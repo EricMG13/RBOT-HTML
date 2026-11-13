@@ -220,9 +220,8 @@ runs it recorded still load and show in Run activity. Every one it had queued (a
 submission) is marked failed, with the reason, the first time the service starts, and is never
 started; submit it again from the page.
 
-Run activity re-loads every 30 seconds while it is showing. A running run's spend counts a call in
-flight at its full reserved amount, so it can read a little high until that call settles. A run
-waits when 3 are going or 30 have started today; Run activity lists it under Waiting and says why
+Run activity re-loads every 30 seconds while it is showing. Run activity does not show spend; the USD 20 cap is shown on the run start page before Submit, and a finished run's provider cap and settled amounts are on its Evidence page.
+A run waits when 3 are going or 30 have started today; Run activity lists it under Waiting and says why
 when the daily limit is the cause. After a restart, a run that was being started when the service
 stopped is shown as interrupted and is not started again; check whether its process is still
 running before submitting it again. If the library cannot be rebuilt, Run activity says so and

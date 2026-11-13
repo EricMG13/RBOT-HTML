@@ -16,8 +16,8 @@
 /* @font-face rules are added by the script: see FONT_BASE. */
 
 /* Tokens: copied from screen.css (lines 5 and 81). */
-:root{--fs-label:11px;--fs-compact:12px;--fs-body:13px;--fs-control:14px;--navy:#000533;--blue:#0017e5;--ground:#eef0f5;--rule:#dde1ea;--muted:#4a5068;--quiet:#f6f7fa;--selection:#e7ecff;--amber:#8a5300;--amber-bg:#fff1c7;--amber-border:#f2d58a;--red:#b3261e;--green:#0e7a46;--depth:0 8px 28px rgba(0,5,51,.085)}
-:root{--gray-25:#fcfcfd;--gray-50:#f8f9fb;--gray-100:#f1f2f6;--gray-200:#e4e6ec;--gray-300:#cfd3dd;--text-primary:#0b1030;--text-secondary:#3a4056;--text-tertiary:#4f566b;--text-quaternary:#5b6279;--border-primary:var(--gray-300);--border-secondary:var(--gray-200);--blue-50:#eef0ff;--blue-100:#dfe3ff;--blue-700:#0012b3;--shadow-xs:0 1px 2px rgba(0,5,51,.05);--ring:0 0 0 4px rgba(0,23,229,.16);--ring-error:0 0 0 4px rgba(179,38,30,.14);--green-bg:#e9f5ee;--red-bg:#fef3f2;--red-border:#f6c9c4;--radius-inline:4px;--radius-control:8px;--radius-card:12px}
+:root{--fs-label:11px;--fs-compact:12px;--fs-body:13px;--fs-control:14px;--navy:#000533;--blue:#001aff;--ground:#f4f4f5;--rule:#e8e9eb;--muted:#474a4f;--quiet:#fafafb;--selection:#e5e8ff;--amber:#806300;--amber-bg:#fff4cc;--amber-border:#f2dc8c;--red:#8e413e;--green:#0f8048;--depth:0 8px 28px rgba(0,5,51,.085)}
+:root{--gray-25:#fcfcfd;--gray-50:#fafafb;--gray-100:#f4f4f5;--gray-200:#e8e9eb;--gray-300:#d1d4d8;--text-primary:#000533;--text-secondary:#383b3f;--text-tertiary:#474a4f;--text-quaternary:#63676e;--border-primary:var(--gray-300);--border-secondary:var(--gray-200);--blue-50:#e5e8ff;--blue-100:#c2c9ff;--blue-700:#0012b2;--shadow-xs:0 1px 2px rgba(0,5,51,.05);--ring:0 0 0 4px rgba(0,26,255,.16);--ring-error:0 0 0 4px rgba(142,65,62,.14);--green-bg:#e8fff4;--red-bg:#fdf0f0;--red-border:#f0cfcd;--radius-inline:4px;--radius-control:8px;--radius-card:12px}
 
 /* Base, as screen.css. */
 *{box-sizing:border-box}
@@ -64,7 +64,7 @@ svg.i{width:16px;height:16px;flex:none}
 .stepper .sep{padding:0 4px;font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--gray-300)}
 .stepper button{position:relative;display:flex;align-items:center;gap:8px;padding:2px 6px 2px 2px;border-radius:999px;font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-quaternary);text-align:left}
 .stepper button:hover{color:var(--text-secondary)}
-.stepper .dot{display:grid;place-items:center;flex:none;width:22px;height:22px;border:1px solid var(--gray-300);border-radius:50%;background:#fff;font:600 var(--fs-compact)/1 'Red Hat Text',system-ui,sans-serif;color:var(--text-quaternary)}
+.stepper .dot{display:grid;place-items:center;flex:none;width:24px;height:24px;border:1.5px solid var(--border-primary);border-radius:50%;background:#fff;font:600 var(--fs-compact)/1 'Red Hat Text',system-ui,sans-serif;color:var(--text-quaternary)}
 .stepper .dot svg{width:12px;height:12px}
 .stepper .sstate{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .stepper .done{color:var(--text-secondary)}
@@ -88,16 +88,16 @@ svg.i{width:16px;height:16px;flex:none}
 .rp-title{min-width:0}
 .rp-title .lead{margin:6px 0 0;font-size:var(--fs-control);line-height:20px}
 .rp-actions{display:flex;flex-wrap:wrap;gap:12px;flex:none;align-items:center}
-.pill{display:flex;align-items:center;gap:8px;width:fit-content;height:24px;margin-bottom:8px;padding:0 10px;border-radius:999px;background:var(--blue-50);color:var(--blue-700);font:600 var(--fs-compact)/18px 'Red Hat Text',system-ui,sans-serif}
+.pill{display:flex;align-items:center;gap:8px;width:fit-content;height:24px;margin-bottom:8px;padding:0 8px;border-radius:6px;background:var(--blue-50);box-shadow:inset 0 0 0 1px var(--blue-100);color:var(--blue-700);font:600 var(--fs-compact)/18px 'Red Hat Text',system-ui,sans-serif}
 .pill::before{content:'';width:8px;height:8px;border-radius:50%;background:currentColor}
 .pill:empty{display:none}
-.pill[data-tone=done]{background:var(--green-bg);color:var(--green)}
-.pill[data-tone=bad]{background:var(--red-bg);color:var(--red)}
+.pill[data-tone=done]{background:var(--green-bg);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--green) 30%,white);color:var(--green)}
+.pill[data-tone=bad]{background:var(--red-bg);box-shadow:inset 0 0 0 1px var(--red-border);color:var(--red)}
 .rp-main{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:40px;margin-top:28px}
 .rp-main>*{min-width:0}
 .run-progress h3.sub{font:600 15px/22px 'Red Hat Display',system-ui,sans-serif;color:var(--text-primary)}
 .run-mods{display:block;columns:2;column-gap:32px;margin:6px 0 0;padding:0;list-style:none}
-.run-mods li{break-inside:avoid;border-bottom:1px solid #eef0f5}
+.run-mods li{break-inside:avoid;border-bottom:1px solid var(--rule)}
 .run-mods .mod{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 0}
 .run-mods .ring{display:grid;place-items:center;width:18px;height:18px;border:1.5px solid var(--gray-300);border-radius:50%;color:#fff}
 .run-mods .ring svg{width:12px;height:12px}
@@ -114,7 +114,7 @@ svg.i{width:16px;height:16px;flex:none}
 .primary-action,.secondary-action,.tertiary-action{position:relative;display:inline-flex;align-items:center;gap:6px;height:40px;padding:0 14px;border:1px solid transparent;border-radius:var(--radius-control);font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;text-decoration:none;white-space:nowrap;cursor:pointer}
 .primary-action{background:var(--blue);border-color:var(--blue);color:#fff;box-shadow:var(--shadow-xs)}
 .primary-action:hover:not(:disabled){background:var(--blue-700);border-color:var(--blue-700)}
-.primary-action:disabled{background:#c8cddb;border-color:#c8cddb;color:var(--muted);cursor:not-allowed}
+.primary-action:disabled{background:var(--gray-300);border-color:var(--gray-300);color:var(--muted);cursor:not-allowed}
 .secondary-action{background:#fff;border-color:var(--border-primary);color:var(--text-secondary);box-shadow:var(--shadow-xs)}
 .secondary-action:hover:not(:disabled){background:var(--gray-50);color:var(--text-primary)}
 .secondary-action:disabled{color:var(--text-quaternary);cursor:not-allowed;opacity:.6}
@@ -131,12 +131,12 @@ svg.i{width:16px;height:16px;flex:none}
 .run-progress h2{font:600 24px/32px 'Red Hat Display',system-ui,sans-serif;letter-spacing:-.02em;color:var(--text-primary)}
 .run-step>h2:focus{outline:0}.run-step>h2:focus-visible{outline:2px solid var(--blue);outline-offset:3px}
 .run-progress h2:focus{outline:0}
-.rv-tick{display:flex;align-items:center;gap:6px;width:fit-content;max-width:100%;margin-top:8px;padding:4px 10px 4px 6px;border:1px solid var(--amber-border);border-radius:var(--radius-control);background:var(--amber-bg);font:500 var(--fs-body)/18px 'Red Hat Text',system-ui,sans-serif;color:var(--text-primary);cursor:pointer}
-.rv-tick input{width:14px;height:14px;margin:0;flex:none;accent-color:var(--blue)}
+.rv-tick{display:flex;align-items:center;gap:8px;width:fit-content;max-width:100%;margin-top:8px;padding:4px 10px 4px 6px;border:1px solid var(--amber-border);border-radius:var(--radius-control);background:var(--amber-bg);font:500 var(--fs-body)/18px 'Red Hat Text',system-ui,sans-serif;color:var(--text-primary);cursor:pointer}
+.rv-tick input{width:16px;height:16px;margin:0;flex:none;accent-color:var(--blue)}
 .rv-facts{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 24px;margin:10px 0 0;font-size:var(--fs-body);line-height:20px;color:var(--text-secondary)}
 .rv-facts dt{font-weight:600;color:var(--text-primary)}.rv-facts dd{margin:0;overflow-wrap:anywhere}
 .run-step:not([hidden])~.run-step:not([hidden]){margin-top:28px;padding-top:24px;border-top:1px solid var(--border-secondary)}
-.readiness-pill{align-self:flex-end;display:inline-flex;align-items:center;gap:8px;height:40px;margin:0 32px 12px;padding:0 16px;border:1px solid var(--border-secondary);border-radius:999px;background:#fcfdff;box-shadow:var(--shadow-xs);font:600 var(--fs-body)/18px 'Red Hat Text',system-ui,sans-serif;color:var(--text-tertiary)}
+.readiness-pill{align-self:flex-end;display:inline-flex;align-items:center;gap:8px;height:40px;margin:0 32px 12px;padding:0 16px;border:1px solid var(--border-secondary);border-radius:999px;background:var(--gray-25);box-shadow:var(--shadow-xs);font:600 var(--fs-body)/18px 'Red Hat Text',system-ui,sans-serif;color:var(--text-tertiary)}
 .readiness-pill::before{content:'';width:8px;height:8px;border:1.5px dashed var(--text-quaternary);border-radius:50%}
 .stepline{margin-top:2px;font-size:var(--fs-compact);line-height:18px;color:var(--text-tertiary)}
 .lead{max-width:68ch;margin:6px 0 4px;font-size:15px;line-height:23px;color:var(--text-secondary)}
@@ -157,14 +157,14 @@ legend{padding:0;margin-bottom:10px;font:500 var(--fs-control)/20px 'Red Hat Tex
 .f{margin-top:20px;min-width:0}
 .f label{display:block;margin-bottom:6px;font:500 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-secondary)}
 .f input[type=text],.f input[type=date],.f select,.f textarea{display:block;width:100%;height:40px;padding:0 12px;background:#fff;border:1px solid var(--border-primary);border-radius:var(--radius-control);box-shadow:var(--shadow-xs);font:400 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-primary)}
-.f textarea{height:auto;min-height:72px;padding:9px 12px;resize:vertical}
-.f select{appearance:none;padding-right:36px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' fill='none' stroke='%236b7287' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 7.5 5 5 5-5'/%3E%3C/svg%3E") no-repeat right 10px center}
+.f textarea{height:auto;min-height:72px;padding:8px 12px;resize:vertical}
+.f select{appearance:none;padding-right:36px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' fill='none' stroke='%2363676e' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 7.5 5 5 5-5'/%3E%3C/svg%3E") no-repeat right 10px center}
 .f input::placeholder,.f textarea::placeholder{color:var(--text-quaternary)}
 .f :is(input,select,textarea):focus{outline:none;border-color:var(--blue);box-shadow:var(--shadow-xs),var(--ring)}
 .f :is(input,select,textarea)[aria-invalid=true]{border-color:var(--red)}
 .f :is(input,select,textarea)[aria-invalid=true]:focus{box-shadow:var(--shadow-xs),var(--ring-error)}
 .req{margin-left:2px;color:var(--blue-700)}
-.rec{display:inline-flex;align-items:center;height:20px;margin-left:8px;padding:0 6px;border:1px solid var(--border-secondary);border-radius:999px;background:var(--gray-50);font:500 var(--fs-label)/18px 'Red Hat Text',system-ui,sans-serif;color:var(--text-tertiary);vertical-align:1px}
+.rec{display:inline-flex;align-items:center;height:20px;margin-left:8px;padding:0 7px;border:1px solid var(--border-primary);border-radius:var(--radius-inline);background:var(--gray-100);font:500 var(--fs-label)/18px 'Red Hat Text',system-ui,sans-serif;color:var(--text-tertiary);vertical-align:1px}
 .err,.note{display:flex;gap:6px;align-items:flex-start;max-width:62ch;margin:6px 0 0;font-size:var(--fs-body);line-height:20px}
 .err{color:var(--red)}
 .note{color:var(--amber)}
@@ -173,7 +173,7 @@ legend{padding:0;margin-bottom:10px;font:500 var(--fs-control)/20px 'Red Hat Tex
 
 /* Pathways as rows: radio, label with its question and modules, what it needs. */
 .prows{margin-top:22px}
-.prow{display:grid;grid-template-columns:20px minmax(0,1fr) 300px;gap:14px;align-items:start;margin:0 -14px;padding:16px 14px;border-bottom:1px solid #eef0f5;cursor:pointer}
+.prow{display:grid;grid-template-columns:20px minmax(0,1fr) 300px;gap:14px;align-items:start;margin:0 -14px;padding:16px 14px;border-bottom:1px solid var(--rule);cursor:pointer}
 .prow:first-child{border-top:1px solid var(--border-secondary)}
 .prow:hover{background:var(--gray-50);border-radius:var(--radius-control)}
 .prow:has(input:checked){background:var(--blue-50);border-radius:var(--radius-control)}
@@ -218,7 +218,7 @@ fieldset[aria-invalid=true] .seg{border-color:var(--red)}
 fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
 
 /* Badges and grades, as screen.css. */
-.badge{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border:1px solid;border-radius:999px;font:500 var(--fs-compact)/18px 'Red Hat Text',system-ui,sans-serif;white-space:nowrap}
+.badge{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 6px;border:1px solid;border-radius:6px;font:500 var(--fs-compact)/18px 'Red Hat Text',system-ui,sans-serif;white-space:nowrap}
 .badge i{width:6px;height:6px;border-radius:50%;background:currentColor}
 .badge-gray,.badge.ready,.badge.information{background:var(--gray-50);border-color:var(--border-secondary);color:var(--text-secondary)}
 .badge.ready i{background:var(--green)}
@@ -228,7 +228,7 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
 .badge.will_refuse{background:var(--red-bg);border-color:var(--red-border);color:var(--red)}
 
 /* Alerts: the run-state strip (screen.css .run-strip). Amber carries attention with its words; grey is neutral. */
-.run-strip{display:grid;grid-template-columns:20px minmax(0,1fr);gap:12px;align-items:start;margin:0 0 16px;padding:12px 16px;border:1px solid var(--border-secondary);border-radius:var(--radius-card);background:var(--gray-50);color:var(--text-primary)}
+.run-strip{display:grid;grid-template-columns:20px minmax(0,1fr);gap:12px;align-items:start;margin:0 0 16px;padding:12px 16px;border:1px solid var(--border-secondary);border-radius:var(--radius-control);background:var(--gray-50);color:var(--text-primary)}
 .run-strip>svg{width:20px;height:20px;color:var(--text-secondary)}
 .run-strip[data-tone=brand]{background:var(--blue-50);border-color:var(--blue-100)}.run-strip[data-tone=brand]>svg{color:var(--blue-700)}
 .run-strip[data-tone=amber]{background:var(--amber-bg);border-color:var(--amber-border)}.run-strip[data-tone=amber]>svg{color:var(--amber)}
@@ -254,12 +254,12 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
 .chk .full{grid-column:1/-1}
 .chk fieldset{margin:0}
 .chk .err,.chk .note{grid-column:1/-1}
-.confirm{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border:1px solid var(--border-secondary);border-radius:var(--radius-card);background:var(--gray-50);font:500 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-secondary);cursor:pointer}
+.confirm{display:flex;gap:8px;align-items:flex-start;padding:12px 14px;border:1px solid var(--border-secondary);border-radius:var(--radius-card);background:var(--gray-50);font:500 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-secondary);cursor:pointer}
 .confirm input{width:16px;height:16px;margin:2px 0 0;flex:none;accent-color:var(--blue)}
 @media(max-width:640px){.chk{grid-template-columns:minmax(0,1fr)}}
 
 /* The documents the service read: a dashed zone, then the files as rows. */
-.dropzone{margin-top:22px;padding:44px 32px;border:1.5px dashed var(--border-primary);border-radius:var(--radius-card);background:#fcfdff;text-align:center}
+.dropzone{margin-top:22px;padding:44px 32px;border:1.5px dashed var(--border-primary);border-radius:var(--radius-card);background:var(--gray-25);text-align:center}
 .dropzone .dz-t{font:600 16px/24px 'Red Hat Text',system-ui,sans-serif;color:var(--text-primary)}
 .dropzone .dl{justify-content:center;margin-top:14px}
 .dropzone .err{max-width:none;margin:12px auto 0;justify-content:center;text-align:left}
@@ -269,9 +269,9 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
 .docres .no{color:var(--red)}.docres .maybe{color:var(--amber)}.docres .ok{color:var(--green)}
 .docres p{margin-top:14px;font-size:var(--fs-body);line-height:20px;color:var(--text-secondary)}
 .docres .table-scroll{margin-top:14px;border:0;border-top:1px solid var(--border-secondary);border-radius:0;box-shadow:none;background:none}
-.docres .table-scroll thead th{padding:8px 16px 8px 0;background:none;border-bottom:1px solid #eef0f5}
-.docres .table-scroll td{padding:11px 16px 11px 0;border-bottom:1px solid #eef0f5}
-.docres .table-scroll tbody tr:last-child>*{border-bottom:1px solid #eef0f5}
+.docres .table-scroll thead th{padding:8px 16px 8px 0;background:none;border-bottom:1px solid var(--rule)}
+.docres .table-scroll td{padding:11px 16px 11px 0;border-bottom:1px solid var(--rule)}
+.docres .table-scroll tbody tr:last-child>*{border-bottom:1px solid var(--rule)}
 .docres .table-scroll th:first-child,.docres .table-scroll td:first-child{position:relative;padding-left:20px}
 .docres .table-scroll td:first-child{font:500 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-primary);overflow-wrap:anywhere}
 .docres .table-scroll td:first-child::before{content:'';position:absolute;left:0;top:17px;width:8px;height:8px;border-radius:50%;background:var(--green)}
@@ -284,7 +284,7 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
 .table-scroll{max-width:100%;overflow:auto;margin-top:10px;background:#fff;border:1px solid var(--border-secondary);border-radius:var(--radius-card);box-shadow:var(--shadow-xs)}
 .table-scroll table{width:100%;border-collapse:collapse;text-align:left;font-size:var(--fs-body);line-height:20px;table-layout:fixed}
 .table-scroll th,.table-scroll td{padding:10px 14px;border-bottom:1px solid var(--border-secondary);vertical-align:top;overflow-wrap:anywhere}
-.table-scroll thead th{background:var(--gray-50);font:600 var(--fs-compact)/18px 'Red Hat Text',system-ui,sans-serif;color:var(--text-tertiary)}
+.table-scroll thead th{background:var(--gray-50);font:600 var(--fs-compact)/18px 'Red Hat Text',system-ui,sans-serif;color:var(--text-quaternary)}
 .table-scroll tbody tr:last-child>*{border-bottom:0}
 .table-scroll td{color:var(--text-secondary)}
 .table-scroll td.st{font-weight:600}
@@ -310,23 +310,23 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
 #loadmsg:empty{display:none}
 
 /* Run readiness: the aside, the card's right column from Purpose to More context. */
-.inspector{min-width:0;min-height:0;overflow:auto;border-left:1px solid var(--border-secondary);background:#fcfdff}
+.inspector{min-width:0;min-height:0;overflow:auto;border-left:1px solid var(--border-secondary);background:var(--gray-25)}
 .inspector>summary{display:none}
-.inspector-bar{position:sticky;top:0;z-index:1;padding:22px 22px 14px;background:#fcfdff;border-bottom:1px solid var(--border-secondary)}
+.inspector-bar{position:sticky;top:0;z-index:1;padding:22px 22px 14px;background:var(--gray-25);border-bottom:1px solid var(--border-secondary)}
 .inspector-bar h2{font:600 16px/24px 'Red Hat Display',system-ui,sans-serif;color:var(--text-primary)}
 .inspector-bar p{margin-top:2px;font-size:var(--fs-body);line-height:19px;color:var(--text-tertiary)}
 .tally{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 0;padding:0;list-style:none}
-.tally .badge{height:24px;padding:0 9px;border:0;font:600 var(--fs-compact)/18px 'Red Hat Text',system-ui,sans-serif}
-.tally .badge.ready{background:var(--green-bg);color:var(--green)}
-.tally .badge.limited,.tally .badge.gap{background:var(--amber-bg);color:var(--amber)}
-.tally .badge.check{border:1px dashed var(--border-primary)}
-.tally .badge.will_refuse{background:var(--red-bg);color:var(--red)}
+.tally .badge{height:24px;padding:0 8px;border:0;box-shadow:inset 0 0 0 1px var(--border-secondary);font:600 var(--fs-compact)/18px 'Red Hat Text',system-ui,sans-serif}
+.tally .badge.ready{background:var(--green-bg);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--green) 30%,white);color:var(--green)}
+.tally .badge.limited,.tally .badge.gap{background:var(--amber-bg);box-shadow:inset 0 0 0 1px var(--amber-border);color:var(--amber)}
+.tally .badge.check{border:1px dashed var(--border-primary);box-shadow:none}
+.tally .badge.will_refuse{background:var(--red-bg);box-shadow:inset 0 0 0 1px var(--red-border);color:var(--red)}
 .inspector-body{padding:8px 22px 22px}
-.runrow{margin:10px 0 4px;padding:10px 12px;border-radius:var(--radius-control);background:var(--amber-bg);font-size:var(--fs-compact);line-height:18px;color:var(--text-secondary)}
+.runrow{margin:10px 0 4px;padding:10px 12px;border-radius:var(--radius-control);background:var(--amber-bg);box-shadow:inset 0 0 0 1px var(--amber-border);font-size:var(--fs-compact);line-height:18px;color:var(--text-secondary)}
 .runrow b{display:block;font-weight:600;color:var(--text-primary)}
 .runrow ul{margin:4px 0 0;padding-left:16px}
 .mods{list-style:none;margin:0;padding:0}
-.mods>li{border-bottom:1px solid #eef0f5;--sd:var(--text-quaternary)}
+.mods>li{border-bottom:1px solid var(--rule);--sd:var(--text-quaternary)}
 .mods>li:last-child{border-bottom:0}
 .mods>li[data-status=ready]{--sd:var(--green)}
 .mods>li[data-status=limited],.mods>li[data-status=gap]{--sd:var(--amber)}
@@ -357,12 +357,12 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
 .rv-card .rv-facts{margin-top:14px;gap:8px 16px;line-height:19px}
 .rv-go{margin-top:16px;padding-top:16px;border-top:1px solid var(--border-secondary)}
 .rv-go .start-confirm{margin-top:0}
-.rv-go .primary-action{width:100%;height:44px;justify-content:center;margin-top:12px;font:600 15px/20px 'Red Hat Text',system-ui,sans-serif}
+.rv-go .primary-action{width:100%;height:44px;padding:0 16px;justify-content:center;margin-top:12px;font:600 15px/20px 'Red Hat Text',system-ui,sans-serif}
 #submitnote{display:block;margin-top:8px;font-size:var(--fs-compact);line-height:18px}
 .rv-list{margin-top:10px;border-top:1px solid var(--border-secondary)}
 .rv-list table,.rv-list tbody{display:block}
 .rv-list thead{display:block;position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
-.rv-list tr{display:grid;grid-template-columns:10px 200px minmax(0,1fr);grid-template-areas:"dot nm why" "dot st why";grid-template-rows:auto 1fr;gap:0 12px;padding:11px 0;border-bottom:1px solid #eef0f5;--sd:var(--text-quaternary);font-size:var(--fs-body);line-height:20px}
+.rv-list tr{display:grid;grid-template-columns:10px 200px minmax(0,1fr);grid-template-areas:"dot nm why" "dot st why";grid-template-rows:auto 1fr;gap:0 12px;padding:11px 0;border-bottom:1px solid var(--rule);--sd:var(--text-quaternary);font-size:var(--fs-body);line-height:20px}
 .rv-list tr::before{content:'';grid-area:dot;width:8px;height:8px;margin-top:6px;border-radius:50%;background:var(--sd)}
 .rv-list tr[data-outcome=ready]{--sd:var(--green)}
 .rv-list tr[data-outcome=limited],.rv-list tr[data-outcome=gap]{--sd:var(--amber)}
@@ -380,7 +380,7 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
 .rv-list .badge.ready{color:var(--green)}
 .rv-list .badge.information{color:var(--blue-700)}
 .review-summary{margin:10px 0 0;border-top:1px solid var(--border-secondary)}
-.rv-row{display:grid;grid-template-columns:200px minmax(0,1fr) auto;gap:12px;padding:11px 0;border-bottom:1px solid #eef0f5;font-size:var(--fs-body);line-height:20px;color:var(--text-secondary)}
+.rv-row{display:grid;grid-template-columns:200px minmax(0,1fr) auto;gap:12px;padding:11px 0;border-bottom:1px solid var(--rule);font-size:var(--fs-body);line-height:20px;color:var(--text-secondary)}
 .rv-row dt{font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-primary)}
 .rv-row dd{margin:0;min-width:0;overflow-wrap:anywhere}
 .rv-row .ed{align-self:start}
@@ -389,7 +389,7 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
 .review-summary .note,.review-summary .err{margin-top:4px}
 .run-step h3.sub{margin-top:28px;font:600 15px/22px 'Red Hat Display',system-ui,sans-serif;color:var(--text-primary)}
 .help code,.note code{font:500 var(--fs-compact) 'Red Hat Mono',monospace;color:var(--text-primary)}
-.start-confirm{display:flex;align-items:flex-start;gap:10px;margin-top:20px;font:500 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-secondary);cursor:pointer}
+.start-confirm{display:flex;align-items:flex-start;gap:8px;margin-top:20px;font:500 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-secondary);cursor:pointer}
 .start-confirm input{width:16px;height:16px;margin:2px 0 0;flex:none;accent-color:var(--blue)}
 .dl{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:16px}
 

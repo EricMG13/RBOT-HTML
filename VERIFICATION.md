@@ -4,6 +4,17 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-13 — Brand colours and component look in the issuer library, run start page and HTML Model; Run activity redesigned, spend off the page (branch `claude/brand-application`)
+Scope: presentation only, offline, no provider or model call. Fonts unchanged. Brand values were read from the owner's screenshots. Design record: `docs/design/2026-11-13-brand-application.md`.
+Reviews: task reviews of the four build tasks (fix rounds 1, 1, 0, 1), all approved; the whole-branch review returned "changes needed (small)": one Medium defect (the empty-state button's label unreadable on hover, 1.5:1) and Lows, fixed in 23a1a3f, re-review approved.
+Fidelity check: on real run `cpos-tdg-sol-medium-all-001` the visible text of eight pages (library home 2,553 characters / 44 number tokens; Overview 1,843 / 6; Changes 1,930 / 84; Financial foundation 18,061 / 217; a second module page 12,831 / 24; Forecast 2,698 / 63; Evidence 2,376 / 43; Report history 1,285 / 18) is identical between the library at 4c0eafa and at 23a1a3f, same data, Chrome 1440 px. The reviewer's box comparison on the same eight routes at 1440 px, 720 px and print: the colour commits move no box; the component look moves boxes by 4–8 px with two reflows of about 20 px. Run activity is excluded from both (redesigned). The comparison scripts are in the session's working folder, not in the repo.
+Reader check, scope: ONE real run (`cpos-tdg-sol-medium-all-001`, TransDigm, as of 30 September 2024, earlier format), Financial foundation and Overview, read by the controller from 1440 px screenshots taken at 4a94b0d (the later commits touch Run activity only), against two of the September VMO2 screenshots (source readiness; ownership and operating registers). Verdict: pass with issues. The reference is black text with ruled tables and no charts, so the comparison covers judgement-first order and table legibility, not colour. The judgement headline still comes first; tables are ruled with no zebra; state badges read. Issues: the legend key of the second series is dark green while its bars are bright green (open for the owner); bar labels are raw ("6585"), as before this branch; the run is earlier format, so Overview shows no reader passages and its voice was not exercised. Run activity was read on invented sample runs only.
+Contrast (reviewer's probe): lowest new text pair 4.77:1; the olive line `#758000` is 4.34:1 and is used for lines only.
+Gates, run at the final code commit 9f9659e before the documents were added (the quick ones were run again after), each exit 0: `node --test` on static, changes, reader and calendar tests 394 passed; `tests/test_context_form.py tests/test_brand_tokens.py` 56 passed; `tests/test_library_page_browser.py tests/test_library_changes_browser.py` 97 passed, 1 skipped (the forecast screenshot test, which needs `FORECAST_SCREENSHOT`); `tests/test_run_start_page.py` 144 passed; `tools/quality_gate.py` 0 findings (954 changed lines in scope). The forced-colours test now also covers `.run-badge`, and the CDP helper removes its temporary Chrome profile on failure.
+Size: 1,210 changed lines against `origin/main` at 9f9659e (1,051 added, 159 removed), over the 800-line convention; 839 of them are in paths containing `test`. The documents add to that.
+Open for the owner: see the design record's list; M2 (the Model navigator's module-family colours, Ruling 24) and the size are the two that need a ruling.
+Not verified: a real run in progress on Run activity; the HTML Model on real data and inside the Forecast frame; yellow, violet, hatches, the ledger and conditional paths on real handoffs (synthetic only); real printing (Chrome emulation); Firefox, Safari and Windows high-contrast mode; whether a retained-run verifier compares rendered Model bytes; the other 124 reference screenshots; the weekly and live suites; mutation testing. Moved to the archive to keep this file under 1,000 lines: the 2026-11-10 Context form proposal entry.
+
 ## 2026-11-12 — CP-8 checker: a currency code glued to digits, more currency and scale forms, bond names (branch `claude/cp8-checker-currency`, owner "complete 1")
 Scope: offline, synthetic plus read-only reading of 974 retained `.md` handoffs; no provider. C1 `EUR437m`, `USD2010` read as figures; C2 `C$`/`A$`/`R$` prefixes, `mln`/`bln`, `'000`, 18 more currency codes (`_CODES` 22 to 40) around a year-shaped number; C3 `2029s` is a bond name, a year. Tests first: 29 of the new cases failed on the unchanged checker, all pass after; `counts_code_glued.py` flipped 1 to 0.
 Corpus (both `counts` modes, token level, old vs new): 1,559 token diffs, 59 files with different held sizes; every one is K-a (`USD`/`EUR` glued to digits, 502 tokens new in each mode: `USD710 million`, `EUR1,000m`, `USD35/share`, all real money; the old reading kept only the fragment `000` of `USD1,000m`, 270 and 265 fragments gone) or K-c (`EUR 2029s, 480bp`, 10 tokens gone, held 2029 lost). K-b (a year-shaped number with a C2 form) 0 tokens, K-d (`mln`/`bln` after a small number) 0 tokens. `gaps_real_run.py` output byte-identical before and after; every other probe exits as on main (three recorded limits unchanged).
@@ -950,48 +961,3 @@ functions); no provider call and no analytical run.
     read a blank cutoff.
 - **Not verified:** Firefox, Safari and real issuer folders. Whether CP-DR finds peers in a folder's
   filings: no live run. Whether the readiness forecast matches live outcomes.
-
-## 2026-11-10 — Context form proposal (branch `claude/optimistic-johnson-bmnwip`)
-
-Proposal only: `docs/templates/context-form-proposal.html` is new, and
-`docs/design/2026-11-10-context-form-proposal.md` holds the module review and the design.
-`context-form.html`, `context.py`, the inbox and the tests are unchanged. All checks below are
-offline browser and reader checks, run in headless Chromium 1.63. No provider was called and no
-analytical run was made with it.
-
-- **Same output as the current form.** Each of three fixture contexts was loaded into both forms with
-  `fill()` and written with `build()`. The two `context.json` files are byte-identical for each:
-  `cases/context/primary-full.json`, `cases/context/research-minimal.json` and
-  `cases/cpdr-context-cutoff/context.json`.
-- **End to end through the page.**
-  - Three files were made by clicking through the page and downloading: Earnings Update; Distressed
-    with TDG-like dates, a duplicate S&P row and stale peers; and a new issue on Credit Snapshot.
-  - Each loads in `context.load_context` and passes `inbox.drops.check` for its pathway.
-  - Each round-trips through `fill()` and `build()` byte for byte.
-  - The readiness panel showed what its own rules state, for example CP-2H Gap on two S&P rows and
-    CP-1C Gap on one admitted peer. This checks the page against its rules, not against a run.
-- **Inbox copies.** Copies made by the real `write_templates` lock the pathway (5 other cards
-  disabled). A loaded file naming another pathway is replaced, with a note.
-- **Newly caught.** `load_context` refuses a research question containing `|`, and an issuer name
-  with U+2028. The current form writes both; the proposal stops both before download.
-- **Defect found and fixed in the proposal.** A blur that adds a message moved the Next button
-  between mousedown and mouseup, and the click was lost. The current form uses the same pattern; not
-  verified there. After the fix, every stage advanced by click on desktop and by tap at iPhone 13
-  size, with no horizontal scroll at 390 px.
-- **Other checks.** Start over returns the page to a fresh build. No console errors in any run.
-  Quality gate exit 0, with no Python changed.
-- **Restyled in the Credit OS language after merging main `caeb622`.** All the checks above were
-  repeated on the restyled page with the same results: byte-identical output, three downloads loading
-  and accepted by the inbox, round-trips, every stage by click and by tap, and Start over.
-  - An inbox copy (from `write_templates`, beside a copy of the library's web folder at
-    `_engine/library`) loads Red Hat Display, Text and Mono from there, shows the rail links to the
-    library, and logs nothing. The repository copy loads the repository's fonts and hides those links.
-  - Compared by eye with the library built offline from the synthetic fixture run, shown in its empty
-    state because that run is not on the current methodology.
-  - Found and fixed while restyling: the yes/no inputs had no positioned parent, so their own hit
-    area sat outside their segment.
-- **Not verified:**
-  - Firefox and Safari, and the folder picker in them.
-  - Real issuer folders. The folder check guesses only from file names.
-  - Whether the readiness forecast matches what the modules actually do in a live run. It ports
-    `run_expectations.RULES` plus rules cited in the design note, but no run has been compared.
