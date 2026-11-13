@@ -15,8 +15,8 @@ Owner's words, 2026-11-13: "create full credit snapshot (full credit assessment)
 - Full credit assessment is the existing `credit_snapshot` pathway. Its id stays `credit_snapshot`
   (CP-8 matches earlier runs on the id; a new id would orphan them). Only its display title changes.
   Its modules and report blocks are unchanged.
-- Lite credit assessment is a new pathway, id `lite_credit_assessment`. Preset: CP-0, CP-1, CP-MODEL,
-  CP-1A, CP-2, CP-2A. CP-8 runs last when an earlier lite run of the same issuer exists, as for every
+- Lite credit assessment is a new pathway, id `lite_credit_assessment`. Preset: CP-0, CP-1, CP-1A,
+  CP-2, CP-2A (no CP-MODEL, no forecast). CP-8 runs last when an earlier lite run of the same issuer exists, as for every
   pathway. Its report holds nine blocks: key findings, company operating model, the Model chart strip,
   credit metrics, strengths and weaknesses, company profile, transaction summary, downside stress and
   break points.

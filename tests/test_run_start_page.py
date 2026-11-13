@@ -2087,6 +2087,25 @@ def test_a_reload_keeps_the_lock_and_does_not_carry_twice(page_from):
     assert "was not used" not in third["msg"] and "Your earlier answers are back." in third["msg"]
 
 
+def test_starting_from_an_offered_pathway_run_with_an_executed_agreement_shows_the_plain_message(
+    page_from_executed,
+):
+    """Before the lite branch (f628136) startFrom discarded fill's warnings: this carry showed the
+    plain, non-error message below. The reset of an executed agreement with no chosen file is by
+    design and stays silent there."""
+    page, run_id = page_from_executed
+    seen = page.run(
+        "return {msg: $('loadmsg').textContent, tone: $('loadmsg').dataset.tone || '',"
+        " carried: CARRIED.fields.has('|pathway')};",
+        path=f"/?from={run_id}",
+    )
+    assert seen["msg"] == (
+        f"Started from run {run_id}: 1 document and its answers carried over. "
+        "The dates and the submitter are not."
+    )
+    assert seen["tone"] == "" and seen["carried"] is True
+
+
 def test_starting_from_an_earlier_short_snapshot_run_keeps_the_default_pathway_and_says_so(
     root, tmp_path, monkeypatch, fake_env
 ):
@@ -2116,6 +2135,7 @@ def test_starting_from_an_earlier_short_snapshot_run_keeps_the_default_pathway_a
     assert seen["carriedPathway"] is False
     assert "short credit snapshot is no longer offered" in seen["msg"]
     assert "Full credit assessment" in seen["msg"]
+    assert "not applied" not in seen["msg"] and "attachments." not in seen["msg"]
 
 
 def test_from_a_run_without_stored_documents_locks_identity_only(page_from_bare):

@@ -2423,16 +2423,14 @@ async function startFrom(runId) {
     resetAll();
   } else if (isObj(ctx)) problems.push('Its stored answers could not be read (' + bad + ').');
   const base = fieldValues(); // when the answers are unusable nothing the analyst typed is cleared: only the name and ID are set
-  let applied = false; // whether the earlier run's pathway is one this page offers and was selected
+  let applied = false, pathNote = ''; // whether the earlier run's pathway is one this page offers and was selected
   if (usable) {
-    const warned = fill(ctx, {}, true);
+    fill(ctx, {}, true); // its other warnings stay unshown here, as before: only a refused pathway is told
     $('submitter').value = submitter;
     applied = getV($('st-pathway'), 'pathway') === txt(ctx.run.pathway);
-    if (!applied) problems.push(txt(ctx.run.pathway) === 'short_snapshot'
+    if (!applied) pathNote = (txt(ctx.run.pathway) === 'short_snapshot'
       ? `The short credit snapshot is no longer offered, so the earlier run's pathway was not carried; the ${PATHS[getV($('st-pathway'), 'pathway')].label} is selected (the Lite credit assessment is the short option). Choose the pathway under Pathway.`
       : `The earlier run's pathway "${txt(ctx.run.pathway)}" is not offered; the ${PATHS[getV($('st-pathway'), 'pathway')].label} is selected. Choose the pathway under Pathway.`);
-    const rest = warned.filter(w => !w.startsWith('run.pathway:')); // that one is stated above
-    if (rest.length) problems.push('Some of its answers were not applied: ' + rest.join('; ') + '.');
   } else $('i-issuer_name').value = txt(got.issuer_name);
   $('i-issuer_id').value = txt(got.issuer_id);
   if (usable) $('d-as_of').value = today(); // the dates are the new run's own: they are never carried
@@ -2442,7 +2440,7 @@ async function startFrom(runId) {
   applyRowKeys();
   // The earlier run's module subset and turns: a subset run started again stays a subset.
   // A subset naming a module this pathway lacks is not applied at all (a partial subset would run other modules than the earlier run's).
-  const notes = [];
+  const notes = pathNote ? [pathNote] : []; // a note, not a problem: the message keeps its plain tone
   if (usable && Array.isArray(got.modules) && got.modules.length) {
     const inPathway = runOf(getV($('st-pathway'), 'pathway')), unknown = got.modules.filter(m => !inPathway.includes(m));
     if (unknown.length) notes.push(`The earlier run's module subset was not carried: ${unknown.map(mname).join(', ')} not in this pathway.`);
