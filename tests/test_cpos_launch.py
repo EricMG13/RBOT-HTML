@@ -4275,12 +4275,24 @@ def test_a_short_snapshot_run_in_the_library_is_listed_with_its_label_and_cp_l10
     assert console == []
     shown = re.sub(r"(?s)<(script|style)\b.*?</\1>|<[^>]+>|\s+", " ", dom)
     assert "Short credit snapshot" in shown  # the run label names the pathway as words
-    lead = re.search(r'(?s)<section class="overview-part" id="overview-lead">.*?</section>', dom)
+    lead = re.search(
+        r'(?s)<section class="overview-part" id="overview-lead"[^>]*>.*?</section>', dom
+    )
     assert lead is not None
     lead_text = re.sub(r"\s+([,.;:])", r"\1", " ".join(re.sub(r"<[^>]+>", " ", lead[0]).split()))
     assert "Creditors are covered today but only just" in lead_text
-    assert "Cover is thin at 3.1x" in lead_text
-    assert 'href="#CP-L10/' in lead[0]  # written by CP-L10
+    # The key finding is the why grid's, beside the lead rather than inside it.
+    why = re.search(r'(?s)<section class="overview-part g24" id="overview-why".*?</section>', dom)
+    assert why is not None
+    why_text = re.sub(r"\s+([,.;:])", r"\1", " ".join(re.sub(r"<[^>]+>", " ", why[0]).split()))
+    assert "Cover is thin at 3.1x" in why_text
+    # The Overview no longer names the module that wrote the lead (ruling: no "Written by"); CP-L10
+    # leads when its tile (named "Short credit snapshot", opening CP-L10) holds the sentence the
+    # lead draws, and no other module's tile does.
+    tiles = re.findall(r'(?s)<details class="mt".*?</details>', dom)
+    leading = [t for t in tiles if "Creditors are covered today but only just" in t]
+    assert len(leading) == 1 and 'class="mt-name">Short credit snapshot<' in leading[0]
+    assert 'href="#CP-L10/' in leading[0]
     assert UNFILLED.search(shown) is None, UNFILLED.findall(shown)
 
 
@@ -4376,8 +4388,17 @@ def test_a_lite_run_fills_the_library_pages_and_its_forecast_page_states_the_gap
         assert UNFILLED.search(shown[name]) is None, (name, UNFILLED.findall(shown[name]))
         assert ISSUER in shown[name] and "Lite credit assessment" in shown[name], name
     dom, _ = visit(index, f"#W-Overview/overview?c={RUN_ID}")
-    lead = re.search(r'(?s)<section class="overview-part" id="overview-lead">.*?</section>', dom)
-    assert lead is not None and 'href="#CP-2/' in lead[0]  # the lead is written by CP-2
+    # The lead is written by CP-2; the Overview no longer links its writer, so the trace
+    # controls of the lead's key findings (the handoff file each was read from) are the evidence.
+    lead = re.search(
+        r'(?s)<section class="overview-part" id="overview-lead"[^>]*>.*?</section>', dom
+    )
+    why = re.search(
+        r'(?s)<section class="overview-part[^"]*" id="overview-why"[^>]*>.*?</section>', dom
+    )
+    assert lead is not None and why is not None
+    sources = re.findall(r'data-paragraph="([^"]*)"', why[0])
+    assert sources and all("/CP-2.md:" in source for source in sources), sources
     assert "First run of this pathway" in shown["Changes"]
     assert "No forecast model was published from this run\u2019s files" in shown["Forecast"]
 

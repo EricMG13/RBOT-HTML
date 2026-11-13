@@ -10,9 +10,10 @@
     fits: de.scrollWidth <= de.clientWidth && content.scrollWidth <= content.clientWidth,
     navigatorShown: shown('navigator'), moduleToggleShown: shown('module-toggle'),
     outline: document.querySelectorAll('#module-list .section-outline').length,
-    dates: [...document.querySelectorAll('.dates-table tbody tr')].map(row => row.textContent.trim()),
+    timeline: document.querySelectorAll('.overview-page .tl').length,
     lead: document.querySelector('#overview-lead').textContent,
-    bottomLines: [...document.querySelectorAll('.bottom-entry')].map(entry => entry.querySelector('h3').textContent.trim()),
+    // One tile per module: its name, then its declared state when the handoff has one.
+    bottomLines: [...document.querySelectorAll('#overview-modules .mt')].map(tile => [tile.querySelector('.mt-name').textContent, tile.querySelector('.mt-state')?.textContent ?? ''].join(' ').trim()),
   });
   document.body.append(out);
 })();

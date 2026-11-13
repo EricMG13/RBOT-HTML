@@ -5,7 +5,8 @@
   const unkeyed = () => [...document.querySelectorAll('#analysis .analysis-text')].find(p => p.textContent.includes('The figure is printed in Z'))?.querySelector('.basis-link');
   for (let i = 0; i < 200 && !unkeyed(); i++) await sleep(50);
   const control = unkeyed();
-  seen.control = control ? control.textContent : null;
+  // The control is an icon button: its name is its aria-label, not text.
+  seen.control = control ? control.getAttribute('aria-label') : null;
   seen.verified = document.querySelectorAll('.chip.verified').length;
   seen.proseChips = document.querySelectorAll('#analysis .chip, #analysis .chip-count').length;
   if (control) {
