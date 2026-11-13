@@ -1,0 +1,114 @@
+diff --git a/docs/rulings/2026-11-11-module-presets-and-changes.md b/docs/rulings/2026-11-11-module-presets-and-changes.md
+index ddcfcc5..8f9ec4b 100644
+--- a/docs/rulings/2026-11-11-module-presets-and-changes.md
++++ b/docs/rulings/2026-11-11-module-presets-and-changes.md
+@@ -461,3 +461,90 @@ so `mypy --strict` reports no error in the file. Recorded limit: a unit directly
+ superscript footnote mark (`2010 US$m-equivalent`, `2010 USD million-plus`, `2010 US$m¹`) is not read as a unit, so that
+ year-shaped number stays a year.
+ Amendment, 2026-11-12 (owner: "complete 1"; controller rulings C1 to C3). (C1) Digits directly after a currency code of `_CODES`, when the code follows no letter, digit or dot, are a figure carrying that currency (`EUR437m`, `USD2010m`, `USD437`); `XEUR437`, `ABC123`, `FY2024`, `USD-denominated` read as before. A 19xx/20xx number so placed is a figure. (C2) A currency sign may carry a one- to three-letter prefix (`C$`, `A$`, `R$`, `HK$`) in the year rules; `mln` and `bln` are scales wherever `mn` and `bn` are, and `'000` (also `’000`) is a scale after a currency (`2010 C$m`, `2010 USD mln`, `2010 USD '000`, `2010 mln` are figures); `_UNITED` takes `mln` and `bln` so `30 mln` is a figure and no count. `_CODES` now holds the 40 codes USD EUR GBP JPY CHF CAD AUD NZD SEK NOK DKK PLN CZK HUF TRY ZAR BRL MXN CNY CNH HKD SGD INR KRW TWD THB IDR MYR PHP SAR AED QAR KWD ILS EGP NGN CLP COP PEN ARS (it held 22 before). A currency after a year still belongs to the next number (`2024 SAR 5,000` reads 5,000). (C3) A 19xx/20xx number directly followed by `s` and then no letter or digit (`EUR 2029s, 480bp`, `the 2031s`) is a bond or decade name, a year in every reading; `2029 s` and `2029secured` are unchanged. Limits that remain: a small number after a one-letter-prefixed sign (`30 C$m`) is not read as carrying a unit; a code before digits that is really a name (`COP26` after a space) is read as a currency amount.
++
++## Amendment 2026-11-13: prompt-first redesign of CP-8 and the forecast inputs
++
++Owner, 2026-11-13: "all three. remove all the code no longer required if resolved by the prompt." The
++controller's answers below (E1 to E12 of the plan `redesign/PLAN.md`) rest on that instruction. Each states what
++it supersedes. This amendment is text only; the packages that build it follow it. It authorises no paid call.
++
++- E1 (controller). `Method change` is required for a `New` or `Not run this time` module only when the pack
++  records `preset` for both runs. When the earlier run's selection is null, `Method change` or `Unresolved` is
++  accepted and any other cause is refused. When either selection is `explicit` the cause is `Unresolved`, as
++  before. This supersedes the controller ruling of 2026-11-12 in D4 above, that a null earlier selection counts as
++  `preset` (the plan calls it K12). Reason: 36 of 42 retained manifests record no selection, explicit subsets
++  among them, so null is not evidence of a preset. The ban on the words "the pack does not say" is dropped with
++  it; the Cause list is the rule.
++- E2 (controller). On a `Same definition` row with cause `Correction`, the row's own permission to print its
++  difference wins over "the net-debt-change cash difference is printed nowhere", on that row only, when the two
++  differences are the same number. Elsewhere the size stays withheld.
++- E3 (controller, under the owner's instruction). The spelled-number reading is replaced by the instruction (write
++  every amount, ratio and difference in digits with its unit; a number word is only for a count of things) plus
++  one short form check, W. W runs only when a difference is withheld. It refuses a number word followed by a
++  scale, percent, basis-point, `x` or currency word, or preceded by a direction word (with an optional `by` and
++  an optional `about`, `roughly` or `nearly`); `times` is not in its list. This supersedes L4 of the amendment
++  "Fix the limits first" (2026-11-12), which ordered spelled numbers to be read, and the words reading of the
++  2026-11-12 count-noun amendment (R3). Numbered lists and hard-wrapped paragraphs are no longer tolerated by
++  the checker: the method says to write `-` bullets and one line per paragraph, item and row; a list number
++  equal to a withheld size is refused by the bare reading. Residual limit, recorded: a withheld size written in
++  words with neither a unit nor a direction word ("the gap is thirty") passes; the earlier grammar caught it and W
++  does not. No retained model-written handoff writes an amount in words.
++- E4 (controller). Accepted: exact value cells built from the pack, the Basis whitelist, the `column` key refused,
++  `currency` required with `scale`, and the `Net debt data` Period form. Each refusal states the exact text to
++  write. The proof run counts first-attempt refusals per form; a form refused more than once is reconsidered, and
++  no check is loosened to pass.
++- E5 (controller). The Period check applies to `Net debt data` only, not to the leverage, interest-cover and
++  liquidity chart tables. Decide again after the proof run.
++- E6 (controller). Three reviewer probes cannot flip under this plan and are superseded by the hand-written keys
++  in section D of the plan: `probe_cp8.py` P3 (a calculation ID stays refused; the key is the reworded message
++  "describe the calculation in words"), `g70/p2_gbp_caption.py` (keyed on a `## Request` phrase that 0 of 38 real
++  CP-1 handoffs print; the key is the `currency` test) and `g50/probe_split_tables.py` (demands a value Python
++  cannot derive from split tables; the key is the withheld amount with the reason "needs ..., which the table
++  holding the named row does not print"). The probes are not edited. This is a recorded exception to "the
++  reviewer's probe is the answer key", not a silent one.
++- E8 (controller). Accepted, as recorded for PR 76 and the named-rows change: relaunching a run delivered since
++  PR 76 whose block names `column`, whose CP-1 has an `LTM Qn YYYY` label, or whose history holds a reworded gap
++  reason re-derives a different delivery id. The owner has not said whether the LTH run `20261112-164724-01`
++  matters; each package reports whether its change would alter that run's delivery id if the run is reachable, and
++  does not touch it.
++- E9 (controller). The forecast deletions (the `LTM Qn YYYY` balance path, then the `column` path and per-row
++  unit) go ahead in the plan's order, before the proof run, although neither the deleted paths nor the
++  replacement instruction has been used by a model. Revert rule: if the proof run's Forecast page shows no
++  fiscal-year cash or debt because CP-1 printed balances only in period-row tables, the `column` deletion is
++  reverted in one pull request rather than a check loosened.
++- E10 (controller). Accepted: runs holding a CP-8 handoff show "Earlier methods" once the CP-8 method text
++  changes. It is true.
++- E11 (controller). Accepted: deleting the trend word list means a `Not comparable` reason that says "leverage
++  rose" with no size passes. No figure is exposed, the method forbids describing movement, and the list refused a
++  compliant sentence ("so no trend is drawn") in a real run. The withheld-difference rule still refuses any size.
++- E12 (controller). Agreed: these stay in code: a single strict unit cell (the per-row unit reader stays in the
++  reading of CP-1 text), facility terms, the Source type cell, date blanking, count nouns, and the Lows the plan
++  lists. Each protects a value, period or unit on text the prompted model does not write, or would need the
++  parsing it replaces.
++
++Recorded scope: the first real CP-8 (`tdg-proof-snapshot-opus-002`) is the only retained model-written CP-8
++after PR 66; every form above is unproven at first attempt until the proof run, and the plan lists what no
++retained run demonstrates.
++
++## Amendment, 2026-11-13 (controller, after review)
++
++Four of the records above differ from what was built. The original text stands; this states what was built.
++
++- E3 as built. Check W refuses a number written in words only when a listed unit word directly follows it
++  (`thirty million`, `two hundred bps`). The direction-word half described in E3 was built, found in review to
++  refuse counts the method allows ("added four new modules") while missing most wordings, and deleted (PR 89).
++  Residual limit: any other wording of a withheld size in words passes; the method text, not the checker, keeps
++  amounts in digits.
++- E9 as built. The `LTM Qn YYYY` balance path was deleted (PR 90). The deletion of the `column` path and the
++  per-row unit reader, which E9 places "before the proof run", was NOT made before it: the wrong-scale unit check
++  is reachable only through that path and no model has been shown the new instruction, so only the instruction
++  changed (PR 91: operands named by `row` and `period`). Decided by the controller on 2026-11-13 under the
++  owner's instruction of the same day; the owner may order the deletion at any time. It is to be decided after the
++  proof run shows how balances are printed.
++- Basis names (not in the original list). No exact-name rule was first built because the model's own names in
++  retained handoffs differ from the registry titles; a deny-list was used (PR 87), then the listed name from
++  `MODULE_NAMES` was accepted outright after the whole-branch review found the deny-list refused
++  `Rates, FX & hedging`.
++- Forecast currency (not in the original list). The planned comparison of the block's `currency` with unit cells
++  was replaced in review by a presence rule: the stated currency must be named somewhere in the Financial
++  foundation handoff, because real handoffs state units in headings (PR 88).
+diff --git a/docs/rulings/2026-11-11-reader-and-issuer-report.md b/docs/rulings/2026-11-11-reader-and-issuer-report.md
+index 118a5b0..0d995b9 100644
+--- a/docs/rulings/2026-11-11-reader-and-issuer-report.md
++++ b/docs/rulings/2026-11-11-reader-and-issuer-report.md
+@@ -336,3 +336,14 @@ Where the decisions left a detail open, the simplest option was taken:
+ Amendment 2026-11-11: a run whose methods have since changed is listed and marked "Earlier methods"; replayed, synthetic and unverified runs stay unlisted.
+ 
+ Amendment 2026-11-12 (owner): no module code is shown on screen, in the issuer library (the Modules navigator, Report history, Evidence, module pages, Overview, the inspector and its Basis items) and on the run start page. A reader sees a module's plain name, never its code. This replaces "the code second" in decision 5 and the reading of decision 7 under which new-format text kept its codes on screen. The Basis line form in the stored handoff (H3) and check 2 are unchanged: the handoff still names an upstream module as `Name (code)`, and the page shows the written name. It is display only: stored handoffs, routes, `href`s, download names and saved answer keys do not change, and stored source file names and file paths are shown exactly as stored on every page, even when they hold a `CP-` token. In the standalone HTML file rendered from `src/deploy_vii/assets` the navigator, headings, coverage table, limitation titles and inspector field name modules too; files already delivered are not rewritten, and codes inside that file's body content are as the data holds them.
++
++Amendment 2026-11-13 (owner: "all three. remove all the code no longer required if resolved by the prompt."; controller
++ruling E7). Check 6 of H6 becomes: an ID is a cell value containing at least one letter and one digit in a table
++column whose header is `ID` or ends in ` ID` (case-insensitive); the clause "or an ID in `## Calculations`" is
++withdrawn. This supersedes the 2026-11-11 reading of check 6 that took the first cell of any `## Calculations` row as an
++ID (the controller's plan calls it L1); it matches the instruction the model is sent, which puts IDs in a column
++headed `ID`. Reason: the first-column heuristic banned period labels such as `FY2024 gross debt` from prose (155 of
++181 retained Calculations tables already have an `ID` column; the other 26 hold labels). Consequence, recorded: an ID
++under a column headed `Calculation` or any other name is no longer banned from prose. The readers of earlier runs
++(`reader_passages`, `bottom_line_text`, `limitation_texts`, `is_earlier_format`) are not touched. Text only; the
++change is built in a later package.

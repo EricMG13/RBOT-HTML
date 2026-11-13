@@ -2259,6 +2259,9 @@ def test_every_module_is_told_what_stands_for_acceptance_scripts_and_questions(t
 # copy of the short stress text (tables T2DS.n, two stale statements removed) instead of cp2a.md.
 # CP-2A pin changed again on 2026-11-13 (final fix wave): the copy's line-1 comment now says it is
 # the CP-OS copy of cp2a.md; nothing else in the file changed.
+# CP-8 pin recomputed on 2026-11-13 (merge of origin/main into claude/deploy-v-methods): it is the
+# merge of main's CP-8 method change (cp8.md redesign) with this branch's appendix section. Every
+# other pin is this branch's value; main changed no other method text.
 METHOD_TEXT_SHA256_AT_1B41E65 = {
     "CP-0": "e8d3e77bc48bc98e2fd8595e7b46ee7fc786e859591cf244325f3508b7d5dac9",
     "CP-1": "02477a91d582f6301b2dbfadd96572ea75f9845493de337d7160a55111b62170",
@@ -2279,7 +2282,7 @@ METHOD_TEXT_SHA256_AT_1B41E65 = {
     "CP-4C": "1d96547563190f89b909c37ea47969ecb04a2c794c5971b6db8f7c94c836b1f8",
     "CP-5": "9ac221698cc36a06473ce8cd9c2128c1705da362b289163d4ab54fda0d418d76",
     "CP-6": "115d07e8934f049b920e497834bcf61d53c6fe0cdd0266daf56b87d18d5e1f26",
-    "CP-8": "7801db139f31238e89757e40fbe588a6cefb9d26ccdab57e2719de4a8654df7c",
+    "CP-8": "0a0b339a9f9a284328b9a6fb50513a9bd03f2aa58dd45a387fe057b6ce2612c3",
     "CP-DR": "83aa5447c37db42db2e3df91cdd0cfaf491f37c0436fc8257c0d5fb43e735353",
     "CP-L10": "5b0e904dd62e1d1b341ec3d7d1717500d68ce1aee734b347e0dbbdfbe696b006",
 }
