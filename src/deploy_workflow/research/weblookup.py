@@ -17,7 +17,6 @@ line saying so), and every string taken from a server or an EDGAR document is ne
 
 import codecs
 import hashlib
-import io
 import json
 import os
 import re
@@ -29,9 +28,6 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
-
-from pypdf import PdfReader
-from pypdf.errors import PyPdfError
 
 from deploy_workflow.research import webfetch
 from deploy_workflow.research.contracts import ResearchError
@@ -53,19 +49,22 @@ MAX_LISTED = 20
 TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
 TAXONOMIES = ("us-gaap", "ifrs-full", "dei", "srt")
 DEFAULT_USER_AGENT = "deploy-workflow-cpdr"
-ACCEPT = "text/html, application/xhtml+xml, text/plain, application/json, application/pdf"
+ACCEPT = "text/html, application/xhtml+xml, text/plain, application/json"
 
 STATUS_USABLE = "usable"
 STATUS_LATER = "later-event"
 STATUS_UNDATED = "undated"
 
+# ponytail: no PDFs; pypdf cannot be bounded on hostile input in-process. Add a sandboxed,
+# time-limited extractor to support them.
 _EXTENSIONS = {
     "text/html": "html",
     "application/xhtml+xml": "html",
     "text/plain": "txt",
     "application/json": "json",
-    "application/pdf": "pdf",
 }
+_PDF = "application/pdf"  # refused on fetch; only a body retained by an earlier build can be one
+_PDF_PAGE = "[this PDF could not be read: PDFs are not supported]"
 _META_NAMES = (
     "article:published_time",
     "datepublished",
@@ -363,25 +362,6 @@ def _bound_text(text: str) -> str:
     return text[:MAX_TEXT_CHARS] + "\n" + _cut_note()
 
 
-def _pdf_pages(body: bytes) -> list[str]:
-    pages: list[str] = []
-    kept = 0
-    try:
-        for page in PdfReader(io.BytesIO(body)).pages:
-            text = page.extract_text(extraction_mode="plain") or ""
-            if kept + len(text) > MAX_TEXT_CHARS:
-                pages.append(text[: MAX_TEXT_CHARS - kept] + "\n" + _cut_note())
-                break
-            pages.append(text)
-            kept += len(text)
-    except (PyPdfError, ValueError, RecursionError, NotImplementedError) as error:
-        # PyPdfError and ValueError: a damaged PDF. RecursionError: deeply nested objects.
-        # NotImplementedError: a stream filter pypdf does not implement. Shown to the model as the
-        # page's text, so the failure is visible, not hidden.
-        return [f"[this PDF could not be read: {type(error).__name__}]"]
-    return pages
-
-
 class _TooLong(Exception):
     pass
 
@@ -411,16 +391,16 @@ def _pretty_json(text: str) -> str:
 
 def pages_from(body: bytes, content_type: str | None) -> list[str]:
     """The text pages of a retained body, delimiters neutralised."""
+    if _media_type(content_type) == _PDF:
+        return [_PDF_PAGE]  # never parsed
     kind = _EXTENSIONS.get(_media_type(content_type), "txt")
-    if kind == "pdf":
-        return [neutralise(page) for page in _pdf_pages(body)]
     if kind == "html":
         text = _parse_html(body, content_type).text()
     elif kind == "json":
         text = _pretty_json(_decode(body, content_type))
     else:
         text = _decode(body, content_type)
-    text = neutralise(_bound_text(text))
+    text = _bound_text(neutralise(text))
     return [text[i : i + PAGE_CHARS] for i in range(0, len(text), PAGE_CHARS)] or [""]
 
 
@@ -540,6 +520,8 @@ class WebLookup:
 
     def page_text(self, item: Retained) -> list[str]:
         """The retained page as text pages for the paging tools (delimiters neutralised)."""
+        if _media_type(item.content_type) == _PDF:
+            return [_PDF_PAGE]  # the body is not read
         ext = _EXTENSIONS.get(_media_type(item.content_type), "txt")
         body = (self._folder / f"{item.sha256}.{ext}").read_bytes()
         return pages_from(body, item.content_type)
@@ -564,8 +546,9 @@ class WebLookup:
         for row in rows:
             if row.get("url") == url:
                 try:
-                    return Retained(**row)
-                except TypeError:
+                    clean = _clean_content_type(row.get("content_type"))
+                    return Retained(**{**row, "content_type": clean})
+                except (TypeError, AttributeError):
                     raise _IndexDamaged("the retained web index is damaged") from None
         return None
 
@@ -633,8 +616,6 @@ class WebLookup:
             if _PLAIN_MEDIA.fullmatch(plain):
                 return f"content type {plain!a} is not allowed"
             return "the response has an unrecognised content type, so it is not retained"
-        if kind == "pdf" and not body.startswith(b"%PDF"):
-            return "the response is declared a PDF but is not one"
         if spent + len(body) > MAX_TOTAL_BYTES:
             return f"the page would pass the run's web budget of {MAX_TOTAL_BYTES} retained bytes"
         return None
