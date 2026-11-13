@@ -4291,12 +4291,24 @@ def test_a_short_snapshot_run_in_the_library_is_listed_with_its_label_and_cp_l10
     assert console == []
     shown = re.sub(r"(?s)<(script|style)\b.*?</\1>|<[^>]+>|\s+", " ", dom)
     assert "Short credit snapshot" in shown  # the run label names the pathway as words
-    lead = re.search(r'(?s)<section class="overview-part" id="overview-lead">.*?</section>', dom)
+    lead = re.search(
+        r'(?s)<section class="overview-part" id="overview-lead"[^>]*>.*?</section>', dom
+    )
     assert lead is not None
     lead_text = re.sub(r"\s+([,.;:])", r"\1", " ".join(re.sub(r"<[^>]+>", " ", lead[0]).split()))
     assert "Creditors are covered today but only just" in lead_text
-    assert "Cover is thin at 3.1x" in lead_text
-    assert 'href="#CP-L10/' in lead[0]  # written by CP-L10
+    # The key finding is the why grid's, beside the lead rather than inside it.
+    why = re.search(r'(?s)<section class="overview-part g24" id="overview-why".*?</section>', dom)
+    assert why is not None
+    why_text = re.sub(r"\s+([,.;:])", r"\1", " ".join(re.sub(r"<[^>]+>", " ", why[0]).split()))
+    assert "Cover is thin at 3.1x" in why_text
+    # The Overview no longer names the module that wrote the lead (ruling: no "Written by"); CP-L10
+    # leads when its tile (named "Short credit snapshot", opening CP-L10) holds the sentence the
+    # lead draws, and no other module's tile does.
+    tiles = re.findall(r'(?s)<details class="mt".*?</details>', dom)
+    leading = [t for t in tiles if "Creditors are covered today but only just" in t]
+    assert len(leading) == 1 and 'class="mt-name">Short credit snapshot<' in leading[0]
+    assert 'href="#CP-L10/' in leading[0]
     assert UNFILLED.search(shown) is None, UNFILLED.findall(shown)
 
 
@@ -4392,8 +4404,17 @@ def test_a_lite_run_fills_the_library_pages_and_its_forecast_page_states_the_gap
         assert UNFILLED.search(shown[name]) is None, (name, UNFILLED.findall(shown[name]))
         assert ISSUER in shown[name] and "Lite credit assessment" in shown[name], name
     dom, _ = visit(index, f"#W-Overview/overview?c={RUN_ID}")
-    lead = re.search(r'(?s)<section class="overview-part" id="overview-lead">.*?</section>', dom)
-    assert lead is not None and 'href="#CP-2/' in lead[0]  # the lead is written by CP-2
+    # The lead is written by CP-2; the Overview no longer links its writer, so the trace
+    # controls of the lead's key findings (the handoff file each was read from) are the evidence.
+    lead = re.search(
+        r'(?s)<section class="overview-part" id="overview-lead"[^>]*>.*?</section>', dom
+    )
+    why = re.search(
+        r'(?s)<section class="overview-part[^"]*" id="overview-why"[^>]*>.*?</section>', dom
+    )
+    assert lead is not None and why is not None
+    sources = re.findall(r'data-paragraph="([^"]*)"', why[0])
+    assert sources and all("/CP-2.md:" in source for source in sources), sources
     assert "First run of this pathway" in shown["Changes"]
     assert "No forecast model was published from this run\u2019s files" in shown["Forecast"]
 
@@ -5455,11 +5476,31 @@ def test_a_real_other_unit_keeps_the_gap_advice_and_the_issue_count():
     assert len(two) == 2
 
 
-@pytest.mark.parametrize("unit", ["US$m / EUR m", "US$m; EUR amounts", "US$m (GBP)"])
+@pytest.mark.parametrize(
+    "unit",
+    [
+        "US$m / EUR m",
+        "US$m; EUR amounts",
+        "US$m (GBP)",
+        "US$m (ILS)",
+        "US$m; TWD amounts",
+        "US$m / AED m",
+        "US$m (SAR)",
+    ],
+)
 def test_a_unit_cell_naming_another_currency_keeps_the_gap_advice(unit):
     (issue,) = debt_stack_issues(DEBT_UNIT_ROW.format(unit))
     assert f"write `Not supplied: reported in {unit}`" in issue
     assert "must be exactly" not in issue
+
+
+@pytest.mark.parametrize(
+    "unit", ["US$m (LTM)", "US$m; PIK interest accrued", "US$m, RCF drawn only", "US$m (TTM basis)"]
+)
+def test_a_three_letter_acronym_after_the_unit_is_not_another_currency(unit):
+    (issue,) = debt_stack_issues(DEBT_UNIT_ROW.format(unit))
+    assert "must be exactly `US$m`" in issue
+    assert "Not supplied" not in issue
 
 
 def test_a_second_table_under_one_heading_is_named_not_reported_as_malformed_rows():
@@ -5841,7 +5882,7 @@ def test_a_claude_run_under_a_ruling_that_lists_web_search_runs_with_search_off(
 
     monkeypatch.setattr(handoff, "HandoffExecutor", recording)
     monkeypatch.setattr(cpos, "live_adapter_for", lambda *args: object())
-    monkeypatch.setattr(cpos, "_release", lambda adapter: None)
+    monkeypatch.setattr(cpos, "_release", lambda adapter, executor: None)
     prepared = prepare(
         context_file(tmp_path),
         issuer_folder(tmp_path),
@@ -7075,13 +7116,18 @@ def events_dir(tmp_path, *records):
 
 
 def test_uncharged_summaries_are_counted_once_each_and_modules_listed_once(tmp_path):
-    same = {"module": "CP-5", "call_index": 1, "reason": "started, no completion reported"}
+    same = {
+        "module": "CP-5",
+        "call_index": 1,
+        "reason": "started, no completion reported",
+        "attempt_id": "a",
+    }
     events_dir(
         tmp_path,
         ("compaction_uncharged", same),
-        ("compaction_uncharged", same),  # the same event recorded again
-        ("compaction_uncharged", {**same, "module": "CP-8", "call_index": 3}),
-        ("compaction_uncharged", {**same, "module": "CP-8", "call_index": 5}),
+        ("compaction_uncharged", same),  # the same attempt recorded again
+        ("compaction_uncharged", {**same, "module": "CP-8", "call_index": 3, "attempt_id": "b"}),
+        ("compaction_uncharged", {**same, "module": "CP-8", "call_index": 5, "attempt_id": "c"}),
     )
     assert cpos_launch._charge_notes(tmp_path) == (
         (
@@ -7123,6 +7169,58 @@ def test_a_module_with_several_summaries_in_one_call_is_listed_for_review(tmp_pa
     )
 
 
+def test_an_accepted_repair_that_dropped_values_is_listed_for_review(tmp_path):
+    events_dir(
+        tmp_path,
+        ("values_dropped_on_repair", {"module": "CP-6", "count": 2}),
+        ("values_dropped_on_repair", {"module": "CP-2", "count": 1}),
+    )
+    assert cpos_launch._review_lines(tmp_path) == (
+        (
+            "Review: CP-6 was accepted after a repair that removed 2 sourced values; the list is "
+            "in that module's review.json (dropped_values). Check them."
+        ),
+        (
+            "Review: CP-2 was accepted after a repair that removed 1 sourced value; the list is "
+            "in that module's review.json (dropped_values). Check it."
+        ),
+    )
+
+
+def test_a_failed_dropped_value_check_is_listed_for_review(tmp_path):
+    events_dir(
+        tmp_path,
+        ("dropped_values_check_failed", {"module": "CP-4", "error": "ValueError: boom"}),
+        ("dropped_values_check_failed", {"module": "CP-4", "error": "ValueError: boom"}),
+    )
+    assert cpos_launch._review_lines(tmp_path) == (
+        (
+            "Review: CP-4 had a repair whose removed values could not be checked "
+            "(dropped_values_error in its review.json); compare the repair with the rejected "
+            "draft."
+        ),
+    )
+
+
+def test_a_failed_summary_and_an_unended_start_without_ids_are_two_summaries(tmp_path):
+    events_dir(
+        tmp_path,
+        ("context_compaction_started", {"module": "CP-5", "call_index": 1}),
+        ("context_compaction_started", {"module": "CP-5", "call_index": 2}),
+        ("context_compacted", {"module": "CP-5", "call_index": 3, "usd": "unknown"}),
+        (
+            "compaction_uncharged",
+            {"module": "CP-5", "call_index": 3, "reason": "failed, no usage reported"},
+        ),
+    )
+    assert cpos_launch._charge_notes(tmp_path) == (
+        (
+            "Charged excludes 2 context summaries with no reported charge (CP-5); "
+            "Copilot may bill them."
+        ),
+    )
+
+
 def test_the_launcher_prints_the_first_prompt_warning_while_the_run_goes_on(
     tmp_path, monkeypatch, capsys, copilot_ruling
 ):
@@ -7155,3 +7253,78 @@ def test_a_note_for_the_separate_cp8_comparison_prints_the_same_review_line(tmp_
     )
     cpos.report_compaction(tmp_path, "requests/CP-8/fp/2.response.md", "CP-8")
     assert capsys.readouterr().err == ""
+
+
+def test_distinct_uncharged_starts_in_one_call_are_counted_apart_and_one_attempt_once(tmp_path):
+    base = {"module": "CP-5", "call_index": 3, "reason": "started, no completion reported"}
+    events_dir(
+        tmp_path,
+        ("compaction_uncharged", {**base, "attempt_id": "a"}),
+        ("compaction_uncharged", {**base, "attempt_id": "b"}),
+        ("compaction_uncharged", {**base, "attempt_id": "b"}),  # the same attempt again
+    )
+    (line,) = cpos_launch._charge_notes(tmp_path)
+    assert line.startswith("Charged excludes 2 context summaries")
+
+
+def test_a_malformed_late_amount_is_shown_as_unreadable_and_the_rest_still_totals(tmp_path):
+    late = {"module": "CP-8", "call_index": 1}
+    events_dir(
+        tmp_path,
+        ("compaction_charge_late", {**late, "usd": "unknown", "attempt_id": "a"}),
+        ("compaction_charge_late", {**late, "usd": "0.25", "attempt_id": "b"}),
+    )
+    (line,) = cpos_launch._charge_notes(tmp_path)
+    assert line == (
+        "Charged excludes USD 0.25 of context-summary charges reported after their module ended "
+        "(CP-8), and 1 amount that could not be read; they were not settled."
+    )
+
+
+def test_a_start_with_no_end_in_the_events_is_disclosed_though_the_run_was_killed(tmp_path):
+    began = {"module": "CP-8", "call_index": 2}
+    events_dir(
+        tmp_path,
+        ("context_compaction_started", {**began, "attempt_id": "a"}),
+        ("context_compaction_started", {**began, "attempt_id": "b"}),
+        ("context_compacted", {**began, "attempt_id": "b", "applied": True, "usd": "0.1"}),
+    )
+    (line,) = cpos_launch._charge_notes(tmp_path)
+    assert line == (
+        "Charged excludes 1 context summary with no reported charge (CP-8); Copilot may bill them."
+    )
+
+
+def test_a_start_already_disclosed_is_not_counted_again_from_its_start_event(tmp_path):
+    began = {"module": "CP-8", "call_index": 2, "attempt_id": "a"}
+    events_dir(
+        tmp_path,
+        ("context_compaction_started", began),
+        ("compaction_uncharged", {**began, "reason": "started, no completion reported"}),
+    )
+    (line,) = cpos_launch._charge_notes(tmp_path)
+    assert line.startswith("Charged excludes 1 context summary ")
+
+
+def test_a_start_reported_uncharged_then_charged_late_is_only_the_late_charge(tmp_path):
+    began = {"module": "CP-8", "call_index": 2, "attempt_id": "a"}
+    events_dir(
+        tmp_path,
+        ("context_compaction_started", began),
+        ("compaction_uncharged", {**began, "reason": "started, no completion reported"}),
+        ("compaction_charge_late", {**began, "usd": "0.1"}),
+    )
+    (line,) = cpos_launch._charge_notes(tmp_path)
+    assert line.startswith("Charged excludes USD 0.1 ")
+
+
+def test_attemptless_starts_are_matched_to_attemptless_ends_by_count(tmp_path):
+    began = {"module": "CP-8", "call_index": 2}
+    events_dir(
+        tmp_path,
+        ("context_compaction_started", began),
+        ("context_compaction_started", began),
+        ("context_compacted", {**began, "applied": True, "usd": "0.1"}),
+    )
+    (line,) = cpos_launch._charge_notes(tmp_path)
+    assert line.startswith("Charged excludes 1 context summary ")

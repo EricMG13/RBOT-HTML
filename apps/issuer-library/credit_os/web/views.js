@@ -99,7 +99,7 @@ function installDestinations() {
     'W-Report':['Report history',[['history','Report history',[]]]],
     'W-Overview':['Overview',[['overview','Overview',[]]]],
     'W-Changes':['Changes',[['changes','Changes',[]]]],
-    'W-Evidence':['Evidence',[['sources','Evidence',[]]]],
+    'W-Evidence':['Evidence',[['summary','Evidence',[]]]],
     'W-Forecast':['Forecast',[['forecast','Forecast',[]]]],
     'CP-OS':['Run activity',[['activity','Run activity',[]]]]
   };
@@ -141,10 +141,10 @@ function modelRelationship(model,models,name) {
   const successor=models.find(m=>m.previous===model.id);
   return model.previous?`supersedes ${name(model.previous)}`:successor?`superseded by ${name(successor.id)}`:null;
 }
-// A delivery in the Model select reads "<run date> · <pathway> · <run id>" from its own run, then its run folder, then its delivery id. Two deliveries that
+// A delivery in the Model select reads "<run date> · <pathway>" from its own run, then its run folder, then its delivery id. Two deliveries that
 // read alike each add the first eight characters of the delivery id, or the whole id when those still tie; a relationship is added only when one is recorded.
 function modelOptionLabels(models) {
-  const base=models.map(m=>{const ctx=Object.values(contexts).find(run=>sameIssuer(m.issuerKey,run.issuerKey)&&(run.folder===m.runFolder||run.folder===m.runId));return ctx?`${runDate(ctx)} · ${runPathway(ctx)} · ${ctx.run}`:m.runFolder||m.id;});
+  const base=models.map(m=>{const ctx=Object.values(contexts).find(run=>sameIssuer(m.issuerKey,run.issuerKey)&&(run.folder===m.runFolder||run.folder===m.runId));return ctx?`${runName(ctx)}`:m.runFolder||m.id;});
   const tagged=models.map((m,i)=>base.filter(text=>text===base[i]).length>1?`${base[i]} · ${m.id.slice(0,8)}`:base[i]);
   const names=models.map((m,i)=>tagged.filter(text=>text===tagged[i]).length>1&&tagged[i]!==base[i]?`${base[i]} · ${m.id}`:tagged[i]);
   const listed=id=>{const at=models.findIndex(m=>m.id===id);return at<0?id:names[at];};
@@ -190,9 +190,14 @@ function fixtureTable(module,line) {
   if(!table)throw new Error(`Missing visual table ${module}:${line}`);
   return table;
 }
+// A new-format chart's one trace control opens the drawer on the first row of its table; its source chips and its Table form are Evidence's (Tables as written).
+// `v.plain` is set by readerChart for a new-format page.
+const chartTrace=(id,v)=>{const row=v.plain&&v.table!==undefined?fixtureTable(id,v.table).rows[0]:null;return row?window.Components.traceRow(`${id}:${row.line}`,`${plain(v.title)}: where it comes from`):'';};
 function chartIntro(id,v) {
+  // A Forecast card draws its own title, unit and trace control; only the module's reading of the chart (if it wrote one) is left to draw here.
+  if(v.headless)return v.quote?`<p class="chart-reading">${rich(v.quote.text.replace(/\n/g,' '))}</p>`:'';
   const label=[v.unit,data[id].period].filter(Boolean).join(' · ');
-  return `<div class="section-heading"><h2>${esc(v.title)}</h2>${label?`<span>${esc(label)}</span>`:''}</div>${v.quote?`<p class="chart-reading">${rich(v.quote.text.replace(/\n/g,' '))}</p>${sourceFooter(`${id}:${v.quote.line}`)}`:''}`;
+  return `<div class="section-heading"><h2>${esc(v.title)}</h2>${label?`<span>${esc(label)}</span>`:''}${chartTrace(id,v)}</div>${v.quote?`<p class="chart-reading">${rich(v.quote.text.replace(/\n/g,' '))}</p>${sourceFooter(`${id}:${v.quote.line}`)}`:''}`;
 }
 const evidenceHref=(id,line)=>routeHref(data[id].module,current?.output===id?current.section:modules[id].first,`${id}:${line}`,data[id].run);
 function comparisonChart(module,v,selection=0,chips=false,note=true) {
@@ -204,7 +209,7 @@ function comparisonChart(module,v,selection=0,chips=false,note=true) {
   const hasNegative=points.some(p=>(chartNumber(p.value)??0)<0);
   return `${chartIntro(module,v)}${selectable&&!v.fixed?`<label class="metric-control">Measure <select id="chart-metric">${v.rows.map((idx,i)=>`<option value="${i}" ${i===selection?'selected':''}>${esc(plain(table.rows[idx].cells[0]))}</option>`).join('')}</select></label>`:''}<div class="horizontal-chart ${hasNegative?'diverging':''}">${points.map((p,i)=>{
     const n=chartNumber(p.value),width=n===null?0:Math.abs(n)/max*100;
-    const key=`${module}:${p.row.line}`,cells=`<span class="chart-label">${i&&points[i-1].label===p.label?`<span class="sr-only">${esc(p.label)}</span>`:esc(p.label)}${v.columns&&v.kind!=='peers'?`<small>${esc(table.headers[p.column])}</small>`:''}</span><span class="track ${n===null?'missing':''}">${hasNegative?`<span class="zero-rule"></span>${n===null?'':`<i class="series-${p.series} ${n<0?'negative':''}" style="left:${n<0?50-width/2:50}%;width:${width/2}%"></i>`}`:n===null?'':`<i class="series-${p.series}" style="width:${width}%"></i>`}</span>${n===null?`<strong${/[\p{L}\p{N}]/u.test(String(p.value??''))?` title="${esc(p.value)}"`:''}>n.a.</strong>`:`<strong>${esc(p.value)}</strong>`}`;
+    const key=`${module}:${p.row.line}`,cells=`<span class="chart-label">${i&&points[i-1].label===p.label?`<span class="sr-only">${esc(p.label)}</span>`:esc(p.label)}${v.columns&&v.kind!=='peers'?`<small>${esc(table.headers[p.column])}</small>`:''}</span><span class="track ${n===null?'missing':''}">${hasNegative?`<span class="zero-rule"></span>${n===null?'':`<i class="series-${p.series} ${n<0?'negative':''}" style="left:${n<0?50-width/2:50}%;width:${width/2}%"></i>`}`:n===null?'':`<i class="series-${p.series}" style="width:${width}%"></i>`}</span>${n===null?(v.plain?`<strong>${statedReason(module,String(p.value??''))}</strong>`:`<strong${/[\p{L}\p{N}]/u.test(String(p.value??''))?` title="${esc(p.value)}"`:''}>n.a.</strong>`):`<strong>${esc(p.value)}</strong>`}`;
     // With chips the row is a group: the button opens the row, each chip opens its own source (a chip cannot sit inside a button).
     return chips?`<div class="chart-row" role="group"><button class="chart-open" data-evidence="${esc(key)}">${cells}</button>${chipsMarkup(key)}</div>`:`<button class="chart-row" data-evidence="${esc(key)}">${cells}</button>`;
   }).join('')}</div>${note?'<p class="matrix-note">Missing values have no bar.</p>':''}`;
@@ -212,25 +217,21 @@ function comparisonChart(module,v,selection=0,chips=false,note=true) {
 // A step label wraps word-wise to what one step can hold (the 14px monospace axis label advances 8.4 viewBox units a character, less a gap
 // between neighbours), in at most three lines. A word is cut only when it alone is wider than a line; the ellipsis marks a cut word or text
 // left after the third line (the last line then drops whole words to make room for it). The title and key carry the full text.
-// A map node reuses it with its own character advance (12px proportional type, MAP_CHAR).
 // Labels start at AXIS_Y and drop 1.2em a line (up to 14px type on a narrow screen), so the viewBox runs to AXIS_BOTTOM to hold three lines and their descenders
 // at either size. A wide bridge is drawn at no less than WIDE_SCALE of its viewBox, whatever its container: a narrow card scrolls it sideways.
 const AXIS_CHAR=8.4,AXIS_LINES=3,WIDE_STEPS=7,WIDE_STEP=142,AXIS_Y=226,BRIDGE_HEIGHT=282,WIDE_SCALE=.75;
-function axisLines(label,step,char=AXIS_CHAR,hard=false,most=AXIS_LINES) {
-  const room=Math.max(4,Math.floor((step-6)/char)),lines=[];
-  for(const long of label.split(' ').filter(Boolean)){
-    // `hard` (map nodes): a word wider than a line breaks across lines, whole, before any ellipsis; the bridge cuts it with an ellipsis; 'keep' (map edge labels) leaves it whole on its own line.
-    let word=long;
-    while(hard===true&&word.length>room){lines.push(word.slice(0,room));word=word.slice(room);}
-    const w=word.length>room&&hard!=='keep'?`${word.slice(0,room-1)}\u2026`:word,last=lines.length-1;
+function axisLines(label,step) {
+  const room=Math.max(4,Math.floor((step-6)/AXIS_CHAR)),lines=[];
+  for(const word of label.split(' ').filter(Boolean)){
+    const w=word.length>room?`${word.slice(0,room-1)}\u2026`:word,last=lines.length-1;
     if(last>=0&&lines[last].length+1+w.length<=room&&!lines[last].endsWith('\u2026'))lines[last]+=` ${w}`;
     else lines.push(w);
   }
-  if(lines.length<=most)return lines.length?lines:[label];
-  const kept=lines.slice(0,most),end=kept[most-1].split(' ');
+  if(lines.length<=AXIS_LINES)return lines.length?lines:[label];
+  const kept=lines.slice(0,AXIS_LINES),end=kept[AXIS_LINES-1].split(' ');
   while(end.length>1&&end.join(' ').length+1>room)end.pop();
   const tail=end.join(' ');
-  kept[most-1]=tail.endsWith('\u2026')?tail:tail.length+1>room&&hard!=='keep'?`${tail.slice(0,room-1)}\u2026`:`${tail}\u2026`;
+  kept[AXIS_LINES-1]=tail.endsWith('\u2026')?tail:tail.length+1>room?`${tail.slice(0,room-1)}\u2026`:`${tail}\u2026`;
   return kept;
 }
 function bridgeChart(module,v) {
@@ -251,8 +252,11 @@ function bridgeChart(module,v) {
   }
   // The scale covers every running start and end, so a position that dips below zero (repay before refinancing) stays inside the frame; the axis is the zero rule.
   const high=Math.max(0,...points.map(p=>Math.max(p.start,p.end)))*1.16,low=Math.min(0,...points.map(p=>Math.min(p.start,p.end)));
-  const wide=points.length>=WIDE_STEPS,width=wide?points.length*WIDE_STEP:660,height=210,step=width/points.length,y=n=>height-(n-low)/((high-low)||1)*height;
-  return `${chartIntro(module,v)}<div class="vector-chart${wide?' bridge-wide':''}"${wide?` role="region" tabindex="0" aria-label="${esc(v.title)}; scroll horizontally for every step"`:''}><svg${wide?` style="min-width:${Math.round((width+20)*WIDE_SCALE)}px"`:''} viewBox="-5 -12 ${width+20} ${BRIDGE_HEIGHT}" role="group" aria-label="${esc(v.title)}. Select a movement to inspect its source."><line x1="0" y1="${y(0)}" x2="${width}" y2="${y(0)}" class="axis"/>${points.map((p,i)=>`<a class="plot-point" href="${evidenceHref(module,p.row.line)}" data-evidence="${esc(`${module}:${p.row.line}`)}" aria-label="${esc(p.label||plain(p.row.cells[0]))}, ${esc(p.display??p.row.cells[v.amount])} ${esc(v.unit)}. View source"><title>${esc(p.label||plain(p.row.cells[0]))}: ${esc(p.display??p.row.cells[v.amount])}</title><rect class="${p.total?'total':p.amount<0?'outflow':'movement'}" x="${i*step+10}" y="${y(Math.max(p.start,p.end))}" width="${step-20}" height="${Math.max(1,Math.abs(y(p.end)-y(p.start)))}"/><text x="${i*step+step/2}" y="${y(Math.max(p.start,p.end))-8}" text-anchor="middle">${esc(p.display??p.row.cells[v.amount])}</text><text class="axis-label" x="${i*step+step/2}" y="${AXIS_Y}" text-anchor="middle">${axisLines(p.label||plain(p.row.cells[0]),step).map((line,at)=>`<tspan x="${i*step+step/2}" dy="${at?'1.2em':0}">${esc(line)}</tspan>`).join('')}</text>${i<points.length-1?`<line class="connector" x1="${i*step+step-10}" y1="${y(p.end)}" x2="${(i+1)*step+10}" y2="${y(p.end)}"/>`:''}</a>`).join('')}</svg></div><div class="bridge-key">${points.map((p,i)=>`<span>${sourceLink(`${module}:${p.row.line}`,p.label||plain(p.row.cells[0]))}${classTag(evidence.get(`${module}:${p.row.line}`),'row-classification')}</span>`).join('')}</div>`;
+  const wide=!v.headless&&points.length>=WIDE_STEPS,width=wide?points.length*WIDE_STEP:660 /* a Forecast card numbers its bars, so its steps fit the card without a sideways scroll */,height=210,step=width/points.length,y=n=>height-(n-low)/((high-low)||1)*height;
+  // A findings page's bars are not links (the chart's one trace control opens the drawer). A Forecast card prints each step once, in full: bars are numbered and one numbered list names them.
+  const name=p=>p.label||cardPlain(module,v,p.row.cells[0]),mark=(p,inner)=>v.plain?`<g class="plot-point" role="img" aria-label="${esc(`${name(p)}, ${p.display??p.row.cells[v.amount]} ${v.unit}`)}"><title>${esc(name(p))}: ${esc(p.display??p.row.cells[v.amount])}</title>${inner}</g>`:`<a class="plot-point" href="${evidenceHref(module,p.row.line)}" data-evidence="${esc(`${module}:${p.row.line}`)}" aria-label="${esc(name(p))}, ${esc(p.display??p.row.cells[v.amount])} ${esc(v.unit)}. View source"><title>${esc(name(p))}: ${esc(p.display??p.row.cells[v.amount])}</title>${inner}</a>`;
+  const axis=(p,i)=>v.plain?[String(i+1)]:axisLines(name(p),step);
+  return `${chartIntro(module,v)}<div class="vector-chart${wide?' bridge-wide':''}"${wide?` role="region" tabindex="0" aria-label="${esc(v.title)}; scroll horizontally for every step"`:''}><svg${wide?` style="min-width:${Math.round((width+20)*WIDE_SCALE)}px"`:v.headless?` style="min-width:${points.length*56}px"`:''} viewBox="-5 -12 ${width+20} ${BRIDGE_HEIGHT}" role="group" aria-label="${esc(v.title)}.${v.plain?'':' Select a movement to inspect its source.'}"><line x1="0" y1="${y(0)}" x2="${width}" y2="${y(0)}" class="axis"/>${points.map((p,i)=>mark(p,`<rect class="${p.total?'total':p.amount<0?'outflow':'movement'}" x="${i*step+10}" y="${y(Math.max(p.start,p.end))}" width="${step-20}" height="${Math.max(1,Math.abs(y(p.end)-y(p.start)))}"/><text x="${i*step+step/2}" y="${y(Math.max(p.start,p.end))-8}" text-anchor="middle">${esc(p.display??p.row.cells[v.amount])}</text><text class="axis-label" x="${i*step+step/2}" y="${AXIS_Y}" text-anchor="middle">${axis(p,i).map((line,at)=>`<tspan x="${i*step+step/2}" dy="${at?'1.2em':0}">${esc(line)}</tspan>`).join('')}</text>${i<points.length-1?`<line class="connector" x1="${i*step+step-10}" y1="${y(p.end)}" x2="${(i+1)*step+10}" y2="${y(p.end)}"/>`:''}`)).join('')}</svg></div>${v.plain?`<ol class="bridge-key bridge-numbered">${points.map((p,i)=>name(p)===''?'':`<li><span class="bridge-n">${i+1}</span><span>${esc(name(p))}</span></li>`).join('')}</ol>`:`<div class="bridge-key">${points.map((p,i)=>`<span>${v.plain?esc(name(p)):`${sourceLink(`${module}:${p.row.line}`,p.label||plain(p.row.cells[0]))}${classTag(evidence.get(`${module}:${p.row.line}`),'row-classification')}`}</span>`).join('')}</div>`}`;
 }
 function pathChart(module,v) {
   const table=fixtureTable(module,v.table),series=['Reference','Downside','Upside'];
@@ -291,20 +295,23 @@ function chartTableForm(id,chart) {
   const table=fixtureTable(id,chart.table),columns=table.headers.map((_,c)=>c);
   return `<details class="chart-table"><summary>Table form</summary>${sourceTable(id,chart.title,table,columns.map(c=>numericColumn(table,c)),columns,table.rows)}</div></details>`;
 }
-// A drawing that states none (a chart, lane or map the store holds as a gap) keeps its section's table as the same fold: every cell as the module wrote it, a Source button per row.
-const gapTableForm=(id,title,table)=>chartTableForm(id,{title,table});
 // ---- Structure views (a "Chart data:" row table that is not by period or step): drawn from the stated numbers only. A value that is
 // not a number is n.a. with its stated reason as the title; it is never a zero position. Nothing is computed for display: headroom and
 // cumulative leverage are shown as stated, and the geometry uses the stated numbers.
 const roundPct=n=>Math.round(n*100)/100;
-const shown=cell=>/^Not supplied:/.test(cell)?`<span title="${esc(cell)}">n.a.</span>`:esc(cell);
-const stated=(cell,suffix='')=>chartNumber(cell)===null?shown(cell):`${esc(cell)}${suffix}`;
+// On a plain (new-format) page a cell that is not a number is its own text as the page reads it (findingCell), never n.a. with the text in a title; a number is drawn as written, with no suffix of ours.
+const shown=(id,v,cell)=>v.plain?statedReason(id,cell,v):/^Not supplied:/.test(cell)?`<span title="${esc(cell)}">n.a.</span>`:esc(cell);
+const stated=(id,v,cell,suffix='')=>chartNumber(cell)===null?shown(id,v,cell):`${esc(cell)}${v.plain?'':suffix}`;
+// A chart key's label: the row's source button on an earlier-format page; on a plain page the text alone (the chart's one trace control opens the drawer).
+const keyLabel=(id,v,row,label)=>v.plain?statedReason(id,String(label),v):sourceLink(`${id}:${row.line}`,label);
 // A track runs from the zero baseline (or the lowest stated value) to just past the highest: `at` is a stated number's position in percent.
 function trackScale(numbers) {
   const known=numbers.filter(n=>n!==null),low=Math.min(0,...known),high=Math.max(0,...known),end=high+((high-low)||1)*.1;
   return n=>roundPct((n-low)/(end-low)*100);
 }
-function structureOpen(id,row,inner,label,chips) {
+function structureOpen(id,row,inner,label,chips,plainPage=false) {
+  // A findings page's row is a labelled group, not a button to a source: the chart's one trace control opens the drawer.
+  if(plainPage)return `<div class="chart-open" role="group" aria-label="${esc(label)}">${inner}</div>`;
   const key=`${id}:${row.line}`,button=`<button class="chart-open" data-evidence="${esc(key)}" aria-label="${esc(`${label}. View source`)}">${inner}</button>`;
   return chips?`${button}${chipsMarkup(key)}`:button;
 }
@@ -323,22 +330,28 @@ function stackChart(id,v,chips=false) {
   const pairs=table.rows.map(r=>stackPair(r,v)),names=[];
   for(const p of pairs)if(p&&!names.includes(`${p.rank}|${p.secured}`))names.push(`${p.rank}|${p.secured}`);
   const series=pairs.map(p=>p?stackClass(names.indexOf(`${p.rank}|${p.secured}`)):'stack-neutral');
-  const unstated=[...new Set(pairs.flatMap((p,i)=>{const rank=stackRank(table.rows[i],v);return p?[]:[rank?`Rank ${esc(rank)} \u00b7 security not stated`:'Ranking not stated'];}))];
-  const legend=[...names.map((n,i)=>{const[rank,secured]=n.split('|');return `<span><i class="${stackClass(i)}"></i>Rank ${esc(rank)} \u00b7 ${secured==='true'?'secured':'unsecured'}</span>`;}),...unstated.map(t=>`<span><i class="stack-neutral"></i>${t}</span>`)].join('');
-  const bar=table.rows.map((row,i)=>amounts[i]>0?`<a class="stack-seg ${series[i]}" href="${evidenceHref(id,row.line)}" data-evidence="${esc(`${id}:${row.line}`)}" style="width:${roundPct(amounts[i]/total*100)}%" aria-label="${esc(`${row.cells[v.label]}, ${row.cells[v.amount]} ${v.unit}. View source`)}" title="${esc(row.cells[v.label])}: ${esc(row.cells[v.amount])}"></a>`:'').join('');
-  const key=table.rows.map((row,i)=>`<li><i class="swatch ${series[i]}"></i><span>${sourceLink(`${id}:${row.line}`,row.cells[v.label])}<small>Rank ${esc(row.cells[v.rank])} · Secured ${esc(row.cells[v.secured])} · Amount ${stated(row.cells[v.amount])} · Cumulative leverage ${stated(row.cells[v.leverage],'x')}</small></span>${chips?chipsMarkup(`${id}:${row.line}`):''}</li>`).join('');
-  return `${chartIntro(id,v)}<div class="chart-legend stack-legend">${legend}</div><div class="stack-bar" role="group" aria-label="${esc(v.title)} in stated rank order. Select a facility to inspect its source.">${bar}</div>${amounts.includes(null)?'<p class="matrix-note">A facility with no stated amount has no segment.</p>':''}<ol class="stack-key">${key}</ol>`;
+  const unstated=[...new Set(pairs.flatMap((p,i)=>{const rank=stackRank(table.rows[i],v);return p?[]:[rank?`Rank ${cardHtml(id,v,rank)} \u00b7 security not stated`:'Ranking not stated'];}))];
+  const legend=[...names.map((n,i)=>{const[rank,secured]=n.split('|');return `<span><i class="${stackClass(i)}"></i>Rank ${cardHtml(id,v,rank)} \u00b7 ${secured==='true'?'secured':'unsecured'}</span>`;}),...unstated.map(t=>`<span><i class="stack-neutral"></i>${t}</span>`)].join('');
+  // A findings page's segment is not a link (the chart's one trace control opens the drawer).
+  const bar=table.rows.map((row,i)=>amounts[i]<=0?'':v.plain?`<span class="stack-seg ${series[i]}" role="img" style="width:${roundPct(amounts[i]/total*100)}%" aria-label="${esc(`${cardPlain(id,v,row.cells[v.label])}, ${row.cells[v.amount]} ${v.unit}`)}" title="${esc(cardPlain(id,v,row.cells[v.label]))}: ${esc(row.cells[v.amount])}"></span>`:`<a class="stack-seg ${series[i]}" href="${evidenceHref(id,row.line)}" data-evidence="${esc(`${id}:${row.line}`)}" style="width:${roundPct(amounts[i]/total*100)}%" aria-label="${esc(`${row.cells[v.label]}, ${row.cells[v.amount]} ${v.unit}. View source`)}" title="${esc(row.cells[v.label])}: ${esc(row.cells[v.amount])}"></a>`).join('');
+  const times=v.plain?'':'x'; // a new-format page draws the cell as written; the x is not the handoff's character
+  // A Forecast card sets each facility's facts as label and value pairs (the figures in the figure face); other pages keep the one line.
+  const facts=row=>v.headless?`<dl class="stack-facts"><div><dt>Rank</dt><dd>${cardHtml(id,v,row.cells[v.rank])}</dd></div><div><dt>Secured</dt><dd>${cardHtml(id,v,row.cells[v.secured])}</dd></div><div><dt>Amount</dt><dd>${stated(id,v,row.cells[v.amount])}</dd></div><div><dt>Cumulative leverage</dt><dd>${stated(id,v,row.cells[v.leverage],times)}</dd></div></dl>`:`<small>Rank ${esc(row.cells[v.rank])} · Secured ${esc(row.cells[v.secured])} · Amount ${stated(id,v,row.cells[v.amount])} · Cumulative leverage ${stated(id,v,row.cells[v.leverage],times)}</small>`;
+  const key=table.rows.map((row,i)=>`<li><i class="swatch ${series[i]}"></i><span>${v.headless?`<span class="stack-name">${keyLabel(id,v,row,row.cells[v.label])}</span>`:keyLabel(id,v,row,row.cells[v.label])}${facts(row)}</span>${chips?chipsMarkup(`${id}:${row.line}`):''}</li>`).join('');
+  // A Forecast card's four field labels are said once, in a header row over the aligned values; the per-row labels stay for a narrow card (CSS) and for assistive technology.
+  const head=v.headless?`<div class="stack-head" aria-hidden="true"><span>Rank</span><span>Secured</span><span>Amount</span><span>Cumulative leverage</span></div>`:'';
+  return `${chartIntro(id,v)}<div class="chart-legend stack-legend">${legend}</div><div class="stack-bar" role="group" aria-label="${esc(v.title)} in stated rank order.${v.plain?'':' Select a facility to inspect its source.'}">${bar}</div>${amounts.includes(null)?'<p class="matrix-note">A facility with no stated amount has no segment.</p>':''}${v.headless?`<div class="stack-tbl">${head}<ol class="stack-key">${key}</ol></div>`:`<ol class="stack-key">${key}</ol>`}`;
 }
 function bulletChart(id,v,chips=false) {
   const table=fixtureTable(id,v.table);
   return `${chartIntro(id,v)}<div class="bullet-chart">${table.rows.map(row=>{
     const cells=row.cells,threshold=chartNumber(cells[v.threshold]),current=chartNumber(cells[v.current]),direction=cells[v.direction],at=trackScale([threshold,current]);
-    const label=v.label.map(c=>plain(cells[c])).join(' · '),unit=v.unit?'':cells[cells.length-2];
+    const label=v.label.map(c=>cardPlain(id,v,cells[c])).join(' · '),unit=v.unit?'':cells[cells.length-2];
     const pass=threshold===null?'':/below/.test(direction)?`<i class="pass" style="left:0%;width:${at(threshold)}%"></i>`:`<i class="pass" style="left:${at(threshold)}%;width:${roundPct(100-at(threshold))}%"></i>`;
     const track=`<span class="bullet-track">${pass}${threshold===null?'':`<i class="tick" style="left:${at(threshold)}%"></i>`}${current===null?'':`<i class="marker" style="left:${at(current)}%"></i>`}</span>`;
-    const text=`<span class="structure-text">Threshold ${stated(cells[v.threshold])} · Current ${stated(cells[v.current])}${v.headroom===null?'':` · Headroom ${shown(cells[v.headroom])}`} · ${esc(direction)}</span>`;
-    const inner=`<span class="chart-label">${esc(label)}${unit?`<small>${esc(unit)}</small>`:''}</span>${track}${text}`;
-    return `<div class="bullet-row" role="group" aria-label="${esc(label)}">${structureOpen(id,row,inner,`${label}: threshold ${cells[v.threshold]}, current ${cells[v.current]}, ${direction}`,chips)}</div>`;
+    const text=`<span class="structure-text">Threshold ${stated(id,v,cells[v.threshold])} · Current ${stated(id,v,cells[v.current])}${v.headroom===null?'':` · Headroom ${shown(id,v,cells[v.headroom])}`} · ${cardHtml(id,v,direction)}</span>`;
+    const inner=`<span class="chart-label">${esc(label)}${unit?`<small>${cardHtml(id,v,unit)}</small>`:''}</span>${track}${text}`;
+    return `<div class="bullet-row" role="group" aria-label="${esc(label)}">${structureOpen(id,row,inner,statement(label,part(id,v,'threshold',cells[v.threshold]),part(id,v,'current',cells[v.current]),part(id,v,'',direction)),chips,v.plain)}</div>`;
   }).join('')}</div>`;
 }
 function limitsChart(id,v,chips=false) {
@@ -347,9 +360,9 @@ function limitsChart(id,v,chips=false) {
     const cells=row.cells,[current,proposed,limit]=[v.current,v.proposed,v.limit].map(c=>chartNumber(cells[c])),at=trackScale([current,proposed,limit]),zero=at(0);
     const bar=(n,series)=>n===null?'':`<i class="series-${series}" style="${n<0?`margin-left:${at(n)}%;`:zero?`margin-left:${zero}%;`:''}width:${roundPct(Math.abs(at(n)-zero))}%"></i>`;
     const track=`<span class="limit-track">${bar(current,0)}${bar(proposed,1)}${limit===null?'':`<i class="tick" style="left:${at(limit)}%"></i>`}</span>`;
-    const text=`<span class="structure-text">Current ${stated(cells[v.current])} · Proposed ${stated(cells[v.proposed])} · Limit ${stated(cells[v.limit])}</span>`;
-    const inner=`<span class="chart-label">${esc(plain(cells[v.label]))}${v.unit?'':`<small>${esc(cells[cells.length-2])}</small>`}</span>${track}${text}`;
-    return `<div class="limit-row" role="group" aria-label="${esc(plain(cells[v.label]))}">${structureOpen(id,row,inner,`${plain(cells[v.label])}: current ${cells[v.current]}, proposed ${cells[v.proposed]}, limit ${cells[v.limit]}`,chips)}</div>`;
+    const text=`<span class="structure-text">Current ${stated(id,v,cells[v.current])} · Proposed ${stated(id,v,cells[v.proposed])} · Limit ${stated(id,v,cells[v.limit])}</span>`;
+    const name=cardPlain(id,v,cells[v.label]),inner=`<span class="chart-label">${esc(name)}${v.unit?'':`<small>${cardHtml(id,v,cells[cells.length-2])}</small>`}</span>${track}${text}`;
+    return `<div class="limit-row" role="group" aria-label="${esc(name)}">${structureOpen(id,row,inner,statement(name,part(id,v,'current',cells[v.current]),part(id,v,'proposed',cells[v.proposed]),part(id,v,'limit',cells[v.limit])),chips,v.plain)}</div>`;
   }).join('')}</div>`;
 }
 // ---- Comparison views: only stated numbers are placed. A change between two stated values is never worked out or written; the two points show it.
@@ -358,14 +371,14 @@ const unitOf=row=>row.cells[row.cells.length-2];
 function dumbbellChart(id,v,chips=false) {
   const table=fixtureTable(id,v.table),pair=row=>[v.prior,v.current].map(c=>chartNumber(row.cells[c]));
   const scales=new Map([...new Set(table.rows.map(unitOf))].map(unit=>[unit,trackScale(table.rows.filter(r=>unitOf(r)===unit).flatMap(pair))]));
-  const legend=`<div class="chart-legend"><span><i class="series-0"></i>${esc(table.headers[v.prior])}</span><span><i class="series-1"></i>${esc(table.headers[v.current])}</span></div>`;
+  const legend=`<div class="chart-legend"><span><i class="series-0"></i>${cardHtml(id,v,table.headers[v.prior])}</span><span><i class="series-1"></i>${cardHtml(id,v,table.headers[v.current])}</span></div>`;
   return `${chartIntro(id,v)}${legend}<div class="dumbbell-chart">${table.rows.map(row=>{
-    const cells=row.cells,[prior,current]=pair(row),at=scales.get(unitOf(row)),label=plain(cells[v.label]);
+    const cells=row.cells,[prior,current]=pair(row),at=scales.get(unitOf(row)),label=cardPlain(id,v,cells[v.label]);
     const link=prior===null||current===null?'':`<i class="dumbbell-link" style="left:${Math.min(at(prior),at(current))}%;width:${roundPct(Math.abs(at(current)-at(prior)))}%"></i>`;
     const dot=(n,series)=>n===null?'':`<i class="dumbbell-dot series-${series}" style="left:${at(n)}%"></i>`;
-    const text=`<span class="structure-text">Prior ${shown(cells[v.periods[0]])} ${stated(cells[v.prior])} · Current ${shown(cells[v.periods[1]])} ${stated(cells[v.current])} · ${esc(unitOf(row))}</span>`;
+    const text=`<span class="structure-text">Prior ${shown(id,v,cells[v.periods[0]])} ${stated(id,v,cells[v.prior])} · Current ${shown(id,v,cells[v.periods[1]])} ${stated(id,v,cells[v.current])} · ${cardHtml(id,v,unitOf(row))}</span>`;
     const inner=`<span class="chart-label">${esc(label)}</span><span class="dumbbell-track">${link}${dot(prior,0)}${dot(current,1)}</span>${text}`;
-    return `<div class="dumbbell-row" role="group" aria-label="${esc(label)}">${structureOpen(id,row,inner,`${label}: prior ${cells[v.prior]}, current ${cells[v.current]}`,chips)}</div>`;
+    return `<div class="dumbbell-row" role="group" aria-label="${esc(label)}">${structureOpen(id,row,inner,statement(label,part(id,v,'prior',cells[v.prior]),part(id,v,'current',cells[v.current])),chips,v.plain)}</div>`;
   }).join('')}</div>`;
 }
 // A peer range strip per metric (each on its own scale: a metric has its own unit). The band is drawn only for a stated low that does not exceed the stated high.
@@ -373,11 +386,11 @@ function rangeChart(id,v,chips=false) {
   const table=fixtureTable(id,v.table);
   const legend=`<div class="chart-legend"><span><i class="range-key"></i>Peer low to high</span><span><i class="limit-key"></i>Peer median</span><span><i class="series-0"></i>Issuer</span></div>`;
   return `${chartIntro(id,v)}${legend}<div class="range-chart">${table.rows.map(row=>{
-    const cells=row.cells,[issuer,low,median,high]=[v.issuer,v.low,v.median,v.high].map(c=>chartNumber(cells[c])),at=trackScale([issuer,low,median,high]),label=plain(cells[v.label]);
+    const cells=row.cells,[issuer,low,median,high]=[v.issuer,v.low,v.median,v.high].map(c=>chartNumber(cells[c])),at=trackScale([issuer,low,median,high]),label=cardPlain(id,v,cells[v.label]);
     const band=low===null||high===null||low>high?'':`<i class="range-band" style="left:${at(low)}%;width:${roundPct(at(high)-at(low))}%"></i>`;
     const track=`<span class="range-track">${band}${median===null?'':`<i class="tick" style="left:${at(median)}%"></i>`}${issuer===null?'':`<i class="marker" style="left:${at(issuer)}%"></i>`}</span>`;
-    const text=`<span class="structure-text">Issuer ${stated(cells[v.issuer])} · Peer low ${stated(cells[v.low])} · Peer median ${stated(cells[v.median])} · Peer high ${stated(cells[v.high])} · Peers ${shown(cells[v.count])} · ${esc(unitOf(row))}</span>`;
-    return `<div class="range-row" role="group" aria-label="${esc(label)}">${structureOpen(id,row,`<span class="chart-label">${esc(label)}</span>${track}${text}`,`${label}: issuer ${cells[v.issuer]}, peer range ${cells[v.low]} to ${cells[v.high]}`,chips)}</div>`;
+    const text=`<span class="structure-text">Issuer ${stated(id,v,cells[v.issuer])} · Peer low ${stated(id,v,cells[v.low])} · Peer median ${stated(id,v,cells[v.median])} · Peer high ${stated(id,v,cells[v.high])} · Peers ${shown(id,v,cells[v.count])} · ${cardHtml(id,v,unitOf(row))}</span>`;
+    return `<div class="range-row" role="group" aria-label="${esc(label)}">${structureOpen(id,row,`<span class="chart-label">${esc(label)}</span>${track}${text}`,statement(label,part(id,v,'issuer',cells[v.issuer]),cardPlain(id,v,cells[v.low])!==''&&cardPlain(id,v,cells[v.high])!==''?`peer range ${cardPlain(id,v,cells[v.low])} to ${cardPlain(id,v,cells[v.high])}`:''),chips,v.plain)}</div>`;
   }).join('')}</div>`;
 }
 // Yield against maturity: x is the stated maturity date (a real YYYY-MM-DD, first to last placed), y the stated yield on a panel per unit. An instrument with no such date or yield has no point and is still listed.
@@ -389,18 +402,22 @@ function scatterChart(id,v,chips=false) {
   const panels=[...new Set(rows.map(unitOf))].map(unit=>{
     const own=rows.filter(r=>unitOf(r)===unit),values=own.map(r=>chartNumber(r.cells[v.yield])),low=Math.min(...values),high=Math.max(...values),pad=(high-low)*.1||.5,y=n=>roundPct(180-(n-low+pad)/(high-low+2*pad)*160);
     const points=own.map(row=>{
-      const cx=x(Date.parse(row.cells[v.date])),cy=y(chartNumber(row.cells[v.yield])),name=plain(row.cells[v.label]),said=`${name}, matures ${row.cells[v.date]}, yield ${row.cells[v.yield]} ${unit}`;
-      return `<a class="plot-point" href="${evidenceHref(id,row.line)}" data-evidence="${esc(`${id}:${row.line}`)}" aria-label="${esc(said)}. View source"><title>${esc(said)}</title><circle class="point-hit" cx="${cx}" cy="${cy}" r="12"/><circle class="scatter-dot" cx="${cx}" cy="${cy}" r="5"/><text x="${cx}" y="${cy-10}" text-anchor="middle">${esc(row.cells[v.yield])}</text></a>`;
+      const cx=x(Date.parse(row.cells[v.date])),cy=y(chartNumber(row.cells[v.yield])),name=cardPlain(id,v,row.cells[v.label]),said=`${name}, matures ${row.cells[v.date]}, yield ${row.cells[v.yield]} ${cardPlain(id,v,unit)}`,dots=`<title>${esc(said)}</title><circle class="point-hit" cx="${cx}" cy="${cy}" r="12"/><circle class="scatter-dot" cx="${cx}" cy="${cy}" r="5"/><text x="${cx}" y="${cy-10}" text-anchor="middle">${esc(row.cells[v.yield])}</text>`;
+      // A findings page's point is not a link (the chart's one trace control opens the drawer).
+      return v.plain?`<g class="plot-point" role="img" aria-label="${esc(said)}">${dots}</g>`:`<a class="plot-point" href="${evidenceHref(id,row.line)}" data-evidence="${esc(`${id}:${row.line}`)}" aria-label="${esc(said)}. View source">${dots}</a>`;
     }).join('');
-    return `<p class="matrix-note">Yield, ${esc(unit)}</p><div class="vector-chart"><svg viewBox="0 0 680 220" role="group" aria-label="${esc(`${v.title}, yield in ${unit}. Select a point to inspect its source.`)}"><line class="axis" x1="60" x2="630" y1="190" y2="190"/>${points}<text class="axis-label" x="60" y="210" text-anchor="start">${esc(dated[0])}</text><text class="axis-label" x="630" y="210" text-anchor="end">${esc(dated.at(-1))}</text></svg></div>`;
+    return `<p class="matrix-note">Yield, ${cardHtml(id,v,unit)}</p><div class="vector-chart"><svg viewBox="0 0 680 220" role="group" aria-label="${esc(`${v.title}, yield in ${cardPlain(id,v,unit)}.${v.plain?'':' Select a point to inspect its source.'}`)}"><line class="axis" x1="60" x2="630" y1="190" y2="190"/>${points}<text class="axis-label" x="60" y="210" text-anchor="start">${esc(dated[0])}</text><text class="axis-label" x="630" y="210" text-anchor="end">${esc(dated.at(-1))}</text></svg></div>`;
   }).join('');
-  const key=table.rows.map(row=>`<li><span>${sourceLink(`${id}:${row.line}`,row.cells[v.label])}<small>Maturity ${shown(row.cells[v.date])} · Yield ${stated(row.cells[v.yield])} ${esc(unitOf(row))} · Spread ${shown(row.cells[v.spread])} · Quoted ${shown(row.cells[v.quoted])} · ${esc(row.cells[v.source])}</small></span>${chips?chipsMarkup(`${id}:${row.line}`):''}</li>`).join('');
+  const key=table.rows.map(row=>`<li><span>${keyLabel(id,v,row,row.cells[v.label])}<small>Maturity ${shown(id,v,row.cells[v.date])} · Yield ${stated(id,v,row.cells[v.yield])} ${cardHtml(id,v,unitOf(row))} · Spread ${shown(id,v,row.cells[v.spread])} · Quoted ${shown(id,v,row.cells[v.quoted])}${v.plain?'':` · ${esc(row.cells[v.source])}`}</small></span>${chips?chipsMarkup(`${id}:${row.line}`):''}</li>`).join('');
   return `${chartIntro(id,v)}${panels}${rows.length<table.rows.length?'<p class="matrix-note">An instrument with no stated maturity date or yield has no point.</p>':''}<ol class="stack-key">${key}</ol>`;
 }
 // One column of a column chart from a stated value: a bar from the zero rule, or n.a. with its stated reason. `tag` and `attrs` let a column be a link.
-function columnOf(value,i,zero,pct,tag='span',attrs='') {
+// `own` (a plain page's cell, as the page reads it) replaces n.a. and its title: the cell is its own text.
+function columnOf(value,i,zero,pct,tag='span',attrs='',own=null,mark=false) {
   const n=chartNumber(value);
-  if(n===null)return `<${tag} class="col missing"${attrs}><strong style="bottom:${zero}%"${/[\p{L}\p{N}]/u.test(String(value??''))?` title="${esc(value)}"`:''}>n.a.</strong></${tag}>`;
+  // A Forecast card marks a stated absence in the value's own column and sets the sentence under the chart; nothing is drawn over a neighbouring bar.
+  if(n===null&&mark)return `<${tag} class="col missing"${attrs}><strong class="absent-mark" style="bottom:${zero}%" aria-hidden="true">\u2020</strong></${tag}>`;
+  if(n===null)return own!==null?`<${tag} class="col missing"${attrs}><strong style="bottom:${zero}%">${own}</strong></${tag}>`:`<${tag} class="col missing"${attrs}><strong style="bottom:${zero}%"${/[\p{L}\p{N}]/u.test(String(value??''))?` title="${esc(value)}"`:''}>n.a.</strong></${tag}>`;
   const height=pct(Math.abs(n)),bottom=n<0?Math.round((zero-height)*100)/100:zero;
   return `<${tag} class="col"${attrs}><i class="series-${i}${n<0?' negative':''}" style="bottom:${bottom}%;height:${height}%"></i><strong${n<0?' class="below"':''} style="bottom:${n<0?bottom:Math.round((bottom+height)*100)/100}%">${esc(value)}</strong></${tag}>`;
 }
@@ -409,17 +426,21 @@ function columnOf(value,i,zero,pct,tag='span',attrs='') {
 function recoveryChart(id,v,chips=false,note=true) {
   const table=fixtureTable(id,v.table),classes=[...new Set(table.rows.map(r=>r.cells[v.label]))],scenarios=[...new Set(table.rows.map(r=>r.cells[v.scenario]))];
   const numbers=table.rows.map(r=>chartNumber(r.cells[v.recovery])??0),top=Math.max(0,...numbers),low=Math.min(0,...numbers),span=top-low||1,pct=n=>Math.round(n/span*10000)/100,zero=pct(-low);
-  const legend=`<div class="chart-legend">${scenarios.map((s,i)=>`<span><i class="series-${i%3}"></i>${esc(s)}</span>`).join('')}</div>`;
+  const legend=`<div class="chart-legend">${scenarios.map((s,i)=>`<span><i class="series-${i%3}"></i>${cardHtml(id,v,s)}</span>`).join('')}</div>`;
   const groups=classes.map(name=>{
     const rows=table.rows.filter(r=>r.cells[v.label]===name);
     const cols=scenarios.map((scenario,i)=>{
       const row=rows.find(r=>r.cells[v.scenario]===scenario);
       if(!row)return `<span class="col missing" title="No row for ${esc(scenario)}"><strong style="bottom:${zero}%">not stated</strong></span>`;
-      const said=`${plain(name)}, ${scenario}: recovery ${chartNumber(row.cells[v.recovery])===null?'n.a.':row.cells[v.recovery]} ${unitOf(row)}. View source`;
-      return columnOf(row.cells[v.recovery],i%3,zero,pct,'a',` href="${evidenceHref(id,row.line)}" data-evidence="${esc(`${id}:${row.line}`)}" aria-label="${esc(said)}"`);
+      const recovered=v.plain?cardPlain(id,v,row.cells[v.recovery]):chartNumber(row.cells[v.recovery])===null?'n.a.':row.cells[v.recovery];  // a findings page leaves out a recovery that states no figure
+      const said=`${cardPlain(id,v,name)}, ${cardPlain(id,v,scenario)}${recovered===''?'':`: recovery ${recovered} ${cardPlain(id,v,unitOf(row))}`}`;
+      // A findings page's column is not a link (the chart's one trace control opens the drawer).
+      // A Forecast card marks a stated absence only when its sentence is drawn in the class's facts line beneath.
+      if(v.plain){const own=statedReason(id,row.cells[v.recovery],v);return columnOf(row.cells[v.recovery],i%3,zero,pct,'span',` role="img" aria-label="${esc(said)}"`,own,v.headless&&own!=='');}
+      return columnOf(row.cells[v.recovery],i%3,zero,pct,'a',` href="${evidenceHref(id,row.line)}" data-evidence="${esc(`${id}:${row.line}`)}" aria-label="${esc(`${said}. View source`)}"`,null);
     }).join('');
-    const facts=rows.map(r=>`<small>${esc(r.cells[v.scenario])}: claim ${stated(r.cells[v.claim])} ${esc(unitOf(r))} · recovery ${stated(r.cells[v.recovery])} · ${stated(r.cells[v.percent],'%')}</small>`).join('');
-    return `<div class="recovery-group" role="group" aria-label="${esc(plain(name))}"><span class="plot"><span class="zero-rule" style="bottom:${zero}%"></span>${cols}</span><span class="chart-label">${esc(plain(name))}${facts}</span>${chips?rows.map(r=>chipsMarkup(`${id}:${r.line}`)).join(''):''}</div>`;
+    const facts=rows.map(r=>`<small>${cardHtml(id,v,r.cells[v.scenario])}: claim ${stated(id,v,r.cells[v.claim])} ${cardHtml(id,v,unitOf(r))} · recovery ${stated(id,v,r.cells[v.recovery])} · ${stated(id,v,r.cells[v.percent],'%')}</small>`).join('');
+    return `<div class="recovery-group" role="group" aria-label="${esc(cardPlain(id,v,name))}"><span class="plot"><span class="zero-rule" style="bottom:${zero}%"></span>${cols}</span><span class="chart-label">${esc(cardPlain(id,v,name))}${facts}</span>${chips?rows.map(r=>chipsMarkup(`${id}:${r.line}`)).join(''):''}</div>`;
   }).join('');
   return `${chartIntro(id,v)}<div class="column-chart" style="--periods:${classes.length}">${legend}<div class="periods">${groups}</div></div>${note?'<p class="matrix-note">Missing values have no bar.</p>':''}`;
 }
@@ -427,21 +448,34 @@ const READER_FIGURES={recovery:recoveryChart,waterfall:bridgeChart,stack:stackCh
 // A reader chart is a "Chart data:" table whose first column is Period, so it is drawn over time: periods along the x axis in table order,
 // one column per series from a zero baseline (owner, 2026-11-10). Each period is one button (its handoff row) with its chips under it.
 // A step table (store.py: kind "waterfall") is a bridge: opening, stated changes and closing, drawn by bridgeChart; the row tables (kinds stack, bullet, limits) are below.
-function readerChart(id,chart,chips=false,note=true) {
-  if(READER_FIGURES[chart.kind])return `${READER_FIGURES[chart.kind](id,chart,chips,note)}${chartTableForm(id,chart)}`;
+// `onPlainPage` is a new-format page's chart: the cells as the handoff wrote them, one trace control, no source chips and no Table form (the table as written is Evidence's).
+function readerChart(id,chart,chips=false,note=true,onPlainPage=false,card=false) {
+  const form=onPlainPage?'':chartTableForm(id,chart);
+  if(onPlainPage){chart={...chart,plain:true,...(card?{headless:true}:{})};chips=false;}
+  if(READER_FIGURES[chart.kind])return `${READER_FIGURES[chart.kind](id,chart,chips,note)}${form}`;
   const table=fixtureTable(id,chart.table),series=chart.columns||[chart.column],rows=(chart.rows||table.rows.map((_,i)=>i)).map(i=>table.rows[i]);
   const numbers=rows.flatMap(row=>series.map(c=>chartNumber(row.cells[c])??0));
   const top=Math.max(0,...numbers),low=Math.min(0,...numbers),span=top-low||1,pct=n=>Math.round(n/span*10000)/100,zero=pct(-low);
-  const legend=`<div class="chart-legend">${series.map((c,i)=>`<span><i class="series-${i}"></i>${esc(table.headers[c])}</span>`).join('')}</div>`;
+  const legend=`<div class="chart-legend">${series.map((c,i)=>`<span><i class="series-${i}"></i>${cardHtml(id,chart,table.headers[c])}</span>`).join('')}</div>`;
+  const absent=[];
   const periods=rows.map(row=>{
-    const key=`${id}:${row.line}`,period=plain(row.cells[0]);
-    const cols=series.map((c,i)=>columnOf(row.cells[c],i,zero,pct)).join('');
-    const said=series.map(c=>`${table.headers[c]} ${chartNumber(row.cells[c])===null?'n.a.':plain(row.cells[c])}`).join(', ');
-    const inner=`<span class="plot"><span class="zero-rule" style="bottom:${zero}%"></span>${cols}</span><span class="chart-label">${esc(period)}${chart.sub?`<small>${chart.sub.map(c=>shown(row.cells[c])).join(' → ')}</small>`:''}</span>`;
+    const key=`${id}:${row.line}`,period=cardPlain(id,chart,row.cells[0]);
+    const cols=series.map((c,i)=>{
+      const own=chart.plain?statedReason(id,row.cells[c],chart):null;
+      // A marker always has its sentence: an empty cell draws none; a stated absence draws the marker and its sentence (or, held back, one link to Evidence).
+      const isStated=chart.headless&&chartNumber(row.cells[c])===null&&String(row.cells[c]??'').trim()!=='';
+      if(isStated)absent.push({period,series:cardHtml(id,chart,table.headers[c]),text:own!==''?own:`<a class="in-ev" href="${esc(window.Evidence.href('registers',data[id].module,data[id].run))}">In Evidence</a>`});
+      return columnOf(row.cells[c],i,zero,pct,'span','',own,isStated);
+    }).join('');
+    const said=chart.plain?series.map(c=>part(id,chart,cardPlain(id,chart,table.headers[c]),row.cells[c])).filter(Boolean).join(', '):series.map(c=>`${cardPlain(id,chart,table.headers[c])} ${chartNumber(row.cells[c])===null?'n.a.':cardPlain(id,chart,row.cells[c])}`).join(', ');
+    const inner=`<span class="plot"><span class="zero-rule" style="bottom:${zero}%"></span>${cols}</span><span class="chart-label">${esc(period)}${chart.sub?`<small>${chart.sub.map(c=>shown(id,chart,row.cells[c])).join(' → ')}</small>`:''}</span>`;
     const label=`aria-label="${esc(`${period}: ${said}. View source`)}"`;
+    // A findings page's period is a labelled group, not a button to a source: the chart's one trace control opens the drawer.
+    if(chart.plain)return `<div class="chart-row" role="group" aria-label="${esc(`${period}: ${said}`)}">${inner}</div>`;
     return chips?`<div class="chart-row" role="group" aria-label="${esc(period)}"><button class="chart-open" data-evidence="${esc(key)}" ${label}>${inner}</button>${chipsMarkup(key)}</div>`:`<button class="chart-row" data-evidence="${esc(key)}" ${label}>${inner}</button>`;
   }).join('');
-  return `${chartIntro(id,chart)}<div class="column-chart" style="--periods:${rows.length}">${legend}<div class="periods">${periods}</div></div>${note?'<p class="matrix-note">Missing values have no bar.</p>':''}${chartTableForm(id,chart)}`;
+  const absences=absent.length?`<ul class="fc-absent">${absent.map(a=>`<li><span class="absent-mark" aria-hidden="true">\u2020</span><b>${esc(a.period)}</b> ${a.series}: ${a.text}</li>`).join('')}</ul>`:'';
+  return `${chartIntro(id,chart)}<div class="column-chart" style="--periods:${rows.length}">${legend}<div class="periods">${periods}</div></div>${absences}${note?'<p class="matrix-note">Missing values have no bar.</p>':''}${form}`;
 }
 function readerCharts(id,section) {
   const lines=new Set(sectionData(id,section).flatMap(s=>s.blocks).map(b=>b.line));
@@ -460,8 +494,8 @@ const drawn=(id,where)=>data[id].sections.filter((section,i)=>data[id].placement
 const DRAWN_PLACEMENTS=['view','reference','calculations','limits'];
 // The routable section anchors of an output: the sections a part draws (audit and consumed sections open from the audit list instead).
 const drawnAnchors=id=>{
-  const {rest,audit,drawings}=isNewFormat(data[id].sections)?newFormatSplit(id):{rest:DRAWN_PLACEMENTS.flatMap(where=>drawn(id,where)),audit:[],drawings:[]};
-  return new Set([...rest,...audit,...drawings].map(section=>`s-${section.line}`));
+  const {rest,drawings,registers}=isNewFormat(data[id].sections)?newFormatSplit(id):{rest:DRAWN_PLACEMENTS.flatMap(where=>drawn(id,where)),drawings:[],registers:[]};
+  return new Set([...rest,...drawings,...registers].map(section=>`s-${section.line}`));
 };
 // What a chip draws, from the chip dict as the library build emits it. An upstream chip with no module names register codes of the row's own module.
 // Only an issuer-page chip has an avatar (its source key); a module is named in the label, never coded.
@@ -485,7 +519,8 @@ const gapCount=n=>`${n} unresolved citation${n===1?'':'s'}`;
 // The "Row" chip comes from the evidence key itself; the others from the chips map, by index (the index counts every chip of the key).
 function chipsMarkup(key,counted=true) {
   const item=evidence.get(key),found=window.CREDIT_OS_DATA?.chips?.[key]||[];
-  const row=item?`<button type="button" class="chip" data-evidence="${esc(key)}" title="Table row, line ${item.line}" aria-label="Table row, line ${item.line}">Row<span class="dot row"></span></button>`:'';
+  if(!item)return ''; // no item behind the key: no chip or trace control that would do nothing
+  const row=item?window.Components.traceRow(key,`Table row, line ${item.line}`):'';
   const gaps=found.filter(unresolvedGap).length;
   const count=counted&&gaps?`<button type="button" class="chip-count" data-gaps="${esc(key)}">${gapCount(gaps)}</button>`:'';
   return chipSet([row,...found.map((chip,index)=>{
@@ -552,7 +587,8 @@ function reportBand(id) {
 const cardTitle=chart=>chart.replace(/<div class="section-heading"><h2>(.*?)<\/h2>/s,'<div class="section-heading"><h4>$1</h4>');
 // The index of the last period chart: the waterfall is not a column chart, so "Missing values have no bar" prints under the last one that is.
 const lastPeriodChart=charts=>charts.findLastIndex(c=>!c.kind||c.kind==='grouped'||c.kind==='recovery');
-const chartCards=charts=>charts.map((chart,at)=>`<div class="panel-card">${cardTitle(chart)}${at===charts.length-1?LEGEND:''}</div>`).join('');
+// The chip key goes with the chips: a new-format page draws none.
+const chartCards=(charts,legend=true)=>charts.map((chart,at)=>`<div class="panel-card">${cardTitle(chart)}${legend&&at===charts.length-1?LEGEND:''}</div>`).join('');
 function reportNumbers(id) {
   // The "Missing values have no bar" note prints once for the part, under its last chart, as on the run report.
   const charts=reportChartCards(id),table=keyNumbers(id);
@@ -574,7 +610,7 @@ function readingSections(id,sections,base=4) {
     const tag='h'+Math.min(6,base+(section.level-top||0));
     return `<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,tag)}${section.blocks.map(block=>{
       if(block.type==='table')return `${sourceTable(id,section.heading,block,block.headers.map((_,c)=>numericColumn(block,c)),block.headers.map((_,c)=>c),block.rows)}</div>`;
-      return `<p class="analysis-text">${paragraphView(block.text,`${id}:${block.line}`,{earlier:true,chips:bodyContext(id,false).chips(`${id}:${block.line}`)}).html}</p>`;
+      return `<p class="analysis-text">${paragraphView(block.text,`${id}:${block.line}`,{earlier:true,chips:bodyContext(id,false).chips(`${id}:${block.line}`),held:evidence.has(`${id}:${block.line}`)}).html}</p>`;
     }).join('')}</div>`;
   }).join('');
 }
@@ -598,22 +634,28 @@ function reportCalculations(id) {
   return sections.length?fold('calculations','Calculations',`${data[id].words.calculations} words`,readingSections(id,sections)):'';
 }
 function reportLimits(id) {
-  const row=(key,label,html)=>`<p>${html} ${basisButton(key,[],`Basis for row: ${plain(label)}`)}</p>`;
+  const row=(key,label,html)=>`<p>${html}${evidence.has(key)?` ${basisButton(key,[],`Basis for row: ${plain(label)}`)}`:''}</p>`;
   const cards=drawn(id,'limits').map(section=>`<div id="s-${section.line}">${headingView(section.heading,'h4')}${section.blocks.flatMap(block=>block.type==='table'?block.rows.map(r=>row(`${id}:${r.line}`,r.cells[0],`<strong>${rich(r.cells[0])}</strong> ${r.cells.slice(1).map(rich).join(' · ')}`)):[`<p>${paragraphView(block.text,`${id}:${block.line}`,{earlier:true,chips:bodyContext(id,false).chips(`${id}:${block.line}`)}).html}</p>`]).join('')}</div>`);
   return cards.length?`<section class="part" id="limits"><h3>Limits &amp; monitoring</h3><div class="limits">${cards.join('')}</div></section>`:'';
 }
 // The sections no part draws, as a line-numbered list; a section's content is drawn when it is opened (screen.js). An entry is listed when a section it holds
 // is placed audit or consumed; the `audit` entry is always listed, for the original-output block it opens with.
 function reportAudit(id) {
-  const out=data[id],kept=['audit','consumed'];
-  const listed=modules[id].sections.filter(([sectionId])=>sectionId==='audit'||sectionData(id,sectionId).some(section=>kept.includes(out.placement[out.sections.indexOf(section)])));
+  // A section written for another module (rule 7: Request, Next module) is listed and drawn nowhere, on an earlier-format page as on any other.
+  const out=data[id],kept=['audit','consumed'],hidden=hiddenSections(id);
+  const listed=modules[id].sections.filter(([sectionId])=>sectionId==='audit'||sectionData(id,sectionId).some(section=>kept.includes(out.placement[out.sections.indexOf(section)])&&!hidden.has(section)));
   return `<details class="audit" id="audit"><summary>${icon('chevron-right')}<span class="fold-title">Evidence &amp; audit</span> <span class="fold-detail">${plural(out.sections.length,'section')} · unchanged from the handoff</span></summary><ul class="audit-list">${listed.map(([sectionId,label])=>{
     const first=sectionData(id,sectionId)[0];
     return `<li><button type="button" class="audit-open" data-audit="${esc(sectionId)}" aria-expanded="false" aria-controls="audit-${esc(sectionId)}">${esc(label)}${first?`<span>L${first.line}</span>`:''}</button><div class="audit-body" id="audit-${esc(sectionId)}" hidden></div></li>`;
   }).join('')}</ul></details>`;
 }
 // A module that reaches no conclusion (established false) keeps its head, band, findings and limits; the reading and reference parts fold under one closed disclosure.
+// A handoff the build could not structure (Shapes.isUnstructured) is stated, with the output's own download, and its raw text is drawn nowhere: the Evidence page's ruling, here on the module page.
+function unreadAudit(id) {
+  return `<details class="audit" id="audit"><summary>${icon('chevron-right')}<span class="fold-title">Evidence &amp; audit</span></summary><p class="small">This module's handoff could not be read into sections. Its file is in the run's downloads.</p><p><a class="text-action" href="${esc(data[id].href)}" download>Download the original handoff</a></p></details>`;
+}
 function reportParts(id) {
+  if(window.Shapes.isUnstructured(data[id].sections))return [['head','Module',reportHead(id)],['audit','Evidence & audit',unreadAudit(id)]];
   if(isNewFormat(data[id].sections))return newFormatParts(id);
   const out=data[id],folded=out.state.established===false,label=anchor=>anchor==='maps'?'Maps':anchor==='timeline'?'Timeline':REPORT_PARTS.find(part=>part[0]===anchor)[1];
   const analysis=reportAnalysis(id),reference=reportReference(id),calculations=reportCalculations(id),limits=reportLimits(id);
@@ -624,25 +666,28 @@ function reportParts(id) {
   parts.push(['audit',reportAudit(id)]);
   return parts.filter(([,html])=>html).map(([anchor,html])=>[anchor,anchor===HANDOFF_TEXT[0]?HANDOFF_TEXT[1]:label(anchor),html]);
 }
-// ---- The module page of a new-format handoff (ruling H1, H4): the reader passages first, each under its own heading and drawn by the one paragraph
-// renderer (passageHtml); then the module's charts, maps and timeline; then every other section of the handoff, unchanged, in handoff order.
-const PASSAGE_ANCHORS={bottom:'bottom-line',key:'key-findings',contrary:'contrary-evidence',limits:'limitations'};
-// The reading style each passage is drawn in (screen.css, `.reading-*`): the headline, the findings list, prose, the limitations list.
-const PASSAGE_STYLES={bottom:'headline',key:'findings',contrary:'prose',limits:'limits'};
+// ---- The module page of a new-format handoff (ruling H1, H4; library redesign, Task 4). The page draws sections by role (Shapes.sectionRole): the four passages as
+// components (Bottom line, Key findings beside What would change the view, Limitations with the gap signal), the module's `finding` and `drawing` sections in handoff
+// order, and nothing else. Sources, Calculations, Gaps, registers, method notes and the sections written for other modules are the Evidence page's (or drawn nowhere).
 const passageSections=id=>Object.values(readerPassages(data[id].sections)).filter(Boolean);
+// A finding section has something to draw when it holds a prose block that is not a note, or a table with a row and a column the reader sees.
+const drawsSomething=section=>section.blocks.some(block=>block.type==='table'?block.rows.length>0&&window.Shapes.hiddenColumns(block.headers,'records',block.rows).length<block.headers.length:window.Shapes.blockRole(block.text)!=='note');
+// Ruling 2026-11-13: a table of a registers section whose shape is promoted (Shapes.promoted) is drawn on the page, in its shape's component; the table as written stays in Evidence.
+// A registers table of any other shape is Evidence only.
+const promotedTables=section=>section.blocks.filter(block=>block.type==='table'&&block.rows.length>0&&window.Shapes.promoted(window.Shapes.tableShape(block))&&window.Shapes.hiddenColumns(block.headers,'records',block.rows).length<block.headers.length);
 // Ruling 2026-11-12, decisions 1 and 2. A chart, map or timeline is drawn once, in its panel: the `Chart data:`, `Map:` or `Events:` section the store drew is `drawings`
-// (its numbers are the drawing's Table form, its prose the caption). `## Request`, `## Next module`, front matter and what sits under them are `audit`. The rest is the page body.
-// A drawing section the store could not draw has no drawing, so it stays in the body. The sections are told apart by name, not by placement: Sources is placed audit and stays.
-const AUDIT_HEADINGS=['Request','Next module','Front matter'];
+// (its numbers are the drawing's Table form, its prose the caption). A drawing section the store could not draw has no drawing, so it stays in the body with the
+// findings. A section that is not a passage, finding or drawing (its role says Evidence or nowhere) is in neither list.
 function newFormatSplit(id) {
   const held=new Set(passageSections(id)),drawnTables=new Set([...(data[id].charts||[]),...(data[id].chartGaps||[]),...(data[id].maps||[]),...(data[id].events||[])].map(drawing=>drawing.table));
-  const split={rest:[],audit:[],drawings:[]};
-  let parent='';
-  for(const section of data[id].sections) {
-    if(section.level<=2)parent=section.level===2&&(section.heading!=='Front matter'||section===data[id].sections[0])?section.heading:'';
+  const split={rest:[],drawings:[],registers:[]};
+  for(const {section,role} of window.Evidence.classify(data[id].sections,data[id].placement)) {
     if(held.has(section)||!section.blocks.length)continue;
-    if(CHART_HEADING.test(section.heading)&&section.blocks.some(block=>block.type==='table'&&drawnTables.has(block.line)))split.drawings.push(section);
-    else split[AUDIT_HEADINGS.includes(parent)?'audit':'rest'].push(section);
+    if(role==='drawing'&&section.blocks.some(block=>block.type==='table'&&drawnTables.has(block.line)))split.drawings.push(section);
+    else if(['finding','drawing','passage'].includes(role)&&drawsSomething(section))split.rest.push(section);
+    else if(role==='registers'&&promotedTables(section).length)split.registers.push(section);
+    // A chart, map or events table is drawn as a card whatever its heading's role (a `### Chart data` under `## Gaps` is a gaps section to Evidence), so its section is routable.
+    else if(section.blocks.some(block=>block.type==='table'&&drawnTables.has(block.line)))split.drawings.push(section);
   }
   return split;
 }
@@ -653,57 +698,142 @@ function drawingCaption(id,table) {
   const section=drawingSection(id,table);
   return section?.blocks.some(block=>block.type==='text')?`<div class="drawing-caption">${sectionBodyHtml(section,bodyContext(id,false))}</div>`:'';
 }
+// A stated reason as the page reads a cell: held back (nothing) when it names an identifier or a calculation.
+// What a chart may draw of a handoff cell. A Forecast card (`v.headless`) reads every text with findingCell strict: a text it holds back is not drawn (the card's table says so).
+// The id values of every module of a run (Shapes.idTokens), once per run: a strict reading holds them back wherever they stand in text; any other id-shaped word is ordinary text.
+// A module code (CP-1) is an id value of one module's table but is drawn (components.js findingCell). A run with no loaded output (or no run) has no tokens.
+const runTokenCache=new Map();
+function runTokens(run) {
+  if(!runTokenCache.has(run)){
+    runTokenCache.set(run,[...new Set(Object.keys(data).filter(out=>data[out].run===run).flatMap(out=>moduleTableContext(out).tokens))].filter(token=>!/^CP-[0-9A-Z]+$/.test(token)));
+  }
+  return runTokenCache.get(run);
+}
+// The page's one strict context: every text read as a findings page reads it, against the id values of the run.
+const strictContext=run=>({tokens:runTokens(run),strict:true});
+const readCtx=(id,v)=>v?.headless?{...moduleTableContext(id),...strictContext(data[id].run)}:moduleTableContext(id);
+// A chart cell's text as the page reads it: html, or '' when findingCell holds it back (statedHtml: for a title, legend or unit, where a link would stand in a heading).
+const statedHtml=(id,text,v)=>window.Components.findingCell(text,readCtx(id,v)).html??'';
+// statedReason: a figure's own cell. A cell held back for an identifier or a calculation ID gives the one link to the place Evidence lists it, never nothing.
+function statedReason(id,text,v) {
+  const cell=window.Components.findingCell(text,readCtx(id,v));
+  return cell.html??(cell.inEvidence?`<a class="in-ev" href="${esc(window.Evidence.href('registers',data[id].module,data[id].run))}">In Evidence</a>`:'');
+}
+// The text a chart's attribute (aria-label, title) may carry: on a findings page (plain) what the visible label draws, through findingCell, and not a stated absence (the reason is drawn beside the figure, never n.a. or raw cell text).
+const STATED_ABSENCE=/^(?:not supplied:|none identified\b|n\.?a\.?$)/i;
+const cardPlain=(id,v,cell)=>{const text=String(cell??'');if(!v?.headless&&!v?.plain)return plain(text);return window.Components.findingCell(text,readCtx(id,v)).html!==undefined&&!STATED_ABSENCE.test(plain(text).trim())?plain(text):'';};
+// A spoken statement: its label, then the parts that have text (a part whose cell states no figure is left out, never worded as n.a.).
+const part=(id,v,key,cell)=>{const text=cardPlain(id,v,cell);return text===''?'':key?`${key} ${text}`:text;};
+const statement=(label,...parts)=>{const list=parts.filter(Boolean).join(', ');return list?`${label}: ${list}`:label;};
+const cardHtml=(id,v,cell)=>v?.headless?statedHtml(id,String(cell??''),v):esc(cell);
 // The module's own charts, one card each; the Key numbers part of an earlier-format page draws the same cards.
 const reportChartCards=id=>chartCards((data[id].charts||[]).map((c,at,all)=>readerChart(id,c,true,at===lastPeriodChart(all))));
 // A new-format page's cards: a chart with no numbers (store `chartGaps`) is a card saying why, in table-line order with the charts; each card has its section route and caption.
 function newFormatChartCards(id) {
   const charts=data[id].charts||[],last=lastPeriodChart(charts);
-  const cards=[...charts.map((chart,at)=>({table:chart.table,html:readerChart(id,chart,true,at===last)})),...(data[id].chartGaps||[]).map(gap=>({table:gap.table,gap}))].sort((a,b)=>a.table-b.table);
-  const lastChart=cards.findLastIndex(card=>!card.gap);
-  return cards.map((card,at)=>{
-    const body=card.gap?`<div class="section-heading"><h4>${esc(card.gap.title)}</h4></div><p class="lane-gap">${NOT_ESTABLISHED}<small>${esc(card.gap.gap)}</small></p>${gapTableForm(id,card.gap.title,card.table)}`:cardTitle(card.html);
-    return `<div class="panel-card"${drawingAnchor(id,card.table)}>${body}${drawingCaption(id,card.table)}${at===lastChart?LEGEND:''}</div>`;
+  const cards=[...charts.map((chart,at)=>({table:chart.table,html:readerChart(id,chart,false,at===last,true)})),...(data[id].chartGaps||[]).map(gap=>({table:gap.table,gap}))].sort((a,b)=>a.table-b.table);
+  // A chart with no numbers is the empty state (C32) with its stated reason; its table as written, like a drawn chart's, is in Evidence.
+  return cards.map(card=>{
+    const body=card.gap?`<div class="section-heading"><h4>${esc(card.gap.title)}</h4>${chartTrace(id,{...card.gap,plain:true})}</div>${window.Components.gapState(fixtureTable(id,card.table),{...tableCtx(id,drawingSection(id,card.table)),noTrace:true})}`:cardTitle(card.html);
+    return `<div class="panel-card"${drawingAnchor(id,card.table)}>${body}${drawingCaption(id,card.table)}</div>`;
   }).join('');
 }
 // An output with Events lanes draws them; an earlier-format one that has an event table and no lane draws that table as a timeline.
 function reportTimeline(id) {
   const html=eventLanesView(data[id].run,{only:id,compact:true,tag:'h3',title:'Timeline'});
   if(html)return `<section class="part" id="timeline">${html}</section>`;
+  if(isNewFormat(data[id].sections))return ''; // a dated table of a finding or register section is drawn there, by its shape
   const table=eventTable(data[id].sections);
   return table?`<section class="part" id="timeline">${eventTimeline(id,table,'h3')}</section>`:'';
 }
+// What a paragraph's drawing needs of the page: its output, the chips the build holds for a key, and the table caption without a method code.
+// A control is drawn only where the evidence map holds its item (`has`): a chip or trace control whose item is gone would do nothing when clicked.
+const bodyContext=(id,tables)=>({id,tables,has:key=>evidence.has(key),chips:key=>evidence.has(key)?(window.CREDIT_OS_DATA?.chips?.[key]||[]).length:0,chipList:key=>window.CREDIT_OS_DATA?.chips?.[key]||[],caption:heading=>plain(heading).replace(METHOD_CODE,'')});
 // The handoff's own heading levels: its H2 sections are h3 (the page's h2 is the module), their H3 children h4, capped at h6.
 const newFormatTag=section=>'h'+Math.min(6,3+section.level-2);
-// What a paragraph's drawing needs of the page: its output, the chips the build holds for a key, and the table caption without a method code.
-const bodyContext=(id,tables)=>({id,tables,chips:key=>(window.CREDIT_OS_DATA?.chips?.[key]||[]).length,chipList:key=>window.CREDIT_OS_DATA?.chips?.[key]||[],caption:heading=>plain(heading).replace(METHOD_CODE,'')});
-const newFormatSection=(id,section)=>`<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,newFormatTag(section))}${sectionBodyHtml(section,bodyContext(id,true))}</div>`;
-// Front matter is drawn as its stated lines. Its `filename` line names the handoff with a module code, and the download carries the file, so it is not drawn.
-const frontMatter=(section,sections)=>section===sections[0]&&section.level===2&&section.heading==='Front matter';
-const frontMatterView=section=>`<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,newFormatTag(section))}<ul class="front-matter">${section.blocks.filter(block=>block.type==='text').flatMap(block=>block.text.split('\n')).map(line=>line.trim()).filter(line=>line&&!/^filename\s*:/i.test(line)).map(line=>`<li>${esc(line)}</li>`).join('')}</ul></div>`;
+// What every table of a module shares: its identifiers (never drawn on a findings page) and how its case columns pair with its case rows. Built once per output.
+const tableContexts=new Map();
+const moduleTableContext=id=>{
+  if(!tableContexts.has(id))tableContexts.set(id,{tokens:window.Shapes.idTokens(data[id].sections),pairing:window.Shapes.casePairing(data[id].sections.flatMap(section=>section.blocks.filter(block=>block.type==='table')))});
+  return tableContexts.get(id);
+};
+// A finding section of the module page: its prose as written (a method or status note is Evidence's) and each table as the component its shape calls for (components.js render).
+// A table of the output `id` as the component its shape calls for (components.js render), with the context every component reads. `at` is the section that holds the table.
+const tableCtx=(id,at)=>({...moduleTableContext(id),id,section:at,module:data[id].module,evidenceHref:window.Evidence.href('registers',data[id].module,data[id].run),key:row=>`${id}:${row.line}`,trace:(row,label)=>window.Components.traceRow(`${id}:${row.line}`,label),caption:plain(at.heading).replace(METHOD_CODE,'').replace(/^(?:Chart data|Map|Events): /,'')});
+const tableRenderer=id=>(block,at,extra={})=>window.Components.render(window.Shapes.tableShape(block),block,{...tableCtx(id,at),...extra});
+const findingSection=(id,section)=>{
+  const shared=moduleTableContext(id),registers=window.Evidence.href('registers',data[id].module,data[id].run),table=tableRenderer(id);
+  // Ruling 2026-11-13: a prose paragraph of a finding section that holds an identifier or names a calculation is a method note, drawn in Evidence (Registers, or Calculations when it names one).
+  const role=window.Evidence.classify(data[id].sections,data[id].placement).find(entry=>entry.section===section)?.role,moved=new Set();
+  const methodNote=block=>role==='finding'&&block.type==='text'&&!block.text.startsWith('```')?window.Shapes.methodNote(window.Components.paragraphText(block.text),shared.tokens):null;
+  const ctx={...bodyContext(id,true),skip:block=>{
+    if(block.type!=='text')return false;
+    if(window.Shapes.blockRole(block.text)==='note')return true;
+    const kind=methodNote(block);
+    if(kind)moved.add(kind);
+    return kind!==null;
+  },table};
+  const body=sectionBodyHtml(section,ctx);
+  // A section that lost every paragraph and holds no table keeps its heading and a link to where the paragraphs went, not an empty card.
+  const link=moved.size&&body.trim()===''?`<p class="sec-moved"><a class="in-ev" href="${esc(window.Evidence.href(moved.has('registers')?'registers':'calculations',data[id].module,data[id].run))}">In Evidence</a></p>`:'';
+  return `<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,newFormatTag(section))}${body}${link}</div>`;
+};
+// A registers section on the module page: its heading and the tables its shape promotes, each as its component. Its prose and its other tables are Evidence's.
+const registerSection=(id,section)=>{
+  const table=tableRenderer(id);
+  return `<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,newFormatTag(section))}${promotedTables(section).map(block=>table(block,section)).join('')}</div>`;
+};
+const passageTexts=section=>(section?section.blocks.filter(block=>block.type==='text').map(block=>({text:block.text,line:block.line})):[]);
+// The rail's count is of the items the section draws, read from its own markup: a feed item, a limitation, and one per table row that has its trace control (a row held back or not drawn has none).
+const drawnRows=html=>new Set([...html.matchAll(/data-evidence="([^"]*)"/g)].map(m=>m[1])).size;
+const drawnOf=(html,rx)=>(html.match(rx)||[]).length;
+// The line of the first section that holds one of a drawing's tables: where in the handoff the drawing stood.
+const drawingLine=(id,drawings)=>Math.min(...(drawings||[]).map(drawing=>drawingSection(id,drawing.table)?.line??Infinity));
+// A part is [anchor, label, html, count?]; `count` is the number of listed items the rail shows beside the label.
 function newFormatParts(id) {
-  const out=data[id],passages=readerPassages(out.sections);
+  const out=data[id],passages=readerPassages(out.sections),texts=Object.fromEntries(Object.entries(passages).map(([key,section])=>[key,passageTexts(section)]));
+  const controls=key=>passageControls(texts[key],bodyContext(id,false));
   const parts=[['head','Module',reportHead(id)]];
+  // The Findings heading above the passages stays in the page for headings and screen readers (sr-only).
   const findings=out.sections.find(section=>section.level===2&&section.heading==='Findings');
-  // The bottom line is the page's headline: its heading, and the Findings heading above it, stay in the page for headings and screen readers (sr-only).
-  let heading=findings&&!findings.blocks.length?`<h3${passages.bottom?' class="sr-only"':''}>${rich(findings.heading)}</h3>`:'';
-  for(const [key,anchor] of Object.entries(PASSAGE_ANCHORS))if(passages[key]) {
-    parts.push([anchor,passages[key].heading,`<section class="part reading-${PASSAGE_STYLES[key]}" id="${anchor}">${heading}${headingView(passages[key].heading,newFormatTag(passages[key]),key==='bottom'?'sr-only':'')}${passageHtml(passages[key],id)}</section>`]);
-    heading='';
+  const verdict=window.Components.verdictPanel(texts.bottom,controls('bottom').trace,controls('bottom').figure);
+  if(verdict)parts.push(['bottom-line','Bottom line',`<section class="part" id="bottom-line">${findings&&!findings.blocks.length?`<h3 class="sr-only">${rich(findings.heading)}</h3>`:''}${verdict}</section>`]);
+  const feed=window.Components.findingsFeed(texts.key,controls('key').trace,controls('key').figure);
+  const change=window.Components.callout('What would change the view',texts.contrary,controls('contrary').trace,controls('contrary').figure);
+  if(feed||change) {
+    const both=Boolean(feed&&change);
+    parts.push(['key-findings',feed?'Key findings':'What would change the view',`<section class="part key-row g24" id="key-findings">${feed?`<div class="${both?'c14':'c24'}"><div class="rd-card"><h4 class="rd-h">Key findings</h4>${feed}</div></div>`:''}${change?`<div class="${both?'c10':'c24'}" id="contrary-evidence">${change}</div>`:''}</section>`,...(feed?[drawnOf(feed,/<li class="feed-item"/g)]:[])]);
   }
-  const charts=newFormatChartCards(id),maps=reportMaps(id),timeline=reportTimeline(id);
-  if(charts)parts.push(['charts','Charts',`<section class="part" id="charts"><h3>Charts</h3>${charts}</section>`]);
-  if(timeline)parts.push(['timeline','Timeline',timeline]);
-  if(maps)parts.push(['maps','Maps',maps]);
-  const {rest,audit}=newFormatSplit(id);
-  for(const section of rest)parts.push([`s-${section.line}`,plain(section.heading.replace(METHOD_CODE,'')),`<section class="part">${newFormatSection(id,section)}</section>`]);
-  if(audit.length)parts.push(['audit','Evidence & audit',fold('audit','Evidence & audit',plural(audit.length,'section'),audit.map(section=>frontMatter(section,data[id].sections)?frontMatterView(section):newFormatSection(id,section)).join(''))]);
+  // Charts, timeline and maps keep their renderers; each stands where its section stood in the handoff, among the finding sections.
+  const body=[],charts=newFormatChartCards(id),maps=reportMaps(id),timeline=reportTimeline(id);
+  if(charts)body.push([drawingLine(id,[...(out.charts||[]),...(out.chartGaps||[])]),['charts','Charts',`<section class="part" id="charts"><h3>Charts</h3>${charts}</section>`]]);
+  if(timeline)body.push([drawingLine(id,out.events),['timeline','Timeline',timeline]]);
+  if(maps)body.push([drawingLine(id,out.maps),['maps','Maps',maps]]);
+  for(const section of newFormatSplit(id).rest) {
+    const html=findingSection(id,section),rows=drawnRows(html);
+    body.push([section.line,[`s-${section.line}`,plain(section.heading.replace(METHOD_CODE,'')),`<section class="part">${html}</section>`,...(rows?[rows]:[])]]);
+  }
+  parts.push(...body.sort((a,b)=>(a[0]<b[0]?-1:a[0]>b[0]?1:0)).map(([,part])=>part));
+  // The promoted registers follow the finding sections as one group, each under its section's own heading, in handoff order.
+  for(const section of newFormatSplit(id).registers) {
+    const html=registerSection(id,section),rows=drawnRows(html);
+    parts.push([`s-${section.line}`,plain(section.heading.replace(METHOD_CODE,'')),`<section class="part part-register">${html}</section>`,...(rows?[rows]:[])]);
+  }
+  const limits=window.Components.limitationsBlock(texts.limits,gapSignal(out.run,out.module),window.Evidence.href('gaps',out.module,out.run),controls('limits').trace,controls('limits').figure);
+  if(limits)parts.push(['limitations','Limitations',`<section class="part" id="limitations"><div class="rd-card"><h4 class="rd-h">Limitations</h4>${limits}</div></section>`,drawnOf(limits,/<li>/g)]);
   return parts;
 }
-const moduleReport=id=>reportParts(id).map(part=>part[2]).join('');
-// What the outline and the section list show: each present part's anchor and label. Presence depends on the data only, so it is built once per output.
+// The module page: the head, then (new format) the section rail beside the parts. An earlier-format page is its parts in a row, as it always was.
+const railItems=id=>reportOutline(id).filter(([anchor])=>anchor!=='head').map(([anchor,label,,count])=>({id:anchor,label,count,href:routeHref(data[id].module,anchor,null,data[id].run)}));
+function moduleReport(id) {
+  const parts=reportParts(id);
+  if(!isNewFormat(data[id].sections)||parts.length<2)return parts.map(part=>part[2]).join('');
+  return `${parts[0][2]}<div class="g24 module-grid"><div class="c5 module-rail">${window.Components.sectionRail(railItems(id))}</div><div class="c19 module-main">${parts.slice(1).map(part=>part[2]).join('')}</div></div>`;
+}
+// What the outline and the section list show: each present part's anchor and label (and its count, where the page shows one). Presence depends on the data only, so it is built once per output.
 const outlineCache=new Map();
 function reportOutline(id) {
-  if(!outlineCache.has(id))outlineCache.set(id,reportParts(id).map(([anchor,label])=>[anchor,label,[]]));
+  if(!outlineCache.has(id))outlineCache.set(id,reportParts(id).map(([anchor,label,,count])=>(count===undefined?[anchor,label,[]]:[anchor,label,[],count])));
   return outlineCache.get(id);
 }
 function galleryVisual(module,section) {
@@ -748,14 +878,24 @@ function routeHref(module,section,key=null,context=current?.context,file=lastFil
   // A report id is a folder name: encoded, it can hold quotes, angle brackets, ? or # and still route back.
   return `#${encodeURIComponent(module)}/${encodeURIComponent(section)}${params.size?'?'+params:''}`;
 }
+// The Evidence page's trace view of one module of the run: routeHref encodes the run (`c`) once; the module (`m`) is encoded the same way (URLSearchParams), which parseRoute reads back.
+function traceHref(moduleId,context=current?.context) {
+  const base=routeHref('W-Evidence','trace',null,context,null),module=new URLSearchParams({m:moduleId});
+  return `${base}${base.includes('?')?'&':'?'}${module}`;
+}
+// The drawer's last element: the way from one traced item to the whole trace of its module in the Evidence page.
+function drawerFoot(moduleId,context=current?.context) {
+  return `<div class="drawer-foot"><a class="text-action" href="${esc(traceHref(moduleId,context))}">Open in Evidence${icon('arrow-right')}</a></div>`;
+}
 function outlineMarkup(id) {
+  if(isNewFormat(data[id].sections))return ''; // the page's own section rail is its outline
   const module=data[id].module||id;
   return `<nav class="section-outline" aria-label="On this page"><p class="outline-heading" aria-hidden="true">On this page</p><ol>${reportOutline(id).map(([part,label])=>`<li><a class="section-item" href="${routeHref(module,part)}" ${current.section===part?'aria-current="location"':''}>${esc(label)}</a></li>`).join('')}</ol></nav>`;
 }
 function unavailableView(module) {
   const ctx=contexts[current.context];
   const others=Object.entries(contexts).filter(([key,run])=>key!==current.context&&sameIssuer(run.issuerKey,ctx.issuerKey)&&run.modules[module]?.outputs.length);
-  return `<div class="missing-state"><div class="empty-symbol">${icon('file-text')}</div><h2>${NO_OUTPUT}</h2></div>${others.length?`<div class="available-case"><h3>Other ${esc(ctx.issuer)} runs with this module</h3>${others.map(([key,run])=>`<p><a class="text-action" href="${routeHref(module,firstSection(module,key),null,key)}">${esc(run.run)}${icon('arrow-right')}</a></p>`).join('')}</div>`:''}`;
+  return `<div class="missing-state"><div class="empty-symbol">${icon('file-text')}</div><h2>${NO_OUTPUT}</h2></div>${others.length?`<div class="available-case"><h3>Other ${esc(ctx.issuer)} runs with this module</h3>${others.map(([key,run])=>`<p><a class="text-action" href="${routeHref(module,firstSection(module,key),null,key)}">${esc(runName(run))}${icon('arrow-right')}</a></p>`).join('')}</div>`:''}`;
 }
 function outputChooser(module) {
   const ctx=contexts[current.context],files=moduleEntry(module,current.context).outputs;
@@ -771,17 +911,13 @@ function eventLanes(context) {
 }
 // A day is a point; a month, quarter or year is drawn across its whole span (calendar.js eventSpan), never on a day the source does not state.
 // `compact` is the lanes alone, without the intro and the event table. Scenario events have an outline.
-// Where each kind of chart table is drawn besides its module page. The views that draw them and the chart index both read this table.
-// Overview charts and maps are the visuals catalogue's own placement (docs/visualisations/catalogue.csv, window.DESIGN_WORKSPACE.visuals) for a module that is not blocked.
-const onOverview=out=>{const code=aliases[out.module]??out.module;return window.DESIGN_WORKSPACE.visuals.some(visual=>visual.module===code&&/\bOverview\b/.test(visual.placement))&&!blocked(out.sections,out.state);};
-// A lane is not drawn on the Overview: its dated rows feed the Overview's nearest dates (overviewDates), which is what 'Overview' means for a lane.
-const PLACEMENT=[['chart','Overview',onOverview],['map','Overview',onOverview],['lane','Overview',()=>true]];
-const placed=(kind,where,out,name)=>PLACEMENT.some(([k,w,test])=>k===kind&&w===where&&test(out,name));
+// A chart, map or lane table is drawn on its module page; the Overview draws no chart or map (the lead's own events, as the dated timeline, are the one exception and are not listed here).
 const LANE_ROW=20,LANE_BASE=4; // a lane row is one marker (16 px) and its gap; the lane's floor is 28 px
 function eventLanesView(context,{compact=false,only=null,tag='h2',title='Event lanes'}={}) {
   // `only` is one output's own lanes, whichever saved output it is; otherwise the run's lanes (each module's default output).
   const lanes=(only?(data[only]?.events||[]).map(lane=>({...lane,id:only})):eventLanes(context)).map(lane=>({...lane,events:lane.gap!==null?[]:fixtureTable(lane.id,lane.table).rows.map(row=>({row,span:eventSpan(row.cells[0],row.cells[1])}))}));
   if(!lanes.length)return '';
+  if(Boolean(only)&&isNewFormat(data[only].sections))return timelineCards(only,lanes,tag,title);
   const scenario=row=>/^Scenario — /.test(row.cells[4]),day=n=>new Date(n*86400000).toISOString().slice(0,10);
   const axis=eventAxis(lanes.flatMap(lane=>lane.events.flatMap(({span})=>span?[span]:[])));
   const link=(lane,row)=>`href="${evidenceHref(lane.id,row.line)}" data-evidence="${esc(`${lane.id}:${row.line}`)}"`;
@@ -798,8 +934,7 @@ function eventLanesView(context,{compact=false,only=null,tag='h2',title='Event l
     const [date,precision,,event]=row.cells;
     return `<a class="lane-event ${span.point?'point':'span'}${anchored?' anchored':''}${scenario(row)?' scenario':''}" ${link(lane,row)} aria-label="${esc(`Event ${no}: ${lane.lane}: ${event}${scenario(row)?' (Scenario event)':''}, ${date} (${precision}). View source`)}" style="${anchored?`right:${Math.round((100-left-width)*100)/100}%`:`left:${left}%`}${span.point?'':`;width:${width}%`};bottom:${LANE_BASE+level*LANE_ROW}px"><span class="lane-no">${no}</span></a>`;
   };
-  const own=Boolean(only)&&isNewFormat(data[only].sections); // a new-format module page: each lane is its section's route and caption, its events a Table form
-  const rows=drawn.map(({lane,items,height})=>`<div class="lane-row"${own?drawingAnchor(lane.id,lane.table):''}><span class="lane-name">${esc(lane.lane)}</span>${lane.gap!==null?`<span class="lane-gap">Not established for this run<small>${esc(lane.gap)}</small></span>`:`<span class="lane-track" style="height:${height}px">${items.map(item=>marker(lane,item)).join('')}</span>`}</div>${own?drawingCaption(lane.id,lane.table)+(lane.gap!==null?gapTableForm(lane.id,lane.lane,lane.table):''):''}`).join('');
+  const rows=drawn.map(({lane,items,height})=>`<div class="lane-row"><span class="lane-name">${esc(lane.lane)}</span>${lane.gap!==null?`<span class="lane-gap">Not established for this run<small>${esc(lane.gap)}</small></span>`:`<span class="lane-track" style="height:${height}px">${items.map(item=>marker(lane,item)).join('')}</span>`}</div>`).join('');
   const key=drawn.filter(({items})=>items.length).map(({lane,items,start})=>`<p class="lane-key-name">${esc(lane.lane)}</p><ol class="lane-key" start="${start}">${[...items].sort((a,b)=>a.no-b.no).map(({row})=>`<li><span class="lane-key-date">${esc(row.cells[0])}</span> ${rich(row.cells[3])}${scenario(row)?' (Scenario event)':''}</li>`).join('')}</ol>`).join('');
   const asOf=contexts[context]?.asOf,asOfAt=eventAsOf(axis,asOf);
   const ticks=eventTicks(axis);
@@ -812,72 +947,25 @@ function eventLanesView(context,{compact=false,only=null,tag='h2',title='Event l
   const head=['Lane','Event date','Date precision','Published','Event','Status','Source','Credit relevance'].map(h=>`<th scope="col">${h}</th>`).join('');
   const eventTableHtml=`<table class="event-table"><caption>All events, by lane</caption><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
   const intro=compact?'':'<p class="intro">Each lane is one module’s dated events on a shared date axis. A day is a point; a month, quarter or year is drawn across its whole span, not on a day the source does not state. A dashed outline is a Scenario event.</p>';
-  return `<div class="event-lanes${compact?' compact':''}"><div class="section-heading"><${tag}>${esc(title)}</${tag}><span>Dated events by module</span></div>${intro}<div class="lane-scroll" role="region" tabindex="0" aria-label="Event lanes; scroll horizontally on a narrow screen"><div class="lane-plot">${axis?`<div class="lane-axis"><span></span>${scale}</div>`:''}<div role="group" aria-label="Event lanes on a shared date axis">${rows}</div>${overlay}</div></div>${key?`<div class="lane-keys" role="group" aria-label="Key to the numbered events"><p class="lane-range">Axis from ${day(axis.start)} to ${day(axis.end)}</p>${key}</div>`:''}${body?(compact?own?`<details class="chart-table"><summary>Table form</summary>${eventTableHtml}</details>`:'':eventTableHtml):''}</div>`;
+  return `<div class="event-lanes${compact?' compact':''}"><div class="section-heading"><${tag}>${esc(title)}</${tag}><span>Dated events by module</span></div>${intro}<div class="lane-scroll" role="region" tabindex="0" aria-label="Event lanes; scroll horizontally on a narrow screen"><div class="lane-plot">${axis?`<div class="lane-axis"><span></span>${scale}</div>`:''}<div role="group" aria-label="Event lanes on a shared date axis">${rows}</div>${overlay}</div></div>${key?`<div class="lane-keys" role="group" aria-label="Key to the numbered events"><p class="lane-range">Axis from ${day(axis.start)} to ${day(axis.end)}</p>${key}</div>`:''}${body&&!compact?eventTableHtml:''}</div>`;
 }
-// ---- Maps: one layered left-to-right SVG for every node/edge map (store.py `maps`), the edge table beneath as its accessible form.
+// A new-format module page: each lane is its section's route, a heading, the dated timeline component (C15, or the empty state when the lane states no event) and the section's caption.
+// The events as written, with their sources, are Evidence's; each event has its own trace control.
+function timelineCards(id,lanes,tag,title) {
+  const render=tableRenderer(id),cards=lanes.map(lane=>`<div class="tl-card"${drawingAnchor(id,lane.table)}><h4 class="tl-name">${esc(lane.lane)}</h4>${render(fixtureTable(id,lane.table),drawingSection(id,lane.table))}${drawingCaption(id,lane.table)}</div>`).join('');
+  return `<div class="tl-lanes"><div class="section-heading"><${tag}>${esc(title)}</${tag}><span>Dated events</span></div>${cards}</div>`;
+}
+// ---- Maps: one layered left-to-right SVG for every node/edge map (store.py `maps`). The layout is components.js's (pathwayDiagram, shared with the pathway component, C14); an earlier-format
+// page keeps this view: the diagram with the edge table beneath as its accessible form. A new-format page draws the pathway component and leaves the edge table to Evidence.
 // A layer is the longest path from a node with no incoming edge. An edge that would close a loop is cut by first-seen row order and still drawn, below the nodes.
 // Nothing is weighted: the edge type is a word label and a line style, and the only coordinates are the layout's.
-function mapLayers(edges,nodes=[]) {
-  const into=new Map(),out=new Map(),layer=new Map(),names=[];
-  const reaches=(from,to,seen=new Set())=>from===to||(!seen.has(from)&&seen.add(from)&&(out.get(from)||[]).some(next=>reaches(next,to,seen)));
-  const cut=edges.map(({from,to})=>{
-    for(const name of [from,to])if(!names.includes(name))names.push(name);
-    if(reaches(to,from))return true;
-    out.set(from,[...(out.get(from)||[]),to]);into.set(to,[...(into.get(to)||[]),from]);
-    return false;
-  });
-  for(const name of nodes)if(!names.includes(name))names.push(name);
-  const depth=name=>{if(!layer.has(name))layer.set(name,Math.max(-1,...(into.get(name)||[]).map(depth))+1);return layer.get(name);};
-  names.forEach(depth);
-  return {names,layer:new Map(names.map(name=>[name,layer.get(name)])),cut};
-}
-const MAP_HEAD=['From','Relationship','Edge type','To','Evidence'],MAP_DASH=['','7 4','2 4','9 3 2 3','12 5 2 5'],BOX={w:150,h:54,gx:120,gy:22,pad:12},MAP_CHAR=6.6,MAP_T=Array.from({length:39},(_,i)=>(i+1)/40).sort((a,b)=>Math.abs(a-.5)-Math.abs(b-.5)),LABEL_CHAR=6.6,LABEL_STEP=15,LABEL_MARGIN=20,LABEL_STEPS=24,LABEL_WRAP=106,LABEL_LINES=2,LABEL_LINE=13;
+const mapLayers=(edges,nodes=[])=>window.Components.mapLayers(edges,nodes);
+const MAP_HEAD=['From','Relationship','Edge type','To','Evidence'];
 function mapDiagram(id,map,rows) {
-  const edges=rows.map(({cells:[from,,type,to]})=>({from,type,to})),{names,layer,cut}=mapLayers(edges),{w,h,gy,pad}=BOX;
-  // The column gap holds the longest label of an edge drawn between columns (a cut edge's label sits below the nodes), never under BOX.gx, so a map of short labels stays compact.
-  // A label wraps on whole words to at most two lines (LABEL_WRAP holds 15 characters; one longer word keeps its own line), so the gap follows the longest line.
-  const wrap=edges.map(e=>axisLines(e.type,LABEL_WRAP,LABEL_CHAR,'keep',LABEL_LINES)),wide=wrap.map(ls=>Math.max(...ls.map(l=>l.length))*LABEL_CHAR);
-  const gx=Math.max(BOX.gx,Math.ceil(Math.max(0,...wide.filter((_,i)=>!cut[i]))+LABEL_MARGIN));
-  const slot=new Map(),filled=[],types=[...new Set(edges.map(edge=>edge.type))];
-  for(const name of names){const l=layer.get(name);slot.set(name,filled[l]??0);filled[l]=(filled[l]??0)+1;}
-  const at=name=>({x:pad+layer.get(name)*(w+gx),y:pad+slot.get(name)*(h+gy)});
-  const width=pad*2+filled.length*(w+gx)-gx,loops=cut.filter(Boolean).length,base=pad*2+Math.max(...filled)*(h+gy)-gy+(loops?46:0);
-  const path=({from,to},back)=>{
-    const a=at(from),b=at(to),mid=(a.x+b.x+w)/2;
-    if(!back)return {d:`M${a.x+w} ${a.y+h/2}C${mid} ${a.y+h/2} ${mid} ${b.y+h/2} ${b.x} ${b.y+h/2}`,c:[[a.x+w,a.y+h/2],[mid,a.y+h/2],[mid,b.y+h/2],[b.x,b.y+h/2]]};
-    const low=Math.max(a.y,b.y)+h+34,x1=a.x+w/2+(from===to?-30:0),x2=b.x+w/2+(from===to?30:0);
-    return {d:`M${x1} ${a.y+h}C${x1} ${low} ${x2} ${low} ${x2} ${b.y+h}`,c:[[x1,a.y+h],[x1,low],[x2,low],[x2,b.y+h]]};
-  };
-  const bezier=(c,t)=>[0,1].map(k=>(1-t)**3*c[0][k]+3*(1-t)**2*t*c[1][k]+3*(1-t)*t*t*c[2][k]+t**3*c[3][k]);
-  const boxes=names.map(name=>({...at(name),w,h})),placed=[],paths=edges.map((edge,i)=>path(edge,cut[i]));
-  const near=paths.map(p=>Array.from({length:61},(_,k)=>bezier(p.c,k/60)));
-  const gap=(pts,x,y)=>Math.min(...pts.map(([px,py])=>Math.hypot(px-x,py-y)));
-  // A label is a box: its longest line wide, 12px tall a line (13px apart), centred on its spot. It tries a spot on its own line, then moves up or down by whole steps,
-  // to the first clear spot (no placed label, no node) that is not nearer another edge than its own. Where another edge crosses its middle it tries nearer its source end
-  // (t .25) or its target end (t .75) first, alternating by edge, so crossing labels are not stacked at the shared middle. Room is made, not borrowed: a spot below the drawing grows its height.
-  const span=(y,n)=>[y-9-(n-1)*LABEL_LINE/2,y+3+(n-1)*LABEL_LINE/2];
-  const clear=(x,y,lw,n)=>{const [top,bot]=span(y,n);return placed.every(o=>Math.abs(o.x-x)>=(o.w+lw)/2||top>=o.bot+2||o.top>=bot+2)&&boxes.every(b=>x+lw/2<=b.x-2||x-lw/2>=b.x+b.w+2||bot<=b.y-2||top>=b.y+b.h+2);};
-  const spot=(i,lw,n)=>{
-    const c=paths[i].c,steps=[0];for(let k=1;k<=LABEL_STEPS;k++)steps.push(-k,k);
-    const [mx,my]=bezier(c,.5),crossed=near.some((pts,k)=>k!==i&&gap(pts,mx,my)<LABEL_STEP*2),pref=i%2?.75:.25,ts=crossed?[...MAP_T].sort((p,q)=>Math.abs(p-pref)-Math.abs(q-pref)):MAP_T;
-    for(const own of [true,false])for(const dy of steps)for(const t of ts){
-      const [x,y]=bezier(c,t),at=y-4+dy*LABEL_STEP;
-      if(at-(n-1)*LABEL_LINE/2>=10&&clear(x,at,lw,n)&&(!own||near.every((pts,k)=>k===i||gap(pts,x,at-4)>=gap(near[i],x,at-4))))return {x,y:at};
-    }
-    // ponytail: LABEL_STEPS (24 steps, 360px) is the bound; past it the label sits at the line's midpoint, over its neighbours, rather than grow the drawing without end.
-    const [x,y]=bezier(c,.5);return {x,y:y-4};
-  };
-  const drawn=edges.map((edge,i)=>{
-    const p=paths[i],dash=MAP_DASH[types.indexOf(edge.type)%MAP_DASH.length],lines=wrap[i],lw=wide[i],q=spot(i,lw,lines.length),[top,bot]=span(q.y,lines.length),y0=q.y-(lines.length-1)*LABEL_LINE/2;
-    placed.push({...q,w:lw,top,bot});
-    return `<path class="map-edge${cut[i]?' cut':''}" d="${p.d}" marker-end="url(#map-arrow-${id.replace(/\W/g,'-')}-${map.table})"${dash?` stroke-dasharray="${dash}"`:''}/><text class="map-edge-label" x="${Math.round(q.x*10)/10}" y="${Math.round(y0*10)/10}" text-anchor="middle">${lines.map((line,k)=>`<tspan x="${Math.round(q.x*10)/10}" dy="${k?LABEL_LINE:0}">${esc(line)}</tspan>`).join('')}${lines.join(' ')===edge.type?'':`<title>${esc(edge.type)}</title>`}</text>`;
-  }).join('');
-  const height=Math.ceil(Math.max(base,...placed.map(o=>o.bot+3)));
-  const nodes=names.map(name=>{const p=at(name),lines=axisLines(name,w-10,MAP_CHAR,true);return `<g class="map-node"><title>${esc(name)}</title><rect x="${p.x}" y="${p.y}" width="${w}" height="${h}" rx="4"/><text x="${p.x+8}" y="${p.y+h/2+4-7*(lines.length-1)}">${lines.map((line,i)=>`<tspan x="${p.x+8}" dy="${i?14:0}">${esc(line)}</tspan>`).join('')}</text></g>`;}).join('');
-  const label=`${map.name}: ${names.length} nodes, ${edges.length} edges`;
-  const marker=`<defs><marker id="map-arrow-${id.replace(/\W/g,'-')}-${map.table}" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path class="map-arrow" d="M0 0L8 4L0 8z"/></marker></defs>`;
-  const note=loops?`<p class="map-note">${loops} edge${loops===1?'':'s'} would close a loop: drawn below the nodes, in the order the handoff states them.</p>`:'';
-  return `<div class="map-scroll" role="region" aria-label="${esc(label)}. The edge table follows; scroll horizontally if the drawing is wider than its card" tabindex="0"><svg role="img" aria-label="${esc(label)}. The edge table follows." width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${marker}${drawn}${nodes}</svg></div>${note}`;
+  const edges=rows.map(({cells:[from,,type,to]})=>({from,type,to})),uid=`${id.replace(/\W/g,'-')}-${map.table}`,label=`${map.name}: ${new Set(edges.flatMap(edge=>[edge.from,edge.to])).size} nodes, ${edges.length} edges`;
+  const {svg,loops}=window.Components.pathwayDiagram(edges,{uid,svgAttrs:`role="img" aria-label="${esc(label)}. The edge table follows."`});
+  const note=window.Components.loopNote(loops);
+  return `<div class="map-scroll" role="region" aria-label="${esc(label)}. The edge table follows; scroll horizontally if the drawing is wider than its card" tabindex="0">${svg}</div>${note}`;
 }
 // A map with only a stated gap is drawn as its reason, never as an empty diagram.
 // `own` is the module page's: the map card carries its section route and caption there; the Overview draws the card alone.
@@ -885,7 +973,14 @@ function mapsView(id,tag='h2',keep=()=>true,own=false) {
   return (data[id]?.maps||[]).filter(keep).map(map=>{
     const title=`<${tag}>${esc(map.name[0].toUpperCase()+map.name.slice(1))}</${tag}>`;
     const anchor=own?drawingAnchor(id,map.table):'',caption=own?drawingCaption(id,map.table):'';
-    if(map.gap!==null)return `<div class="map-card"${anchor}>${title}<p class="lane-gap">Not established for this run<small>${esc(map.gap)}</small></p>${own&&isNewFormat(data[id].sections)?gapTableForm(id,map.name,map.table):''}${caption}</div>`;
+    // A new-format page draws the pathway component (C14), or the empty state (C32) with the module's stated reason, and one link to the edge table as written, which is Evidence's.
+    if(isNewFormat(data[id].sections)){
+      const section=drawingSection(id,map.table),drawn=tableRenderer(id)(fixtureTable(id,map.table),section);
+      // The component's empty state already holds the link when it held a reason back: one link, not two.
+      const link=drawn.includes('class="in-ev"')?'':`<p class="map-ev"><a class="in-ev" href="${esc(window.Evidence.href('registers',data[id].module,data[id].run))}">In Evidence</a></p>`;
+      return `<div class="map-card"${anchor}>${title}${drawn}${link}${caption}</div>`;
+    }
+    if(map.gap!==null)return `<div class="map-card"${anchor}>${title}<p class="lane-gap">Not established for this run<small>${esc(map.gap)}</small></p>${caption}</div>`;
     const rows=fixtureTable(id,map.table).rows,link=row=>`<a class="event-link" href="${evidenceHref(id,row.line)}" data-evidence="${esc(`${id}:${row.line}`)}">${rich(row.cells[1])}</a>`;
     const body=rows.map(row=>`<tr><td>${rich(row.cells[0])}</td><td>${link(row)}</td><td>${esc(row.cells[2])}</td><td>${rich(row.cells[3])}</td><td>${rich(row.cells[4])}</td></tr>`).join('');
     return `<div class="map-card"${anchor}>${title}${mapDiagram(id,map,rows)}<table class="map-table"><caption>Edges of the map, as stated</caption><thead><tr>${MAP_HEAD.map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>${caption}</div>`;
@@ -893,59 +988,20 @@ function mapsView(id,tag='h2',keep=()=>true,own=false) {
 }
 // Maps on a module page.
 const reportMaps=id=>data[id]?.maps?.length?`<section class="part" id="maps"><h3>Maps</h3>${mapsView(id,'h4',()=>true,true)}</section>`:'';
-// ---- Chart index (CP-MODEL-V02): one row per `Chart data:`, `Map:` or `Events:` table the run's handoffs hold, in the state the build gave it. It lists and links; nothing is drawn or recomputed here.
-const CHART_HEADING=/^(Chart data|Map|Events): /;
-const NOT_STATED='Not stated',NOT_ESTABLISHED='Not established for this run';
-const raised=text=>text.charAt(0).toUpperCase()+text.slice(1);
-const shownIn=(out,kind,name)=>[`${moduleTitle(out.module)} page`,...PLACEMENT.filter(([k,,test])=>k===kind&&test(out,name)).map(([,where])=>where)];
-// The part of the module page that holds a chart, map or lane table: charts (earlier format: Key numbers), maps, and for a lane the routable s-<line>
-// section that holds its table, else the page's Timeline part. Every one is an anchor of reportParts, so the link never lands on the page head.
-function tableForm(id,kind,section) {
-  if(kind==='map')return 'maps';
-  if(kind==='chart')return isNewFormat(data[id].sections)?'charts':'numbers';
-  return drawnAnchors(id).has(`s-${section.line}`)?`s-${section.line}`:'timeline';
-}
-function chartRows(context) {
-  const ids=Object.values(contexts[context]?.modules||{}).map(entry=>entry.default||entry.outputs[0]).filter(id=>id&&data[id]);
-  return ids.flatMap(id=>{
-    const out=data[id];
-    const held=new Map([...(out.charts||[]).map(c=>[c.table,{kind:'chart',title:c.title,unit:c.unit,gap:null}]),...(out.chartGaps||[]).map(c=>[c.table,{kind:'chart',...c}]),...(out.maps||[]).map(m=>[m.table,{kind:'map',title:`${raised(m.name)} map`,name:m.name,gap:m.gap}]),...(out.events||[]).map(l=>[l.table,{kind:'lane',title:`${l.lane} events`,gap:l.gap}])]);
-    return out.sections.filter(section=>CHART_HEADING.test(section.heading)).flatMap(section=>{
-      const table=section.blocks.find(b=>b.type==='table');
-      if(!table)return [];
-      const kind=section.heading.startsWith('Map')?'map':section.heading.startsWith('Events')?'lane':'chart',name=section.heading.replace(CHART_HEADING,''),here=held.get(table.line);
-      const title=here?.title||(kind==='map'?`${raised(name)} map`:kind==='lane'?`${name} events`:raised(name));
-      const sentBack=!here&&out.issue?.split('; ').find(problem=>problem.startsWith(section.heading));
-      const unsupplied=table.rows[0]?.cells.find(cell=>/^Not supplied:/.test(cell))?.replace(/^Not supplied:\s*/,'');
-      const hidden=kind==='chart'&&out.state.established===false;
-      const drawn=Boolean(here)&&here.gap===null&&!hidden,basis=[...new Set(table.rows.map(row=>row.cells.at(-1)))].join('; ');
-      const state=hidden?NOT_ESTABLISHED:drawn?'Drawn':sentBack?'Sent back':NOT_ESTABLISHED;
-      const limitation=hidden?(out.summary?.limitation||'Module not assessable'):drawn?(kind==='chart'&&/^Basis/.test(table.headers.at(-1))&&basis)||NOT_STATED:sentBack||here?.gap||unsupplied||NOT_STATED;
-      const unit=drawn&&kind==='chart'?(here.unit===''?'Stated per row':here.unit??NOT_STATED):NOT_STATED;
-      const period=drawn&&kind==='chart'&&table.headers[0]==='Period'?[...new Set([table.rows[0].cells[0],table.rows.at(-1).cells[0]])].map(plain).join(' to '):NOT_STATED;
-      const line=table.rows[0]?.line,key=`${id}:${line}`;
-      const form=!drawn?null:routeHref(out.module,tableForm(id,kind,section),null,out.run,out.source);
-      return [{key,title,owner:moduleTitle(out.module),state,limitation,unit,period,where:drawn?shownIn(out,kind,here.name).join(', '):'Not drawn',form,source:evidence.has(key)?evidenceHref(id,line):null,line}];
-    });
-  });
-}
-function chartIndex(context) {
-  if(!contexts[context])return '';
-  const rows=chartRows(context),open='<section class="run-section chart-index" id="run-charts"><h2>Chart index</h2>';
-  if(!rows.length)return `${open}<p class="intro">No chart, map or calendar lane table is held in this run’s handoffs.</p></section>`;
-  const head=['Chart','Module','State','Limitation','Unit','Period','Shown in','Table form','Source'];
-  const body=rows.map(row=>`<tr data-chart="${esc(row.key)}"><th scope="row">${esc(row.title)}</th><td>${esc(row.owner)}</td><td>${esc(row.state)}</td><td class="index-limit">${esc(row.limitation)}</td><td>${esc(row.unit)}</td><td>${esc(row.period)}</td><td>${esc(row.where)}</td><td>${row.form?`<a href="${esc(row.form)}">Table form</a>`:'Not drawn'}</td><td>${row.source?`<a href="${esc(row.source)}">Line ${row.line}</a>`:NOT_STATED}</td></tr>`).join('');
-  return `${open}<p class="intro">Every chart, map and calendar lane in this run’s handoffs, as the handoff states it. A chart drawn in several places is one row. This index lists them; it recalculates nothing.</p><div class="table-scroll" role="region" aria-label="Chart index" tabindex="0"><table class="index-table"><thead><tr>${head.map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div></section>`;
-}
+// The part of the module page that holds its charts (earlier format: Key numbers), an anchor of reportParts, so the link never lands on the page head.
+const chartPart=id=>isNewFormat(data[id].sections)?'charts':'numbers';
 // ---- The run label (decision 12 of the 2026-11-11 reader ruling): every run page says which run it shows, and where the issuer's other runs are.
 // H7: a run is "Earlier format" when any of its handoffs (every saved output of every module, not only the defaults) has no Bottom line first under Findings.
-const earlierFormat=run=>earlierFormatRun(Object.values(run.modules).flatMap(entry=>entry.outputs).filter(id=>data[id]).map(id=>data[id].sections));
+// A handoff the build could not read at all (Shapes.isUnstructured) is not an earlier format: it is stated on the Evidence page as not read.
+const earlierFormat=run=>earlierFormatRun(Object.values(run.modules).flatMap(entry=>entry.outputs).filter(id=>data[id]).map(id=>data[id].sections).filter(sections=>!window.Shapes.isUnstructured(sections)));
 const EARLIER_FORMAT_BADGE='<span class="badge badge-gray earlier-format">Earlier format</span>';
 // A run whose module methods have changed since it ran is listed and marked (owner, 2026-11-11); the store's own list decides.
 const EARLIER_METHODS_BADGE='<span class="badge badge-gray earlier-methods">Earlier methods</span>';
 const earlierMethods=run=>(run.methodChanges||[]).length>0;
 const runDate=run=>run.asOf?displayDate(run.asOf):'Not recorded';
 const runPathway=run=>pathwayTitle(run.pathway)||'Not recorded';
+// A findings page names a run by its date and pathway in words, never by its code (the Evidence page's to show).
+const runName=run=>`${runDate(run)} · ${runPathway(run)}`;
 // The header's meta line under the issuer title: the ticker and sector the catalogue holds for this run and the number of the issuer's runs it holds (the runs
 // the store joins to the same issuer, this one included). A part the catalogue lacks is left out; with none the line is not drawn.
 function issuerMeta(context) {
@@ -968,33 +1024,41 @@ function startRunLink(context) {
   const href=startRunHref(context);
   return servedOverHttp()&&href?`<a class="start-run primary-action" href="${esc(href)}">${icon('plus')}Start a run on this issuer</a>`:'';
 }
-// "Showing run: 31 March 2025 · Credit snapshot · <run code>", the Earlier format badge where it holds, the link to the issuer's Report history and, where the run records one, the run it replaces.
+// "Showing run: 31 March 2025 · Credit snapshot" (and the run code on the Evidence page), the Earlier format badge where it holds, the link to the issuer's Report history and, where the run records one, the run it replaces.
 function runLabel(module,context) {
   const ctx=contexts[context];
   if(!ctx)return '';
   const here=['W-Forecast','W-Evidence','W-Changes'].includes(module)?module:'W-Overview';
-  const revisions=(ctx.revisions||[]).map(r=>r.run&&contexts[r.run]?`<a href="${esc(routeHref(here,navigationSections(here,r.run)[0][0],null,r.run,null))}">${esc(`${r.word} ${contexts[r.run].run}`)}</a>`:`<span>${esc(`${r.word} ${r.id}`)}</span>`);
-  return `<p class="context-run">Showing run: <strong>${esc(runDate(ctx))}</strong> · ${esc(runPathway(ctx))} · <span class="code">${esc(ctx.run)}</span>${earlierFormat(ctx)?` ${EARLIER_FORMAT_BADGE}`:''}${earlierMethods(ctx)?` ${EARLIER_METHODS_BADGE}`:''}</p><a class="text-action" href="${esc(routeHref('W-Report','history',null,context))}">All runs of this issuer</a>${revisions.length?`<p class="context-revision">${revisions.join(' · ')}</p>`:''}`;
+  const revisions=(ctx.revisions||[]).map(r=>r.run&&contexts[r.run]?`<a href="${esc(routeHref(here,navigationSections(here,r.run)[0][0],null,r.run,null))}">${esc(`${r.word} ${runDate(contexts[r.run])}`)}</a>`:`<span>${esc(`${r.word} ${r.id}`)}</span>`);
+  // The run code is the Evidence page's to show; every other page names the run by its date and pathway.
+  const code=module==='W-Evidence'?` · <span class="code">${esc(ctx.run)}</span>`:'';
+  return `<p class="context-run">Showing run: <strong>${esc(runDate(ctx))}</strong> · ${esc(runPathway(ctx))}${code}${earlierFormat(ctx)?` ${EARLIER_FORMAT_BADGE}`:''}${earlierMethods(ctx)?` ${EARLIER_METHODS_BADGE}`:''}</p><a class="text-action" href="${esc(routeHref('W-Report','history',null,context))}">All runs of this issuer</a>${revisions.length?`<p class="context-revision">${revisions.join(' · ')}</p>`:''}`;
 }
-// ---- Report history (decision 4): one row per run of the issuer, latest as-of date first. Each row opens that run's Overview.
-const SOURCE_NOT_RECORDED='Not recorded';
+// ---- Report history (decision 4; library redesign Task 11): the issuer's runs as a vertical timeline (C15), latest as-of date first, one entry per run. An entry is the date as written and the pathway, then the
+// declared state of the lead module, the Completed status with the number of modules not assessable, the module dot strip (C21) and the links. "What changed" opens that run's Changes page; the first run of a
+// pathway has no earlier run of it to be compared with and carries no such link (CP-8 compares a run with the earlier run of the same issuer and pathway). Two runs with one name are told apart by Latest and Earlier.
+// Whether a run holds a comparison, by the Changes page's own reading of the run's record: one that was produced, one stated as not produced and one that could not be read each give the page something to say;
+// a recorded first run and a run that records nothing have no comparison, so the page would only say "No comparison recorded" (review L7).
+const comparedWithEarlier=run=>['produced','not_produced','unreadable'].includes(ChangesView.changesState(run.changes));
 function historyView(context) {
   const ctx=contexts[context],keyOf=new Map(Object.entries(contexts).map(([key,run])=>[run,key])),runs=issuerRuns(context);
-  const row=run=>{
-    const key=keyOf.get(run),codes=runModuleCodes(run),label=`${runDate(run)}, ${runPathway(run)}, ${run.run}`;
+  const words=sameNameWords(runs.map(run=>({id:run.folder,group:'',name:runName(run),date:run.asOf||'',started:run.record?.steps?.[0]?.started??null})));
+  const slot=(row,n)=>{
+    const run=runs[n],key=keyOf.get(run),lead=libraryLead(key),codes=runModuleCodes(run),label=`${runDate(run)}, ${runPathway(run)}`;
     const notAssessable=codes.filter(code=>{const id=run.modules[code].default;return id&&blocked(data[id].sections,data[id].state);}).length;
-    const modulesRun=codes.length?`<ul class="history-modules">${codes.map(code=>`<li>${esc(moduleTitle(code))}</li>`).join('')}</ul>`:SOURCE_NOT_RECORDED;
-    const status=`Completed${notAssessable?` · ${notAssessable} not assessable`:''}`;
-    return `<tr${key===context?' aria-current="true" class="selected-run"':''}><th scope="row"><a href="${esc(routeHref('W-Overview','overview',null,key))}" aria-label="${esc(`Open run: ${label}`)}">${esc(runDate(run))}</a><small class="code">${esc(run.run)}</small>${key===context?' <span class="badge badge-gray">Showing</span>':''}</th><td>${esc(runPathway(run))}</td><td>${modulesRun}</td><td>${esc(status)}${earlierFormat(run)?` ${EARLIER_FORMAT_BADGE}`:''}${earlierMethods(run)?` ${EARLIER_METHODS_BADGE}`:''}</td></tr>`;
+    const marks=[lead?.state?window.Components.stateBadge(lead.state,{}):'',`<span class="hist-status">Completed${notAssessable?` · ${notAssessable} not assessable`:''}</span>`,earlierFormat(run)?EARLIER_FORMAT_BADGE:'',earlierMethods(run)?EARLIER_METHODS_BADGE:'',words[n]?`<span class="badge badge-gray">${words[n]}</span>`:'',key===context?'<span class="badge badge-gray">Showing</span>':''].filter(Boolean).join(' ');
+    const modules=libraryModules(key),changed=comparedWithEarlier(run);
+    return `<div class="hist-marks">${marks}</div><div class="hist-dots">${modules.length?window.Components.moduleDots(modules):`<p class="lc-none">No module output is retained for this run.</p>`}</div><div class="hist-links"><a class="text-action" href="${esc(routeHref('W-Overview','overview',null,key))}" aria-label="${esc(`Open run: ${label}`)}">Open overview${icon('arrow-right')}</a>${changed?`<a class="text-action" href="${esc(routeHref('W-Changes','changes',null,key))}" aria-label="${esc(`What changed in the run of ${label}`)}">What changed${icon('git-compare')}</a>`:''}</div>`;
   };
-  return `<div class="table-scroll" role="region" aria-label="Report history" tabindex="0"><table class="history-table"><caption>Runs of ${esc(ctx.issuer||ctx.title)}, latest as-of date first</caption><thead><tr>${['Date','Pathway','Modules run','Status'].map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${runs.map(row).join('')}</tbody></table></div>`;
+  const block={headers:['Date','Event'],rows:runs.map(run=>({cells:[runDate(run),runPathway(run)]}))};
+  return `<div class="history">${window.Components.datedTimeline(block,{stacked:true,unit:['run','runs'],caption:`Runs of ${ctx.issuer||ctx.title}, latest as-of date first`,current:(row,n)=>keyOf.get(runs[n])===context,slot})}</div>`;
 }
 function forecastSections(context) {
-  const models=runModels(context);
-  return models.length?models.map(m=>[m.id,m.id,[]]):[['none','Forecast availability',[]]];
+  const models=runModels(context),labels=modelOptionLabels(models); // a model is named as the Model select names it; its id stays the route's section
+  return models.length?models.map((m,i)=>[m.id,labels[i],[]]):[['none','Forecast availability',[]]];
 }
 function navigationSections(module,context,output=defaultOutput(module,context)) {
-  if(module==='W-Evidence')return [['sources','Evidence',[]]];
+  if(module==='W-Evidence')return [['summary','Evidence',[]]];
   if(module==='W-Forecast'||module===MODEL_ENTRY[0])return forecastSections(context);
   if(isAnalytical(module)&&output)return reportOutline(output);
   if(Object.hasOwn(modules,module))return modules[module].sections;
@@ -1009,7 +1073,15 @@ function navigatorGroups(context) {
   return runModels(context).length?[...named,['Delivered model',[MODEL_ENTRY]]]:named;
 }
 // The section titles a navigator entry is searched by: the model's, or those of the module's default output.
-const entrySections=(id,context)=>{const output=defaultOutput(id,context);return id===MODEL_ENTRY[0]?navigationSections(id,context):output?modules[output].sections:[];};
+// A section of the module page whose every heading is hidden (rule 7) is not a title the navigator search can match.
+const hiddenSections=output=>new Set(window.Evidence.classify(data[output].sections,data[output].placement).filter(entry=>entry.role==='hidden').map(entry=>entry.section));
+const entrySections=(id,context)=>{
+  const output=defaultOutput(id,context);
+  if(id===MODEL_ENTRY[0])return navigationSections(id,context);
+  if(!output)return [];
+  const hidden=hiddenSections(output);
+  return modules[output].sections.filter(([sectionId])=>{const held=sectionData(output,sectionId);return !held.length||!held.every(section=>hidden.has(section));});
+};
 function navigatorEntry(id,name,module,context,query) {
   const output=defaultOutput(id,context),sections=entrySections(id,context);
   const hit=query&&sections.find(s=>s[1].toLowerCase().includes(query));
@@ -1030,6 +1102,19 @@ function navigatorView(module,query) {
     return shown.length?`<div class="nav-group"><h2 class="nav-heading">${esc(title)}</h2><ul class="module-list">${shown.map(([id,name])=>navigatorEntry(id,name,module,context,query)).join('')}</ul></div>`:'';
   }).join('')+(count?'':'<p class="empty">No match. Try another name or topic.</p>');
   return {html,count};
+}
+// A search hit on a table whose section the module page does not hold: the Evidence tab that holds the section (Sources, Calculations, Registers or Gaps) for its module, with the hit's row
+// (its handoff line) in view; null for a section no tab holds, which keeps the module route.
+const EVIDENCE_HIT_TABS=['sources','calculations','registers','gaps'];
+// The Evidence tab a section of an output belongs to by role (Sources, Calculations, Registers or Gaps), or null.
+function auditTab(id,heading) {
+  const role=window.Evidence.classify(data[id].sections,data[id].placement).find(entry=>entry.section.heading===heading)?.role;
+  return EVIDENCE_HIT_TABS.includes(role)?role:null;
+}
+const evidenceTabName=tab=>window.Evidence.TABS.find(entry=>entry[0]===tab)[1];
+function evidenceHit(id,heading,line=null) {
+  const tab=auditTab(id,heading);
+  return tab===null?null:window.Evidence.href(tab,data[id].module,data[id].run,line);
 }
 const moduleHref=id=>routeHref(id,lastSection.get(current?.context+':'+id)||firstSection(id,current?.context));
 function moduleLink(id,label){return `<a class="text-action" href="${moduleHref(id)}">${esc(label||moduleNames[id])}${icon('arrow-right')}</a>`;}
@@ -1113,16 +1198,103 @@ function cashflowSection(model) {
 // The roles a delivery's sources are declared under; an unknown role shows its own token.
 const SOURCE_ROLES={annual:'Annual handoff',quarter:'Quarterly handoff',forecast:'Forecast handoff',forecast_exact:'Forecast calculations',current_synthesis:'Current synthesis'};
 const sourceFile=s=>(s.output||s.path||'').split('/').at(-1);
-// A fact, not a judgement: sources whose file names carry different attempt numbers.
-function attemptNote(sources) {
-  const named=[...new Set(sources.map(sourceFile).filter(f=>/-attempt-\d+/.test(f)))];
-  const attempt=f=>/-attempt-(\d+)/.exec(f)[1];
-  if(new Set(named.map(attempt)).size<2)return '';
-  return `<p class="forecast-attempts">${esc(`These files come from different attempts: ${named.map(f=>`${f} (attempt ${attempt(f)})`).join(', ')}`)}</p>`;
+// ---- The run's charts on the Forecast page: small multiples, one card per chart contract, in the order the data holds them. Nothing is recomputed: a mark is placed from the
+// stated number and the text beside it is the cell. A card has its title, the figure, a Chart or Table toggle (the contract's rows as written, minus the columns a findings page
+// never draws), the contract's "Basis and limitation" as a footnote, ONE trace control and a link to the module that wrote it.
+// The form follows the contract kind and its shape (spec section 5): the kinds readerChart knows draw themselves; two periods of one measure are a prior-value tile, never a
+// two-point line; a kind the page does not know is its table as written. A chart with no numbers is the empty state (C32) with its stated reason.
+const FIGURE_KINDS=new Set([...Object.keys(READER_FIGURES),'grouped']);
+const WIDE_KINDS=new Set(['stack','recovery','scatter','range','bullet','limits']);
+// A card's span in the 24-column grid (c8, c12, c16 or c24): the form's own width, then each row is filled so no card sits alone beside empty space.
+const SPAN_STEPS=[8,12,16,24];
+function packSpans(wanted) {
+  const spans=[],row=[];
+  const close=()=>{
+    for(let grew=true;grew;){grew=false;for(let i=0;i<row.length;i++){const next=SPAN_STEPS[SPAN_STEPS.indexOf(row[i])+1];if(next!==undefined&&row.reduce((a,b)=>a+b,0)-row[i]+next<=24){row[i]=next;grew=true;}}}
+    spans.push(...row);row.length=0;
+  };
+  for(const want of wanted){if(row.reduce((a,b)=>a+b,0)+want>24)close();row.push(want);}
+  close();
+  return spans;
+}
+const CARD={headless:true};
+// A card's context: strict, so every text it draws is read as a findings page reads it and then some (components.js findingCell).
+const cardContext=(id,title)=>({...readCtx(id,CARD),id,module:data[id].module,evidenceHref:window.Evidence.href('registers',data[id].module,data[id].run),key:row=>`${id}:${row.line}`,caption:plain(title)});
+const isPairContract=(chart,table)=>(!chart.kind||chart.kind==='grouped')&&(chart.columns||[chart.column]).length===1&&(chart.rows||table.rows).length>=1&&(chart.rows||table.rows).length<=2;
+// Two periods (or one) of a single measure: each period with its own label at the same weight, in the table's order. The contract does not mark which period is
+// later, and the page does not infer it, so nothing is emphasised.
+function pairTile(id,chart) {
+  const table=fixtureTable(id,chart.table),col=(chart.columns||[chart.column])[0],rows=(chart.rows||table.rows.map((_,i)=>i)).map(i=>table.rows[i]);
+  const text=cell=>chartNumber(cell)===null?statedReason(id,cell,CARD):esc(cell);
+  return `<div class="fc-pair"><p class="fc-measure">${cardHtml(id,CARD,table.headers[col])}</p>${rows.map(row=>`<p class="fc-period"><span class="fc-k">${esc(cardPlain(id,CARD,row.cells[0]))}</span><strong>${text(row.cells[col])}</strong></p>`).join('')}</div>`;
+}
+// The contract's "Basis and limitation", verbatim: one line per distinct text, led by every row label that shares it. A text findingCell (strict) holds back is not drawn.
+// `held` says some text was held back; the card then links to the place Evidence lists it. With nothing drawn there is no heading, only the link.
+function chartNote(block,ctx) {
+  const at=block.headers.findIndex(h=>window.Shapes.columnKind(h)==='limitation');
+  if(at<0)return {html:'',held:false};
+  const byText=new Map();
+  let held=false;
+  for(const row of block.rows) {
+    const text=String(row.cells[at]??'').trim();
+    if(text==='')continue;
+    const lead=window.Components.findingCell(String(row.cells[0]??''),ctx).html;
+    const entry=byText.get(text)||byText.set(text,{leads:[]}).get(text);
+    if(lead!==undefined)entry.leads.push(lead);
+  }
+  const items=[];
+  for(const [text,{leads}] of byText) {
+    const cell=window.Components.findingCell(text,ctx);
+    if(cell.html===undefined){held=true;continue;}
+    items.push(`<li>${block.rows.length>1&&leads.length?`<b>${leads.join(', ')}</b> `:''}${cell.html}</li>`);
+  }
+  return {html:items.length?`<div class="fc-note"><p class="fc-note-k">${esc(block.headers[at])}</p><ul>${items.join('')}</ul></div>`:'',held};
+}
+// The empty state a card shows for a chart that was not drawn: a stated reason, or (the build's own message held back) the fixed label and a link.
+const CARD_HELD_LABEL='Not established for this run';
+function chartCard(id,item,number) {
+  const out=data[id],chart=item.chart||item.gap||item.sent,T=text=>statedHtml(id,text,CARD),name=cardPlain(id,CARD,chart.title)||`Chart ${number}`,title=T(chart.title)||esc(name),ctx=cardContext(id,name);
+  const owner=`<a class="text-action" href="${routeHref(out.module,chartPart(id),null,out.run,out.source)}">${esc(moduleTitle(out.module))}${icon('arrow-right')}</a>`;
+  const open=`<article class="fc-card" data-block data-view="chart" aria-label="${esc(name)}">`;
+  const evLink=(tab,module=out.module)=>`<a class="in-ev" href="${esc(window.Evidence.href(tab,module,out.run))}">In Evidence</a>`;
+  const head=`<div class="fc-head"><div class="fc-title"><h3>${title}</h3></div></div>`;
+  if(item.sent)return `${open}${head}${window.Components.emptyState('Sent back by the build',[],`<div class="es-trace">${evLink('record')}</div>`)}<div class="fc-foot">${owner}</div></article>`;
+  const block=fixtureTable(id,chart.table);
+  if(item.gap||item.hidden) {
+    const reasons=item.hidden?[window.Components.findingCell(item.hidden,ctx).html].filter(Boolean):null;
+    // A reason the page holds back leaves the fixed label and one link to the place Evidence lists it.
+    const body=item.hidden?window.Components.emptyState(CARD_HELD_LABEL,reasons,reasons.length?'':`<div class="es-trace">${evLink('registers')}</div>`):window.Components.gapState(block,ctx,chart.gap);
+    return `${open}${head}${body}<div class="fc-foot">${owner}</div></article>`;
+  }
+  const known=!chart.kind||FIGURE_KINDS.has(chart.kind);
+  const figure=!known?'':isPairContract(chart,block)?pairTile(id,chart):readerChart(id,{...chart,title:name},false,false,true,true);
+  const unit=chart.unit?T(chart.unit):''; // the run's period is the page's context bar, not each card's
+  const toggle=figure?window.Components.viewToggle(`${name}: chart or table`,[['chart','Chart'],['table','Table']]):'';
+  const table=window.Components.pane('table',window.Components.chartTable(block,ctx),!figure);
+  const fig=figure?window.Components.pane('chart',`<div class="fc-fig" role="region" aria-label="${esc(`${name}, chart`)}" tabindex="0">${figure}</div>`,true):'';
+  const note=chartNote(block,ctx);
+  return `${open}<div class="fc-head"><div class="fc-title"><h3>${title}</h3>${unit?`<span class="fc-unit">${unit}</span>`:''}</div><div class="fc-tools">${chartTrace(id,{...chart,title:name,plain:true})}${toggle}</div></div>${fig}${table}${note.html}<div class="fc-foot">${note.held?`${evLink('registers')}`:''}${owner}</div></article>`;
+}
+// Every chart contract of the run's modules, the stated gaps and the charts sent back, in the order the data holds them. `wide` forms take more of the row.
+function forecastCharts(context) {
+  const ids=Object.values(contexts[context]?.modules||{}).map(entry=>entry.default||entry.outputs[0]).filter(id=>id&&data[id]);
+  const items=ids.flatMap(id=>{
+    const out=data[id],hidden=out.state?.established===false?(out.summary?.limitation||'Module not assessable'):null;
+    return [...(out.charts||[]).map(chart=>({id,chart,hidden})),...(out.chartGaps||[]).map(gap=>({id,gap})),...sentBackCharts(id).map(sent=>({id,sent}))].sort((a,b)=>(a.chart||a.gap||a.sent).table-(b.chart||b.gap||b.sent).table);
+  });
+  const open='<section class="fc-charts" id="run-charts"><h2>Run charts</h2>';
+  if(!items.length)return `${open}${window.Components.emptyState('No chart in this run',[],'')}</section>`;
+  const gaps=items.filter(item=>item.gap||item.hidden||item.sent).length;
+  const wanted=items.map(item=>{
+    const chart=item.chart||item.gap||item.sent,drawn=!item.gap&&!item.hidden&&!item.sent;
+    return !drawn?8:WIDE_KINDS.has(chart.kind)?24:chart.kind==='waterfall'||(chart.rows||fixtureTable(item.id,chart.table).rows).length>4?16:8;
+  }),spans=packSpans(wanted);
+  const cards=items.map((item,at)=>`<div class="c${spans[at]}${wanted[at]>=16?' fc-wide':''}">${chartCard(item.id,item,at+1)}</div>`).join('');
+  return `${open}<p class="fc-count">${items.length} ${items.length===1?'chart':'charts'}${gaps?`, ${gaps} not drawn`:''}</p><div class="g24 fc-grid">${cards}</div></section>`;
 }
 function forecastView(context,id) {
   const models=runModels(context);
-  if(!models.length)return forecastEmpty(context);
+  if(!models.length)return forecastEmpty(context)+forecastCharts(context);
   const model=models.find(m=>m.id===id)||models[0];
   const acceptance=reportAcceptance(model);
   const optionLabels=modelOptionLabels(models);
@@ -1132,13 +1304,27 @@ function forecastView(context,id) {
   // The link opens the module that wrote the forecast handoff: CP-2G's forward model, or CP-1 for a layer-1 forecast.
   const fullName=forecast?.output&&(data[forecast.output].module==='CP-2G'?'the full forward credit model output':`the ${data[forecast.output].module} output the forecast was built from`);
   const full=forecast?.output?`<a class="text-action" href="${routeHref(data[forecast.output].module,modules[forecast.output].first,null,forecast.run,data[forecast.output].source)}">Open ${fullName}${icon('arrow-right')}</a>`:'';
-  const assumptions=`<section class="forecast-assumptions"><h2>Assumptions and their rationale</h2>${register?`<h3>${esc(register.heading)}</h3>${register.intro==null?'':`<p class="register-intro">${esc(register.intro)}</p>`}${register.headers.length?`<div class="table-scroll"><table><thead><tr>${register.headers.map(c=>`<th scope="col">${esc(c)}</th>`).join('')}</tr></thead><tbody>${register.rows.map(r=>`<tr>${r.map(c=>`<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`:''}${full}`:'<p>This model’s forecast handoff has no assumption register.</p>'}</section>`;
-  const source=s=>s.output?`<a href="${routeHref(data[s.output].module,modules[s.output].first,null,s.run,data[s.output].source)}">${esc(s.output.split('/').at(-1))}</a>`:`<span title="${esc(s.path)}">${esc(sourceFile(s))}</span>`;
-  // The run is the folder the delivery declares the file under, so every source names one the same way.
-  const run=s=>{const id=/^runs\/([^/]+)\//.exec(s.path||'')?.[1];return id?`<span class="code">${esc(id)}</span>`:'<span class="muted">Not recorded</span>';};
-  const status=s=>s.sha256===null?badge('attention','Invalid path or hash'):s.changed?badge('attention','Changed since publication'):badge('gray','Matches publication');
-  const built=`<section class="forecast-built"><h2>Built from</h2><div class="table-scroll"><table><thead><tr><th scope="col">Role</th><th scope="col">Run</th><th scope="col">Source</th><th scope="col">SHA-256 prefix</th><th scope="col">Status</th></tr></thead><tbody>${model.sources.map(s=>`<tr><th scope="row">${esc(Object.hasOwn(SOURCE_ROLES,s.role)?SOURCE_ROLES[s.role]:s.role)}</th><td>${run(s)}</td><td>${source(s)}</td><td>${s.sha256===null?'':esc(s.sha256.slice(0,12))}</td><td>${status(s)}</td></tr>`).join('')}</tbody></table></div>${attemptNote(model.sources)}</section>`;
-  return `<div class="forecast"><div class="report-tools forecast-tools">${select}${acceptance.html}<a href="${esc(model.download)}" download>Download original HTML</a></div>${cashflowSection(model)}${assumptions}${model.cashflow?`<section class="forecast-limits"><h2>Model limitations</h2><ul>${model.cashflow.limits.map(l=>`<li>${esc(l)}</li>`).join('')}</ul></section>`:''}${why}${built}<details class="model-original"><summary>Published model (original HTML)</summary><div class="frame-host"><p class="frame-status" role="status" hidden></p><iframe id="model-preview" data-download="${esc(model.download)}" data-src="${esc(model.href)}" title="${esc(model.id)} · published model" sandbox="allow-scripts allow-downloads" referrerpolicy="no-referrer"></iframe></div></details></div>`;
+  // The register and the limitation lines are the model's own words. A file name, a calculation or scenario identifier (an id value of any module of the run, strictContext) inside them is held back
+  // (findingCell, strict) and one link to Evidence stands in; a source column and an identifier column are Evidence's.
+  const owner=forecast?.output&&data[forecast.output]?data[forecast.output].module:null;
+  // The register is the forecast handoff's (Evidence Registers of its module); the limitation lines are the calculation record's scope limits (Evidence Gaps, a group of their own).
+  const ctx={...strictContext(context),evidenceHref:window.Evidence.href('registers',owner,context)};
+  const limitsCtx={...ctx,evidenceHref:window.Evidence.href('gaps',owner,context)};
+  const block=register&&register.headers.length?{headers:register.headers,rows:register.rows.map((cells,at)=>({line:at,cells}))}:null;
+  const intro=register?.intro==null?null:window.Components.findingCell(register.intro,ctx).html;
+  const table=block&&block.rows.length?window.Components.chartTable(block,{...ctx,caption:register.heading}):'';
+  const assumptions=`<section class="forecast-assumptions"><h2>Assumptions and their rationale</h2>${register?`${register.intro==null||intro===undefined?'':`<p class="register-intro">${intro}</p>`}${table?`<details class="forecast-register"><summary>The assumptions behind the forecast (${block.rows.length})</summary>${table}</details>`:''}${full}`:'<p>This model’s forecast handoff has no assumption register.</p>'}</section>`;
+  const limits=model.cashflow?model.cashflow.limits.map(l=>({l,cell:window.Components.findingCell(l,limitsCtx)})):[];
+  const heldLimits=limits.filter(x=>x.cell.html===undefined).length;
+  const limitList=limits.filter(x=>x.cell.html!==undefined).map(x=>`<li>${x.cell.html}</li>`).join('')+(heldLimits?`<li class="fc-held">${heldLimits} further ${heldLimits===1?'limitation is':'limitations are'} stated in Evidence. <a class="in-ev" href="${esc(limitsCtx.evidenceHref)}">In Evidence</a></li>`:'');
+  // Built from: the modules and roles the model read, linked; no file name, hash or folder (those are Evidence's run record).
+  const source=s=>`<li>${s.output?`<a href="${routeHref(data[s.output].module,modules[s.output].first,null,s.run,data[s.output].source)}">${esc(Object.hasOwn(SOURCE_ROLES,s.role)?SOURCE_ROLES[s.role]:'Source')} · ${esc(moduleTitle(data[s.output].module))}</a>`:`<span>${esc(Object.hasOwn(SOURCE_ROLES,s.role)?SOURCE_ROLES[s.role]:'Source')}</span>`}${s.sha256===null?badge('attention','Invalid path or hash'):s.changed?badge('attention','Changed since publication'):''}</li>`;
+  const differing=new Set(model.sources.map(sourceFile).filter(f=>/-attempt-\d+/.test(f)).map(f=>/-attempt-(\d+)/.exec(f)[1])).size>1;
+  const built=model.sources.length?`<section class="forecast-built"><h2>Built from</h2><ul class="fc-built">${model.sources.map(source).join('')}</ul>${differing?'<p class="forecast-attempts">These inputs come from different attempts.</p>':''}</section>`:'';
+  // The frame names the run by its period and pathway only (the select's labels may carry a delivery tag or a relationship).
+  const label=contexts[context]?runName(contexts[context]):'This run';
+  const frame=`<details class="model-original"><summary>Published model (original HTML)</summary><div class="frame-host"><div class="frame-head"><h2>Published model</h2><span>${esc(label)}</span></div><p class="frame-status" role="status" hidden></p><iframe id="model-preview" data-download="${esc(model.download)}" data-src="${esc(model.href)}" title="Published model, ${esc(label)}" sandbox="allow-scripts allow-downloads" referrerpolicy="no-referrer"></iframe></div></details>`;
+  return `<div class="forecast">${forecastCharts(context)}<div class="report-tools forecast-tools">${select}${acceptance.html}<a href="${esc(model.download)}" download>Download original HTML</a></div>${cashflowSection(model)}${assumptions}${model.cashflow?`<section class="forecast-limits"><h2>Model limitations</h2><ul>${limitList}</ul></section>`:''}${why}${built}${frame}</div>`;
 }
 // The Library screen. The served catalogue (window.DESIGN_CATALOGUE) is screened and sorted by LibraryLogic (screening.js); this places it. Nothing here calculates, converts or rescales a value.
 const METRIC_NAMES={revenue:'Revenue',ebitda:'EBITDA',leverage:'Leverage',net_leverage:'Net leverage',coverage:'Interest coverage',cash:'Closing cash',undrawn:'Undrawn facilities',cashflow:'Cash flow measure'};
@@ -1147,7 +1333,7 @@ const TERM_LABELS={size_m:'Size',tenor_years:'Tenor',talk_spread_bps_low:'Spread
 const CLASSIFICATIONS={investment_grade:'Investment grade',high_yield:'High yield'},RATING_SCOPES={issuer:'Issuer',facility:'Facility'};
 // Coverage group names as the screen says them; the first four hold no figure, so their hidden rows have none recorded.
 const COVERAGE_NAMES={classification:'Classification',currency:'Currency',rating:'Rating',limitation:'Accepted limitations',leverage:'Leverage',net_leverage:'Net leverage',coverage:'Interest coverage',cash:'Cash',undrawn:'Undrawn facilities',talk:'Spread talk',margin:'Margin',coupon:'Coupon',price:'Price',yield:'Yield'};
-const LIBRARY_GROUPS={metric:['basis','period','leverageMin','leverageMax','coverageMin','coverageMax','netLeverageMin','netLeverageMax','cashMin','cashMax','undrawnMin','undrawnMax'],rating:['classification','currency','ratingBelow','ratingAbove','ratingScope'],deal:['talkMin','talkMax','marginMin','marginMax','couponMin','couponMax','priceMin','priceMax','yieldMin','yieldMax'],limit:['limitation']};
+const LIBRARY_GROUPS={metric:['period','leverageMin','leverageMax','coverageMin','coverageMax','netLeverageMin','netLeverageMax','cashMin','cashMax','undrawnMin','undrawnMax'],rating:['classification','currency','ratingBelow','ratingAbove','ratingScope'],deal:['talkMin','talkMax','marginMin','marginMax','couponMin','couponMax','priceMin','priceMax','yieldMin','yieldMax'],limit:['limitation']};
 const catalogueRuns=()=>window.DESIGN_CATALOGUE?.real||[];
 // A date that is not a real calendar day is shown as served, never as another day.
 function libraryDate(value) {
@@ -1184,18 +1370,23 @@ function libraryArtifactLink(artifact,key,text,cls,aria='') {
 }
 // What a deliverable is called: the model the store holds at its address, else the label as catalogued; a label that is only the delivery folder's hash is "Delivered report".
 function libraryArtifactName(artifact) {
-  const model=window.DESIGN_WORKSPACE.models.find(m=>m.href===artifact.href);
-  return model?model.id:/^[0-9a-f]{64}$/.test(artifact.label)?'Delivered report':artifact.label;
+  return /^[0-9a-f]{64}$/.test(artifact.label)?'Delivered report':artifact.label; // a model's own id is its delivery folder: never a name
+}
+// Search also reads the issuer name and terms the store recorded for the joined run, appended to the title the search reads; counts, hidden rows, the option counts and the list all see the same text.
+const libraryShadows=runs=>runs.map(run=>{const held=contexts[libraryRunKey(run)];return {...run,title:[run.title,held?.issuer,...(held?.issuerTerms||[])].filter(Boolean).join(' ')};});
+// The runs the screen lists for filters `f`: the Latest-run rule and the criteria, or, in a "Show them" view, exactly the logic's hidden rows. The list, its counts and the option numbers all read this.
+function libraryListed(shadows,f,hiddenGroup) {
+  const coverage=LibraryLogic.coverage(shadows,f),hidden=Object.hasOwn(coverage,hiddenGroup)?hiddenGroup:'';
+  const entries=LibraryLogic.screened(shadows,f);
+  return {coverage,hidden,entries,runs:hidden?LibraryLogic.hiddenBy(shadows,f,hidden):entries.map(e=>e.run)};
 }
 function libraryRows() {
-  const runs=catalogueRuns(),f={...libraryFilters};
-  // Search also reads the issuer name and terms the store recorded for the joined run, appended to the title the search reads; counts, hidden rows and the list all see the same text.
-  const shadows=runs.map(run=>{const held=contexts[libraryRunKey(run)];return {...run,title:[run.title,held?.issuer,...(held?.issuerTerms||[])].filter(Boolean).join(' ')};});
+  const runs=catalogueRuns(),f={...libraryFilters},shadows=libraryShadows(runs);
   const original=new Map(runs.map(run=>[run.id,run])),back=list=>list.map(run=>original.get(run.id));
-  const coverage=LibraryLogic.coverage(shadows,f);
-  if(!Object.hasOwn(coverage,libraryState.hidden))libraryState.hidden='';
-  const entries=LibraryLogic.screened(shadows,f),skipped=new Set(entries.filter(e=>e.notScreened).map(e=>e.run.id));
-  const matching=back(libraryState.hidden?LibraryLogic.hiddenBy(shadows,f,libraryState.hidden):entries.map(e=>e.run)); // "Show them" lists exactly the logic's hidden rows
+  const listed=libraryListed(shadows,f,libraryState.hidden),{coverage,entries}=listed;
+  libraryState.hidden=listed.hidden;
+  const skipped=new Set(entries.filter(e=>e.notScreened).map(e=>e.run.id));
+  const matching=back(listed.runs);
   const rows=libraryState.sortKey?LibraryLogic.sortRuns(matching,libraryState.sortKey,libraryState.direction,f):matching;
   if(!rows.some(r=>r.id===libraryState.selected))libraryState.selected=rows[0]?.id??'';
   const unscreened=f.runs==='any'?0:LibraryLogic.filterRuns(shadows,{...f,runs:'any'}).length-entries.length; // rows Any run would add under these filters
@@ -1203,62 +1394,106 @@ function libraryRows() {
 }
 // Runs grouped by issuer, case-insensitively, in order of first appearance.
 const issuerGroups=runs=>[...runs.reduce((m,r)=>m.set(LibraryLogic.issuerKey(r.issuer),[...(m.get(LibraryLogic.issuerKey(r.issuer))||[]),r]),new Map()).values()];
-const libraryCount=({runs,rows,hidden})=>hidden?`${plural(rows.length,'run')} hidden by ${COVERAGE_NAMES[hidden]} · not matching these filters`:`${rows.length} of ${plural(runs.length,'run')} · ${plural(issuerGroups(rows).length,'issuer')}`;
+const libraryCount=({runs,rows,hidden})=>hidden?`${plural(rows.length,'run')} hidden by ${COVERAGE_NAMES[hidden]} · not matching these filters`:rows.length?`${plural(issuerGroups(rows).length,'issuer')} · ${rows.length} of ${plural(runs.length,'run')}`:runs.length?'No issuers match these filters. Clear a filter to list them again.':'No issuers to list.';
 function libraryCoverage({runs,coverage,unscreened}) {
   const lines=Object.entries(coverage).map(([group,{recorded,hidden}])=>`<p data-library-coverage="${group}">${esc(`${COVERAGE_NAMES[group]} recorded for ${recorded} of ${plural(runs.length,'run')}`)}${hidden?` · ${hidden} hidden · <button class="tertiary-action" type="button" data-library-hidden="${group}">Show them</button>`:''}</p>`);
   if(unscreened)lines.push(`<p>${esc(`${plural(unscreened,'run')} not screened by the Latest run rule · choose Any run to show them`)}</p>`);
   return lines.join('');
 }
-// One item per column (owner, 2026-11-10). What a row no longer carries (ticker, workflow, period, each ratio's basis, a rating's agency and date, the checklist line) is in the selected-run panel; a ratio's basis and a rating's detail are also the cell's title.
+// One item per column (owner, 2026-11-10). What a row no longer carries (ticker, workflow, period, a rating's agency and date, the checklist line) is in the selected-run panel; the period of a ratio and a rating's detail are also the cell's title.
+// A ratio's basis is Evidence's, not the library's (library redesign, Task 11): the cell title is the period the figure is for.
 const libraryMetricCell=(run,key)=>{
   const metric=run.metrics[key];
-  return `<td${metric?'':' class="missing"'} title="${esc(metric?.basis||'Not available')}">${esc(libraryMetric(metric))}</td>`;
+  return `<td${metric?'':' class="missing"'} title="${esc(metric?(metric.period||'Period not recorded'):'Not available')}">${esc(libraryMetric(metric))}</td>`;
 };
 const libraryRatingText=r=>[r.agency||'Agency not recorded',RATING_SCOPES[r.scope]||'Scope not recorded',libraryDate(r.date)].join(' · ');
 function libraryRatingCell(run) {
   const lowest=LibraryLogic.lowestRating(run,libraryFilters.ratingScope);
   return lowest?`<td title="${esc(libraryRatingText(lowest))}">${esc(lowest.label)}</td>`:'<td class="missing" title="No rating recorded">n.a.</td>';
 }
-// The name selects the row (its panel is below the table); the run id opens the run when the store holds it.
-function libraryRow(run,selected,skipped) {
-  const key=libraryRunKey(run),artifact=primaryArtifact(run);
-  const name=`<td><button class="library-run-name" type="button" data-library-select="${esc(run.id)}" aria-expanded="${selected}" aria-controls="run-detail" aria-label="${esc(`View ${run.name}: ${run.title}`)}">${esc(run.name)}</button></td>`;
-  const id=`<td class="run-id" title="${esc(run.id)}">${key?`<a href="${routeHref('W-Overview','overview',null,key)}" aria-label="${esc(`Open run: ${run.name}, ${run.id}`)}">${esc(run.id)}</a>`:esc(run.id)}</td>`;
-  const label=`${run.name}, ${run.id}`,links=key?[`<a class="report-link" href="${routeHref('W-Overview','overview',null,key)}" aria-label="${esc(`Open run: ${label}`)}">Open run</a>`,`<a class="report-link" href="${routeHref('W-Report','history',null,key)}" aria-label="${esc(`Report history: ${label}`)}">History</a>`]:[];
-  if(artifact)links.push(libraryArtifactLink(artifact,key,'Open model','report-link',`Open model: ${run.name}, ${artifact.label}`));
-  const deliverable=links.length?links.join(' · '):skipped?'Not screened':'Handoffs only';
-  return `<tr${selected?' class="selected"':''}>${name}${id}<td>${esc(run.sector)}</td><td>${esc(libraryDate(run.date))}</td>${libraryMetricCell(run,'leverage')}${libraryMetricCell(run,'net_leverage')}${libraryMetricCell(run,'coverage')}${libraryRatingCell(run)}<td>${esc(run.completion===null?'Not assessed':`${run.completion}%`)}</td><td>${deliverable}</td></tr>`;
+// A catalogue run is named as every run page names it, by its period and pathway; a run the store does not hold keeps its catalogue date and workflow. Never by its code or folder.
+const libraryRunParts=run=>{const held=contexts[libraryRunKey(run)];return held?[runDate(held),runPathway(held)]:[run.date?displayDate(run.date):'Not recorded',run.workflow||'Not recorded'];};
+const libraryRunName=run=>libraryRunParts(run).join(' · ');
+// Two runs of one issuer that carry the same name are told apart by a fixed word and nothing else: Latest for the later, Earlier for the rest. Which is later is a fact about the runs, never about the row order:
+// the as-of date, then the run's start (a run with no start is the older), then the folder order Report history uses (the smaller folder is listed first). `items` are {id, group, name, date, started}; the word for each, in order ('' for a name held once).
+const laterRun=(a,b)=>((a.date||'')!==(b.date||'')?(a.date||'')>(b.date||''):(a.started||null)!==(b.started||null)?b.started==null||(a.started!=null&&a.started>b.started):String(a.id)<String(b.id));
+function sameNameWords(items) {
+  const same=(a,b)=>a.group===b.group&&a.name===b.name;
+  return items.map(item=>{
+    const peers=items.filter(other=>same(item,other));
+    if(peers.length<2)return '';
+    return peers.every(other=>other===item||laterRun(item,other))?'Latest':'Earlier';
+  });
 }
-function libraryResults({runs,rows,skipped,hidden}) {
-  if(!runs.length)return window.DESIGN_APP?.problem?`<div class="library-empty"><h2>The library could not read this workspace</h2><p>Nothing can be listed until its data file loads. Rebuild the data file and open this page again.</p></div>`:`<div class="library-empty"><h2>No runs in this workspace yet</h2><p>The data file holds no retained runs.</p></div>`;
-  if(!rows.length)return '<div class="library-empty"><h2>No runs match these filters</h2><p>Try a wider range or include unavailable values. Workflow completeness is not assessed for retained runs.</p><button id="library-empty-reset" class="primary-action" type="button">Reset filters</button></div>';
+// The start of a run's first step, the order Report history breaks a date tie by.
+const runStarted=key=>contexts[key]?.record?.steps?.[0]?.started??null;
+// The name selects the row (its panel is below the table), by the row's place in the list; the run's name opens the run when the store holds it.
+function libraryRow(run,selected,skipped,index=0,word='') {
+  const key=libraryRunKey(run),artifact=primaryArtifact(run),when=libraryRunName(run),label=`${run.name}, ${when}`;
+  const name=`<td><button class="library-run-name" type="button" data-library-select="${index}" aria-expanded="${selected}" aria-controls="run-detail" aria-label="${esc(`View ${run.name}: ${run.title}`)}">${esc(run.name)}</button></td>`;
+  const named=`<td class="run-when">${key?`<a href="${routeHref('W-Overview','overview',null,key)}" aria-label="${esc(`Open run: ${label}`)}">${esc(when)}</a>`:esc(when)}${word?` <span class="badge badge-gray">${word}</span>`:''}</td>`;
+  const links=key?[`<a class="report-link" href="${routeHref('W-Overview','overview',null,key)}" aria-label="${esc(`Open run: ${label}`)}">Open run</a>`,`<a class="report-link" href="${routeHref('W-Report','history',null,key)}" aria-label="${esc(`Report history: ${label}`)}">History</a>`]:[];
+  if(artifact)links.push(libraryArtifactLink(artifact,key,'Open model','report-link',`Open model: ${label}`));
+  const deliverable=links.length?links.join(' · '):skipped?'Not screened':'Handoffs only';
+  return `<tr${selected?' class="selected"':''}>${name}${named}<td>${esc(run.sector)}</td><td>${esc(libraryDate(run.date))}</td>${libraryMetricCell(run,'leverage')}${libraryMetricCell(run,'net_leverage')}${libraryMetricCell(run,'coverage')}${libraryRatingCell(run)}<td>${esc(run.completion===null?'Not assessed':`${run.completion}%`)}</td><td>${deliverable}</td></tr>`;
+}
+// ---- Issuer cards (library redesign, Task 11): one card per issuer of the listed runs, drawn from its latest listed run. Everything on a card is the run's own: its name, the lead module's
+// declared state and first sentence, one dot per module (C21) and the links. Nothing is counted but the issuer's runs.
+// The lead module of a run (the Overview's rule), its declared state when that is a usable word, and its Bottom line's first sentence, once per run.
+const libraryLeads=new Map();
+function libraryLead(key) {
+  if(!key||!contexts[key])return null;
+  if(!libraryLeads.has(key)) {
+    const lead=overviewLeadEntry(overviewEntries(key,LEAD_MODULES)),declared=lead?.out.state?.declared??null;
+    libraryLeads.set(key,lead?{state:declared&&window.Components.findingCell(declared,{}).html!==undefined?declared:null,sentence:window.Components.firstSentenceOf(passageTexts(lead.passages.bottom),null)}:null);
+  }
+  return libraryLeads.get(key);
+}
+// The run's modules in the catalogue's order and groups, as the dot strip takes them.
+const libraryModules=key=>runGroups(key).flatMap(([,items])=>items).map(({module,id,out,choices})=>({title:moduleTitle(module),state:out?.state?.declared??null,blocked:Boolean(out)&&blocked(out.sections,out.state),choose:!id&&choices>0}));
+// The Overview's figure strip for the run: the same rule, the same function (leadStrip); here without trace controls, which need a run page to open on.
+const libraryStrips=new Map();
+function libraryStrip(key) {
+  if(!key||!contexts[key])return '';
+  if(!libraryStrips.has(key)) {
+    const entries=overviewEntries(key),lead=overviewLeadEntry(entries);
+    libraryStrips.set(key,lead?leadStrip(lead,overviewTables(entries),key):'');
+  }
+  return libraryStrips.get(key);
+}
+// What the issuer is called: its company name when every listed run carries the same one, else its ticker (the issuer filter's own rule).
+const issuerLabel=group=>new Set(group.map(r=>r.name)).size===1?group[0].name:group[0].issuer;
+function libraryCard(group,index,at) {
+  const run=group.reduce((best,other)=>(other.date||'')>(best.date||'')?other:best,group[0]),key=libraryRunKey(run),lead=libraryLead(key),when=libraryRunName(run),name=issuerLabel(group);
+  const modules=key?libraryModules(key):[],id=`lc-${index}`;
+  const dots=modules.length?window.Components.moduleDots(modules):`<p class="lc-none">${key?'No module output is retained for this run.':'No run page is held for this issuer.'}</p>`;
+  const meta=[run.issuer!==name?run.issuer:'',run.sector].filter(Boolean).join(' · ');
+  const label=`${name}, ${when}`,[whenDate,whenPathway]=libraryRunParts(run),open=!!libraryState.opened&&libraryState.selected===run.id;
+  return `<article class="lib-card" aria-labelledby="${id}"><header class="lc-head"><h3 class="lc-name" id="${id}">${esc(name)}</h3>${meta?`<p class="lc-meta">${esc(meta)}</p>`:''}</header><div class="lc-run"><p class="lc-when">${esc(whenDate)}</p><span class="badge badge-gray lc-path">${esc(whenPathway)}</span>${lead?.state?window.Components.stateBadge(lead.state,{}):''}</div>${lead?.sentence?`<p class="lc-lead">${lead.sentence}</p>`:''}<div class="lc-dots">${dots}</div><footer class="lc-foot">${key?`<a class="lc-open" href="${routeHref('W-Overview','overview',null,key)}" aria-label="${esc(`Open overview: ${label}`)}">Open overview${icon('arrow-right')}</a>`:''}<button class="secondary-action lc-details" type="button" data-library-select="${at}" aria-expanded="${open}" aria-controls="run-detail" aria-label="${esc(`Details: ${label}`)}">Details</button>${key?`<a class="lc-hist" href="${routeHref('W-Report','history',null,key)}" aria-label="${esc(`Report history: ${name}`)}">${plural(issuerRuns(key).length,'run')}</a>`:''}</footer></article>`;
+}
+// The cards of the listed runs: issuers in order of their first listed run; each card's Details button selects the run it draws, by its place in the list.
+function libraryCards(rows) {
+  return `<div class="lib-grid">${issuerGroups(rows).map((group,n)=>libraryCard(group,n,rows.indexOf(group.reduce((best,other)=>(other.date||'')>(best.date||'')?other:best,group[0])))).join('')}</div>`;
+}
+// The sort the screen offers beside the view toggle: the same keys and directions the table's column heads and the address use.
+function librarySortSelect() {
+  const chosen=libraryState.sortKey?`${libraryState.sortKey}:${libraryState.direction}`:'';
+  const options=[['','Default order'],...LIBRARY_COLUMNS.filter(([key])=>key).flatMap(([key,label])=>[[`${key}:asc`,`${label}, ascending`],[`${key}:desc`,`${label}, descending`]])];
+  return `<label class="lib-sort"><span>Sort</span><select id="library-sort" data-library-sort-select>${options.map(([value,text])=>`<option value="${value}"${value===chosen?' selected':''}>${esc(text)}</option>`).join('')}</select></label>`;
+}
+function libraryResults({runs,rows,skipped,hidden},shown=libraryState.view??'cards') {
+  if(!runs.length)return window.DESIGN_APP?.problem?`<div class="library-empty"><h2>The library could not read this workspace</h2><p>Nothing can be listed until its data file loads. Rebuild the data file and open this page again.</p></div>`:window.Components.emptyState('No issuers in this library yet',['The data file holds no retained runs.'],'<p class="es-do">Start a run on an issuer, then rebuild the library data file to list it here.</p>');
+  if(!rows.length)return '<div class="library-empty"><h2>No issuers match these filters</h2><p>Try a wider range or include unavailable values. Workflow completeness is not assessed for retained runs.</p><button id="library-empty-reset" class="primary-action" type="button">Reset filters</button></div>';
   const sort=key=>libraryState.sortKey===key?libraryState.direction==='asc'?'ascending':'descending':'none';
   const head=LIBRARY_COLUMNS.map(([key,label])=>key?`<th scope="col" aria-sort="${sort(key)}"><button type="button" data-library-sort="${key}">${label} <span aria-hidden="true">${{ascending:'↑',descending:'↓',none:'↕'}[sort(key)]}</span></button></th>`:`<th scope="col">${label}</th>`).join('');
+  const words=sameNameWords(rows.map(r=>({id:r.id,group:LibraryLogic.issuerKey(r.issuer),name:libraryRunName(r),date:r.date||'',started:runStarted(libraryRunKey(r))})));
   const heading=hidden?`<div class="hidden-head"><h2 id="library-hidden-title" tabindex="-1">${esc(`Hidden by ${COVERAGE_NAMES[hidden]}: ${['classification','currency','rating','limitation'].includes(hidden)?'not':'no figure'} recorded`)}</h2><button type="button" class="secondary-action" data-library-back>Back to results</button></div>`:'';
-  return `${heading}<div class="table-scroll" role="region" aria-label="Issuer runs table; scroll horizontally for all columns" tabindex="0"><table class="library-table"><caption class="sr-only">Issuer runs, credit metrics, completeness and report availability</caption><thead><tr>${head}</tr></thead><tbody>${rows.map(r=>libraryRow(r,r.id===libraryState.selected,skipped.has(r.id))).join('')}</tbody></table></div><p class="hint">Dates refer to evidence, not execution. Ratios keep their original definitions.</p>`;
+  const table=`<div class="table-scroll" role="region" aria-label="Issuer runs table; scroll horizontally for all columns" tabindex="0"><table class="library-table"><caption class="sr-only">Issuer runs, credit metrics, completeness and report availability</caption><thead><tr>${head}</tr></thead><tbody>${rows.map((r,n)=>libraryRow(r,r.id===libraryState.selected,skipped.has(r.id),n,words[n])).join('')}</tbody></table></div>`;
+  const bar=`<div class="shape-bar lib-resultbar"><div class="shape-bar-l">${librarySortSelect()}</div><div class="shape-bar-r">${window.Components.viewToggle('Issuers as cards or as a list',[['cards','Cards'],['list','List']],shown)}</div></div>`;
+  return `${heading}<div class="lib-block" data-block data-view="${shown}">${bar}${window.Components.pane('cards',libraryCards(rows),shown==='cards')}${window.Components.pane('list',table,shown==='list')}</div><p class="hint">Dates refer to evidence, not execution. Ratios keep their original definitions.</p>`;
 }
-function librarySources(run) {
-  const sources=window.DESIGN_CATALOGUE?.sources||{};
-  const ids=[...new Set([run.identity_source,run.sector_source,run.classification_source,run.private_side_source,...Object.values(run.metrics).map(m=>m?.source),...run.ratings.map(r=>r.source),...libraryTerms(run).map(([,m])=>m.source)].filter(Boolean))];
-  const block=id=>{
-    const s=Object.hasOwn(sources,id)?sources[id]:null;
-    if(!s)return `<div id="source-${esc(id)}" tabindex="-1"><p>${esc(id)} · source record not served</p></div>`;
-    const quote=String(s.quote);
-    return `<div id="source-${esc(id)}" tabindex="-1"><p>${esc(`${handoffLabel(s.path)} · line ${s.line}`)}</p><blockquote>${esc(quote.length>1500?`${quote.slice(0,1500)}… [full capture in linked file]`:quote)}</blockquote>${libraryPath(s.href)?`<a href="${esc(s.href)}" target="_blank" rel="noopener">Open retained source ↗</a>`:''}</div>`;
-  };
-  return `<details class="source-details" id="metric-sources"><summary>Sources &amp; definitions · ${ids.length} references</summary>${ids.map(block).join('')}</details>`;
-}
-// The pinned line opens in the evidence inspector when the joined run holds that file as a module output and the evidence map has the line; otherwise the Sources & definitions entry.
-function librarySourceAction(run,id) {
-  const sources=window.DESIGN_CATALOGUE?.sources||{},source=id&&Object.hasOwn(sources,id)?sources[id]:null,key=libraryRunKey(run);
-  const output=source&&key?String(source.path).replace(/^runs\//,''):'',line=`${output}:${source?.line}`;
-  if(Object.hasOwn(data,output)&&data[output].run===key&&evidence.has(line))return `<a class="tertiary-action" href="${routeHref(data[output].module,modules[output].first,line,key,data[output].source)}">View source</a>`;
-  return id?`<button class="tertiary-action" type="button" data-library-source="${esc(id)}">View source</button>`:'';
-}
-// Every facility term and quote term as served: [field, Metric].
-const libraryTerms=run=>(run.facilities||[]).flatMap(f=>[f.terms,...(f.quotes||[]).map(q=>q.terms)]).flatMap(terms=>Object.entries(terms||{}));
 function libraryMetricItem(run,name,metric) {
-  return `<div class="metric-item"><span class="metric-label">${esc(name)}</span><span class="metric-value">${esc(libraryMetric(metric))}${metric&&metric.unit!=='x'&&LibraryLogic.numberOf(metric)!==null?`<small>${esc(metric.unit)}</small>`:''}</span><p>${esc(metric?`${metric.period} · ${metric.basis}`:'Not established for this run.')}</p>${metric?.provenance==='user'?'<p>Entered by the user · shown as entered</p>':''}${librarySourceAction(run,metric?.source)}</div>`;
+  return `<div class="metric-item"><span class="metric-label">${esc(name)}</span><span class="metric-value">${esc(libraryMetric(metric))}${metric&&metric.unit!=='x'&&LibraryLogic.numberOf(metric)!==null?`<small>${esc(metric.unit)}</small>`:''}</span><p>${esc(metric?metric.period:'Not established for this run.')}</p>${metric?.provenance==='user'?'<p>Entered by the user · shown as entered</p>':''}</div>`;
 }
 // The run's measures as cards; those it does not establish are named in one line under them.
 function libraryMetrics(run) {
@@ -1267,19 +1502,23 @@ function libraryMetrics(run) {
 }
 const libraryTermItems=(run,terms)=>Object.entries(terms||{}).map(([field,metric])=>libraryMetricItem(run,TERM_LABELS[field]||field,metric)).join('');
 const libraryFacilities=run=>run.facilities?.length?`<h3>Facilities &amp; quotes as entered</h3>${run.facilities.map(f=>`<section class="facility"><h4>${esc(f.facility_id)}</h4><div class="metric-grid">${libraryTermItems(run,f.terms)}</div>${(f.quotes||[]).map(q=>`<h5>${esc(`Quote · ${q.kind}`)}</h5><div class="metric-grid">${libraryTermItems(run,q.terms)}</div>`).join('')}</section>`).join('')}`:'';
+// The selected issuer's panel: its latest figures (the Overview's strip), what the run says about its scope, classification and ratings, its measures and its deliverables. Where each figure comes from and how it is defined is in Evidence.
 function libraryDetail({rows}) {
   const run=rows.find(r=>r.id===libraryState.selected);
   if(!run)return '';
-  const key=libraryRunKey(run),artifact=primaryArtifact(run);
+  const key=libraryRunKey(run),artifact=primaryArtifact(run),when=libraryRunName(run),strip=libraryStrip(key);
   const open=[key?`<a class="secondary-action" href="${routeHref('W-Overview','overview',null,key)}">Open run</a><a class="secondary-action" href="${routeHref('W-Report','history',null,key)}">History</a>`:'',artifact?libraryArtifactLink(artifact,key,'Open model','primary-action'):libraryPath(run.handoff_href)?`<a class="primary-action" href="${esc(run.handoff_href)}" target="_blank" rel="noopener">Open primary handoff ↗</a>`:''].join('');
   const done=run.completion===null?['Workflow completeness · Not assessed','A verified checklist for this workflow has not been supplied. Available files and checked ratios do not establish end-to-end completion.']:[`Workflow completeness · ${run.completion}%`,run.checkpoints?`${run.checkpoints.done} of ${run.checkpoints.total} required checkpoints completed. This is workflow progress, not a credit score.`:'This is workflow progress, not a credit score.'];
   const artifacts=run.artifacts.length?run.artifacts.map(a=>`<li>${a.available?libraryArtifactLink(a,key,libraryArtifactName(a),''):`<span>${esc(libraryArtifactName(a))} · Unavailable</span>`}<small>${esc(a.issue||(a.state==='superseded'?'Retained failed attempt':`${a.relationship==='related'?'Related annual report · ':''}${reportAcceptance({mode:a.state}).state}`))}</small></li>`).join(''):'<li>No final deliverable has been indexed for this run.</li>';
-  return `<div class="detail-head"><div><h2>${esc(run.name)}</h2><p class="cell-secondary">${esc(`${run.issuer} · ${run.id} / ${run.title}`)}</p><p class="cell-secondary">${esc(['Evidence date',libraryDate(run.date),run.period].filter(Boolean).join(' · '))}</p></div><div class="detail-actions">${artifact?`<span class="badge badge-gray">${esc(reportAcceptance({mode:artifact.state}).state)}</span>`:''}${open}</div></div><div class="detail-layout"><div><p>${esc(run.summary)}</p><h3>Scope &amp; open questions</h3><ul class="gap-list">${run.gaps.map(g=>`<li>${esc(g)}</li>`).join('')}</ul><h3>Classification &amp; currency</h3>${[['Classification',CLASSIFICATIONS[run.classification],run.classification_source],...(run.private_side===true?[['Private-side','Yes',run.private_side_source]]:[]),['Currency',run.currency]].map(([name,value,source])=>`<p>${esc(`${name} · ${value||'Not stated'}`)} ${librarySourceAction(run,source)}</p>`).join('')}${run.ratings.length?`<h3>Dated ratings</h3>${run.ratings.map(r=>`<p>${esc(`${r.label} · ${libraryRatingText(r)}`)} ${librarySourceAction(run,r.source)}</p>`).join('')}`:''}<div class="completion-box"><strong>${esc(done[0])}</strong>${esc(done[1])}</div></div><div>${libraryMetrics(run)}${libraryFacilities(run)}<h3>Deliverables &amp; revision history</h3><ul class="artifact-list">${artifacts}</ul>${librarySources(run)}</div></div>`;
+  const evidenceLink=key?`<p class="detail-evidence"><a class="text-action" href="${esc(window.Evidence.href('sources',null,key))}">Sources, definitions and calculations in Evidence${icon('arrow-right')}</a></p>`:'';
+  return `<div class="detail-head"><div><h2>${esc(run.name)}</h2><p class="cell-secondary">${esc(`${run.issuer} · ${when}`)}</p><p class="cell-secondary">${esc(['Evidence date',libraryDate(run.date),run.period].filter(Boolean).join(' · '))}</p></div><div class="detail-actions">${artifact?`<span class="badge badge-gray">${esc(reportAcceptance({mode:artifact.state}).state)}</span>`:''}${open}</div></div>${strip?`<div class="lib-strip">${strip}</div>`:''}<div class="detail-layout"><div><p>${esc(run.summary)}</p><h3>Scope &amp; open questions</h3><ul class="gap-list">${run.gaps.map(g=>`<li>${esc(g)}</li>`).join('')}</ul><h3>Classification &amp; currency</h3>${[['Classification',CLASSIFICATIONS[run.classification]],...(run.private_side===true?[['Private-side','Yes']]:[]),['Currency',run.currency]].map(([name,value])=>`<p>${esc(`${name} · ${value||'Not stated'}`)}</p>`).join('')}${run.ratings.length?`<h3>Dated ratings</h3>${run.ratings.map(r=>`<p>${esc(`${r.label} · ${libraryRatingText(r)}`)}</p>`).join('')}`:''}<div class="completion-box"><strong>${esc(done[0])}</strong>${esc(done[1])}</div></div><div>${libraryMetrics(run)}${libraryFacilities(run)}<h3>Deliverables &amp; revision history</h3><ul class="artifact-list">${artifacts}</ul>${evidenceLink}</div></div>`;
 }
 // Options of every select the screen sends to LibraryLogic, as [value, text]. The Library query accepts only these values.
 function libraryChoices() {
   const runs=catalogueRuns(),values=pick=>[...new Set(runs.flatMap(pick).filter(Boolean))].sort().map(v=>[v,v]);
-  return {sector:values(r=>r.sector),workflow:values(r=>r.workflow),issuer:issuerGroups(runs).filter(g=>g[0].issuer).map(g=>[g[0].issuer,new Set(g.map(r=>r.name)).size===1?g[0].name:g[0].issuer]).sort((a,b)=>a[1].localeCompare(b[1])),basis:values(r=>r.metrics.leverage?.basis),period:values(r=>r.period_kind),currency:values(r=>r.currency),limitation:values(r=>r.gaps||[]),
+  return {sector:values(r=>r.sector),workflow:values(r=>r.workflow),issuer:issuerGroups(runs).filter(g=>g[0].issuer).map(g=>[g[0].issuer,new Set(g.map(r=>r.name)).size===1?g[0].name:g[0].issuer]).sort((a,b)=>a[1].localeCompare(b[1])),period:values(r=>r.period_kind),currency:values(r=>r.currency),
+    // A limitation is an option only when it is clean under the strict findings rule (no file name, id, calculation ID or module code), and carries no register or module code either; the rest are Evidence's.
+    limitation:values(r=>(r.gaps||[]).filter(gap=>window.Components.findingCell(gap,strictContext(libraryRunKey(r))).html!==undefined&&!/\b(?:EV|GAP|MON|DP|SRC)-\d{2,3}\b|\bCP-[0-9A-Z]+\b/.test(gap))),
     // No run records a completeness until a checklist is supplied; a filter that nothing can match is not offered, by the screen or the address.
     completion:runs.some(run=>run.completion!=null)?[['75','75% or above'],['50','50% or above'],['100','100% complete'],['unassessed','Not assessed']]:[],availability:[['report','Report available'],['handoff','No report available']],
     runs:[['latest','Latest run per issuer'],['any','Any run']],classification:[...Object.entries(CLASSIFICATIONS),['not_stated','Not stated']],
@@ -1288,6 +1527,35 @@ function libraryChoices() {
 // Anything Reset filters would undo: a filter off its default, or a sort.
 const libraryFiltered=()=>!!libraryState.sortKey||Object.keys(LIBRARY_DEFAULTS).some(key=>libraryFilters[key]!==LIBRARY_DEFAULTS[key]);
 const libraryActive=group=>LIBRARY_GROUPS[group].filter(k=>libraryFilters[k]&&libraryFilters[k]!==LIBRARY_DEFAULTS[k]).length;
+// ---- The filter bar (C26, library redesign Task 11). The same filters, state and address as before; what changed is how the common ones are chosen. Each option is a button (aria-pressed) that shows
+// how many issuers the screen lists once it is chosen, the other filters as they stand; the issuer has a select (one option per issuer). A pressed option pressed again clears its filter. Chosen filters repeat in one row, each with its own clear.
+const LIBRARY_CHIPS=[['runs','Runs'],['sector','Sector'],['workflow','Workflow'],['completion','Completeness'],['availability','Deliverables']];
+const LIBRARY_LABELS={search:'Search',runs:'Runs',issuer:'Issuer',sector:'Sector',workflow:'Workflow',completion:'Completeness',availability:'Deliverables',classification:'Classification',currency:'Currency',ratingBelow:'Rating at or below',ratingAbove:'Rating at or above',ratingScope:'Rating scope',period:'Financial period',limitation:'Accepted limitation'};
+const RANGE_NAMES={leverage:'Leverage',coverage:'Coverage',netLeverage:'Net leverage',cash:'Cash',undrawn:'Undrawn facilities',talk:'Spread talk',margin:'Margin',coupon:'Coupon',price:'Price',yield:'Yield'};
+const libraryLabel=key=>{const range=/^(.+?)(Min|Max)$/.exec(key);return LIBRARY_LABELS[key]??(range&&RANGE_NAMES[range[1]]?`${RANGE_NAMES[range[1]]}, ${range[2]==='Min'?'minimum':'maximum'}`:key);};
+// What choosing an option sets: the option, or the filter's default when it is the one already chosen; null when the filter does not offer that option (nothing is set).
+function libraryChipValue(key,value) {
+  if(!LIBRARY_CHIPS.some(([chip])=>chip===key)||!libraryChoices()[key].some(([option])=>option===value))return null;
+  return libraryFilters[key]===value?LIBRARY_DEFAULTS[key]:value;
+}
+// The issuers the screen lists when `overrides` replace some filters: the number beside an option.
+const libraryIssuerCount=(shadows,overrides)=>issuerGroups(libraryListed(shadows,{...libraryFilters,...overrides},libraryState.hidden).runs).length;
+function libraryFacets() {
+  const f=libraryFilters,choices=libraryChoices(),shadows=libraryShadows(catalogueRuns());
+  const group=(key,label,body)=>`<div class="lf-group" id="library-${key}" role="group" aria-labelledby="lf-${key}"><span class="lf-lab" id="lf-${key}">${label}</span><div class="lf-chips">${body}</div></div>`;
+  const chip=(key,[value,text])=>{const n=libraryIssuerCount(shadows,{[key]:value});return `<button class="lf-chip${n?'':' is-zero'}" type="button" data-library-chip="${key}" data-value="${esc(value)}" data-count="${n}" aria-pressed="${f[key]===value}"><span class="lf-t">${esc(text)}</span><span class="lf-n">${n}</span><span class="sr-only"> ${n===1?'issuer':'issuers'}</span></button>`;};
+  const chips=Object.fromEntries(LIBRARY_CHIPS.filter(([key])=>choices[key].length).map(([key,label])=>[key,group(key,label,choices[key].map(option=>chip(key,option)).join(''))]));
+  // One option per issuer: each selects that issuer or nobody, so its number rides in data-count and is shown only on "All issuers" and on an issuer the other filters exclude.
+  const chosen=v=>!!v&&LibraryLogic.issuerKey(f.issuer)===LibraryLogic.issuerKey(v);
+  const option=(v,text,n,shown)=>`<option value="${esc(v)}" data-count="${n}"${(v===''?f.issuer==='':chosen(v))?' selected':''}>${esc(shown?`${text} (${n})`:text)}</option>`;
+  const issuers=choices.issuer.map(([v,text])=>{const n=libraryIssuerCount(shadows,{issuer:v});return option(v,text,n,n===0);});
+  const select=`<label class="lf-group lf-select"><span class="lf-lab">Issuer</span><select id="library-issuer" data-library-filter="issuer">${option('','All issuers',libraryIssuerCount(shadows,{issuer:''}),true)}${issuers.join('')}</select></label>`;
+  const optionText=(key,value)=>(choices[key]?.find(([v])=>key==='issuer'?LibraryLogic.issuerKey(v)===LibraryLogic.issuerKey(value):v===value))?.[1]??value;
+  const on=Object.keys(LIBRARY_DEFAULTS).filter(key=>f[key]!==LIBRARY_DEFAULTS[key]&&f[key]!=='invalid').map(key=>[key,`${libraryLabel(key)}: ${optionText(key,f[key])}`]);
+  if(libraryState.sortKey)on.push(['sort',`Sort: ${LIBRARY_COLUMNS.find(([key])=>key===libraryState.sortKey)?.[1]??libraryState.sortKey}, ${libraryState.direction==='asc'?'ascending':'descending'}`]);
+  const active=on.length?`<div class="lf-active" role="group" aria-label="Active filters">${on.map(([key,text])=>`<button class="lf-on" type="button" data-library-unset="${key}" aria-label="${esc(`Remove filter ${text}`)}">${esc(text)}${icon('x')}</button>`).join('')}</div>`:'';
+  return `<div class="lf-row">${[chips.runs,select,chips.sector,chips.workflow,chips.completion,chips.availability].filter(Boolean).join('')}</div>${active}`;
+}
 function libraryPanel() {
   const f=libraryFilters,choices=libraryChoices();
   const chosen=(key,v)=>key==='issuer'?!!v&&LibraryLogic.issuerKey(f.issuer)===LibraryLogic.issuerKey(v):f[key]===v; // an issuer from the address matches in any case
@@ -1295,14 +1563,37 @@ function libraryPanel() {
   const number=(key,label,hint)=>`<label>${label}<input id="library-${key}" data-library-filter="${key}" type="number" step="any" placeholder="${hint}" value="${esc(f[key])}"></label>`;
   const pair=(key,label,unit)=>['Min','Max'].map(end=>number(`${key}${end}`,`${label}, ${end==='Min'?'minimum':'maximum'}${unit?` (${unit})`:''}`,`No ${end==='Min'?'minimum':'maximum'}`)).join('');
   const group=(name,title,body,hint='')=>{const n=libraryActive(name);return `<details id="${name}-filters" ${n?'open':''}><summary>${title} <span id="${name}-filter-count">${n?`· ${n} active`:''}</span></summary><div class="library-filters">${body}</div>${hint}</details>`;};
-  return `<div class="search-row"><label class="library-search"><span class="sr-only">Search issuer, run or sector</span>${icon('search')}<input id="library-query" data-library-filter="search" type="search" value="${esc(f.search)}" placeholder="Search issuer, run or sector…" autocomplete="off" aria-controls="library-results"></label><button id="library-clear" class="tertiary-action" type="button"${libraryFiltered()?'':' hidden'}>Reset filters</button></div><div class="library-filters">${select('runs','Runs')}${select('issuer','Issuer','All issuers')}${select('sector','Sector','All sectors')}${select('workflow','Workflow','All workflows')}${choices.completion.length?select('completion','Completeness','Any completeness'):''}${select('availability','Deliverables','All runs')}</div>`
+  return `<div class="search-row"><label class="library-search"><span class="sr-only">Search issuer, run or sector</span>${icon('search')}<input id="library-query" data-library-filter="search" type="search" value="${esc(f.search)}" placeholder="Search issuer, run or sector…" autocomplete="off" aria-controls="library-results"></label><button id="library-clear" class="tertiary-action" type="button"${libraryFiltered()?'':' hidden'}>Reset filters</button></div><div id="library-facets" class="lf" tabindex="-1">${libraryFacets()}</div>`
     +group('rating','Classification, rating &amp; currency',`${select('classification','Classification','Any')}${select('currency','Currency','Any')}${select('ratingBelow','Rating at or below','Any')}${select('ratingAbove','Rating at or above','Any')}${select('ratingScope','Rating scope')}`)
-    +group('metric','Credit metrics &amp; period',`${select('basis','Leverage basis','All bases · definitions differ')}${select('period','Financial period','All period types')}${pair('leverage','Leverage','x')}${pair('coverage','Coverage','x')}${pair('netLeverage','Net leverage','x')}${pair('cash','Cash','as reported unit')}${pair('undrawn','Undrawn facilities','as reported unit')}`,'<p class="hint">Numeric filters exclude unavailable values. Select a leverage basis to keep definitions consistent; the definition of each ratio is listed for the selected run.</p>')
+    +group('metric','Credit metrics &amp; period',`${select('period','Financial period','All period types')}${pair('leverage','Leverage','x')}${pair('coverage','Coverage','x')}${pair('netLeverage','Net leverage','x')}${pair('cash','Cash','as reported unit')}${pair('undrawn','Undrawn facilities','as reported unit')}`,'<p class="hint">Numeric filters exclude unavailable values. The definition of each ratio is in Evidence.</p>')
     +group('deal','Facilities &amp; quotes',`${pair('talk','Spread talk','bps')}${pair('margin','Margin','bps')}${pair('coupon','Coupon','%')}${pair('price','Price')}${pair('yield','Yield','%')}`,'<p class="hint">Matched within one facility: talk and bid–ask by overlap, single values inside the range. Values are shown as entered.</p>')
     +group('limit','Accepted limitations',select('limitation','Accepted limitation','Any'));
 }
 // A panel rebuild shows an unreadable number box empty, so its stored 'invalid' bound is dropped to keep the filter and the control in agreement.
 const clearInvalidBounds=()=>Object.keys(libraryFilters).forEach(k=>{if(libraryFilters[k]==='invalid')libraryFilters[k]='';});
+// Runs in progress, from the live activity file (the Run activity page owns the full picture): a running run shows its issuer and pathway, the C31 mark and the C13 steps (which module is running, how many are
+// done of how many); a waiting run shows its issuer, pathway and mark. Only strings reach the page; cost and the run's folder are not shown. Nothing is drawn when no run is running or waiting.
+// Defined with the other live readers below: homeFollowsRuns says whether this section has a run to follow.
+function libraryLive() {
+  const live=window.RUN_ACTIVITY;
+  if(!liveReadable(live))return '';
+  const shown=liveRuns(live).filter(run=>run.status==='running'||run.status==='queued');
+  if(!shown.length)return '';
+  const text=value=>typeof value==='string'?value.trim():'';
+  const row=run=>{
+    const steps=run.status==='running'?(Array.isArray(run.modules)?run.modules:[]).filter(item=>Array.isArray(item)&&typeof item[0]==='string').map(([module,state])=>({title:moduleLabel(module)??module,state})):[];
+    const pathway=text(run.pathway)?pathwayTitle(run.pathway):'';
+    const mark=window.Components.runMark(run.stalled?'stalled':run.status==='running'?'running':'queued');
+    return `<li class="live-row"><div class="lv-head"><strong class="lv-name">${esc(text(run.issuer_name)||'Run in progress')}</strong>${pathway?`<span class="lv-pathway">${esc(pathway)}</span>`:''}${mark}</div>${window.Components.runSteps(steps)}</li>`;
+  };
+  return `<section class="lib-live" aria-labelledby="lib-live-h"><h2 class="eyebrow lib-eyebrow" id="lib-live-h">${shown.some(run=>run.status==='running')?'Running now':'Waiting'}</h2><ul class="live-rows">${shown.map(row).join('')}</ul></section>`;
+}
+// The section follows a new snapshot in place: redrawn while a run is shown, removed (loader and all) when none is.
+function refreshLibraryLive() {
+  const old=document.querySelector('.lib-live'),html=libraryLive();
+  if(!html){if(old)old.remove();return;}
+  if(old)old.outerHTML=html;else $('library-filters').insertAdjacentHTML('beforebegin',html);
+}
 // Read when the library was built: the run folders it does not show, with the reason, and the issues the build found. Closed by default; it changes nothing.
 function libraryNotShown(activity) {
   if(!activity)return '<p class="intro">The build’s list of folders not shown and its issues could not be read; nothing is claimed about them.</p>';
@@ -1315,17 +1606,25 @@ function libraryNotShown(activity) {
 function libraryView() {
   clearInvalidBounds();
   const view=libraryRows();
-  return `<div class="library-main"><form id="library-filters" class="library-panel" role="search" aria-label="Screen issuer runs">${libraryPanel()}</form><section class="library-results-panel" aria-label="Run results"><p id="library-count" role="status" aria-live="polite">${libraryCount(view)}</p><div id="library-coverage" class="library-coverage" role="status" aria-live="polite">${libraryCoverage(view)}</div><div id="library-results">${libraryResults(view)}</div></section><section id="run-detail" class="run-detail" aria-label="Selected run details" tabindex="-1" ${view.rows.some(r=>r.id===libraryState.selected)?'':'hidden'}>${libraryDetail(view)}</section></div>${libraryNotShown(window.DESIGN_ACTIVITY)}`;
+  return `<div class="library-main">${libraryLive()}<form id="library-filters" class="library-panel" role="search" aria-label="Screen issuers">${libraryPanel()}</form><section class="library-results-panel" aria-label="Issuer results"><h2 class="sr-only">Issuers</h2><p id="library-count" role="status" aria-live="polite">${libraryCount(view)}</p><div id="library-coverage" class="library-coverage" role="status" aria-live="polite">${libraryCoverage(view)}</div><div id="library-results">${libraryResults(view)}</div></section><section id="run-detail" class="run-detail" aria-label="Selected issuer details" tabindex="-1" ${libraryState.opened?'data-chosen ':''}${view.rows.some(r=>r.id===libraryState.selected)?'':'hidden'}>${libraryDetail(view)}</section></div>${libraryNotShown(window.DESIGN_ACTIVITY)}`;
+}
+// The counted options and the chosen-filters row follow every change, and focus stays on the option the reader used. The search box and the criteria groups keep their focus: only a reset rebuilds them.
+function refreshFacets() {
+  const facets=$('library-facets'),held=document.activeElement,inside=!!held&&facets.contains(held);
+  const match=item=>held.id?item.id===held.id:item.dataset.libraryChip!==undefined&&item.dataset.libraryChip===held.dataset.libraryChip&&item.dataset.value===held.dataset.value;
+  facets.innerHTML=libraryFacets();
+  if(inside)([...facets.querySelectorAll('button,select')].find(match)||facets).focus({preventScroll:true});
 }
 // Re-places the results from the current filters; the panel itself is only rebuilt on a reset so typing keeps its focus.
 function updateLibrary(panel=false) {
   if(panel)clearInvalidBounds();
   const view=libraryRows();
-  if(panel)$('library-filters').innerHTML=libraryPanel();
+  if(panel)$('library-filters').innerHTML=libraryPanel();else refreshFacets();
   $('library-count').textContent=libraryCount(view);
   $('library-results').innerHTML=libraryResults(view);
   $('run-detail').innerHTML=libraryDetail(view);
   $('run-detail').hidden=!view.rows.some(r=>r.id===libraryState.selected);
+  $('run-detail').toggleAttribute('data-chosen',!!libraryState.opened);
   $('library-coverage').innerHTML=libraryCoverage(view);
   $('library-clear').hidden=!libraryFiltered();
   // What was redrawn is named as the route's own draw names it.
@@ -1335,7 +1634,6 @@ function updateLibrary(panel=false) {
 }
 // ---- The run report: the run's landing page. Every sentence is a handoff cell verbatim; the counts, the state and the words come from
 // Python (data[id].state, data[id].words). The page makes no judgement of its own.
-const NO_SUMMARY='No reader summary';
 // Every module that has an output in the run, in reading-group order: [group title, [{module, id, out}]]. A module with saved outputs but no
 // default has id and out null and the number of its outputs in choices: the page does not pick one for it.
 function runGroups(context) {
@@ -1345,22 +1643,17 @@ function runGroups(context) {
   };
   return groups.map(([title,items])=>[title,items.map(([module])=>item(module)).filter(item=>item.id||item.choices)]).filter(([,items])=>items.length);
 }
-const stateWord=established=>established===true?'Reaches a conclusion':established===false?'Not assessable':NO_SUMMARY;
-// ---- The Overview (ruling H5): selection and ordering of the handoffs' own passages, text unchanged. Nothing is written, counted or
-// judged here; a passage the handoff lacks is named as missing, never replaced by other text (H7).
+// ---- The Overview (ruling H5; redesign 2026-11-13): selection and ordering of the handoffs' own passages and tables, text unchanged. Nothing is written, counted or
+// judged here except counts of listed items; a passage the handoff lacks is named as missing, never replaced by other text (H7). The page answers, in order: the view
+// (the lead module's Bottom line and the figures it cites), what decides it (the first sided table), why (Key findings), what would change it, what to watch, the modules
+// and what limits the reading. Every block is a shared component (components.js); nothing on the page is audit material.
 // CP-L10 leads only a short snapshot (amendment 2026-11-11 to H5): CP-2 and CP-6 do not run in it.
 const LEAD_MODULES=['CP-6','CP-2','CP-L10'];
 const NO_LEAD='No credit view module completed in this run.';
 const EARLIER_NO_LEAD='This run is in the earlier format: its handoffs carry no reader passages for Overview to select.';
-// The one place a handoff paragraph is drawn (Overview and, later, the module page), so figures can become clickable in one function.
-// The one place a handoff's prose is drawn (Overview and the module page): a list item loses its "- " marker, the Basis line is not printed, and its
-// figures (or one Basis button) open the inspector. `tables` false draws prose only (Overview).
-function passageHtml(section,id,tables=true) {
-  return section?sectionBodyHtml(section,bodyContext(id,tables)):'';
-}
 // The run's modules in the order CP-OS ran them, each with its default output and that output's reader passages.
-function overviewEntries(context) {
-  return runModuleCodes(contexts[context]).map(module=>{
+function overviewEntries(context,only=null) {
+  return runModuleCodes(contexts[context]).filter(module=>!only||only.includes(module)).map(module=>{
     const id=defaultOutput(module,context);
     if(!id)return {module,id:null,out:null,passages:null,choices:(moduleEntry(module,context)?.outputs||[]).length};
     const out=data[id];
@@ -1368,137 +1661,208 @@ function overviewEntries(context) {
   });
 }
 const notAssessable=entry=>Boolean(entry.out)&&blocked(entry.out.sections,entry.out.state);
-const NOT_ASSESSABLE_BADGE='<span class="badge badge-gray">Not assessable</span>';
-function overviewLead(entries,earlier) {
-  const lead=LEAD_MODULES.map(code=>entries.find(entry=>entry.module===code)).find(entry=>entry?.passages?.bottom&&!notAssessable(entry));
-  if(!lead)return {lead:null,html:`<section class="overview-part" id="overview-lead"><h2 class="kicker">Credit view</h2><p class="intro">${earlier?EARLIER_NO_LEAD:NO_LEAD}</p></section>`};
-  const key=lead.passages.key?`<div class="reading-findings"><h3>Key findings</h3>${passageHtml(lead.passages.key,lead.id,false)}</div>`:'';
-  return {lead,html:`<section class="overview-part" id="overview-lead"><h2 class="kicker">Credit view</h2><p class="lead-source kicker">Written by ${moduleLink(lead.module)}</p><div class="reading-headline"><h3 class="sr-only">Bottom line</h3>${passageHtml(lead.passages.bottom,lead.id,false)}</div>${key}</section>`};
+// The lead is the first of CP-6, CP-2, CP-L10 that ran, has a Bottom line and is not blocked; a run with none has no lead.
+const overviewLeadEntry=entries=>LEAD_MODULES.map(code=>entries.find(entry=>entry.module===code)).find(entry=>entry?.passages?.bottom&&!notAssessable(entry));
+// One of the lead's passages as the components take it: its paragraphs, and the controls that open each one's basis in the drawer.
+function leadPassage(lead,key) {
+  const texts=passageTexts(lead.passages[key]);
+  return {texts,...passageControls(texts,bodyContext(lead.id,false))};
 }
-function overviewBottomLines(entries,lead) {
-  const rows=entries.filter(entry=>entry!==lead).map(entry=>{
-    if(!entry.out)return `<div class="bottom-entry"><h3>${moduleLink(entry.module)}</h3><p class="intro">${entry.choices} saved outputs, none chosen. <a class="text-action" href="#${encodeURIComponent(entry.module)}?${new URLSearchParams({c:current.context})}">Choose one</a></p></div>`;
-    const body=entry.passages.bottom?passageHtml(entry.passages.bottom,entry.id,false):'<p class="intro">No bottom line in this handoff.</p>';
-    return `<div class="bottom-entry" data-module="${esc(entry.module)}"><h3>${moduleLink(entry.module)}${notAssessable(entry)?` ${NOT_ASSESSABLE_BADGE}`:''}</h3>${body}</div>`;
+// The tables a module page draws, run order then handoff order: those of a finding section, and of a registers section only when their shape is promoted. A blocked module's tables feed nothing on the Overview.
+function overviewTables(entries) {
+  return entries.filter(entry=>entry.out&&isNewFormat(entry.out.sections)&&!notAssessable(entry)).flatMap(entry=>{
+    const {rest,registers}=newFormatSplit(entry.id);
+    const own=section=>(registers.includes(section)?promotedTables(section):section.blocks.filter(block=>block.type==='table'&&block.rows.length>0)).map(block=>({entry,section,block,shape:window.Shapes.tableShape(block)}));
+    return [...rest,...registers].sort((a,b)=>a.line-b.line).flatMap(own);
   });
-  return rows.length?`<section class="overview-part" id="overview-bottom-lines"><h2>Bottom line by module</h2>${rows.join('')}</section>`:'';
 }
-// Every Limitations item of every module, first occurrence kept (verbatim) when the normalised text repeats.
-function overviewLimitations(entries) {
-  const seen=new Set(),items=[];
-  for(const entry of entries)for(const block of (entry.passages?.limits?.blocks||[]).filter(b=>b.type==='text')) {
-    const key=normaliseLimitation(block.text);
-    if(key!==''&&seen.has(key))continue;
-    seen.add(key);
-    const ref=`${entry.id}:${block.line}`,{html}=paragraphView(block.text,ref,{chips:bodyContext(entry.id,false).chips(ref)});
-    items.push(`<li class="limit-item">${html}<small class="limit-module">${moduleLink(entry.module)}</small></li>`);
+const ovHead=(id,title,aside='')=>`<div class="ov-head"><h2 id="${id}">${esc(title)}</h2>${aside}</div>`;
+const fromModule=module=>window.Components.attribution({title:moduleTitle(module),href:moduleHref(module)});
+// C4: the rows of the run's first metric table whose label the lead's Bottom line or Key findings name. The library home uses the same rule for a run it names by `key`: its links go to that run and the strip carries no trace controls (there is no run page to open them on).
+function leadStrip(lead,tables,key=null) {
+  const cited=[...leadPassage(lead,'bottom').texts,...leadPassage(lead,'key').texts].map(entry=>plain(window.Components.paragraphText(entry.text))).join(' ');
+  const metric=tables.find(table=>table.shape==='metric');
+  if(!metric)return '';
+  const ctx=tableCtx(metric.entry.id,metric.section),module=metric.entry.module;
+  return key?window.Components.metricStrip(metric.block,{...ctx,trace:null,key:null},cited,{href:routeHref(module,firstSection(module,key),null,key),title:moduleTitle(module)}):window.Components.metricStrip(metric.block,ctx,cited,{href:moduleHref(module),title:moduleTitle(module)});
+}
+// C2 and C4: the lead's Bottom line, and beside it the rows of the run's first metric table whose label the Bottom line or Key findings name.
+function overviewLead(entries,earlier,tables) {
+  const lead=overviewLeadEntry(entries);
+  if(!lead)return {lead:null,html:`<section class="overview-part" id="overview-lead"><h2 class="kicker">Credit view</h2><p class="intro">${earlier?EARLIER_NO_LEAD:NO_LEAD}</p></section>`};
+  const bottom=leadPassage(lead,'bottom');
+  const verdict=window.Components.verdictPanel(bottom.texts,bottom.trace,bottom.figure,'h3');
+  const strip=leadStrip(lead,tables);
+  return {lead,html:`<section class="overview-part" id="overview-lead" aria-labelledby="overview-lead-h"><h2 class="sr-only" id="overview-lead-h">Credit view</h2><div class="g24"><div class="${strip?'c16':'c24'}">${verdict}</div>${strip?`<div class="c8">${strip}</div>`:''}</div></section>`};
+}
+// C7: the run's first sided table, drawn by its component and attributed to its module. No sided table, no block.
+function overviewBoard(tables) {
+  const sided=tables.find(table=>table.shape==='sided');
+  const board=sided?tableRenderer(sided.entry.id)(sided.block,sided.section):'';
+  return board?`<section class="overview-part" id="overview-decides" aria-labelledby="overview-decides-h">${ovHead('overview-decides-h','What decides it',fromModule(sided.entry.module))}${board}</section>`:'';
+}
+// C15: the lead module's events when they hold at least one dated event, else the run's first dated table (of a module that is not blocked) that does; attributed to the module that
+// holds it. A lane or table that only states an absence is left to the module page and Evidence: with nothing dated, the block is omitted.
+function overviewWatch(lead,tables) {
+  const lanes=isNewFormat(lead.out.sections)?(lead.out.events||[]):[];
+  const drawn=lanes.map(lane=>({name:lane.lane,block:fixtureTable(lead.id,lane.table),section:drawingSection(lead.id,lane.table)})).filter(item=>window.Components.hasDatedEvent(item.block));
+  let module=lead.module,id=lead.id,items=drawn;
+  if(!items.length) {
+    const dated=tables.find(table=>table.shape==='dated'&&window.Components.hasDatedEvent(table.block));
+    items=dated?[{name:'',block:dated.block,section:dated.section}]:[];
+    module=dated?.entry.module;id=dated?.entry.id;
   }
-  return `<section class="overview-part" id="overview-limitations"><h2>Limitations</h2>${items.length?`<div class="reading-limits"><ul class="passage-list">${items.join('')}</ul></div>`:'<p class="intro">No handoff in this run states limitations.</p>'}</section>`;
+  const cards=items.map(item=>({name:item.name,html:tableRenderer(id)(item.block,item.section,{stacked:true})})).filter(card=>card.html).map(card=>`<div class="tl-card">${items.length>1&&card.name?`<h3 class="tl-name">${esc(card.name)}</h3>`:''}${card.html}</div>`).join('');
+  return cards?`<section class="overview-part" id="overview-watch" aria-labelledby="overview-watch-h">${ovHead('overview-watch-h','What to watch',fromModule(module))}${cards}</section>`:'';
 }
-// The drawn charts and maps of the modules the visuals catalogue places on Overview (PLACEMENT); a blocked module draws none. Lanes are the dates section.
-function overviewCharts(entries,context) {
-  let noted=false;
-  const html=entries.filter(entry=>entry.out).map(({id,out})=>{
-    if(!placed('chart','Overview',out))return '';
-    const charts=out.charts||[];
-    const cards=chartCards(charts.map((chart,at)=>readerChart(id,chart,true,!noted&&at===lastPeriodChart(charts))));
-    noted=noted||lastPeriodChart(charts)>=0;
-    return `<div class="overview-charts" data-module="${esc(out.module)}">${cards}${mapsView(id,'h3',map=>map.gap===null&&placed('map','Overview',out,map.name))}</div>`;
-  }).filter(html=>/class="(panel-card|map-card)"/.test(html));
-  // The link goes to the chart index on this run's Forecast page: the index is a section of that page, reached by its route (it has no route of its own).
-  const index=`<a class="chart-index-link" href="${routeHref('W-Forecast','run-charts',null,context)}">Chart index</a>`;
-  return html.length?`<section class="overview-part" id="overview-charts"><h2>Key charts</h2>${index}${html.join('')}</section>`:'';
+// C20: one tile per module of the run, in the catalogue's order and groups. A module with saved outputs and none chosen is a plain tile with the way to choose.
+function overviewModules(context) {
+  const groups=runGroups(context).map(([title,items])=>({title,items:items.map(({module,id,out,choices})=>{
+    const base={title:moduleNames[module],href:moduleHref(module)};
+    if(!id)return {...base,choose:{count:choices,href:`#${encodeURIComponent(module)}?${new URLSearchParams({c:context})}`}};
+    return {...base,state:out.state?.declared??null,blocked:blocked(out.sections,out.state),...leadPassage({id,passages:readerPassages(out.sections)},'bottom')};
+  })}));
+  const tiles=window.Components.moduleTiles(groups);
+  return tiles?`<section class="overview-part" id="overview-modules" aria-labelledby="overview-modules-h">${ovHead('overview-modules-h','By module','<p class="ov-sub">Open one to read its whole bottom line</p>')}${tiles}</section>`:'';
 }
-// Nearest dates: the next five items in all (reader.js nearestDates), day-dated and period-dated in one nearest-first list, from every module's event lanes.
-// A period-dated item (month, quarter or year) is sorted by its period end and shown with that date text as written. The sentence when none is drawn names its cause.
-const runHoldsEventTable=context=>runModuleCodes(contexts[context]).some(module=>{const id=defaultOutput(module,context);return Boolean(id)&&Boolean(eventTable(data[id].sections));});
-function overviewDates(context) {
-  const asOf=contexts[context].asOf;
-  const head='<section class="overview-part" id="overview-dates"><h2>Nearest dates</h2>';
-  if(!asOf)return `${head}<p class="intro">This run records no as-of date, so no nearest dates are selected.</p></section>`;
-  const lanes=eventLanes(context);
-  if(!lanes.length)return `${head}<p class="intro">${runHoldsEventTable(context)?'This run’s handoffs hold an event table but no dated lane, so no nearest dates are selected.':'No event timeline in this run’s handoffs.'}</p></section>`;
-  const items=lanes.filter(lane=>lane.gap===null).flatMap(lane=>fixtureTable(lane.id,lane.table).rows.map(row=>({date:row.cells[0],text:row.cells[3],module:data[lane.id].module,line:row.line})));
-  const next=nearestDates(items,asOf);
-  if(!next.length)return `${head}<p class="intro">No dated item on or after ${esc(asOf)} in this run’s handoffs.</p></section>`;
-  const caption=`The next ${next.length} dated item${next.length===1?'':'s'} on or after ${asOf}`;
-  const table=scrollRegion(caption,`<table class="dates-table"><caption>${esc(caption)}</caption><thead><tr>${['Date','Event','Module'].map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${next.map(item=>`<tr><th scope="row">${esc(item.date)}</th><td>${rich(item.text)}</td><td>${moduleLink(item.module)}</td></tr>`).join('')}</tbody></table>`);
-  return `${head}${table}</section>`;
+// The lead's Limitations and, beside them, the number of gaps the run's handoffs record, with the way to them in Evidence (the count is of listed items).
+function overviewLimitations(lead,context) {
+  const limits=leadPassage(lead,'limits'),gaps=gapSignal(context);
+  const html=window.Components.limitationsBlock(limits.texts,gaps,window.Evidence.href('gaps',null,context),limits.trace,limits.figure);
+  return html?`<section class="overview-part" id="overview-limitations" aria-labelledby="overview-limitations-h"><div class="rd-card"><h2 class="rd-h" id="overview-limitations-h">Limitations</h2>${html}</div></section>`:'';
 }
 function runReport(context) {
   const entries=overviewEntries(context);
   // A run that holds no module output has nothing to select from: it says so and keeps the way to its sources.
   if(!entries.length)return `<div class="missing-state"><h2>No module output retained for this run</h2><p>The Overview is selected from module handoffs, and this run holds none.</p></div><p class="run-inventory"><a class="text-action" href="${routeHref('W-Evidence','sources',null,context)}">Evidence${icon('arrow-right')}</a></p>`;
-  const {lead,html}=overviewLead(entries,earlierFormat(contexts[context]));
-  // Two columns at wide windows (screen.css): the reading in the main column, the charts and dates in the aside; the document order is the part order.
-  return `<div class="overview-main">${html+overviewBottomLines(entries,lead)+overviewLimitations(entries)}</div><aside class="overview-aside" aria-label="Charts and dates">${overviewCharts(entries,context)+overviewDates(context)}</aside>`;
+  const tables=overviewTables(entries),{lead,html}=overviewLead(entries,earlierFormat(contexts[context]),tables);
+  if(!lead)return `<div class="overview-page">${html+overviewModules(context)}</div>`;
+  const key=leadPassage(lead,'key'),contrary=leadPassage(lead,'contrary');
+  const feed=window.Components.findingsFeed(key.texts,key.trace,key.figure),change=window.Components.callout('What would change the view',contrary.texts,contrary.trace,contrary.figure,'h2'),watch=overviewWatch(lead,tables);
+  const side=change+watch,both=Boolean(feed&&side);
+  const why=feed||side?`<section class="overview-part g24" id="overview-why" aria-label="Why, and what would change the view">${feed?`<div class="${both?'c14':'c24'}"><div class="rd-card"><h2 class="rd-h">Key findings</h2>${feed}</div></div>`:''}${side?`<div class="${both?'c10':'c24'} ov-side">${side}</div>`:''}</section>`:'';
+  return `<div class="overview-page">${html+overviewBoard(tables)+why+overviewModules(context)+overviewLimitations(lead,context)}</div>`;
 }
-// Run activity (ruling decision 10): only what is in progress and the queue. A finished run is reached from the library; the folders the
-// library does not show and the build's issues are on the library page.
-function activityView(live) {
-  const top=liveActivityView(live);
-  if(!live||typeof live!=='object'||Array.isArray(live)||!Array.isArray(live.runs))return '<div class="missing-state activity-empty"><div class="empty-symbol">'+icon('file-text')+'</div><h2>Run activity could not be read</h2><p>No live run data was supplied, so nothing is claimed about runs in progress or waiting.</p></div>';
-  if(!top.includes('<section'))return top+'<div class="missing-state activity-empty"><div class="empty-symbol">'+icon('file-text')+'</div><h2>No run in progress</h2><p>No run is running or waiting. Finished runs are in the Issuer library.</p><a class="primary-action" href="#W-Library/cases">Issuer library</a></div>';
-  return top;
-}
-// Live runs from _engine/activity.js (window.RUN_ACTIVITY). Every field may be missing and the whole object may be malformed:
-// then nothing live is shown. Each value passes through esc. Only runs that are running or queued are drawn.
+// Run activity (ruling decision 10): only what is in progress and the queue. A finished run is reached from the library, and a run that ends while the page
+// is open is announced once by a toast. The state comes first (counts, then the run cards), detail after. Spend, run folders, run codes and file names are not shown.
+// Live runs come from _engine/activity.js (window.RUN_ACTIVITY). Every field may be missing and the whole object may be malformed: then nothing live is shown
+// (the documented rule: unreadable data is said to be unreadable, never filled in). Each value passes through esc. Only runs that are running or queued are drawn.
 const ACTIVITY_RELOAD_MS=30000;
+const LIBRARY_HOME='#W-Library/cases';
 // Statuses of runs that have ended: not drawn here (decision 10); the list stays so a test can check it against the run start service's statuses.
 const ENDED_STATUSES=['finished','failed','capped','rejected','interrupted'];
 // Only strings and finite numbers reach the page; any other value in a field renders as empty text.
-function liveText(value) {return esc(typeof value==='string'||(typeof value==='number'&&Number.isFinite(value))?value:'');}
+const livePlain=value=>typeof value==='string'||(typeof value==='number'&&Number.isFinite(value))?String(value):'';
+function liveText(value) {return esc(livePlain(value));}
 const LIVE_STATUSES=['queued','running','finished','failed','capped','rejected','interrupted']; // read only by tests/test_context_form.py, which holds it to the run start service's statuses
 const servedOverHttp=()=>typeof window!=='undefined'&&/^https?:$/.test(window.location?.protocol); // a page with no location (the node tests) is not served
-const MODULE_STATES=['done','running','waiting'];
-// What a run's head and a waiting row say about it: each part that has text, joined with " · ".
-function liveRunLine(run,extra=[]) {
+const liveReadable=live=>Boolean(live)&&typeof live==='object'&&!Array.isArray(live)&&Array.isArray(live.runs);
+const liveRuns=live=>live.runs.filter(run=>run&&typeof run==='object'&&!Array.isArray(run));
+// The clock reading since a start time, in words. Only a dated time with a zone counts; any other text gives no clock. A start up to five minutes ahead of this
+// clock (the service's and the browser's clocks differ) reads under a minute; further ahead gives none.
+const CLOCK_SKEW_MS=5*60000;
+const START_TIME=/^\d{4}-\d{2}-\d{2}[T ](?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|[+-](?:[01]\d|2[0-3]):?[0-5]\d)$/; // clock time and offset in range
+function elapsedLabel(since,now) {
+  if(typeof since!=='string'||!START_TIME.test(since))return '';
+  const ms=now-Date.parse(since);
+  if(!Number.isFinite(ms)||ms<-CLOCK_SKEW_MS)return '';
+  const minutes=Math.floor(ms/60000),hours=Math.floor(minutes/60);
+  if(ms<60000)return 'under a minute';
+  return hours?`${hours} h${minutes%60?` ${minutes%60} min`:''}`:`${minutes} min`;
+}
+// A start or snapshot time as the page writes it: "13 November 2026, 07:56 UTC", the date as displayDate gives it and the time and zone as the data writes them
+// (Z is UTC, an offset stays as written); no conversion to local time. Any value that is not a dated time is returned as it is.
+function liveStampText(value) {
+  const m=typeof value==='string'&&START_TIME.test(value)&&/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})(?::\d{2}(?:\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/.exec(value);
+  if(!m)return value;
+  const date=displayDate(m[1]);
+  return date===m[1]?value:`${date}, ${m[2]} ${m[3]==='Z'?'UTC':m[3]}`;
+}
+// The clock is drawn once per render; the page's existing re-load moves it in place (no timer of its own).
+function refreshElapsed(root,now) {
+  for(const el of root.querySelectorAll('[data-since]')){
+    const label=elapsedLabel(el.getAttribute('data-since'),now);
+    if(label)el.textContent=` · ${label} into the run`;
+  }
+}
+// What a run's head and a queue row say about it: each part that has text, joined with " · ".
+function liveRunLine(run) {
   const part=(value,html)=>liveText(value)?html:'';
-  return [part(run.submitted_by,`<span class="run-by">submitted by ${liveText(run.submitted_by)}</span>`),part(run.started_at,`<span class="run-time">started ${liveText(run.started_at)}</span>`),part(run.folder,`<span class="code">${liveText(run.folder)}</span>`),...extra].filter(Boolean).join(' · ');
+  const pathway=livePlain(run.pathway)?pathwayTitle(livePlain(run.pathway)):'';
+  return [pathway&&`<span class="run-path">${esc(pathway)}</span>`,part(run.submitted_by,`<span class="run-by">submitted by ${liveText(run.submitted_by)}</span>`),part(run.started_at,`<span class="run-time">started ${esc(liveStampText(livePlain(run.started_at)))}</span>`)].filter(Boolean).join(' · ');
 }
-function liveRunProgress(modules) {
-  if(!modules.length)return '';
-  const done=modules.filter(m=>m[1]==='done').length;
-  const badges=modules.map(([name,state])=>{const kind=MODULE_STATES.includes(state)?state:'waiting';return `<span class="chip chip-${kind}">${liveText(name)}<span class="run-vh">, ${kind}</span></span>`;}).join('');
-  return `<div class="run-progress"><progress max="${modules.length}" value="${done}" aria-label="Modules done"></progress><span class="run-done">${done} of ${modules.length} done</span></div><div class="run-mods">${badges}</div>`;
+// The run's modules as C13 steps, in the data's order; the data carries one start time, the run's, and the clock is drawn on the running module only.
+function liveSteps(run,now) {
+  const since=elapsedLabel(run.started_at,now)?run.started_at:'';
+  const steps=(Array.isArray(run.modules)?run.modules:[]).filter(item=>Array.isArray(item)&&livePlain(item[0])!=='').map(([name,state])=>{
+    const step={title:livePlain(name),state,...(run.stalled?{stalled:true}:{})};
+    return state==='running'&&since?{...step,note:`${elapsedLabel(since,now)} into the run`,since}:step;
+  });
+  return window.Components.runSteps(steps,{labelled:true});
 }
-function liveRunFiles(run) {
-  const files=Array.isArray(run.files)?run.files:[];
-  const has=typeof run.id==='string'&&run.id||typeof run.id==='number'&&Number.isFinite(run.id),tag=has?` data-run="${liveText(run.id)}"`:'';
-  return files.length?`<details class="run-files"${tag}><summary>${files.length} file${files.length===1?'':'s'} read</summary><ul>${files.map(f=>`<li>${liveText(f)}</li>`).join('')}</ul></details>`:'';
+// The number of source files the data lists for a run (a count of listed names, nothing else); the names are audit material.
+function liveFileCount(run) {
+  const count=(Array.isArray(run.files)?run.files:[]).filter(file=>livePlain(file)!=='').length;
+  return count?`<span class="run-files">${window.Components.icon('files')}${count} source file${count===1?'':'s'}</span>`:'';
 }
-// The reason a run is not progressing and the name warning, as spans: the card and the waiting row both show them.
+// The reason a run is not progressing and the name warning, as spans: the card and the queue row both show them.
 function liveRunNotes(run) {
   return [run.reason&&liveText(run.reason)?`<span class="run-reason">${liveText(run.reason)}</span>`:'',run.name_differs?'<span class="run-note">issuer name differs from earlier runs</span>':''].filter(Boolean);
 }
-function liveRunCard(run) {
-  const modules=Array.isArray(run.modules)?run.modules.filter(Array.isArray):[];
-  const line=liveRunLine(run),pathway=liveText(run.pathway);
-  const notes=liveRunNotes(run).join(' · ');
-  const list=liveRunFiles(run);
-  const badge=run.stalled?'<span class="run-badge run-badge-stalled">Running · stalled</span>':'<span class="run-badge run-badge-running">Running</span>';
-  return `<li class="run-card live-run live-running"><div class="run-head"><div class="run-who"><strong>${liveText(run.issuer_name||run.folder||run.id)}</strong>${line?`<p>${line}</p>`:''}</div><div class="run-marks">${pathway?`<span class="run-tag">${pathway}</span>`:''}${badge}</div></div>${liveRunProgress(modules)}${list||notes?`<div class="run-foot">${list}${notes?`<span class="run-foot-notes">${notes}</span>`:''}</div>`:''}</li>`;
+const liveName=run=>liveText(run.issuer_name)||'Issuer not named';
+function liveRunCard(run,now) {
+  const line=liveRunLine(run),notes=liveRunNotes(run).join(' · '),files=liveFileCount(run);
+  const mark=window.Components.runMark(run.stalled?'stalled':'running');
+  return `<li class="run-card live-run live-running${run.stalled?' stalled':''}"><div class="run-head"><div class="run-who"><strong>${liveName(run)}</strong>${line?`<p>${line}</p>`:''}</div><div class="run-marks">${mark}</div></div>${liveSteps(run,now)}${files||notes?`<div class="run-foot">${files}${notes?`<span class="run-foot-notes">${notes}</span>`:''}</div>`:''}</li>`;
 }
 function liveWaitingRow(run) {
-  const extra=[...liveRunNotes(run),...(run.stalled?['<span class="run-stalled">stalled</span>']:[])];
-  const line=liveRunLine({submitted_by:run.submitted_by,folder:run.folder},extra);
-  return `<tr class="live-run live-queued"><th scope="row"><span class="run-name">${liveText(run.issuer_name||run.folder||run.id)}</span>${line?`<span class="run-sub">${line}</span>`:''}${liveRunFiles(run)}</th><td>${liveText(run.pathway)}</td></tr>`;
+  const line=[liveRunLine(run),...liveRunNotes(run)].filter(Boolean).join(' · '),files=liveFileCount(run);
+  return `<li class="live-run live-queued"><span class="rq-mark">${window.Components.runMark(run.stalled?'stalled':'queued')}</span><div class="rq-who"><span class="run-name">${liveName(run)}</span>${line?`<span class="run-sub">${line}</span>`:''}</div>${files}</li>`;
 }
-function liveActivityView(live) {
-  if(!live||typeof live!=='object'||Array.isArray(live)||!Array.isArray(live.runs))return '';
-  const runs=live.runs.filter(r=>r&&typeof r==='object'&&!Array.isArray(r));
+function liveActivityView(live,now=Date.now()) {
+  if(!liveReadable(live))return '';
+  const runs=liveRuns(live);
   const running=runs.filter(r=>r.status==='running'),waiting=runs.filter(r=>r.status==='queued');
-  const held=live.held&&liveText(live.held)?`<p class="run-held" role="note">${liveText(live.held)}</p>`:'';
-  const runningHtml=running.length?`<section class="activity-running"><h2>Running</h2><ul class="run-cards">${running.map(liveRunCard).join('')}</ul></section>`:'';
-  const table=waiting.length?`<div class="run-table-wrap"><table class="run-table"><caption class="run-vh">Waiting runs</caption><thead><tr><th scope="col">Issuer</th><th scope="col">Pathway</th></tr></thead><tbody>${waiting.map(liveWaitingRow).join('')}</tbody></table></div>`:'';
-  const waitingHtml=waiting.length||held?`<section class="activity-waiting"><h2>Waiting</h2>${held}${table}</section>`:'';
-  const stamp=`<p class="run-updated">Updated <span class="run-updated-at">${liveText(live.updated)}</span></p>`;
+  const runningHtml=running.length?`<section class="activity-running"><h2>Running</h2><ul class="run-cards">${running.map(run=>liveRunCard(run,now)).join('')}</ul></section>`:'';
+  const waitingHtml=waiting.length?`<section class="activity-waiting"><h2>Waiting</h2><ul class="run-queue">${waiting.map(liveWaitingRow).join('')}</ul></section>`:'';
+  const stamp=liveText(live.updated)?`<p class="run-updated">Updated <span class="run-updated-at">${esc(liveStampText(livePlain(live.updated)))}</span></p>`:'';
+  // The service's reason the queue or the ended runs are held (a daily limit, a library that could not be rebuilt): text, not an amount.
+  const held=typeof live.held==='string'&&live.held.trim()?`<p class="run-held" role="note">${window.Components.icon('triangle-alert')}<span>${liveText(live.held)}</span></p>`:'';
   const counts=`<dl class="run-tally"><div><dt>Running</dt><dd>${running.length}</dd></div><div><dt>Waiting</dt><dd>${waiting.length}</dd></div></dl>`;
   const cols=runningHtml&&waitingHtml?'':' one';
-  return `<div class="run-activity-head">${stamp}${counts}</div>${runningHtml||waitingHtml?`<div class="activity-cols${cols}">${runningHtml}${waitingHtml}</div>`:''}`;
+  return `<div class="run-activity-head">${stamp}${counts}</div>${held}${runningHtml||waitingHtml?`<div class="activity-cols${cols}">${runningHtml}${waitingHtml}</div>`:''}`;
 }
-// The Run activity view re-loads activity.js every 30 s while it is showing; no other view schedules anything.
-function nextActivityReload(route) {return route&&route.module==='CP-OS'?ACTIVITY_RELOAD_MS:null;}
+// C32: the page's two empty states, both with the one link to the library.
+function activityEmpty(title,reasons) {
+  return `<div class="activity-empty">${window.Components.emptyState(title,reasons,`<a class="primary-action" href="${LIBRARY_HOME}">Issuer library</a>`)}</div>`;
+}
+function activityView(live,now=Date.now()) {
+  if(!liveReadable(live))return activityEmpty('Run activity could not be read',['Reload this page to read it again. Nothing is claimed about runs in progress or waiting.','Finished runs are in the Issuer library.']);
+  const top=liveActivityView(live,now);
+  return top.includes('<section')?top:top+activityEmpty('No run in progress',['No run is running or waiting. Finished runs are in the Issuer library.']);
+}
+// C23: what the toast says when a run that was running on the previous load has ended on this one. `previous` is the earlier load's running set
+// ([{id,name}], kept in memory only; null before the first load). Returns the toasts to raise and this load's running set. Data that cannot be read
+// changes nothing: the earlier set is kept and nothing is announced. A run with no id cannot be matched and a run that left the data is not claimed finished.
+function activityEnded(previous,live) {
+  if(!liveReadable(live))return {toasts:[],running:previous};
+  const byId=new Map(liveRuns(live).filter(run=>livePlain(run.id)!=='').map(run=>[livePlain(run.id),run]));
+  const running=[...byId].filter(([,run])=>run.status==='running').map(([id,run])=>({id,name:livePlain(run.issuer_name)}));
+  const toasts=(previous||[]).flatMap(({id,name})=>{
+    const run=byId.get(id);
+    if(!run||!ENDED_STATUSES.includes(run.status))return [];
+    const who=livePlain(run.issuer_name)||name,lead=who?`${who}: run`:'Run';
+    if(run.status==='finished')return [{text:`${lead} finished. Reload to see it in the Issuer library.`,action:{label:'Reload',href:LIBRARY_HOME}}]; // the open page loaded the library once: only a reload lists the new run
+    return [{text:run.status==='failed'?`${lead} failed.`:`${lead} did not finish.`}];
+  });
+  return {toasts,running};
+}
+// The Run activity view re-loads activity.js every 30 s while it is showing, and the library home does the same, on the same timer, only while its Running now section shows a running or waiting run; no other view schedules anything.
+const homeFollowsRuns=live=>liveReadable(live)&&liveRuns(live).some(run=>run.status==='running'||run.status==='queued');
+function nextActivityReload(route) {
+  if(route&&route.module==='CP-OS')return ACTIVITY_RELOAD_MS;
+  return route&&route.module==='W-Library'&&homeFollowsRuns(window.RUN_ACTIVITY)?ACTIVITY_RELOAD_MS:null;
+}
 // Adds a fresh copy of the script and removes the previous one. A missing file only logs in the browser; the page carries on.
 function swapActivityScript(doc,now) {
   const previous=doc.head.querySelector('script[data-run-activity]');
@@ -1507,33 +1871,14 @@ function swapActivityScript(doc,now) {
   doc.head.append(script);
   if(previous)previous.remove();
 }
-// ---- Evidence (ruling decisions 9, 10): four lists for the run, every value as the store copied it from the run's own files; a value the run does not record reads "Not recorded". Source files are listed only.
-const shownOrNot=value=>value===null||value===undefined||value===''?'Not recorded':String(value);
-const readers=codes=>codes.map(code=>esc(moduleTitle(code))).join(', ');
-const downloadLink=(label,href,named=label)=>href?`<a class="text-action" href="${esc(href)}" download aria-label="Download ${esc(named)}">${esc(label)}${icon('download')}</a>`:`<span>${esc(label)}</span> <span class="muted">No link</span>`;
-// A wide table scrolls inside its own focusable region, never the page (the region pattern of the library and chart index tables).
-const scrollRegion=(label,table)=>`<div class="table-scroll" role="region" aria-label="${esc(label)}" tabindex="0">${table}</div>`;
-const evidenceTable=(caption,heads,rows)=>scrollRegion(caption,`<table class="history-table"><caption>${esc(caption)}</caption><thead><tr>${heads.map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${rows.map(row=>`<tr>${row.map(cell=>`<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody></table>`);
-function evidenceSources(ev) {
-  const head='<section class="run-section" id="evidence-sources"><h2>Source files used</h2><p class="intro">Listed only: source files are not included here and page references point to the originals.</p>';
-  // A run that records no supplied file (no list in its record) is not one whose every file was used: missing is not zero.
-  if(!ev.sources.length&&!ev.unused.length&&!(ev.unrecorded||[]).length)return `${head}<p class="empty">The run record lists no supplied files.</p></section>`;
-  const used=ev.sources.length?evidenceTable('Supplied files that a handoff’s Sources section names',['Name','Type','Document date','Read by'],ev.sources.map(f=>[esc(f.name),esc(shownOrNot(f.type)),esc(shownOrNot(f.documentDate)),readers(f.readBy)])):'<p class="empty">No handoff’s Sources section names a supplied file.</p>';
-  const fileList=files=>`<ul class="report-list">${files.map(f=>`<li class="report-row"><span>${esc(f.name)}</span><span class="muted">${esc(shownOrNot(f.type))} · document date ${esc(shownOrNot(f.documentDate))}</span></li>`).join('')}</ul>`;
-  const unused=ev.unused.length?fileList(ev.unused):'<p class="empty">Every supplied file is named in a handoff’s Sources section.</p>';
-  const lacking=ev.noSourcesModules&&ev.noSourcesModules.length&&!ev.unrecorded.length?`<p class="intro">No Sources section in the handoff of ${readers(ev.noSourcesModules)}, so a file those modules read may be listed here.</p>`:'';
-  const unrecorded=ev.unrecorded&&ev.unrecorded.length?`<h3>Use not recorded</h3><p class="intro">None of this run’s handoffs has a Sources section, so the run does not record which supplied files were read.</p>${fileList(ev.unrecorded)}`:'';
-  const notUsed=ev.unrecorded&&ev.unrecorded.length&&!ev.unused.length?'':`<h3>Supplied, not used</h3>${lacking}${unused}`;
-  return `${head}${used}${notUsed}${unrecorded}</section>`;
-}
-function evidenceHandoffs(ev) {
-  const rows=ev.handoffs.map(h=>[esc(moduleTitle(h.module)),downloadLink('Download',h.href,`${moduleTitle(h.module)} handoff`)]);
-  const all=ev.zip?`<p>${downloadLink('Download all',ev.zip,'all handoffs (zip)')}</p>`:'';
-  return `<section class="run-section" id="evidence-handoffs"><h2>Handoffs</h2>${rows.length?evidenceTable('The delivered Markdown of each module',['Module','Original Markdown'],rows)+all:'<p class="empty">This run holds no handoff.</p>'}</section>`;
-}
-function evidenceDownloads(ev) {
-  const rows=ev.downloads.map(d=>`<li class="report-row">${downloadLink(d.label,d.href)}</li>`).join('');
-  return `<section class="run-section" id="evidence-downloads"><h2>Calculations and Model</h2>${rows?`<ul class="report-list">${rows}</ul>`:'<p class="empty">No calculation or Model file was published from this run.</p>'}</section>`;
+// ---- Evidence (ruling decisions 9, 10; library redesign task 3): evidence.js draws a governance summary and the tabs; this gathers what the library holds for the run.
+// A chart section the module wrote that the build sent back: it has no contract and no gap, and the output's `issue` names it. The build's message is Evidence's.
+function sentBackCharts(id) {
+  const out=data[id],drawnTables=new Set([...(out.charts||[]),...(out.chartGaps||[])].map(c=>c.table));
+  return out.sections.filter(section=>/^Chart data: /.test(section.heading)).flatMap(section=>{
+    const block=section.blocks.find(b=>b.type==='table'),message=out.issue?.split('; ').find(problem=>problem.startsWith(section.heading));
+    return block&&!drawnTables.has(block.line)&&message?[{table:block.line,title:(name=>name.charAt(0).toUpperCase()+name.slice(1))(section.heading.replace(/^Chart data: /,'')),message}]:[];
+  });
 }
 // A file named after a module is labelled by its module; any other file keeps its name. The hash beside it is the file's own.
 const hashLabel=name=>{
@@ -1542,30 +1887,40 @@ const hashLabel=name=>{
 };
 // A module code in a method-change line ("CP-0: src/…/cp0.md changed") is named; a code inside a file path (…/CP-1.md) is part of the path and stays.
 const CODE_NOT_IN_PATH=/(?<![\w/.-])CP-[A-Z0-9]+(?![\w-]|\.md)/g;
-function evidenceRecord(ev,methodChanges) {
-  const r=ev.record;
-  const changed=(methodChanges||[]).length?`<h3>Methods changed since this run</h3><ul class="report-list">${methodChanges.map(c=>`<li>${esc(c.replace(CODE_NOT_IN_PATH,moduleTitle))}</li>`).join('')}</ul>`:'';
-  const hashes=r.hashes.length?evidenceTable('Hashes the run records',['File','SHA-256'],r.hashes.map(h=>[esc([...ev.sources,...ev.unused,...(ev.unrecorded||[])].some(f=>f.name===h.name)?h.name:hashLabel(h.name)),`<span class="hash">${esc(shownOrNot(h.sha256))}</span>`])):'<p class="empty">The run records no hash.</p>';
-  const sent=r.instructions.length?`<ul class="report-list">${r.instructions.map(i=>`<li class="report-row">${downloadLink(`${moduleTitle(i.module)} instructions`,i.href)}</li>`).join('')}</ul>`:'<p class="empty">The run records no instructions.</p>';
-  const calls=r.calls.length?evidenceTable('Model calls, in the order recorded',['Module','Attempt','Started','HTTP status','Error','Settled (USD)'],r.calls.map(c=>[esc(moduleTitle(c.module)),esc(shownOrNot(c.attempt)),esc(shownOrNot(c.started)),esc(shownOrNot(c.http_status)),esc(shownOrNot(c.error_class)),esc(shownOrNot(c.settled_usd))])):'<p class="empty">The run records no model call.</p>';
-  return `<section class="run-section" id="evidence-record"><details><summary>Run record</summary>${changed}<h3>Hashes</h3>${hashes}<h3>Instructions sent</h3>${sent}<h3>Retries and cost</h3><p>Provider cap: USD ${esc(shownOrNot(r.cap))}</p>${calls}</details></section>`;
+// What the Evidence page and every gap signal read: the run and each module's saved outputs, all of them.
+function evidenceInput(context) {
+  const run=contexts[context];
+  // A hash row named like a stored source file keeps that name; any other module-named file is labelled by its module.
+  const stored=new Set([...(run?.evidence?.sources||[]),...(run?.evidence?.unused||[]),...(run?.evidence?.unrecorded||[])].map(f=>f.name));
+  const modules=Object.entries(run?.modules||{}).map(([id,entry])=>({id,outputs:entry.outputs.map(output=>data[output]).filter(Boolean).map(output=>({id:output.id,sections:output.sections,placement:output.placement}))}));
+  // The delivered model's own material for Evidence: its scope limits (Gaps), the files it was built from and the charts the build sent back (Run record), each as written.
+  const found=runModels(context),labels=modelOptionLabels(found);
+  const models=found.map((model,at)=>{
+    const forecast=model.sources.find(s=>s.role==='forecast'),owner=forecast?.output&&data[forecast.output]?data[forecast.output].module:null;
+    return {name:MODEL_ENTRY[1],label:labels[at],module:owner,limits:model.cashflow?.limits||[],sources:model.sources.map(s=>({role:Object.hasOwn(SOURCE_ROLES,s.role)?SOURCE_ROLES[s.role]:s.role,file:sourceFile(s),run:/^runs\/([^/]+)\//.exec(s.path||'')?.[1]||null,sha256:s.sha256,match:s.sha256===null?'invalid':s.changed?'changed':'matches',attempt:/-attempt-(\d+)/.exec(sourceFile(s))?.[1]??null}))};
+  });
+  const sentBack=Object.values(run?.modules||{}).map(entry=>entry.default||entry.outputs[0]).filter(id=>id&&data[id]).flatMap(id=>sentBackCharts(id).map(item=>({module:data[id].module,title:item.title,message:item.message})));
+  return {
+    run:{context,code:run?.run,evidence:run?.evidence,methodChanges:run?.methodChanges||[],steps:run?.record?.steps||[],comparison:ChangesView.comparisonEvidence(run?.changes?.pack,run?.changes,'CP-8'),models,sentBack},
+    modules,chips:window.CREDIT_OS_DATA?.chips||{},
+    deps:{moduleTitle,hashLabel:name=>stored.has(name)?name:hashLabel(name),methodChange:line=>line.replace(CODE_NOT_IN_PATH,moduleTitle)}
+  };
 }
-function evidenceView(context) {
-  const ev=contexts[context]?.evidence;
-  if(!ev)return '<div class="missing-state"><h2>No evidence record was read for this run</h2><p>Rebuild the library and open this page again.</p></div>';
-  return evidenceSources(ev)+evidenceHandoffs(ev)+evidenceDownloads(ev)+evidenceRecord(ev,contexts[context].methodChanges);
-}
+const evidenceView=context=>window.Evidence.view(evidenceInput(context),{tab:current?.tab,module:current?.evidenceModule});
+// The gap signal of a findings page: the count the Evidence Gaps tab shows for the same scope (the run, or one module), from the same function.
+const gapSignal=(context,module=null)=>window.Evidence.gapCount(evidenceInput(context),module);
 // ---- Changes (decision M8 of the 2026-11-11 module-presets ruling): changes.js draws the run's comparison pack and CP-8's handoff. Nothing is worked out here:
 // this gathers what the library holds, the runs of this issuer and pathway (earliest first) with their quoted figures, packs and lead-module bottom lines.
 function changesView(context) {
   const ctx=contexts[context],keyOf=new Map(Object.entries(contexts).map(([key,run])=>[run,key]));
-  const sections=run=>{const id=run.modules['CP-8']?.default;return id&&data[id]?data[id].sections:null;};
+  const cp8Id=run=>{const id=run.modules['CP-8']?.default;return id&&data[id]?id:null;},sections=run=>(cp8Id(run)?data[cp8Id(run)].sections:null);
+  const held=cp8Id(ctx),output=held?{id:held,module:data[held].module,run:data[held].run,chips:key=>(window.CREDIT_OS_DATA?.chips?.[key]||[]).length}:null;
   const runs=historyRows(Object.values(contexts).filter(run=>run===ctx||(sameIssuer(run.issuerKey,ctx.issuerKey)&&run.pathway===ctx.pathway))).reverse().map(run=>{
     const key=keyOf.get(run),lead=run.changes?.lead&&run.modules[run.changes.lead]?.default,out=lead&&data[lead];
     return {key,href:routeHref('W-Changes','changes',null,key),asOf:run.asOf,runId:run.folder,current:run===ctx,bottom:out?ChangesView.leadBottom(out.sections,out.summary):null,
       metrics:window.DESIGN_CATALOGUE.real.find(r=>r.id===run.folder)?.metrics||{},changes:run.changes||null};
   });
-  return ChangesView.changesHtml({changes:ctx.changes||null,cp8:sections(ctx),pathway:runPathway(ctx),fmtDate:displayDate,runs});
+  return ChangesView.changesHtml({changes:ctx.changes||null,cp8:sections(ctx),output,evidence:evidenceInput(context),modules:{name:moduleLabel},pathway:runPathway(ctx),fmtDate:displayDate,overviewHref:routeHref('W-Overview','overview',null,context),runs});
 }
 function workspaceView(module,section) {
   const context=current?.context,ctx=contexts[context],available=ctx?contextModules(context):[];
@@ -1574,18 +1929,25 @@ function workspaceView(module,section) {
   if(module==='W-Changes')return changesView(context);
   if(module==='W-Report')return historyView(context);
   if(module==='W-Evidence')return evidenceView(context);
-  if(module==='W-Forecast')return forecastView(context,section)+chartIndex(context);
+  if(module==='W-Forecast')return forecastView(context,section);
   if(module==='CP-OS')return activityView(window.RUN_ACTIVITY);
   return '';
 }
+// The issuer's header chips: the run's period, its pathway in words and, only when the store lists method changes since the run, an amber chip to Evidence's run record.
+// The sliding pill sits under the active tab; it is measured, so it is placed again when the tabs are drawn, the window resizes or the fonts load.
+const placeTabsPill=()=>{const tabs=document.querySelector('.workspace-tabs');if(tabs&&!tabs.hidden)window.Components.placePill(tabs);};
+function headerChipMarkup(ctx,context) {
+  const changed=earlierMethods(ctx)?{text:'Methods changed since this run',tone:'amber',href:routeHref('W-Evidence','record',null,context,null)}:null;
+  return window.Components.headerChips([{text:ctx.period},{text:pathwayTitle(ctx.pathway)},changed]);
+}
 function updateWorkspaceChrome(module) {
   const ctx=contexts[current.context],isHome=!ctx||appDestinations.has(module);
-  const moduleId=ctx&&(lastSection.get(current.context+':module')||ctx.first),period=current.output?data[current.output].period:ctx?.period;
+  const moduleId=ctx&&(lastSection.get(current.context+':module')||ctx.first);
   const title=isHome?(module==='W-Library'?'Issuer library':moduleNames[module]):ctx.title;
   const header=document.querySelector('.issuer'),meta=isHome?'':issuerMeta(current.context);
   header.classList.toggle('run-header',!isHome);
-  const startRun=isHome?'':startRunLink(current.context),scope=isHome?'':`<div class="scope">${icon('calendar-days')}<strong>${esc(period)}</strong></div>`;
-  header.innerHTML=isHome?`<div class="issuer-title"><h1 title="${esc(title)}">${esc(title)}</h1></div>`:`<a class="issuer-back" href="#W-Library/cases"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>Issuer library</a><div class="issuer-row${startRun?' has-start-link':''}"><div class="issuer-title"><h1 title="${esc(title)}">${esc(title)}</h1>${meta?`<p class="issuer-meta">${esc(meta)}</p>`:''}</div>${startRun?`<div class="issuer-side">${scope}${startRun}</div>`:scope}</div>`;
+  const startRun=isHome?'':startRunLink(current.context),chips=isHome?'':headerChipMarkup(ctx,current.context);
+  header.innerHTML=isHome?`<div class="issuer-title"><h1 title="${esc(title)}">${esc(title)}</h1></div>`:`<a class="issuer-back" href="#W-Library/cases"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>Issuer library</a><div class="issuer-row${startRun?' has-start-link':''}"><div class="issuer-title"><h1 title="${esc(title)}">${esc(title)}</h1>${meta?`<p class="issuer-meta">${esc(meta)}</p>`:''}${chips}</div>${startRun?`<div class="issuer-side">${startRun}</div>`:''}</div>`;
   document.querySelector('.workspace-tabs').hidden=isHome;
   $('context-bar').hidden=isHome||module==='W-Report';
   if(!isHome)$('context-bar').innerHTML=runLabel(module,current.context);
@@ -1593,6 +1955,7 @@ function updateWorkspaceChrome(module) {
     const sections=navigationSections(id,current.context,resolveOutput(id,current.context,lastFile.get(`${current.context}:${id}`))),remembered=lastSection.get(current.context+':'+id),section=sections.some(s=>s[0]===remembered)?remembered:sections[0][0];
     return `<a href="${routeHref(id,section)}" ${(label==='Modules'?isAnalytical(module):id===module)?'aria-current="page"':''}>${label}</a>`;
   }).join('');
+  placeTabsPill();
   $('workbench').classList.toggle('library-workspace',isHome);
   // The Overview is a page of selected passages: no module navigator beside it and no Browse modules button above it.
   $('workbench').classList.toggle('overview-workspace',!isHome&&module==='W-Overview');

@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from library_fixtures import CITED, make_run, method, with_changes, without_report  # noqa: F401
 from test_credit_os_catalogue import CHARTS
-from test_library_page_browser import visit
+from test_library_page_browser import read_probe, visit
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "apps/issuer-library"))
@@ -157,7 +157,7 @@ def two_runs(workspace: Path, *, pack=True, note=None) -> None:
 
 
 def tab_names(dom: str) -> list[str]:
-    tabs = re.search(r'<div class="workspace-tabs"[^>]*>(.*?)</div>', dom, re.DOTALL).group(1)
+    tabs = re.search(r'<div class="workspace-tabs[^"]*"[^>]*>(.*?)</div>', dom, re.DOTALL).group(1)
     return re.findall(r"<a [^>]*>(?:<img[^>]*>)?([A-Za-z ]+)</a>", tabs)
 
 
@@ -170,10 +170,27 @@ def test_the_changes_tab_sits_between_overview_and_modules_and_shows_the_compari
     assert re.search(r'<a href="#W-Changes/changes[^"]*" aria-current="page"', dom)
     assert "Since 30 September 2024 · Full credit assessment" in dom
     assert BOTTOM in dom and "Cash is USD 6,300 million." in dom
-    # Part 2: values as the pack writes them; leverage is Not comparable and shows no difference.
-    assert "<td>6.57x (FY2024)</td><td>6.01x (FY2025)</td>" in dom
+    # Part 2: values as the pack writes them, drawn as the earlier and current side of a card;
+    # leverage is Not comparable and shows no difference on the route or in Evidence.
+    assert (
+        '<p class="chg-v">6.57x (FY2024)</p>' in dom
+        and '<p class="chg-v">6.01x (FY2025)</p>' in dom
+    )
     assert "-0.56" not in dom
-    assert "<td>6300 US$m (2025-03-31)</td><td>39 US$m</td>" in dom
+    assert '<p class="chg-v">6261 US$m (2024-09-30)</p>' in dom
+    assert '<p class="chg-v">6300 US$m (2025-03-31)</p>' in dom
+    # The computed difference is Evidence's: listed there only where the measure is comparable.
+    evidence, console = visit(page, "#W-Evidence/calculations?c=later&m=CP-8")
+    assert console == []
+    assert (
+        '<td class="">Total debt / EBITDA</td><td class="">6.57x (FY2024)</td>'
+        '<td class="">6.01x (FY2025)</td><td class="">\u2014</td>'
+    ) in evidence
+    assert (
+        '<td class="">Cash</td><td class="">6261 US$m (2024-09-30)</td>'
+        '<td class="">6300 US$m (2025-03-31)</td><td class="">39 US$m</td>'
+    ) in evidence
+    assert "-0.56" not in evidence
     # Part 3 and 5: the module row, and Over time with both runs, earliest first.
     assert 'change-status">Unchanged</span>' in dom
     over = dom[dom.index('id="changes-over-time"') :]
@@ -189,7 +206,8 @@ def test_a_first_run_says_so_and_shows_nothing_else(tmp_path):
     dom, console = visit(build(tmp_path), "#W-Changes/changes?c=only")
     assert console == []
     assert tab_names(dom)[2] == "Changes"
-    assert '<p class="changes-first">First run of this pathway</p>' in dom
+    assert "<li>First run of this pathway</li>" in dom
+    assert 'class="empty-state" role="status"' in dom
     for part in ("changes-issuer", "changes-analysis", "changes-over-time", "changes-heading"):
         assert part not in dom
 
@@ -256,3 +274,100 @@ def test_no_module_code_reaches_a_reader_from_the_changes_tab(tmp_path):
     assert 'id="changes-issuer"' in dom and 'id="changes-analysis"' in dom
     seen = read_codes_probe(page, "later", "#CP-2/head?c=later")
     assert seen["hits"] == []
+
+
+def with_one_model(page: Path) -> None:
+    """List one forecast model for the later run, so its Forecast page and chart index are drawn."""
+    data_js = page.parent / "data.js"
+    prefix = "window.CREDIT_OS_DATA="
+    data = json.loads(data_js.read_text(encoding="utf-8").removeprefix(prefix).rstrip().rstrip(";"))
+    run = data["workspace"]["runs"]["later"]
+    data["workspace"]["models"] = [
+        {
+            "id": "model-a",
+            "issuerKey": run["issuerKey"],
+            "mode": "accepted",
+            "qualification": "unrun",
+            "runId": None,
+            "runFolder": "later",
+            "scope": None,
+            "inputContract": None,
+            "revisionNote": None,
+            "previous": None,
+            "href": "../models/model-a.html?embedded=1",
+            "download": "../models/model-a.html?download=1",
+            "files": [],
+            "sources": [],
+            "register": None,
+            "cashflow": None,
+        }
+    ]
+    data_js.write_text(prefix + update_library.embedded_json(data) + ";\n", encoding="utf-8")
+
+
+TRACE_PROBE = """
+(async () => {
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const seen = {};
+  for (const [name, route, selector] of PROBE.routes) {
+    location.hash = route;
+    await sleep(900);
+    const control = document.querySelector(selector);
+    const entry = {found: Boolean(control)};
+    if (control) {
+      control.click();
+      await sleep(600);
+      const drawer = document.getElementById('inspector');
+      entry.open = !drawer.hidden;
+      entry.title = drawer.querySelector('.inspector-body h3')?.textContent ?? '';
+      entry.text = drawer.innerText.length;
+      entry.hash = location.hash;
+    }
+    seen[name] = entry;
+    location.hash = route;
+    await sleep(300);
+  }
+  const out = document.createElement('pre');
+  out.id = 'probe';
+  out.textContent = JSON.stringify(seen);
+  document.body.appendChild(out);
+})();
+"""
+
+
+def test_a_trace_control_opens_the_drawer_on_every_findings_route(tmp_path):
+    """Review H1: a trace key opens on any route of its run, not only on a route with an output.
+    The Forecast chart index keeps its own route when its control is used."""
+    two_runs(tmp_path)
+    page = build(tmp_path)
+    with_one_model(page)
+    routes = [
+        ["overview", "#W-Overview/overview?c=later", "#content .basis-link"],
+        ["module", "#CP-0/head?c=later", "#content .basis-link"],
+        ["changes", "#W-Changes/changes?c=later", "#content .trace-row"],
+        ["forecast", "#W-Forecast/run-charts?c=later", "#content .trace-row"],
+    ]
+    seen = read_probe(page, "#W-Overview/overview?c=later", 1280, TRACE_PROBE, {"routes": routes})
+    for name, entry in seen.items():
+        assert entry["found"] and entry["open"] and entry["text"] > 0 and entry["title"], (
+            name,
+            entry,
+        )
+    assert "Total debt / EBITDA" in seen["changes"]["title"], seen["changes"]
+    assert seen["forecast"]["hash"].startswith("#W-Forecast/run-charts?"), seen["forecast"]
+    assert "e=" in seen["forecast"]["hash"], seen["forecast"]
+
+
+def test_report_history_links_what_changed_only_for_a_run_with_a_comparison_record(tmp_path):
+    """Review L7: an earlier listed run of the same pathway is not a comparison; the link is drawn
+    only where the run's own record holds one."""
+    two_runs(tmp_path)
+    run_of(
+        tmp_path, "latest", as_of="2025-06-30", modules=("CP-0", "CP-1", "CP-2"), cp1_extra=CHARTS
+    )
+    dom, console = visit(build(tmp_path), "#W-Report/history?c=later")
+    assert console == []
+    asked = re.findall(r'aria-label="(What changed in the run of [^"]+)"', dom)
+    assert len(asked) == 1 and asked[0].startswith("What changed in the run of 31 March 2025"), (
+        asked
+    )

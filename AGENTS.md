@@ -32,7 +32,10 @@ plans, staff roles, pauses and approval records are evidence, not inherited auth
   module writes bottom line, key findings, contrary evidence and what would change the view, and
   limitations, in that order, judgement first; data modules owe the bottom line. Source references
   live in each paragraph's Basis line, tables' Source columns and `## Sources`, never in
-  narrative sentences.
+  narrative sentences. The issuer library draws them only on its Evidence page and trace drawer
+  (source references, file names, hashes, ids, registers, gap ledgers, run codes); every other page shows
+  findings and one trace control per paragraph, row or figure, and text written for another module is
+  drawn nowhere.
 - Analytical modules own analysis and inter-module Markdown communication.
   Markdown handoffs are intermediate artifacts, not completion of the user task.
 - CP-8 runs last in a run with an earlier listed run of the same issuer and pathway and compares

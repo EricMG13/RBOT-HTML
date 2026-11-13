@@ -78,6 +78,7 @@ from deploy_workflow.model.handoff import (
     REQUEST_OVERHEAD,
     WEB_SEARCH_CALLS_PER_TURN,
     WEB_SEARCH_CASE_KINDS,
+    FAILED_NO_USAGE,
     Check,
     _pages,
     web_search_offered,
@@ -103,6 +104,7 @@ from deploy_workflow.owners.cpos import (
 )
 from deploy_workflow.prose_checks import (
     DATA_MODULES,
+    ISO_4217,
     READER_HEADINGS,
     figure_issues,
     key_figures_issues,
@@ -1423,13 +1425,17 @@ def _stated_gap(cell: str) -> bool:
     return cell.startswith(NOT_SUPPLIED) and bool(cell.removeprefix(NOT_SUPPLIED).strip())
 
 
+CURRENCY_CODES = ISO_4217  # the repo's one list of real codes; LTM, PIK, RCF, TTM are not in it
+
+
 def _unit_advice(spec: OwnerTable, unit: str) -> str:
     """What to do about a unit cell that is not the chart unit. A cell that begins with the chart
     unit and adds other words is a unit cell holding more than the unit: its amounts are sound, so
     the advice is to cut the cell, never to replace the amounts with gaps. When the rest names
     another currency code or symbol the amounts may really be in it, so the gap advice stays."""
     rest = unit.removeprefix(spec.chart_unit)
-    other_currency = re.search(r"\b[A-Z]{3}\b|[$\u20ac\u00a3\u00a5]", rest)
+    codes = "|".join(sorted(CURRENCY_CODES))
+    other_currency = re.search(rf"\b(?:{codes})\b|[$\u20ac\u00a3\u00a5]", rest)
     if rest != unit and rest[:1] and not rest[:1].isalnum() and not other_currency:
         return (
             f"the Reporting unit must be exactly `{spec.chart_unit}` (the Amount's unit only); "
@@ -3139,7 +3145,78 @@ def _review_lines(directory: Path) -> tuple[str, ...]:
         "run's charge."
         for module in multiple
     ]
-    return tuple(lines)
+    return (*lines, *_dropped_value_lines(events))
+
+
+def _dropped_value_lines(events: Sequence[Mapping[str, Any]]) -> list[str]:
+    """One line per module whose accepted repair removed sourced values (the last such event of a
+    module), and one per module whose removed-values check failed."""
+    dropped = {
+        str(e.get("module")): e.get("count")
+        for e in events
+        if e.get("event") == "values_dropped_on_repair"
+    }
+    lines = []
+    for module, count in dropped.items():
+        one = count == 1
+        what = "1 sourced value" if one else f"{count} sourced values"
+        lines.append(
+            f"Review: {module} was accepted after a repair that removed {what}; the list is in "
+            f"that module's review.json (dropped_values). Check {'it' if one else 'them'}."
+        )
+    failed = dict.fromkeys(
+        str(e.get("module")) for e in events if e.get("event") == "dropped_values_check_failed"
+    )
+    lines += [
+        f"Review: {module} had a repair whose removed values could not be checked "
+        "(dropped_values_error in its review.json); compare the repair with the rejected draft."
+        for module in failed
+    ]
+    return lines
+
+
+def _attempt(event: Mapping[str, Any]) -> str:
+    value = event.get("attempt_id")
+    return value if isinstance(value, str) else ""
+
+
+def _uncharged_summaries(events: Sequence[Mapping[str, Any]]) -> dict[Any, tuple[Any, Any]]:
+    """The context summaries with no reported charge, key -> (module, call). One attempt is one
+    summary however many events name it; an event with no attempt id is one summary of its own.
+    A start that never ended is counted from its events too (a killed run wrote no disclosure),
+    and a summary charged late is only that charge."""
+    found: dict[Any, tuple[Any, Any]] = {}
+    started: dict[Any, tuple[Any, Any]] = {}
+    ended: set[Any] = set()
+    anonymous: dict[Any, list[int]] = {}  # module -> [starts, ends, disclosed], no attempt id
+    for number, e in enumerate(events):
+        name, module, call = e.get("event"), e.get("module"), e.get("call_index")
+        attempt = _attempt(e)
+        counts = anonymous.setdefault(module, [0, 0, 0])
+        if name == "compaction_uncharged":
+            found[(module, attempt) if attempt else (module, number)] = (module, call)
+            # a failed completion's own record is not a second sign that a start ended
+            counts[2] += not attempt and e.get("reason") != FAILED_NO_USAGE
+        elif name == "context_compaction_started":
+            if attempt:
+                started[(module, attempt)] = (module, call)
+            else:
+                counts[0] += 1
+        elif name in {"context_compacted", "compaction_charge_late"}:
+            if attempt:
+                ended.add((module, attempt))
+            else:
+                counts[1] += 1
+    for key, where in started.items():
+        if key not in ended:
+            found.setdefault(key, where)
+    for module, (starts, ends, disclosed) in anonymous.items():
+        for extra in range(max(0, starts - ends - disclosed)):
+            found[(module, "unmatched", extra)] = (module, None)
+    late = {
+        (e.get("module"), _attempt(e)) for e in events if e.get("event") == "compaction_charge_late"
+    }
+    return {k: v for k, v in found.items() if k not in late}
 
 
 def _charge_notes(directory: Path) -> tuple[str, ...]:
@@ -3147,19 +3224,17 @@ def _charge_notes(directory: Path) -> tuple[str, ...]:
     relaunch reads the same events and cannot count one again): context summaries with no
     reported charge, and charges the runtime reported after their module ended (not settled)."""
     events, _ = _run_events(directory)
-    uncharged = {
-        (e.get("module"), e.get("call_index"), e.get("reason"))
-        for e in events
-        if e.get("event") == "compaction_uncharged"
-    }
+    uncharged = _uncharged_summaries(events)
     late = {
-        (e.get("module"), e.get("attempt_id"), e.get("call_index")): e.get("usd")
-        for e in events
+        (e.get("module"), _attempt(e) or number, e.get("call_index")): e.get("usd")
+        for number, e in enumerate(events)
         if e.get("event") == "compaction_charge_late"
     }
     notes = []
     if uncharged:
-        modules = ", ".join(dict.fromkeys(str(m) for m, _, _ in sorted(uncharged, key=_order)))
+        modules = ", ".join(
+            dict.fromkeys(str(m) for m, _ in sorted(uncharged.values(), key=_order))
+        )
         count = len(uncharged)
         noun = "summary" if count == 1 else "summaries"
         notes.append(
@@ -3167,16 +3242,29 @@ def _charge_notes(directory: Path) -> tuple[str, ...]:
             "Copilot may bill them."
         )
     if late:
-        total = exact_sum(Decimal(str(usd)) for usd in late.values())
+        amounts, unreadable = [], 0
+        for usd in late.values():
+            try:
+                amounts.append(Decimal(str(usd)))
+            except InvalidOperation:  # a hand-edited or damaged event: shown, not hidden
+                unreadable += 1
         named = ", ".join(dict.fromkeys(str(m) for m, _, _ in late))
+        total = f"USD {exact_sum(amounts)} " if amounts else ""
+        more = ""
+        if unreadable:
+            more = (
+                f", and {unreadable} amount{'s' if unreadable > 1 else ''} that could not be read"
+                if amounts
+                else f"{unreadable} amount{'s' if unreadable > 1 else ''} that could not be read "
+            )
         notes.append(
-            f"Charged excludes USD {total} of context-summary charges reported after their "
-            f"module ended ({named}); they were not settled."
+            f"Charged excludes {total}of context-summary charges reported after their "
+            f"module ended ({named}){more}; they were not settled."
         )
     return tuple(notes)
 
 
-def _order(item: tuple[Any, Any, Any]) -> tuple[int, str]:
+def _order(item: tuple[Any, Any]) -> tuple[int, str]:
     return (item[1] if isinstance(item[1], int) else 0, str(item[0]))
 
 

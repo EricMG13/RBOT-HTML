@@ -1192,6 +1192,12 @@ def test_a_quote_excuses_only_the_line_the_issue_names(tmp_path: Path) -> None:
     assert _dropped(tmp_path, rows, second, issue) == ["USD 755 million"]
 
 
+def test_a_number_already_on_the_line_is_no_correction_of_it(tmp_path: Path) -> None:
+    row = "Net debt was USD 247 million in 2024.\n"
+    issue = ("State the 2024 comparison under Findings.",)
+    assert _dropped(tmp_path, row, row.replace("247", "240"), issue) == ["USD 247 million"]
+
+
 def test_a_line_number_in_an_issue_label_excuses_no_value(tmp_path: Path) -> None:
     row = "| Adjustments | USD 247 million | FY2023 |\n"
     assert _dropped(
@@ -1281,6 +1287,21 @@ def test_every_line_an_issue_names_is_named(tmp_path: Path, label: str) -> None:
     kept = "| A | USD 240 million | FY2023 |\n| B | USD 750 million | FY2023 |\n"
     issue = f'{label}: "247 million" and "755 million" are wrong; canonical'
     assert _dropped(tmp_path, rows, kept, (issue,)) == []
+
+
+@pytest.mark.parametrize(
+    "issue",
+    [
+        "line 6, 247 million is unsupported; remove",
+        "line 6, 2.5 million and 247 million are unsupported",
+    ],
+)
+def test_a_comma_after_a_line_label_does_not_make_the_number_a_line(
+    tmp_path: Path, issue: str
+) -> None:
+    row = "| Adjustments | USD 247 million | FY2023 |\n"
+    removed = "| Adjustments | Not supplied | FY2023 |\n"
+    assert _dropped(tmp_path, row, removed, (issue + " canonical",)) == []
 
 
 def test_an_interrupt_in_the_comparison_still_leaves_the_review(
@@ -1500,3 +1521,76 @@ def test_compaction_usd_is_exact_beyond_the_default_context() -> None:
         compactions=(CompactionRecord.model_construct(usd=big),),
     )
     assert rec.own_usd == turn_usd and rec.compaction_usd == big
+
+
+# ---------------------------------------------------------------- compaction, end batch
+
+
+def test_compaction_events_carry_the_attempt_id(tmp_path: Path) -> None:
+    loop, folder = compacting_loop(tmp_path, compacted(turn(write_call()), CP8_START, CP8_DONE))
+    assert loop(task()) == GOOD
+    for name in ("context_compaction_started", "context_compacted"):
+        (event,) = named(folder, name)
+        assert event["attempt_id"] == ATTEMPT
+
+
+def test_two_uncharged_starts_in_one_call_are_two_events_with_their_ids(tmp_path: Path) -> None:
+    other = replace(CP8_START, attempt_id="second-attempt")
+    loop, folder = compacting_loop(tmp_path, compacted(turn(write_call()), CP8_START, other))
+    assert loop(task()) == GOOD
+    ids = sorted(e["attempt_id"] for e in named(folder, "compaction_uncharged"))
+    assert ids == sorted([ATTEMPT, "second-attempt"])
+
+
+def test_an_attemptless_late_completion_after_an_attemptless_one_is_disclosed(
+    tmp_path: Path,
+) -> None:
+    in_call = replace(CP8_DONE, attempt_id=None)
+    late = replace(CP8_DONE, attempt_id=None, usd=Decimal("0.05"))
+    loop, folder, _ = draining_loop(tmp_path, (late,), compacted(turn(write_call()), in_call))
+    assert loop(task()) == GOOD
+    (event,) = named(folder, "compaction_charge_late")
+    assert event["usd"] == "0.05"
+
+
+class Draining2(Draining):
+    """A drain that answers differently each time: the module's end, then the run's close."""
+
+    def __init__(self, drains: list[tuple[Compaction, ...]], *replies: AdapterReply) -> None:
+        super().__init__((), *replies)
+        self.drains = drains
+
+    def drain_compactions(self, digest: str) -> tuple[Compaction, ...]:
+        self.drained.append(digest)
+        return self.drains.pop(0) if self.drains else ()
+
+
+def test_a_summary_still_running_at_the_module_end_is_drained_again_before_close(
+    tmp_path: Path,
+) -> None:
+    folder = tmp_path / "run"
+    adapter = Draining2([(), (CP8_DONE,), ()], compacted(turn(write_call()), CP8_START))
+    loop = HandoffExecutor(
+        folder / "live", adapter=adapter, cap_usd=Decimal(10), check=check, events=folder
+    )
+    assert loop(task()) == GOOD
+    assert len(named(folder, "compaction_uncharged")) == 1  # open at the module's end
+    loop.drain_late()
+    (late,) = named(folder, "compaction_charge_late")
+    assert (late["module"], late["usd"], late["attempt_id"]) == ("CP-2", "0.0996381", ATTEMPT)
+    loop.drain_late()  # a second sweep finds nothing new and writes nothing again
+    assert len(named(folder, "compaction_charge_late")) == 1
+    assert len(named(folder, "compaction_uncharged")) == 1
+
+
+def test_a_sweep_discloses_a_start_that_began_after_the_module_end(tmp_path: Path) -> None:
+    folder = tmp_path / "run"
+    adapter = Draining2([(), (CP8_START,)], turn(write_call()))
+    loop = HandoffExecutor(
+        folder / "live", adapter=adapter, cap_usd=Decimal(10), check=check, events=folder
+    )
+    assert loop(task()) == GOOD
+    assert not named(folder, "compaction_uncharged")
+    loop.drain_late()
+    (event,) = named(folder, "compaction_uncharged")
+    assert event["attempt_id"] == ATTEMPT and event["reason"] == "started, no completion reported"
