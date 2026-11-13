@@ -217,25 +217,21 @@ function comparisonChart(module,v,selection=0,chips=false,note=true) {
 // A step label wraps word-wise to what one step can hold (the 14px monospace axis label advances 8.4 viewBox units a character, less a gap
 // between neighbours), in at most three lines. A word is cut only when it alone is wider than a line; the ellipsis marks a cut word or text
 // left after the third line (the last line then drops whole words to make room for it). The title and key carry the full text.
-// A map node reuses it with its own character advance (12px proportional type, MAP_CHAR).
 // Labels start at AXIS_Y and drop 1.2em a line (up to 14px type on a narrow screen), so the viewBox runs to AXIS_BOTTOM to hold three lines and their descenders
 // at either size. A wide bridge is drawn at no less than WIDE_SCALE of its viewBox, whatever its container: a narrow card scrolls it sideways.
 const AXIS_CHAR=8.4,AXIS_LINES=3,WIDE_STEPS=7,WIDE_STEP=142,AXIS_Y=226,BRIDGE_HEIGHT=282,WIDE_SCALE=.75;
-function axisLines(label,step,char=AXIS_CHAR,hard=false,most=AXIS_LINES) {
-  const room=Math.max(4,Math.floor((step-6)/char)),lines=[];
-  for(const long of label.split(' ').filter(Boolean)){
-    // `hard` (map nodes): a word wider than a line breaks across lines, whole, before any ellipsis; the bridge cuts it with an ellipsis; 'keep' (map edge labels) leaves it whole on its own line.
-    let word=long;
-    while(hard===true&&word.length>room){lines.push(word.slice(0,room));word=word.slice(room);}
-    const w=word.length>room&&hard!=='keep'?`${word.slice(0,room-1)}\u2026`:word,last=lines.length-1;
+function axisLines(label,step) {
+  const room=Math.max(4,Math.floor((step-6)/AXIS_CHAR)),lines=[];
+  for(const word of label.split(' ').filter(Boolean)){
+    const w=word.length>room?`${word.slice(0,room-1)}\u2026`:word,last=lines.length-1;
     if(last>=0&&lines[last].length+1+w.length<=room&&!lines[last].endsWith('\u2026'))lines[last]+=` ${w}`;
     else lines.push(w);
   }
-  if(lines.length<=most)return lines.length?lines:[label];
-  const kept=lines.slice(0,most),end=kept[most-1].split(' ');
+  if(lines.length<=AXIS_LINES)return lines.length?lines:[label];
+  const kept=lines.slice(0,AXIS_LINES),end=kept[AXIS_LINES-1].split(' ');
   while(end.length>1&&end.join(' ').length+1>room)end.pop();
   const tail=end.join(' ');
-  kept[most-1]=tail.endsWith('\u2026')?tail:tail.length+1>room&&hard!=='keep'?`${tail.slice(0,room-1)}\u2026`:`${tail}\u2026`;
+  kept[AXIS_LINES-1]=tail.endsWith('\u2026')?tail:tail.length+1>room?`${tail.slice(0,room-1)}\u2026`:`${tail}\u2026`;
   return kept;
 }
 function bridgeChart(module,v) {
@@ -987,13 +983,8 @@ function mapsView(id,tag='h2',keep=()=>true,own=false) {
 }
 // Maps on a module page.
 const reportMaps=id=>data[id]?.maps?.length?`<section class="part" id="maps"><h3>Maps</h3>${mapsView(id,'h4',()=>true,true)}</section>`:'';
-// The part of the module page that holds a chart, map or lane table: charts (earlier format: Key numbers), maps, and for a lane the routable s-<line>
-// section that holds its table, else the page's Timeline part. Every one is an anchor of reportParts, so the link never lands on the page head.
-function tableForm(id,kind,section) {
-  if(kind==='map')return 'maps';
-  if(kind==='chart')return isNewFormat(data[id].sections)?'charts':'numbers';
-  return drawnAnchors(id).has(`s-${section.line}`)?`s-${section.line}`:'timeline';
-}
+// The part of the module page that holds its charts (earlier format: Key numbers), an anchor of reportParts, so the link never lands on the page head.
+const chartPart=id=>isNewFormat(data[id].sections)?'charts':'numbers';
 // ---- The run label (decision 12 of the 2026-11-11 reader ruling): every run page says which run it shows, and where the issuer's other runs are.
 // H7: a run is "Earlier format" when any of its handoffs (every saved output of every module, not only the defaults) has no Bottom line first under Findings.
 // A handoff the build could not read at all (Shapes.isUnstructured) is not an earlier format: it is stated on the Evidence page as not read.
@@ -1258,7 +1249,7 @@ function chartNote(block,ctx) {
 const CARD_HELD_LABEL='Not established for this run';
 function chartCard(id,item,number) {
   const out=data[id],chart=item.chart||item.gap||item.sent,T=text=>statedHtml(id,text,CARD),name=cardPlain(id,CARD,chart.title)||`Chart ${number}`,title=T(chart.title)||esc(name),ctx=cardContext(id,name);
-  const owner=`<a class="text-action" href="${routeHref(out.module,tableForm(id,'chart'),null,out.run,out.source)}">${esc(moduleTitle(out.module))}${icon('arrow-right')}</a>`;
+  const owner=`<a class="text-action" href="${routeHref(out.module,chartPart(id),null,out.run,out.source)}">${esc(moduleTitle(out.module))}${icon('arrow-right')}</a>`;
   const open=`<article class="fc-card" data-block data-view="chart" aria-label="${esc(name)}">`;
   const evLink=(tab,module=out.module)=>`<a class="in-ev" href="${esc(window.Evidence.href(tab,module,out.run))}">In Evidence</a>`;
   const head=`<div class="fc-head"><div class="fc-title"><h3>${title}</h3></div></div>`;
@@ -1878,7 +1869,6 @@ function swapActivityScript(doc,now) {
   if(previous)previous.remove();
 }
 // A wide table scrolls inside its own focusable region, never the page (the region pattern of the library and chart index tables).
-const scrollRegion=(label,table)=>`<div class="table-scroll" role="region" aria-label="${esc(label)}" tabindex="0">${table}</div>`;
 // ---- Evidence (ruling decisions 9, 10; library redesign task 3): evidence.js draws a governance summary and the tabs; this gathers what the library holds for the run.
 // A chart section the module wrote that the build sent back: it has no contract and no gap, and the output's `issue` names it. The build's message is Evidence's.
 function sentBackCharts(id) {

@@ -211,9 +211,8 @@
     const [titleCol, ...otherCols] = shown;
     const cards = block.rows.map(row => {
       const title = String(row.cells[titleCol.at] ?? '').trim(), titleHtml = fieldHtml(title, ctx);
-      const fields = otherCols.map(col => [col, fieldHtml(cellText(row, col.at), ctx)]).filter(([, html]) => html !== '').map(([col, html]) => `<div><dt>${escapeHtml(col.label)}</dt><dd>${html}</dd></div>`).join('');
       const label = rowLabelOf(block, ctx, row, title);
-      return `<article class="rec-card"><div class="rec-head">${titleHtml ? `<p class="rec-title">${titleHtml}</p>` : '<span></span>'}${traceFor(ctx, row, label)}</div>${fields ? `<dl class="rec-fields">${fields}</dl>` : ''}${extraList(block, row, ctx)}</article>`;
+      return `<article class="rec-card"><div class="rec-head">${titleHtml ? `<p class="rec-title">${titleHtml}</p>` : '<span></span>'}${traceFor(ctx, row, label)}</div>${fieldList(row, otherCols, ctx)}${extraList(block, row, ctx)}</article>`;
     });
     return `<div class="rec-cards"${ctx.caption ? ` role="group" aria-label="${escapeHtml(ctx.caption)}"` : ''}>${cards.join('')}</div>`;
   }
@@ -391,7 +390,7 @@
   // ---- caseRows: one row per case
   const LEVEL = {high: 3, medium: 2, low: 1};
   const levelOf = word => (Object.hasOwn(LEVEL, word.toLowerCase()) ? LEVEL[word.toLowerCase()] : 0);
-  const meter = (word, header) => `<span class="cr-conf"><span class="k">${escapeHtml(header)}</span><span class="meter" aria-hidden="true">${[1, 2, 3].map(n => (n <= levelOf(word) ? '<i class="f"></i>' : '<i></i>')).join('')}</span><span class="meter-w">${escapeHtml(word)}</span></span>`;
+  const meter = (word, header = null) => `<span class="cr-conf">${header === null ? '' : `<span class="k">${escapeHtml(header)}</span>`}<span class="meter" aria-hidden="true">${[1, 2, 3].map(n => (n <= levelOf(word) ? '<i class="f"></i>' : '<i></i>')).join('')}</span><span class="meter-w">${escapeHtml(word)}</span></span>`;
   const isLevel = text => Object.hasOwn(LEVEL, text.toLowerCase());
   // "a, b, c": items short enough to be chips; the commas stay in the text (hidden) so the cell reads as written.
   function chipItems(text) {
@@ -527,20 +526,24 @@
     const latest = periodCols.reduce((best, col) => (year(col) > year(best) ? col : best), periodCols[0]);
     return {latest, earlier: periodCols.filter(col => col !== latest)};
   }
-  const earlierHtml = (col, text, ctx) => (startsWithNumber(text) ? {below: `${escapeHtml(col.label)} ${fieldHtml(text, ctx)}`} : {note: fieldHtml(text, ctx)});
+  // A row's earlier periods: a number goes beneath the value with its period's label, any other text is a note.
+  function earlierParts(row, cols, ctx) {
+    const below = [], notes = [];
+    for (const col of cols) {
+      const text = cellText(row, col.at), html = fieldHtml(text, ctx);
+      if (startsWithNumber(text)) below.push(`${escapeHtml(col.label)} ${html}`); else if (html !== '') notes.push(html);
+    }
+    return {below: below.join(' · '), notes};
+  }
   function metricTiles(block, ctx) {
     const cols = visibleColumns(block, 'metric', ctx), labelCol = cols[0], periodCols = cols.slice(1).filter(col => col.kind === 'period');
     if (!labelCol || !periodCols.length || !block.rows.length) return recordCards(block, ctx);
     const {latest, earlier} = periodOrder(periodCols), definition = cols.find(col => /definition|identity/i.test(col.label));
     const others = cols.slice(1).filter(col => !periodCols.includes(col) && col !== definition);
     const tiles = block.rows.map(row => {
-      const raw = cellText(row, latest.at), below = [], notes = [];
-      for (const col of earlier) {
-        const text = cellText(row, col.at), shown = text === '' ? {} : earlierHtml(col, text, ctx);
-        if (shown.below) below.push(shown.below); else if (shown.note) notes.push(shown.note);
-      }
+      const raw = cellText(row, latest.at), {below, notes} = earlierParts(row, earlier, ctx);
       const defText = definition ? cellText(row, definition.at) : '';
-      return tile({label: fieldHtml(cellText(row, labelCol.at), ctx), value: valueHtml(raw, ctx), raw, below: below.join(' · '), notes: notes.concat(others.map(col => [col, fieldHtml(cellText(row, col.at), ctx)]).filter(([, html]) => html !== '').map(([col, html]) => `${escapeHtml(col.label)} ${html}`)).concat(extrasOf(block, row, ctx)),
+      return tile({label: fieldHtml(cellText(row, labelCol.at), ctx), value: valueHtml(raw, ctx), raw, below, notes: notes.concat(others.map(col => [col, fieldHtml(cellText(row, col.at), ctx)]).filter(([, html]) => html !== '').map(([col, html]) => `${escapeHtml(col.label)} ${html}`)).concat(extrasOf(block, row, ctx)),
         info: defText === '' ? '' : findingCell(defText, ctx).html !== undefined ? infoTip(defText) : fieldHtml(defText, ctx)});
     }).join('');
     const table = designedTable(block, cols, ctx);
@@ -578,12 +581,8 @@
     const absent = (row, col) => TILE_ABSENCE.test(plain(cellText(row, col.at)).trim()) && fieldHtml(cellText(row, col.at), ctx) !== '';
     const common = tagCols.filter(col => block.rows.every(row => absent(row, col) && cellText(row, col.at) === cellText(block.rows[0], col.at)));
     const tiles = block.rows.map(row => {
-      const raw = cellText(row, main.latest.at), below = [], notes = [];
-      for (const col of main.earlier) {
-        const text = cellText(row, col.at), shown = text === '' ? {} : earlierHtml(col, text, ctx);
-        if (shown.below) below.push(shown.below); else if (shown.note) notes.push(shown.note);
-      }
-      return tile({label: fieldHtml(cellText(row, labelCol.at), ctx), value: valueHtml(raw, ctx), raw, below: below.join(' · '), notes: notes.concat(extrasOf(block, row, ctx)),
+      const raw = cellText(row, main.latest.at), {below, notes} = earlierParts(row, main.earlier, ctx);
+      return tile({label: fieldHtml(cellText(row, labelCol.at), ctx), value: valueHtml(raw, ctx), raw, below, notes: notes.concat(extrasOf(block, row, ctx)),
         tags: tagCols.filter(col => !absent(row, col)).map(col => [col, fieldHtml(cellText(row, col.at), ctx)]).filter(([, html]) => html !== '').map(([col, html]) => tag(col.label, html)),
         absences: tagCols.filter(col => absent(row, col) && !common.includes(col)).map(col => fieldHtml(cellText(row, col.at), ctx)),
         caption: consequence ? fieldHtml(cellText(row, consequence.at), ctx) : ''});
@@ -605,11 +604,10 @@
         const axis = axisOf([na, nb]);
         dumb = `<div class="dumb" role="img" aria-label="${escapeHtml(`${before.label} ${a}, ${after.label} ${b}`)}"><i class="dumb-line"></i><i class="dm e" style="left:${positionOn(axis, na)}%"></i><i class="dm c" style="left:${positionOn(axis, nb)}%"></i></div>`;
       }
-      const fields = others.map(col => [col, fieldHtml(cellText(row, col.at), ctx)]).filter(([, html]) => html !== '').map(([col, html]) => `<div><dt>${escapeHtml(col.label)}</dt><dd>${html}</dd></div>`).join('');
       const side = (col, text) => `<div class="chg-side"><p class="chg-k">${escapeHtml(col.label)}</p><p class="chg-v">${valueHtml(text, ctx)}</p></div>`;
       // A tile whose earlier and current cells are both empty has no pair to show: the empty marks beside an arrow would read as a change from nothing to nothing.
       const pair = a === '' && b === '' ? '' : `<div class="chg-pair">${side(before, a)}<span class="chg-arrow">${icon('arrow-right')}</span>${side(after, b)}</div>`;
-      return `<article class="chg-card"><div class="chg-head"><p class="chg-title">${fieldHtml(title, ctx)}</p>${traceFor(ctx, row, rowLabelOf(block, ctx, row, title))}</div>${pair}${dumb}${fields ? `<dl class="rec-fields">${fields}</dl>` : ''}${extrasOf(block, row, ctx).map(html => `<p class="chg-x">${html}</p>`).join('')}</article>`;
+      return `<article class="chg-card"><div class="chg-head"><p class="chg-title">${fieldHtml(title, ctx)}</p>${traceFor(ctx, row, rowLabelOf(block, ctx, row, title))}</div>${pair}${dumb}${fieldList(row, others, ctx)}${extrasOf(block, row, ctx).map(html => `<p class="chg-x">${html}</p>`).join('')}</article>`;
     });
     return `<div class="chg-cards"${ctx.caption ? ` role="group" aria-label="${escapeHtml(ctx.caption)}"` : ''}>${cards.join('')}</div>`;
   }
@@ -624,11 +622,10 @@
   // The cells of a row beyond the table's headers have no label to stand under; each is drawn unlabelled, through findingCell, after the row's other fields.
   const extraList = (block, row, ctx) => extrasOf(block, row, ctx).map(html => `<p class="rec-x">${html}</p>`).join('');
   const levelColumn = (block, at) => { const cells = block.rows.map(row => cellText(row, at)).filter(text => text !== ''); return cells.length > 0 && cells.every(isLevel); };
-  const levelMeter = word => `<span class="cr-conf"><span class="meter" aria-hidden="true">${[1, 2, 3].map(n => (n <= levelOf(word) ? '<i class="f"></i>' : '<i></i>')).join('')}</span><span class="meter-w">${escapeHtml(word)}</span></span>`;
   // The columns of a row that a card shows as label and value; a level column (every cell High, Medium or Low) is the three-segment meter with its word (C29).
   function fieldList(row, cols, ctx, levels = new Set()) {
     const items = cols.map(col => {
-      const text = cellText(row, col.at), html = levels.has(col.at) && findingCell(text, ctx).html !== undefined ? levelMeter(text) : fieldHtml(text, ctx);
+      const text = cellText(row, col.at), html = levels.has(col.at) && findingCell(text, ctx).html !== undefined ? meter(text) : fieldHtml(text, ctx);
       return html === '' ? '' : `<div><dt>${escapeHtml(col.label)}</dt><dd>${html}</dd></div>`;
     }).join('');
     return items ? `<dl class="rec-fields">${items}</dl>` : '';
@@ -812,13 +809,12 @@
     if (!steps.length) return '';
     const kind = step => (Object.hasOwn(STEP_WORDS, step.state) ? step.state : 'waiting'), done = steps.filter(step => kind(step) === 'done').length;
     const running = steps.filter(step => kind(step) === 'running');
-    const runningName = step => `${escapeHtml(step.title)}${step.note ? `<span class="steps-el"${step.since ? ` data-since="${escapeHtml(step.since)}"` : ''}> · ${escapeHtml(step.note)}</span>` : ''}`;
-    const segment = step => `<li class="step ${kind(step)}" ${tipAttributes(`${step.title}: ${STEP_WORDS[kind(step)]}`)}></li>`;
     const clock = step => (step.note ? `<span class="steps-el"${step.since ? ` data-since="${escapeHtml(step.since)}"` : ''}> · ${escapeHtml(step.note)}</span>` : '');
+    const segment = step => `<li class="step ${kind(step)}" ${tipAttributes(`${step.title}: ${STEP_WORDS[kind(step)]}`)}></li>`;
     // State mark first, then the module name; a running step's clock is part of its mark ("Running · 37 min into the run"), so the phrase stays on the mark's line and wraps as one.
     const labelled = step => `<li class="step ${kind(step)}">${runMark({done: 'done', running: step.stalled ? 'stalled' : 'running', waiting: 'queued'}[kind(step)], '', kind(step) === 'running' ? clock(step) : '')}<span class="st-n">${escapeHtml(step.title)}</span></li>`;
     if (options.labelled) return `<div class="steps-w"><ol class="steps steps-l" aria-label="Modules, ${done} of ${steps.length} done">${steps.map(labelled).join('')}</ol><p class="steps-t"><span class="steps-n">${done} of ${steps.length} done</span></p></div>`;
-    return `<div class="steps-w"><ol class="steps" aria-label="Modules, ${done} of ${steps.length} done">${steps.map(segment).join('')}</ol><p class="steps-t">${running.length ? `<span class="steps-now"><span class="steps-k">Running</span> ${running.map(runningName).join(', ')}</span>` : ''}<span class="steps-n">${done} of ${steps.length} done</span></p></div>`;
+    return `<div class="steps-w"><ol class="steps" aria-label="Modules, ${done} of ${steps.length} done">${steps.map(segment).join('')}</ol><p class="steps-t">${running.length ? `<span class="steps-now"><span class="steps-k">Running</span> ${running.map(step => escapeHtml(step.title) + clock(step)).join(', ')}</span>` : ''}<span class="steps-n">${done} of ${steps.length} done</span></p></div>`;
   }
   // Where a block on the Overview comes from: a link to the module page that holds it.
   const attribution = ({title, href}) => `<p class="from"><a href="${escapeHtml(href)}">From ${escapeHtml(title)}${icon('arrow-right')}</a></p>`;
@@ -862,23 +858,21 @@
   // ---- matrix: C16, the table's own row and column labels in their written order; the classification word is the cell's own
   const CLASS_WORDS = ['critical', 'high', 'medium', 'low'];
   const classOf = text => { const word = plain(text).trim().toLowerCase(); return CLASS_WORDS.includes(word) ? ` rm-c-${word}` : ''; };
+  const LEVEL_RANK = {low: 0, medium: 1, moderate: 1, high: 2};
   function riskMatrix(block, ctx) {
     const cols = visibleColumns(block, 'matrix', ctx), probCol = cols.find(col => labelNorm(col) === 'probability'), impCol = cols.find(col => labelNorm(col) === 'impact');
     const titleCol = cols.find(col => col !== probCol && col !== impCol);
     if (!probCol || !impCol || !titleCol || !block.rows.length) return recordCards(block, ctx);
     const classCol = cols.find(col => ![titleCol, probCol, impCol].includes(col) && /classification|rating|level|severity/.test(labelNorm(col))), rest = cols.filter(col => ![titleCol, probCol, impCol, classCol].includes(col));
-    const rowsOf = [], colsOf = [], placed = [], loose = [];
+    const placed = [], loose = [];
     for (const row of block.rows) {
       const p = cellText(row, probCol.at), i = cellText(row, impCol.at);
-      if (p === '' || i === '' || fieldHtml(p, ctx) === '' || fieldHtml(i, ctx) === '') { loose.push(row); continue; }
-      if (!rowsOf.includes(p)) rowsOf.push(p);
-      if (!colsOf.includes(i)) colsOf.push(i);
-      placed.push({row, p, i});
+      if (fieldHtml(p, ctx) === '' || fieldHtml(i, ctx) === '') loose.push(row); else placed.push({row, p, i});
     }
     // An axis whose labels all belong to Low / Medium / High (Moderate for Medium) is ordered by level: likelihood rows High to Low as the approved mock draws it, impact columns Low to High.
-    const LEVEL_RANK = {low: 0, medium: 1, moderate: 1, high: 2}, byLevel = (labels, down) => (labels.every(label => Object.hasOwn(LEVEL_RANK, plain(label).trim().toLowerCase())) ? [...labels].sort((a, b) => (LEVEL_RANK[plain(a).trim().toLowerCase()] - LEVEL_RANK[plain(b).trim().toLowerCase()]) * (down ? -1 : 1)) : labels);
-    rowsOf.splice(0, rowsOf.length, ...byLevel(rowsOf, true));
-    colsOf.splice(0, colsOf.length, ...byLevel(colsOf, false));
+    const levelOf = label => LEVEL_RANK[plain(label).trim().toLowerCase()];
+    const axis = (key, down) => { const labels = [...new Set(placed.map(entry => entry[key]))]; return labels.every(label => Object.hasOwn(LEVEL_RANK, plain(label).trim().toLowerCase())) ? labels.sort((a, b) => (levelOf(a) - levelOf(b)) * (down ? -1 : 1)) : labels; };
+    const rowsOf = axis('p', true), colsOf = axis('i', false);
     const chip = row => {
       const title = cellText(row, titleCol.at), word = classCol ? cellText(row, classCol.at) : '', wordHtml = word === '' ? '' : fieldHtml(word, ctx);
       const extra = rest.map(col => [col, fieldHtml(cellText(row, col.at), ctx)]).filter(([, html]) => html !== '').map(([col, html]) => `<span class="rm-x"><b>${escapeHtml(col.label)}</b> ${html}</span>`).join('') + extrasOf(block, row, ctx).map(html => `<span class="rm-x">${html}</span>`).join('');
@@ -1021,7 +1015,7 @@
     kept[most - 1] = tail.endsWith('…') ? tail : tail.length + 1 > room && hard !== 'keep' ? `${tail.slice(0, room - 1)}…` : `${tail}…`;
     return kept;
   }
-  const MAP_DASH = ['', '7 4', '2 4', '9 3 2 3', '12 5 2 5'], BOX = {w: 150, h: 54, gx: 120, gy: 22, pad: 12}, MAP_CHAR = 6.6;
+  const MAP_DASH = ['', '7 4', '2 4', '9 3 2 3', '12 5 2 5'], BOX = {w: 150, h: 54, gx: 120, gy: 22, pad: 12};
   const MAP_T = Array.from({length: 39}, (_, i) => (i + 1) / 40).sort((a, b) => Math.abs(a - .5) - Math.abs(b - .5));
   const LABEL_CHAR = 6.6, LABEL_STEP = 15, LABEL_MARGIN = 20, LABEL_STEPS = 24, LABEL_WRAP = 106, LABEL_LINES = 2, LABEL_LINE = 13;
   // The layered SVG of `edges` ([{from, to, type}], plain text). `uid` names its arrow marker; `svgAttrs` is the <svg> element's role and name; `nodeAttrs(name, at)` and `edgeAttrs(at)`,
@@ -1075,7 +1069,7 @@
     }).join('');
     const height = Math.ceil(Math.max(base, ...placed.map(o => o.bot + 3)));
     const nodes = names.map((name, i) => {
-      const p = at(name), lines = wrapLabel(name, w - 10, MAP_CHAR, true, 3);
+      const p = at(name), lines = wrapLabel(name, w - 10, LABEL_CHAR, true, 3);
       return `<g class="map-node"${nodeAttrs ? ` ${nodeAttrs(name, i)}` : ''}><title>${escapeHtml(name)}</title><rect x="${p.x}" y="${p.y}" width="${w}" height="${h}" rx="4"/><text x="${p.x + 8}" y="${p.y + h / 2 + 4 - 7 * (lines.length - 1)}">${lines.map((line, k) => `<tspan x="${p.x + 8}" dy="${k ? 14 : 0}">${escapeHtml(line)}</tspan>`).join('')}</text></g>`;
     }).join('');
     const defs = `<defs><marker id="${marker}" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path class="map-arrow" d="M0 0L8 4L0 8z"/></marker></defs>`;
@@ -1127,7 +1121,6 @@
     root.querySelectorAll('[data-map-pick]').forEach(item => item.setAttribute('aria-pressed', String(key !== '' && item.dataset.mapPick === key)));
     root.querySelectorAll('[data-rel]').forEach(rel => { rel.hidden = !shown.includes(rel.dataset.rel); });
     root.querySelectorAll('[data-map-hint]').forEach(hint => { hint.hidden = key !== ''; });
-    root.querySelectorAll('[data-map-pick]').forEach(item => item.classList.toggle('on', key !== '' && item.dataset.mapPick === key));
     root.querySelectorAll('.map-node').forEach(node => node.classList.toggle('hl', marked.includes(node.dataset.mapPick.slice(2))));
     root.querySelectorAll('.map-eg').forEach(edge => edge.classList.toggle('hl', shown.includes(edge.dataset.mapPick.slice(2))));
   }
