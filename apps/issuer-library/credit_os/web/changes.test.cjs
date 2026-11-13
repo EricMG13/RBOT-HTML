@@ -4,7 +4,7 @@
 // nothing is derived by calling the code under test.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const {changesState, measureVerdict, differenceText, analysisPart, withUnit, leadBottom, changesHtml, FIRST_RUN} = require('./changes.js');
+const {changesState, measureVerdict, differenceText, analysisPart, withUnit, leadBottom, changesHtml, comparisonEvidence, maturityView, FIRST_RUN} = require('./changes.js');
 
 const fmtDate = iso => ({'2024-09-30': '30 September 2024', '2025-03-31': '31 March 2025', '2023-09-30': '30 September 2023'}[iso] || iso);
 const text = (body, line = 1) => ({type: 'text', line, end: line, text: body});
@@ -66,7 +66,12 @@ const VERDICTS = {
   ledger: [['Closed', 0], ['Remaining', 1], ['New', 1], ['No longer stated', 2]],
 };
 const here = {key: 'k3', href: '#W-Changes/changes/k3', asOf: '2024-09-30', runId: 'r-now', current: true, bottom: 'Now.', metrics: {}, changes: null, cp8: null};
-const base = (over = {}) => ({changes: {lead: 'CP-2', pack: PACK, note: null, problem: null, verdicts: VERDICTS}, cp8: CP8, pathway: 'Credit snapshot', fmtDate, runs: [here], ...over});
+// What the Evidence page enumerates for a run: the gap count and the ledger row count on the Changes page are its functions' answers over this input.
+const evidenceOf = (...outputs) => ({run: {context: 'run-x', evidence: {sources: [], unused: [], unrecorded: [], record: {hashes: [], instructions: [], calls: []}, handoffs: [], downloads: []}, methodChanges: [], steps: []},
+  modules: [{id: 'CP-8', outputs: outputs.map((sections, i) => ({id: `o${i + 8}`, sections}))}], chips: {}, deps: {moduleTitle: code => code, hashLabel: name => name, methodChange: line => line}});
+const base = (over = {}) => ({evidence: evidenceOf(CP8), changes: {lead: 'CP-2', pack: PACK, note: null, problem: null, verdicts: VERDICTS}, cp8: CP8, pathway: 'Credit snapshot', fmtDate, runs: [here], ...over});
+// The cells of the comparison's measures table as Evidence lists it (headers: Measure, Earlier, Current, the computed difference, Comparability).
+const measureRows = (pack, verdicts) => comparisonEvidence(pack, {verdicts}, 'CP-8').entries[0].tables[0].rows.map(r => r.cells);
 const count = (html, needle) => html.split(needle).length - 1;
 // The text of a page: tags removed, entities decoded (the five the page writes), spaces collapsed.
 const INLINE = '(?:button|b|strong|em|i|code|a|span|small)';
@@ -86,19 +91,17 @@ test('a run with no comparison is a first run: the designed empty state with the
 
 test('a full Changes tab: heading, CP-8 passages, the issuer, the analysis, the ledger counts, over time', () => {
   const html = changesHtml(base());
-  assert.ok(html.includes('<h2 class="changes-heading">Since 30 September 2024 · Credit snapshot</h2>'));
+  // The two runs have one name (same period and pathway): fixed words say which is which.
+  assert.ok(html.includes('<h2 class="changes-heading">Earlier run · 30 September 2024 · Credit snapshot') && html.includes('This run · 30 September 2024 · Credit snapshot</h2>'));
   // Part 1: the passages' sentences as written (the page's text, tags removed); the Basis line is not part of the sentence and is not on the page (it is Evidence's).
   const page = textOf(html);
   assert.ok(page.includes('The credit picture is about the same since the earlier run, and the change is the analysis\'s, not the issuer\'s.'));
   assert.ok(!html.includes('Basis:') && !page.includes('CP-1 handoff; calculation C01'));
   assert.ok(page.includes('Cash is unchanged at USD 6,261 million.'));
   assert.ok(page.includes('Leverage is 6.01x on EBITDA as defined against 6.57x on reported EBITDA, not comparable.'));
-  // Part 2: the pack's values with unit and period.
-  assert.ok(html.includes('<td>6.57x (FY2024 / 2024-09-30)</td><td>6.01x (FY2024)</td>'));
-  assert.ok(html.includes('<td>6261 US$m (2024-09-30)</td><td>6261 US$m (2024-09-30)</td><td>0 US$m</td>'));
-  assert.ok(html.includes('Net debt change is not shown: gross debt is not stated in either run.'));
-  assert.ok(html.includes('<th scope="row">FY2028</th><td>6637</td><td>6637</td><td>0</td>'));
-  assert.ok(html.includes('Debt maturities, US$m'));
+  // Part 2: the pack's computed differences and measure table are not on the route (Evidence lists them); the maturity profile stays as each run's stated values.
+  for (const gone of ['<td>6.57x (FY2024 / 2024-09-30)</td>', '-0.56', '0.31', 'dumbbell', 'chg-fold-ch"><svg', 'Net debt change']) assert.ok(!html.includes(gone), gone);
+  assert.ok(html.includes('id="changes-issuer"') && html.includes('class="fc-card chg-mat"') && html.includes('Debt maturities, US$m'));
   // CP-8's own tables: each change row is a card, the cause and the effect in words.
   assert.equal(count(html, '<article class="chg-card">'), 3);
   assert.ok(page.includes('Same definition; unchanged at USD 6,261 million.'));
@@ -115,31 +118,29 @@ test('a full Changes tab: heading, CP-8 passages, the issuer, the analysis, the 
   for (const row of ['An earlier limitation in words.', 'Another earlier limitation.', 'Carried over.', 'A current limitation in words.']) assert.ok(!page.includes(row), row);
   // Part 5 is present.
   assert.ok(html.includes('id="changes-over-time"'));
+  // Different periods: "Since <earlier>" and the current run's own line.
+  const later = changesHtml(base({changes: {lead: 'CP-2', pack: {...PACK, current: {...PACK.current, as_of: '2025-03-31'}}, note: null, problem: null, verdicts: VERDICTS}}));
+  assert.ok(later.includes('<h2 class="changes-heading">Since 30 September 2024 · Credit snapshot</h2>') && later.includes('This run: 31 March 2025 · Credit snapshot'));
 });
 
-test('a measure that is not comparable shows both values, no difference, no joining line and no arrow', () => {
+test('a measure that is not comparable shows both values and no difference; Evidence lists the pack\'s differences only where the build judged the measure comparable', () => {
   const html = changesHtml(base());
-  // Total debt / EBITDA: CP-8 says Not comparable although the pack holds a difference of -0.56.
-  assert.ok(!html.includes('-0.56'), 'its difference is printed nowhere');
-  assert.ok(html.includes('<strong>Not comparable</strong><small>Not comparable: reported EBITDA against EBITDA As Defined.</small>'));
-  assert.ok(html.includes('Earlier 6.57x (FY2024 / 2024-09-30) · Current 6.01x (FY2024) · Not comparable'));
-  // Cash (same period, difference 0) is joined; coverage is one period with two values (0.31) and leverage is Not comparable: no line for either.
-  assert.equal(count(html, 'class="dumbbell-link"'), 1);
-  assert.ok(!/[←-⇿▲△▼▽⬆⬇]/.test(html), 'no direction arrow anywhere');
-  // comparable "no" from the pack itself: unit differs.
+  assert.ok(!html.includes('-0.56') && !html.includes('Comparability'), 'no difference and no comparability column on the route');
+  assert.ok(!/[←-⇿▲△▼▽⬆⬇]/.test(html.replace(/<svg[^]*?<\/svg>/g, '')), 'no direction arrow anywhere in text');
+  // Total debt / EBITDA: CP-8's verdict is Not comparable although the pack holds a difference of -0.56; coverage is one period with two values (0.31) and CP-8 calls it the analysis changing.
+  const rows = measureRows(PACK, VERDICTS);
+  assert.deepEqual(rows[0], ['Total debt / EBITDA', '6.57x (FY2024 / 2024-09-30)', '6.01x (FY2024)', '—', 'Not comparable: reported EBITDA against EBITDA As Defined.']);
+  assert.deepEqual(rows[1], ['EBITDA / cash interest', '3.29x (FY2024)', '3.60x (FY2024)', '0.31x', 'Same definition. The analysis changed, not the issuer: Unresolved']);
+  assert.deepEqual(rows[2], ['Cash', '6261 US$m (2024-09-30)', '6261 US$m (2024-09-30)', '0 US$m', 'Same definition']);
   const pack = {...PACK, measures: [measure('leverage', 'Total debt / EBITDA', 'x', 'no', side('6.57', 'FY2024'), side('62', 'FY2024', '%'), null, {reason: 'the units differ'})]};
-  const verdicts = {measures: {leverage: verdict('not_comparable', 'Not comparable', 'the units differ')}};
-  const no = changesHtml(base({changes: {lead: 'CP-2', pack, note: null, problem: null, verdicts}}));
-  assert.ok(no.includes('<td>6.57x (FY2024)</td><td>62% (FY2024)</td><td><strong>Not comparable</strong><small>the units differ</small></td>'));
-  assert.equal(count(no, 'class="dumbbell-link"'), 0);
+  assert.deepEqual(measureRows(pack, {measures: {leverage: verdict('not_comparable', 'Not comparable', 'the units differ')}}), [['Total debt / EBITDA', '6.57x (FY2024)', '62% (FY2024)', '—', 'Not comparable. the units differ']]);
 });
 
 test('a judge measure without a verdict from CP-8 is left unjudged, with no difference', () => {
   const pack = {...PACK, measures: [PACK.measures[0]]};
+  assert.deepEqual(measureRows(pack, null)[0].slice(3), ['—', 'Comparability not judged. the label or definition text differs; CP-8 judges']);
   const html = changesHtml(base({changes: {lead: 'CP-2', pack, note: null, problem: null}, cp8: null}));
-  assert.ok(html.includes('<strong>Comparability not judged</strong>'));
-  assert.ok(!html.includes('-0.56'));
-  assert.equal(count(html, 'class="dumbbell-link"'), 0);
+  assert.ok(!html.includes('-0.56') && !html.includes('Comparability not judged'));
   const unjudged = {kind: 'unjudged', label: 'Comparability not judged', reason: 'the label or definition text differs; CP-8 judges'};
   assert.deepEqual(measureVerdict(PACK.measures[2], {verdicts: null}), unjudged);
   assert.deepEqual(measureVerdict(PACK.measures[2], {verdicts: {measures: {}}}), unjudged);
@@ -151,10 +152,7 @@ test('a judge measure without a verdict from CP-8 is left unjudged, with no diff
 test('a value the pack does not state is shown as not stated, never as zero', () => {
   const pack = {...PACK, measures: [measure('coverage', 'EBITDA / cash interest', 'x', 'no', side('3.29', 'FY2024'), null, null, {reason: 'the current run does not state it'})]};
   const verdicts = {measures: {coverage: verdict('not_comparable', 'Not comparable', 'the current run does not state it')}};
-  const html = changesHtml(base({changes: {lead: 'CP-2', pack, note: null, problem: null, verdicts}}));
-  assert.ok(html.includes('<td>3.29x (FY2024)</td><td>Not stated</td><td><strong>Not comparable</strong>'));
-  assert.ok(html.includes('Earlier 3.29x (FY2024) · Current Not stated · Not comparable'));
-  assert.equal(count(html, 'class="dumbbell-dot'), 1, 'one point, the stated one');
+  assert.deepEqual(measureRows(pack, verdicts), [['EBITDA / cash interest', '3.29x (FY2024)', 'Not stated', '—', 'Not comparable. the current run does not state it']]);
   assert.equal(withUnit('0', 'US$m'), '0 US$m');
   assert.equal(withUnit('4.51', 'x'), '4.51x');
   assert.equal(withUnit('-0.56', 'x'), '-0.56x');
@@ -165,18 +163,18 @@ test('a CP-8 that was not produced says so plainly with its recorded reason and 
   const html = changesHtml(base({changes: {lead: 'CP-2', pack: PACK, note, problem: null}, cp8: null}));
   assert.ok(html.includes('The explanation of what changed was not produced for this run.'));
   assert.ok(html.includes('Recorded reason: cpos_live_not_accepted: CP-8 not accepted within bounds'));
-  assert.ok(html.includes('Since 30 September 2024 · Credit snapshot'));
+  assert.ok(html.includes('Earlier run · 30 September 2024 · Credit snapshot'));
   assert.ok(!html.includes('id="changes-what"'), 'no CP-8 passage');
   assert.ok(!html.includes('id="changes-limitations"'), 'no ledger');
   assert.ok(html.includes('id="changes-issuer"') && html.includes('id="changes-analysis"') && html.includes('id="changes-over-time"'));
   assert.equal(count(html, 'Explanation not produced'), 2, 'each module row says so');
-  assert.ok(!html.includes('Each change and its cause'));
+  assert.ok(!html.includes('Each change and its cause') && !html.includes('chg-card') && !html.includes('The Changes handoff has no table'), 'nothing of the handoff, and no complaint about a handoff that was not produced');
   assert.ok(!html.includes('-0.56') && !html.includes('0.31'), 'no difference without CP-8’s verdict');
   // The delivery may hold the reason and no pack: the statement and Over time only.
   const bare = changesHtml(base({changes: {lead: 'CP-2', pack: null, note, problem: null}, cp8: null}));
-  assert.ok(bare.includes('Since the earlier run · Credit snapshot'));
+  assert.ok(bare.includes('Since the earlier run · Credit snapshot') && !bare.includes('This run'));
   assert.ok(bare.includes('Recorded reason: cpos_live_not_accepted'));
-  assert.ok(!bare.includes('id="changes-issuer"') && bare.includes('id="changes-over-time"'));
+  assert.ok(!bare.includes('id="changes-issuer"') && !bare.includes('id="changes-analysis"') && bare.includes('id="changes-over-time"'));
 });
 
 test('a pack that could not be read is stated and is never shown as a first run', () => {
@@ -235,41 +233,58 @@ test('the lead module’s bottom line is the handoff’s first Bottom line parag
   assert.equal(leadBottom([], null), null);
 });
 
-test('the chart has a text alternative, is keyboard reachable and every row names its values', () => {
+test('the maturity profile is one card: the chart is the default, the table (Period, Earlier, Current, no Change) is behind the shared toggle, each series has its own non-status colour and a legend', () => {
   const html = changesHtml(base());
-  assert.ok(html.includes('class="dumbbell-chart changes-chart" role="group" aria-label="Then and now: each measure on its own scale. The table below gives the same values." tabindex="0"'));
-  assert.ok(html.includes('<table class="history-table"><caption>Measures the pack states, earlier and current</caption>'));
-  assert.equal(count(html, 'aria-hidden="true"') >= 3, true, 'tracks are decoration; the text beside them carries the values');
+  const card = /<article class="fc-card chg-mat"[^>]*>.*?<\/article>/s.exec(html)[0];
+  assert.ok(card.includes('data-block data-view="chart"') && card.includes('<div class="seg"') && card.includes('data-view-pick="chart" aria-pressed="true"') && card.includes('data-view-pick="table" aria-pressed="false"'));
+  assert.ok(card.includes('<div data-pane="chart">') && card.includes('<div data-pane="table" hidden>'), 'chart shown, table held back');
+  assert.ok(card.includes('role="region" aria-label="Debt maturities, US$m, chart" tabindex="0"'), 'a keyboard-reachable region with a name');
+  const table = card.slice(card.indexOf('data-pane="table"'));
+  assert.deepEqual([...table.matchAll(/<th scope="col"[^>]*>([^<]*)<\/th>/g)].map(m => m[1]), ['Period', 'Earlier', 'Current']);
+  for (const row of [['FY2025', '93', '93'], ['FY2028', '6637', '6637']]) for (const cell of row) assert.ok(table.includes(cell), cell);
+  assert.ok(!card.includes('Change') && !card.includes('Difference'));
+  assert.ok(card.includes('chg-bar e') && card.includes('chg-bar c') && card.includes('Earlier run') && card.includes('Current run'));
+  assert.ok(!card.includes('series-') && !/green/.test(card), 'neither series is a status or a numbered chart token class');
+  assert.equal(maturityView(null), '');
+  assert.equal(maturityView({unit: 'US$m', rows: []}), '');
 });
 
-test('one period with two values is the analysis changing: no line, and the difference only under the build\u2019s Same definition beside its cause', () => {
+test('the comparison\'s differences are Evidence\'s: the maturity and net debt differences are listed there with the column headed as computed, and never on the route', () => {
+  const entries = comparisonEvidence(PACK, {verdicts: VERDICTS}, 'CP-8');
+  assert.equal(entries.module, 'CP-8');
+  const maturity = entries.entries.find(e => e.heading === 'Debt maturities, US$m').tables[0];
+  assert.deepEqual(maturity.headers, ['Period', 'Earlier', 'Current', 'Difference computed by the comparison']);
+  assert.deepEqual(maturity.rows.map(r => r.cells), [['FY2025', '93', '93', '0'], ['FY2028', '6637', '6637', '0']]);
+  assert.deepEqual(entries.entries.find(e => e.heading === 'Not listed').notes, ['Net debt change is not listed: gross debt is not stated in either run.']);
+  assert.equal(comparisonEvidence(null, null, 'CP-8'), null);
+  assert.equal(comparisonEvidence({...PACK, measures: [], maturity_profile: null, omitted: {}}, null, 'CP-8'), null);
+});
+
+test('one period with two values is the analysis changing: the difference is listed only under the build\u2019s Same definition, beside its cause, and never on the route', () => {
   const lev = (extra = {}) => measure('leverage', 'Total debt / EBITDA', 'x', 'yes', side('6.57', 'FY2024'), side('6.01', 'FY2024'), '-0.56', extra);
   const draw = (leverage, measures) => changesHtml(base({changes: {lead: 'CP-2', pack: {...PACK, measures}, note: null, problem: null, verdicts: leverage ? {measures: {leverage, cash: verdict('comparable', 'Comparable')}} : null}}));
-  const issuer = html => html.slice(html.indexOf('id="changes-issuer"'), html.indexOf('id="changes-analysis"'));
-  const same = issuer(draw(verdict('comparable', 'Same definition', null, 'Correction'), [lev()]));
-  assert.ok(same.includes('<td>-0.56x<small>The analysis changed, not the issuer: Correction</small></td>'));
-  assert.ok(!same.includes('dumbbell-link'));
-  for (const html of [issuer(draw(verdict('not_comparable', 'Not comparable', 'Not comparable: basis.'), [lev()])), issuer(draw(verdict('unjudged', 'Comparability not judged'), [lev()])), issuer(draw(null, [lev()]))]) {
-    assert.ok(!html.includes('-0.56') && !html.includes('dumbbell-link'));
-    assert.ok(html.includes('Earlier 6.57x (FY2024) · Current 6.01x (FY2024)'));
+  const verdictsOf = leverage => (leverage ? {measures: {leverage, cash: verdict('comparable', 'Comparable')}} : null);
+  assert.deepEqual(measureRows({...PACK, measures: [lev()]}, verdictsOf(verdict('comparable', 'Same definition', null, 'Correction')))[0].slice(3), ['-0.56x', 'Same definition. The analysis changed, not the issuer: Correction']);
+  for (const leverage of [verdict('not_comparable', 'Not comparable', 'Not comparable: basis.'), verdict('unjudged', 'Comparability not judged'), null]) {
+    assert.equal(measureRows({...PACK, measures: [lev()]}, verdictsOf(leverage))[0][3], '—');
+    assert.ok(!draw(leverage, [lev()]).includes('-0.56'));
   }
-  // The same period with a zero difference is unaffected.
-  const zero = issuer(draw(verdict('comparable', 'Comparable'), [measure('cash', 'Cash', 'US$m', 'yes', side('6261', 'FY2024', 'US$m'), side('6261', 'FY2024', 'US$m'), '0')]));
-  assert.ok(zero.includes('<td>0 US$m</td>') && zero.includes('dumbbell-link'));
+  assert.ok(!draw(verdict('comparable', 'Same definition', null, 'Correction'), [lev()]).includes('-0.56'), 'not on the route even when listed');
+  // The same period with a zero difference is listed as zero.
+  assert.equal(measureRows({...PACK, measures: [measure('cash', 'Cash', 'US$m', 'yes', side('6261', 'FY2024', 'US$m'), side('6261', 'FY2024', 'US$m'), '0')]}, verdictsOf(verdict('comparable', 'Comparable')))[0][3], '0 US$m');
   // Over time draws no segment between two values of one period.
   const runs = [{...here, key: 'a', runId: 'r-a', current: false, metrics: {leverage: {value: '6.57', unit: 'x', period: 'FY2024'}}}, {...here, key: 'b', runId: 'r-b', metrics: {leverage: {value: '6.01', unit: 'x', period: 'FY2024'}}, changes: {pack: {...PACK, prior: {...PACK.prior, run: 'r-a'}, measures: [lev()]}, verdicts: {measures: {leverage: verdict('comparable', 'Same definition', null, 'Correction')}}}}];
   assert.ok(!/<line /.test(changesHtml(base({runs}))));
 });
 
-test('only a comparable verdict shows a difference and a joining line; not comparable, not judged, an unknown kind and no verdicts show neither', () => {
+test('only a comparable verdict lists a difference and joins a line in Over time; not comparable, not judged, an unknown kind and no verdicts list none and join none', () => {
   const lev = measure('leverage', 'Total debt / EBITDA', 'x', 'yes', side('6.57', 'FY2023'), side('6.01', 'FY2024'), '-0.56', {same_period: false});
-  const draw = verdicts => changesHtml(base({changes: {lead: 'CP-2', pack: {...PACK, measures: [lev]}, note: null, problem: null, verdicts}}));
-  const comparable = draw({measures: {leverage: verdict('comparable', 'Comparable')}});
-  assert.ok(comparable.includes('<td>-0.56x</td>') && comparable.includes('dumbbell-link'));
+  const pack = {...PACK, measures: [lev]};
+  assert.equal(measureRows(pack, {measures: {leverage: verdict('comparable', 'Comparable')}})[0][3], '-0.56x');
   for (const verdicts of [{measures: {leverage: verdict('not_comparable', 'Not comparable', 'basis')}}, {measures: {leverage: verdict('unjudged', 'Comparability not judged')}}, {measures: {leverage: verdict('maybe', 'Comparable')}}, {measures: {}}, {}, null]) {
-    const html = draw(verdicts);
-    assert.ok(!html.includes('-0.56') && !html.includes('dumbbell-link') && !/<line /.test(html), JSON.stringify(verdicts));
-    assert.ok(html.includes('Earlier 6.57x (FY2023) · Current 6.01x (FY2024)'));
+    assert.equal(measureRows(pack, verdicts)[0][3], '—', JSON.stringify(verdicts));
+    const html = changesHtml(base({changes: {lead: 'CP-2', pack, note: null, problem: null, verdicts}}));
+    assert.ok(!html.includes('-0.56') && !/<line /.test(html), JSON.stringify(verdicts));
   }
   // Over time reads the later run's verdicts, never a register: a join needs a comparable verdict.
   const runs = verdicts => [{...here, key: 'a', runId: 'r-a', current: false, metrics: {leverage: {value: '6.57', unit: 'x', period: 'FY2023'}}}, {...here, key: 'b', runId: 'r-b', metrics: {leverage: {value: '6.01', unit: 'x', period: 'FY2024'}}, changes: {pack: {...PACK, prior: {...PACK.prior, run: 'r-a'}, measures: [lev]}, verdicts}}];
@@ -323,7 +338,7 @@ test('a module row is the build\u2019s: its status and reason are shown, and a m
 test('the ledger bar is the build\u2019s counts; a ledger it could not read draws no bar, and no ledger row is on the Changes page either way', () => {
   const unread = changesHtml(base({changes: {lead: 'CP-2', pack: PACK, note: null, problem: null, verdicts: {...VERDICTS, ledger: null}}}));
   assert.ok(!unread.includes('class="ledger-bar"') && !textOf(unread).includes('An earlier limitation in words.'));
-  assert.ok(unread.includes('Unresolved differences in Evidence'), 'the one link stays');
+  assert.ok(unread.includes('Limitations ledger in Evidence'), 'the one link stays');
   const other = changesHtml(base({changes: {lead: 'CP-2', pack: PACK, note: null, problem: null, verdicts: {...VERDICTS, ledger: [['Closed', 0], ['Remaining', 0], ['New', 0], ['No longer stated', 0], ['Other', 3]]}}}));
   assert.ok(other.includes('aria-label="Limitations: Closed 0, Remaining 0, New 0, No longer stated 0, Other 3"'));
 });
@@ -333,7 +348,7 @@ test('what the Changes tab itself writes names things and shows no module code',
   const clean = {...PACK, measures: PACK.measures.map(m => ({...m, reason: 'the definition text differs'}))};
   const noCode = /\bCP-[A-Z0-9]+\b/;
   const html = changesHtml(base({changes: {lead: 'CP-2', pack: clean, note: null, problem: null, verdicts: {measures: {}, modules: {}, ledger: []}}, cp8: []}));
-  assert.ok(html.includes('The Changes handoff has no') && html.includes('Not stated in the Changes handoff.'));
+  assert.ok(html.includes('Not stated in the Changes handoff.') && !html.includes('The Changes handoff has no table'), 'an earlier-format handoff gives one message');
   assert.ok(html.includes('change-status">Not stated by Changes since the last run<'));
   assert.ok(html.includes('<span class="change-name">Source readiness</span>') && !html.includes('module-code'));
   assert.ok(!noCode.test(html.replace(/ (?:href|data-[a-z-]+)="[^"]*"/g, '')), html.match(noCode)?.[0]);
@@ -341,33 +356,28 @@ test('what the Changes tab itself writes names things and shows no module code',
   assert.ok(notHeld.includes('The explanation of the changes is not held for this run.') && !noCode.test(notHeld.replace(/ (?:href|data-[a-z-]+)="[^"]*"/g, '')));
 });
 
-// ---- The net debt change of one period (owner, 2026-11-12): the analysis changed, not the issuer. Literals are hand-written.
-const {netDebtView} = require('./changes.js');
+// ---- The net debt change of one period (owner, 2026-11-12): the analysis changed, not the issuer. It is Evidence's now, listed with the column headed as computed. Literals are hand-written.
 const ND = {unit: 'US$m', prior_net_debt: '6190', change_in_gross_debt: '-110', change_in_cash: '-30', current_net_debt: '6110', convention: 'net debt = gross debt - cash',
   same_period: true, prior_period: 'FY2024', current_period: 'FY2024 / 2024-09-30', prior_gross_debt: '7100', prior_cash: '910', current_gross_debt: '6990', current_cash: '880'};
+const netDebt = nd => comparisonEvidence({...PACK, measures: [], maturity_profile: null, omitted: {}, net_debt_change: nd}, null, 'CP-8').entries[0];
 
-test('one period with two net debt values: both runs, their periods, the sentence, no change figure and no direction', () => {
-  const html = netDebtView(ND);
-  for (const shown of ['7100 US$m', '910 US$m', '6190 US$m', '6990 US$m', '880 US$m', '6110 US$m', 'Earlier gross debt (FY2024)', 'Current net debt (FY2024 / 2024-09-30)'])
-    assert.ok(html.includes(shown), shown);
-  assert.ok(html.includes('Both runs state net debt for the same date; the difference is between the two analyses, not a change in the issuer.'));
-  for (const hidden of ['-110 US$m', '-30 US$m', 'Change in', 'rose', 'fell']) assert.ok(!html.includes(hidden), hidden);
+test('one period with two net debt values: both runs, their periods, the sentence, no change figure', () => {
+  const entry = netDebt(ND), rows = entry.tables[0].rows.map(r => r.cells);
+  assert.equal(entry.heading, 'Net debt (FY2024 to FY2024 / 2024-09-30)');
+  assert.deepEqual(rows, [['Gross debt', '7100 US$m', '6990 US$m', '—'], ['Cash', '910 US$m', '880 US$m', '—'], ['Net debt', '6190 US$m', '6110 US$m', '—']]);
+  assert.ok(entry.notes.includes('Both runs state net debt for the same date; the difference is between the two analyses, not a change in the issuer.'));
+  assert.ok(!JSON.stringify(entry).includes('-110') && !JSON.stringify(entry).includes('-30 US$m'));
 });
 
-test('one period with equal net debt values, two periods, and a pack without the flag render as a change', () => {
-  const zero = netDebtView({...ND, change_in_gross_debt: '0', change_in_cash: '0'});
-  assert.ok(zero.includes('Change in gross debt (FY2024 to FY2024 / 2024-09-30)') && !zero.includes('Both runs state'));
-  const two = netDebtView({...ND, same_period: false, prior_period: 'FY2023', current_period: 'FY2024'});
-  assert.ok(two.includes('-110 US$m') && two.includes('Change in cash (FY2023 to FY2024)') && !two.includes('Both runs state'));
+test('one period with equal net debt values, two periods, and a pack without the flag list the change', () => {
+  const zero = netDebt({...ND, change_in_gross_debt: '0', change_in_cash: '0'});
+  assert.deepEqual(zero.tables[0].rows.map(r => r.cells[3]), ['0 US$m', '0 US$m', '—']);
+  assert.ok(!zero.notes.some(n => n.startsWith('Both runs')));
+  const two = netDebt({...ND, same_period: false, prior_period: 'FY2023', current_period: 'FY2024'});
+  assert.deepEqual(two.tables[0].rows.map(r => r.cells[3]), ['-110 US$m', '-30 US$m', '—']);
+  assert.equal(two.heading, 'Net debt (FY2023 to FY2024)');
   const {same_period, prior_period, current_period, prior_gross_debt, prior_cash, current_gross_debt, current_cash, ...old} = ND;
-  const older = netDebtView(old);
-  assert.ok(older.includes('<dt>Change in cash</dt><dd>-30 US$m</dd>') && !older.includes('Both runs state'));
-});
-
-test('net debt periods and values are escaped', () => {
-  const evil = '<img src=x onerror=alert(1)>';
-  const html = netDebtView({...ND, prior_period: evil, prior_cash: evil});
-  assert.ok(!html.includes('<img') && html.includes('&lt;img'));
+  assert.deepEqual(netDebt(old).tables[0].rows.map(r => r.cells), [['Gross debt', 'Not stated', 'Not stated', '-110 US$m'], ['Cash', 'Not stated', 'Not stated', '-30 US$m'], ['Net debt', '6190 US$m', '6110 US$m', '—']]);
 });
 
 // ---- Task 9: the page is CP-8's own passages and tables drawn by the shared components. Fixture with unique lines, Basis lines, a Source column and a ledger.
@@ -402,7 +412,7 @@ const CP8R = [
   {heading: 'Next module', level: 2, line: 80, blocks: [para(81, 'NEXTMODULE text')]},
 ];
 const OUT = {id: 'o8', module: 'CP-8', run: 'run-x', chips: () => 0};
-const rich = (over = {}) => base({cp8: CP8R, output: OUT, ...over});
+const rich = (over = {}) => base({cp8: CP8R, output: OUT, evidence: evidenceOf(CP8R), ...over});
 const reasonless = html => html.replace(/ (?:href|data-paragraph|data-basis|data-evidence|data-figure)="[^"]*"/g, '');
 
 test('every sentence of the CP-8 passages is on the page as written; the Basis lines are not', () => {
@@ -440,16 +450,28 @@ test('the modules whose state repeats collapse to one tile whose count is the ro
   assert.ok(html.includes('Not run this time') && html.includes('Added'));
 });
 
-test('the ledger is not on the Changes route: no row, no heading, no table; one counted link to Evidence’s Gaps tab', () => {
+test('the ledger is not on the Changes route: no row, no heading, no table; one counted link to Evidence\u2019s Gaps tab, and the gap signal counts gaps only', () => {
   const html = changesHtml(rich()), page = textOf(html);
-  for (const gone of ['LEDGERROW', 'Earlier ref', 'Limitations ledger', 'What closed it', 'CALCSECTION', 'CALCROW', 'GAPROW', 'NEXTMODULE', 'HIDDEN request']) assert.ok(!page.includes(gone), gone);
-  assert.ok(html.includes('<a class="text-action" href="#W-Evidence/gaps?c=run-x&amp;m=CP-8">Unresolved differences in Evidence<span class="chg-n">3</span>'));
-  assert.equal(count(html, 'Unresolved differences in Evidence'), 1);
-  assert.ok(html.includes('class="gapsig"') && html.includes('<div class="gapsig-n" data-count>4</div>'), 'the gap signal counts what the Gaps tab lists: 1 gap and 3 ledger rows');
-  // The same rows are on Evidence’s Gaps tab for the module.
+  for (const gone of ['LEDGERROW', 'Earlier ref', 'What closed it', 'CALCSECTION', 'CALCROW', 'GAPROW', 'NEXTMODULE', 'HIDDEN request']) assert.ok(!page.includes(gone), gone);
+  assert.ok(html.includes('<a class="text-action" href="#W-Evidence/gaps?c=run-x&amp;m=CP-8">Limitations ledger in Evidence<span class="chg-n">3</span>'));
+  assert.equal(count(html, 'Limitations ledger in Evidence'), 1);
+  // Ledger rows are not gaps: the signal is the 1 gap the handoff records, the link the 3 ledger rows.
+  assert.ok(html.includes('<div class="gapsig-n" data-count>1</div><div class="gapsig-w">gap recorded</div>'));
   const Evidence = require('./evidence.js');
-  assert.equal(Evidence.ledgerTotal(CP8R), 3);
-  assert.equal(Evidence.gapTotal(CP8R), 4);
+  assert.equal(Evidence.gapCount(evidenceOf(CP8R), 'CP-8'), 1);
+  assert.equal(Evidence.ledgerCount(evidenceOf(CP8R), 'CP-8'), 3);
+});
+
+test('one enumeration: with a second saved CP-8 output the Changes signal is the Gaps tab\'s count for the module, not the default output\'s', () => {
+  const second = [{heading: 'Findings', level: 2, line: 1, blocks: []}, {heading: 'Gaps', level: 2, line: 30, blocks: [{type: 'table', line: 31, headers: ['Gap', 'Effect'], rows: [{line: 32, cells: ['G1', 'x']}, {line: 33, cells: ['G2', 'y']}]}]}];
+  const html = changesHtml(rich({evidence: evidenceOf(CP8R, second)}));
+  assert.ok(html.includes('<div class="gapsig-n" data-count>3</div><div class="gapsig-w">gaps recorded</div>'));
+  assert.ok(html.includes('Limitations ledger in Evidence<span class="chg-n">3</span>'));
+  // No evidence input, no signal rather than a count made from the one handoff.
+  assert.ok(!changesHtml(rich({evidence: undefined})).includes('gapsig'));
+  // The same module's Gaps tab, over the same input, badges gaps and ledger rows apart.
+  const tab = require('./evidence.js').view(evidenceOf(CP8R, second), {tab: 'gaps', module: 'CP-8'});
+  assert.ok(/<span data-count>3<\/span> gaps</.test(tab) && /<span data-count>3<\/span> ledger rows</.test(tab));
 });
 
 test('nothing audit-like is on the page: no Basis, file, hash, calculation or method code, run code or inter-module text, in text or in attributes (trace keys apart)', () => {
@@ -468,7 +490,8 @@ test('Review Focus 3: no CP-8 handoff, no change table, no moduleState table, an
   const noState = changesHtml(rich({cp8: withoutTable('What changed: the analysis')}));
   assert.ok(noState.includes('The Changes handoff has no table of what changed in the analysis.') && !noState.includes('ms-tile') && noState.includes('chg-card') && noState.includes('change-module'));
   const earlier = changesHtml(rich({cp8: [{heading: 'Reader summary', level: 2, line: 1, blocks: [para(2, 'An earlier-format summary.')]}]}));
-  assert.ok(earlier.includes('Not stated in the Changes handoff. It is in the earlier format, which has no bottom line or key findings; the comparison pack is shown on its own.'));
+  assert.ok(earlier.includes('Not stated in the Changes handoff. It is in the earlier format, which has no bottom line or key findings; the module-by-module comparison is shown on its own.'));
+  assert.ok(!earlier.includes('The Changes handoff has no table'), 'one message only');
   assert.ok(earlier.includes('id="changes-issuer"') && earlier.includes('id="changes-analysis"') && earlier.includes('id="changes-over-time"') && !earlier.includes('class="verdict"') && !earlier.includes('An earlier-format summary.'));
   const nothing = changesHtml(rich({cp8: CP8R.slice(0, 2)}));
   assert.ok(nothing.includes('Not stated in the Changes handoff.'));
@@ -481,7 +504,7 @@ test('Review Focus 3: no CP-8 handoff, no change table, no moduleState table, an
 
 test('a handoff with only some passages draws only those; a passage with no text leaves no card', () => {
   const only = CP8R.filter(s => !['Key findings', 'Contrary evidence and what would change the view', 'Limitations'].includes(s.heading) && !/ledger/i.test(s.heading));
-  const html = changesHtml(rich({cp8: only, changes: {lead: 'CP-2', pack: PACK, note: null, problem: null, verdicts: {...VERDICTS, ledger: null}}}));
+  const html = changesHtml(rich({cp8: only, evidence: evidenceOf(only), changes: {lead: 'CP-2', pack: PACK, note: null, problem: null, verdicts: {...VERDICTS, ledger: null}}}));
   assert.ok(html.includes('class="verdict"') && !html.includes('class="feed"') && !html.includes('class="callout"') && !html.includes('id="changes-limitations"') && !html.includes('chg-why'));
   const keyOnly = changesHtml(rich({cp8: CP8R.filter(s => s.heading !== 'Contrary evidence and what would change the view')}));
   assert.ok(keyOnly.includes('<div class="c24"><div class="rd-card"><h3 class="rd-h">Key findings</h3>') && !keyOnly.includes('class="callout"'));
@@ -512,4 +535,45 @@ test('earlier run: CP-8 not held and no change table leaves the pack parts; the 
   assert.ok(unrecorded.includes('<li>No comparison was recorded for this run</li>') && unrecorded.includes('empty-state'));
   const unreadable = changesHtml(rich({changes: {lead: 'CP-2', pack: null, note: null, problem: 'could not read', verdicts: null}, cp8: null}));
   assert.ok(unreadable.includes('could not be read') && !unreadable.includes('empty-state') && !unreadable.includes('id="changes-what"'));
+});
+
+// ---- Fix round 1: per-module bottom lines through the passage renderer, catalogue names, no pack wording, no computed differences on the route.
+const pack2 = lines => ({...PACK, modules: [{module: 'CP-1', title: 'Canonical data foundation', ran_prior: true, ran_current: true, prior_bottom_line: lines[0], current_bottom_line: lines[1]}]});
+const withModules = (pack, modules) => changesHtml(base({changes: {lead: 'CP-2', pack, note: null, problem: null, verdicts: VERDICTS}, modules}));
+
+test('a module is named by its catalogue title (the one the module rail shows); one with no entry keeps the pack’s name', () => {
+  const two = {...PACK, modules: [{module: 'CP-1', title: 'Canonical data foundation', ran_prior: true, ran_current: true, prior_bottom_line: 'a', current_bottom_line: 'b'}, {module: 'CP-9', title: 'Pack-only name', ran_prior: true, ran_current: true, prior_bottom_line: 'a', current_bottom_line: 'b'}]};
+  const html = withModules(two, {name: code => ({'CP-1': 'Financial foundation'})[code] ?? null, href: code => `#${code}/head`});
+  assert.ok(html.includes('<span class="change-name">Financial foundation</span>') && !html.includes('Canonical data foundation'));
+  assert.ok(html.includes('<span class="change-name">Pack-only name</span>'));
+  assert.ok(withModules(two, undefined).includes('<span class="change-name">Canonical data foundation</span>'), 'no catalogue given: the pack’s name');
+});
+
+test('a run’s bottom line is drawn as a Bottom line is: bold as emphasis, Basis dropped; a line that cites a calculation, an identifier or a file is not repeated, with the way to its module page', () => {
+  const html = withModules(pack2(['**Leverage is 6.6x** on EBITDA As Defined.\nBasis: changes.json', 'Leverage is *6.0x* on EBITDA As Defined.']), {name: () => null, href: code => `#${code}/head`});
+  assert.ok(html.includes('<strong>Leverage is 6.6x</strong> on EBITDA As Defined.') && html.includes('Leverage is <em>6.0x</em> on EBITDA As Defined.'));
+  assert.ok(!html.includes('**') && !html.includes('changes.json') && !/\*6\.0x\*/.test(html));
+  for (const cited of ['Leverage is 6.6x per calculation C05.', 'Leverage is 6.6x (C01).', 'See EV-012.', 'Read TDG_10-K.htm.jsonl.', 'Per T2B.3 the figure holds.', 'Cover is 3.6x (C01, C02).']) {
+    const held = withModules(pack2([cited, 'Fine.']), {name: () => null, href: code => `#${code}/head`});
+    assert.ok(held.includes('class="change-held"') && held.includes('<a class="in-ev" href="#CP-1/head">Read it on the module page</a>'), cited);
+    for (const rx of [/calculation C05/, /\(C01/, /EV-012/, /\.htm\.jsonl/, /T2B\.3/]) assert.ok(!rx.test(held), `${cited} ${rx}`);
+  }
+  // A period label in brackets, or a figure, is not a reference.
+  assert.ok(!withModules(pack2(['Leverage is 6.0x (FY24) and cover 3.6x (H1 24).', 'x']), {}).includes('change-held'));
+  // Escaped like every model text.
+  assert.ok(!withModules(pack2(['<img src=x onerror=1>', 'x']), {}).includes('<img'));
+});
+
+test('no label on the route says "the pack", and the route carries no difference or Change column from the comparison', () => {
+  for (const html of [changesHtml(base()), changesHtml(rich()), changesHtml(rich({cp8: null})), changesHtml(rich({cp8: [{heading: 'Reader summary', level: 2, line: 1, blocks: []}]}))]) {
+    assert.ok(!/\bthe pack\b|comparison pack|pack’s|pack's/i.test(textOf(html).replace(/Recorded reason[^]*/, '')), textOf(html).match(/.{20}\bpack\b.{20}/i)?.[0]);
+    assert.ok(!html.includes('Difference computed') && !/<th[^>]*>Change<\/th>/.test(html) && !html.includes('-0.56'));
+  }
+});
+
+test('the two runs’ names: different periods read "Since" and the run’s own line; one shared name reads Earlier run and This run, escaped', () => {
+  const evil = '<img src=x>';
+  const html = changesHtml(base({pathway: evil}));
+  assert.ok(html.includes('Earlier run · 30 September 2024 · &lt;img src=x&gt;') && html.includes('This run · 30 September 2024 · &lt;img src=x&gt;') && !html.includes('<img'));
+  assert.equal(count(/<h2 class="changes-heading">.*?<\/h2>/s.exec(changesHtml(base()))[0], 'Earlier run'), 1);
 });

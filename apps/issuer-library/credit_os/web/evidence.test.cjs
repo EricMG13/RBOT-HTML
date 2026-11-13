@@ -469,9 +469,36 @@ test('ledger: the Gaps badge, the group count and the counted [data-hay] element
   const panel = html.slice(html.indexOf('id="ev-panel"'), html.indexOf('class="ev-card ev-foot"'));
   assert.equal(badge, '4');
   assert.equal(panel.match(/data-hay=/g).length, 4);
-  assert.ok(/<span data-count>4<\/span> gaps/.test(panel));
-  assert.equal(Evidence.gapTotal(CP8), 4);
-  assert.equal(Evidence.gapTotal([sec('Findings', 2, 1)]), 0);
+  // Ruling: ledger rows are not gaps. The gap group's head counts the 1 gap, the ledger's own head counts its 3 rows; the badge is both because the panel's counted elements are.
+  assert.ok(/<span data-count>1<\/span> gap</.test(panel) && /<span data-count>3<\/span> ledger rows</.test(panel), 'each head says what its number is');
+  assert.ok(!/<span data-count>4<\/span>/.test(panel));
+  assert.equal(Evidence.gapCount(cp8Input(), 'CP-8'), 1);
+  assert.equal(Evidence.ledgerCount(cp8Input(), 'CP-8'), 3);
+  assert.equal(Evidence.gapCount(cp8Input()), 1, 'the run-wide count is of gaps too');
+  assert.equal(Evidence.gapTotal, undefined, 'one enumeration: the sections-only helper is gone');
+  assert.equal(Evidence.ledgerTotal, undefined);
+});
+
+test('one gap enumeration: a second saved output of the module is counted by the count, the tab\'s badge and the group head alike', () => {
+  const second = [sec('Findings', 2, 1), sec('Gaps', 2, 30, [table(31, ['Gap', 'Severity'], [['Gap B', 'Low'], ['Gap C', 'Low']])])];
+  const two = input({modules: [{id: 'CP-8', outputs: [out('o8', CP8), out('o9', second)]}]});
+  const html = Evidence.view(two, {tab: 'gaps', module: 'CP-8'});
+  assert.equal(Evidence.gapCount(two, 'CP-8'), 3);
+  assert.ok(/<span data-count>3<\/span> gaps</.test(html) && /<span data-count>3<\/span> ledger rows</.test(html));
+  assert.ok(/id="ev-tab-gaps"[^>]*aria-current="page"><span>[^<]*<\/span><span class="ev-cnt" data-count>6</.test(html));
+  // The governance summary's tile is the same count.
+  assert.ok(/Gaps recorded<\/div><span class="ev-big" data-count>3</.test(html));
+});
+
+test('the comparison\'s own figures, built from the two runs\' packs, are listed with the calculations of the module that holds the comparison, counted and searchable', () => {
+  const comparison = {module: 'CP-8', entries: [{heading: 'Comparison figures', notes: ['Listed as the comparison computed them.'], tables: [{line: 0, headers: ['Measure', 'Earlier', 'Current', 'Difference computed by the comparison'], rows: [{line: 0, cells: ['Coverage', '3.29x (FY2024)', '3.60x (FY2024)', '0.31x']}]}]}]};
+  const withIt = input({run: {...input().run, comparison}, modules: [{id: 'CP-8', outputs: [out('o8', CP8)]}, {id: 'CP-6', outputs: [out('o2', CP6)]}]});
+  const calc = Evidence.view(withIt, {tab: 'calculations', module: 'CP-8'}), other = Evidence.view(withIt, {tab: 'calculations', module: 'CP-6'});
+  assert.ok(calc.includes('Difference computed by the comparison') && calc.includes('0.31x') && calc.includes('Comparison figures'));
+  assert.ok(!other.includes('0.31x'), 'only the named module lists it');
+  const badge = /id="ev-tab-calculations"[^>]*aria-current="page"><span>[^<]*<\/span><span class="ev-cnt" data-count>(\d+)</.exec(calc)[1];
+  assert.equal(calc.slice(calc.indexOf('id="ev-panel"'), calc.indexOf('class="ev-card ev-foot"')).match(/data-hay=/g).length, Number(badge));
+  assert.ok(/<tr data-hay="[^"]*coverage[^"]*0\.31x/.test(calc), 'searchable by row');
 });
 
 test('ledger: its rows are searchable like the rest of the tab (each row has its own search text, the head matches the whole table)', () => {
@@ -485,6 +512,8 @@ test('ledger: a ledger beside a table that is not one in one section keeps each 
   const html = (tab) => Evidence.view(input({modules: [{id: 'CP-8', outputs: [out('o8', mixed)]}]}), {tab, module: 'CP-8'});
   assert.ok(html('gaps').includes('>E1<') && !html('gaps').includes('>Other<'));
   assert.ok(html('registers').includes('>Other<') && html('registers').includes('Note kept.') && !html('registers').includes('>E1<'));
-  assert.equal(Evidence.gapTotal(mixed), 1);
-  assert.equal(Evidence.gapTotal(CP2A), 2, 'only the Gaps section counts there');
+  const one = input({modules: [{id: 'CP-8', outputs: [out('o8', mixed)]}]});
+  assert.equal(Evidence.ledgerCount(one, 'CP-8'), 1);
+  assert.equal(Evidence.gapCount(one, 'CP-8'), 0, 'a ledger row is not a gap');
+  assert.equal(Evidence.gapCount(input(), 'CP-2A'), 2, 'only the Gaps section counts there');
 });

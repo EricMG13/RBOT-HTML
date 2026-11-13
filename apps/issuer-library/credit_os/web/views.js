@@ -1637,7 +1637,7 @@ function evidenceInput(context) {
   const stored=new Set([...(run?.evidence?.sources||[]),...(run?.evidence?.unused||[]),...(run?.evidence?.unrecorded||[])].map(f=>f.name));
   const modules=Object.entries(run?.modules||{}).map(([id,entry])=>({id,outputs:entry.outputs.map(output=>data[output]).filter(Boolean).map(output=>({id:output.id,sections:output.sections,placement:output.placement}))}));
   return {
-    run:{context,code:run?.run,evidence:run?.evidence,methodChanges:run?.methodChanges||[],steps:run?.record?.steps||[]},
+    run:{context,code:run?.run,evidence:run?.evidence,methodChanges:run?.methodChanges||[],steps:run?.record?.steps||[],comparison:ChangesView.comparisonEvidence(run?.changes?.pack,run?.changes,'CP-8')},
     modules,chips:window.CREDIT_OS_DATA?.chips||{},
     deps:{moduleTitle,hashLabel:name=>stored.has(name)?name:hashLabel(name),methodChange:line=>line.replace(CODE_NOT_IN_PATH,moduleTitle)}
   };
@@ -1656,7 +1656,7 @@ function changesView(context) {
     return {key,href:routeHref('W-Changes','changes',null,key),asOf:run.asOf,runId:run.folder,current:run===ctx,bottom:out?ChangesView.leadBottom(out.sections,out.summary):null,
       metrics:window.DESIGN_CATALOGUE.real.find(r=>r.id===run.folder)?.metrics||{},changes:run.changes||null};
   });
-  return ChangesView.changesHtml({changes:ctx.changes||null,cp8:sections(ctx),output,pathway:runPathway(ctx),fmtDate:displayDate,overviewHref:routeHref('W-Overview','overview',null,context),runs});
+  return ChangesView.changesHtml({changes:ctx.changes||null,cp8:sections(ctx),output,evidence:evidenceInput(context),modules:{name:moduleLabel,href:moduleHref},pathway:runPathway(ctx),fmtDate:displayDate,overviewHref:routeHref('W-Overview','overview',null,context),runs});
 }
 function workspaceView(module,section) {
   const context=current?.context,ctx=contexts[context],available=ctx?contextModules(context):[];

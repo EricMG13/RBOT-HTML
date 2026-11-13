@@ -680,6 +680,13 @@ test('sidedBoard: "Bear (weakly)" is placed right with the tag "weakly"; a side 
   assert.deepEqual([...html.matchAll(/<div class="sd-col sd-s(\d)">(.*?)<\/div><\/div>(?=<div class="sd-col|<\/div>)/gs)].map(m => [m[1], [...m[2].matchAll(/<p class="sd-name">([^<]*)</g)].map(n => n[1])]), [['0', ['Cover', 'Liquidity']], ['1', ['Leverage', 'Yield']]], 'two independent columns, each from the top in written order');
 });
 
+test('moduleStateTiles: a page that supplies countNoun gets that word as the caption of the count, not the name column\'s header; the text of every row is unchanged', () => {
+  const t = keyTables('CP-8', 'moduleState')[0], ctx = pageCtx('CP-8'), plain = C.moduleStateTiles(keyBlock(t), ctx), named = C.moduleStateTiles(keyBlock(t), {...ctx, countNoun: 'modules'});
+  assert.deepEqual([...named.matchAll(/<summary><b class="ms-n">(\d+)<\/b> <span class="ms-nl">([^<]*)</g)].map(m => [m[1], m[2]]), [['8', 'modules'], ['4', 'modules']]);
+  assert.ok(!named.includes('Module</span>') && plain.includes('<b class="ms-n">8</b> · <span class="ms-nl">Module</span>'), 'without it, as before');
+  for (const row of t.rows) assert.ok(textOf(named).includes(row[0]) && textOf(named).includes(row[3]), row[0]);
+});
+
 test('moduleStateTiles: a repeated state is one tile (icon, word, count, the modules in a details); a state seen once stays a full tile with its module name as the title', () => {
   const t = keyTables('CP-8', 'moduleState')[0], ctx = pageCtx('CP-8'), html = C.moduleStateTiles(keyBlock(t), ctx);
   assert.equal(countOf(html, /<article class="ms-tile ms-group">/g), 2);

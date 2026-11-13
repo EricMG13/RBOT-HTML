@@ -671,7 +671,8 @@
     return cell.omitted && !cell.inEvidence && MODULE_NAME.test(raw) && plainName ? readerText().richText(raw) : fieldHtml(text, ctx);
   }
 
-  // ---- moduleState: C20, tiles; a state that repeats collapses to one tile with the state, the count and the rows in a <details>
+  // ---- moduleState: C20, tiles; a state that repeats collapses to one tile with the state, the count and the rows in a <details>.
+  // `ctx.countNoun` (a fixed word the page supplies, "modules") is the caption after the count; without it the caption is the name column's header, as written.
   function moduleStateTiles(block, ctx) {
     const cols = visibleColumns(block, 'moduleState', ctx), stateCol = cols.find(col => labelNorm(col) === 'status'), nameCol = cols.find(col => col !== stateCol);
     if (!stateCol || !nameCol || !block.rows.length) return recordCards(block, ctx);
@@ -687,7 +688,7 @@
         done.add(key);
         const same = block.rows.filter(other => stateKey(other) === key);
         const items = same.map(other => `<li><div class="ms-head"><p class="ms-name">${subjectHtml(cellText(other, nameCol.at), ctx)}</p>${traceFor(ctx, other, rowLabelOf(block, ctx, other, cellText(other, nameCol.at)))}</div>${fieldList(other, rest, ctx)}${extraList(block, other, ctx)}</li>`).join('');
-        tiles.push(`<article class="ms-tile ms-group"><div class="ms-head">${stateBadge(cellText(row, stateCol.at), ctx)}</div><details class="ms-list"><summary><b class="ms-n">${same.length}</b> · <span class="ms-nl">${escapeHtml(nameCol.label)}</span><span class="ms-ch" aria-hidden="true">${icon('chevron-down')}</span></summary><ul>${items}</ul></details></article>`);
+        tiles.push(`<article class="ms-tile ms-group"><div class="ms-head">${stateBadge(cellText(row, stateCol.at), ctx)}</div><details class="ms-list"><summary><b class="ms-n">${same.length}</b> ${ctx.countNoun ? '' : '· '}<span class="ms-nl">${escapeHtml(ctx.countNoun ?? nameCol.label)}</span><span class="ms-ch" aria-hidden="true">${icon('chevron-down')}</span></summary><ul>${items}</ul></details></article>`);
       }
     }
     return listGroup('ms-tiles', ctx, tiles.join(''));

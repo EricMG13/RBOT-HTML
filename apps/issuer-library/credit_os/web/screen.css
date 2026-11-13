@@ -1706,3 +1706,19 @@ details[open]>summary .ms-ch,details[open]>summary .qa-ch,details[open]>summary 
 .fc-card .col.missing strong{position:static;transform:none;display:block;white-space:normal;padding:0;font:400 var(--fs-label)/1.35 'Red Hat Text',sans-serif;text-align:center;color:var(--text-tertiary);overflow-wrap:anywhere}
 @media(max-width:560px){.fc-tools{flex-wrap:wrap;justify-content:flex-end}}
 .fc-card .seg button{min-width:56px;padding:0 10px}
+/* Changes, fix round 1: the maturity card (shared fc-card and Chart/Table toggle), two non-status series colours, the held bottom line, the shared run name */
+.chg-mat{margin-top:14px}
+.chg-mat-fig{display:flex;flex-direction:column;gap:12px;min-width:0}
+.chg-mat-legend{display:flex;flex-wrap:wrap;gap:6px 16px;font:400 12px/1.4 'Red Hat Text',sans-serif;color:var(--text-secondary)}
+.chg-mat-legend span{display:inline-flex;align-items:center;gap:6px}
+.chg-bar{display:block;height:10px;border-radius:3px;min-width:2px;forced-color-adjust:none}
+.chg-mat-legend .chg-bar{width:14px}
+.chg-bar.e{background:var(--series-4-ln)}
+.chg-bar.c{background:var(--series-1)}
+.chg-mat-row{display:grid;grid-template-columns:minmax(64px,96px) minmax(0,1fr);gap:4px 12px;align-items:center;min-width:0}
+.chg-mat-k{font:600 12px/1.3 'Red Hat Text',sans-serif;color:var(--text-primary);overflow-wrap:anywhere}
+.chg-bar-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;margin:2px 0}
+.chg-bv{font:400 12px/1.3 'Red Hat Text',sans-serif;font-variant-numeric:tabular-nums;color:var(--text-secondary);white-space:nowrap}
+.change-held{font-style:italic;color:var(--muted)}
+.chg-to{display:inline-flex;vertical-align:middle;margin:0 8px;color:var(--text-quaternary)}
+.chg-to .i{width:18px;height:18px}
