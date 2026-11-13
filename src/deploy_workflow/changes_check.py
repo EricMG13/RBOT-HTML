@@ -17,8 +17,8 @@ it refuses, naming the line, a CP-8 handoff in which:
   `Remaining`; only `E`: `Closed` or `No longer stated`; only `C`: `New`), has no limitation in
   words, or closes a limitation without naming a module of the current run as evidence; or a ref
   is written anywhere but the two ref columns (K4);
-- a row of a pack measure does not print that measure's earlier and current value, with its sign
-  and unit, in the right columns (K5);
+- a row of a pack measure does not hold, in its Earlier and Current cells, exactly the pack's value,
+  unit and period (`6.01x (FY2024)`, `6261 US$m (2024-09-30)`; `Not stated` for a null value) (K5);
 - a measure the pack marks `judge` is said neither or both of `Same definition` and
   `Not comparable`, or one the pack marks `no` is not said `Not comparable` (K6);
 - a measure the two runs state for one period with different values is given the cause
@@ -27,14 +27,13 @@ it refuses, naming the line, a CP-8 handoff in which:
 - a measure the pack gives a difference of zero, and that the row does not say `Not comparable`,
   has a Cause other than `None`: nothing changed, so `Unresolved` is refused for it (K2);
 - a `New` or `Not run this time` module, when the pack says both runs' modules were the pathway's
-  preset (`current.selection` is `preset` and `prior.selection` is `preset` or null: a prior run
-  with no recorded selection was accepted as a base only because it ran the pathway's lead
-  module, so it is a whole-pathway run), has a Cause other than `Method change` or a Why that
-  says the pack does not say (K12); with either run `explicit`, or a pack of the earlier shape
-  (no `selection` key), nothing is required;
-- a `Basis: ` line names `changes.json` or a `prior/` file, gives a page for an earlier-run
-  handoff, or writes the two forms CP-8 may add in another way: `Run comparison` for the comparison
-  pack and `<plain module name> (<code>), earlier run` for an earlier run's handoff (K13);
+  preset (`current.selection` and `prior.selection` both `preset`), has a Cause other than
+  `Method change`; when the earlier run records no selection (null) the Cause is `Method change`
+  or `Unresolved` (K12); with either run `explicit`, or a pack of the earlier shape (no
+  `selection` key), nothing is required;
+- a `Basis: ` item is not `Run comparison`, `<plain module name> (<code>)` or `<plain module
+  name> (<code>), earlier run`, or names a handoff of a module that did not run in the run it
+  names (K13);
 - a difference printed anywhere (a figure after `by`, or after a direction word) is not a pack
   difference, or its direction word contradicts the pack's sign, or it carries a sign after a
   direction word (K8);
@@ -66,7 +65,8 @@ from collections.abc import Mapping, Sequence
 from decimal import Decimal
 from typing import Any
 
-from deploy_workflow.changes import PACK_NAME, PRIOR_PREFIX, decimal, number
+from deploy_workflow.changes import decimal, number
+from deploy_workflow.credit_os_chips import BASIS_COMPARISON, BASIS_EARLIER_RUN
 
 ISSUER = "What changed: the issuer"
 ANALYSIS = "What changed: the analysis"
@@ -86,12 +86,6 @@ SAME_PERIOD_CAUSES = ("Correction", "Method change")
 COUNT_BELOW = 100  # a whole number below this, without a unit, is a count
 SAME = "same definition"
 NOT_COMPARABLE = "not comparable"
-COMPARISON = "Run comparison"  # CP-8's Basis item for the comparison pack; an earlier handoff is
-# `<plain module name> (<code>), earlier run`
-_HANDOFF_PAGE = re.compile(
-    r"\(CP-[A-Z0-9]+\).*(?:\bpages?\b|\bpp?\.\s*\d)", re.IGNORECASE
-)  # any page locator on a handoff item
-_DOES_NOT_SAY = re.compile(r"\bthe\s+pack\s+does\s+not\s+say\b", re.IGNORECASE)
 _MODULE = re.compile(r"\bCP-[A-Z0-9]+\b")
 _MODULE_CELL = re.compile(r"\((CP-[A-Z0-9]+)\)$")  # the code ends the cell, in brackets
 _REF = re.compile(r"\b[EC]\d+\b")
@@ -408,42 +402,32 @@ def _direction_issues(text: str, differences: set[Decimal], where: str) -> list[
     return issues
 
 
-def _unit_differs(cell: str, figure: Figure, unit: str | None) -> bool:
-    """True when the text directly after the figure states a unit or scale other than the measure's
-    (`300 US$bn` for US$m), unless the unit is split around the figure (`US$300m`)."""
-    if unit is None:
-        return False
-    tail = re.split(r"[(,;]|\.\s|\.$", cell[figure.end :], maxsplit=1)[0]
-    tail = re.sub(r"\s+", "", tail).lower()
-    want = re.sub(r"\s+", "", unit).lower()
-    if not tail or tail.startswith(want):
-        return False
-    head = re.sub(r"\s+", "", cell[max(0, figure.start - len(want)) : figure.start]).lower()
-    return not (want.endswith(tail) and head.endswith(want[: -len(tail)]))
+def _value_cell(held: Mapping[str, Any] | None) -> str:
+    """The cell a measure's Earlier or Current column holds, built from the pack alone: the value,
+    the unit (attached for `x` and `%`, after a space otherwise), then the period in brackets; a
+    part the pack gives as null is left out, and a null value is `Not stated`."""
+    record = held or {}
+    if record.get("value") is None:
+        return "Not stated"
+    unit, period = record.get("unit"), record.get("period")
+    joined = "" if unit is None else (unit if unit in ("x", "%") else f" {unit}")
+    value = str(record["value"]).replace(",", "")  # cp8.md: "no grouping comma"
+    return f"{value}{joined}" + ("" if period is None else f" ({period})")
 
 
 def _value_cell_issues(
     where: str, side: str, cell: str, held: Mapping[str, Any] | None
 ) -> list[str]:
-    """An Earlier or Current cell of a measure's row: it prints that run's value with its sign and
-    unit, and no other figure."""
-    stated = _signed((held or {}).get("value"))
-    printed = _figures(cell)
-    issues = []
-    for figure in printed:
-        if figure.signed != stated:
-            issues.append(
-                f"{where}: {side} figure {figure.signed} is not the pack's {side} value "
-                f"({'not stated' if stated is None else stated})."
-            )
-        elif _unit_differs(cell, figure, (held or {}).get("unit")):
-            issues.append(
-                f"{where}: the unit written after the {side} figure {figure.signed} is not the "
-                f"pack's ({(held or {}).get('unit')}); the scale is part of the value."
-            )
-    if stated is not None and not any(f.signed == stated for f in printed):
-        issues.append(f"{where}: the {side} cell must print the pack's {side} value ({stated}).")
-    return issues
+    """An Earlier or Current cell of a measure's row is exactly the pack's value cell."""
+    expected = _plain(_value_cell(held))  # the cell is read plain, so the text to write is too
+    if _plain(cell) == expected:
+        return []
+    return [
+        (
+            f"{where}, {side.capitalize()} cell: write exactly `{expected}` (the pack's value, "
+            f"unit and period); it is `{cell}`."
+        )
+    ]
 
 
 def _definition_issues(where: str, row: Sequence[str], measure: Mapping[str, Any]) -> list[str]:
@@ -639,24 +623,31 @@ def _issuer_issues(
     return issues
 
 
-def _preset_issues(code: str, cause: str, why: str) -> list[str]:
+def _preset_issues(code: str, cause: str) -> list[str]:
     """A module that ran in one run only, between two runs of the pathway's own module set: the
-    pathway's module set changed, so the cause is known (`Method change`) and the pack is not
-    said to lack it."""
-    issues = []
-    if cause != "Method change":
-        issues.append(
+    pathway's module set changed, so the cause is known (`Method change`)."""
+    if cause == "Method change":
+        return []
+    return [
+        (
             f"Analysis register, {code}: both runs used the pathway's own modules, so the "
-            f"pathway's module set changed between them: the Cause is `Method change`, "
+            f"pathway's module set changed between them: write the Cause `Method change`, "
             f"not {cause!r}."
         )
-    if _DOES_NOT_SAY.search(why):
-        issues.append(
-            f"Analysis register, {code}: both runs used the pathway's own modules, so the words "
-            "`the pack does not say` are refused: say that the pathway's module set changed "
-            "between the runs."
+    ]
+
+
+def _unrecorded_issues(code: str, cause: str) -> list[str]:
+    """A module that ran in one run only, when the earlier run records no selection: the pack
+    cannot say which modules that run was asked for."""
+    if cause in ("Method change", "Unresolved"):
+        return []
+    return [
+        (
+            f"Analysis register, {code}: the earlier run records no selection, so write the Cause "
+            f"`Method change` or `Unresolved`, not {cause!r}."
         )
-    return issues
+    ]
 
 
 def _analysis_issues(rows: list[list[str]], pack: Mapping[str, Any]) -> list[str]:
@@ -665,12 +656,11 @@ def _analysis_issues(rows: list[list[str]], pack: Mapping[str, Any]) -> list[str
     seen = {code: len(found) for code, found in _rows_by_module(rows).items() if code in ran}
     prior, current = pack.get("prior") or {}, pack.get("current") or {}
     # An absent `selection` key is a pack of the earlier shape; a null is a run that predates it.
-    both_preset = (
-        "selection" in prior
-        and current.get("selection") == "preset"
-        and prior["selection"] in ("preset", None)
+    both_preset = prior.get("selection") == "preset" == current.get("selection")
+    unrecorded = (
+        "selection" in prior and prior["selection"] is None and current.get("selection") == "preset"
     )
-    for module, status, cause, why in rows:
+    for module, status, cause, _why in rows:
         code = _module_code(module)
         if code is None or code not in ran:
             issues.append(
@@ -695,8 +685,11 @@ def _analysis_issues(rows: list[list[str]], pack: Mapping[str, Any]) -> list[str
                 f"Analysis register, {code}: the module did not run in both runs, so its Status "
                 "is `New` or `Not run this time`."
             )
-        if both_preset and status in ("New", "Not run this time"):
-            issues += _preset_issues(code, cause, why)
+        if status in ("New", "Not run this time"):
+            if both_preset:
+                issues += _preset_issues(code, cause)
+            elif unrecorded:
+                issues += _unrecorded_issues(code, cause)
         if cause not in (*CAUSES, "None"):
             issues.append(f"Analysis register, {code}: Cause {cause!r} is not one of {CAUSES}.")
         elif cause == "Presentation" and status != "Unchanged":
@@ -1249,32 +1242,57 @@ def _passage_issues(
     return issues
 
 
-def _basis_issues(lines: Sequence[str]) -> list[str]:
-    """CP-8's Basis items: the comparison pack is `Run comparison`, an earlier run's handoff is
-    `<plain module name> (<code>), earlier run`; no pipeline file name and no page of a handoff."""
-    issues = []
-    for line in lines:
-        text = line.strip()
-        if not text.startswith("Basis: "):
-            continue
-        for item in (i.strip() for i in text.removeprefix("Basis: ").removesuffix(".").split("; ")):
-            if PACK_NAME in item or PRIOR_PREFIX in item:
-                issues.append(
-                    f"Basis item {item!r} names a pipeline file; write the comparison pack as "
-                    f"`{COMPARISON}` and an earlier run's handoff as `<plain module name> "
-                    "(<code>), earlier run`."
-                )
-            elif item.startswith(COMPARISON) and item != COMPARISON:
-                issues.append(
-                    f"Basis item {item!r}: the comparison pack is exactly `{COMPARISON}`."
-                )
-            elif _HANDOFF_PAGE.search(item):
-                issues.append(
-                    f"Basis item {item!r} gives a page for a handoff; a handoff is "
-                    "`<plain module name> (<code>)`, or `<plain module name> (<code>), earlier "
-                    "run` for the earlier run, with no page."
-                )
-    return issues
+# ponytail: the name before the code is the model's own wording and no name source exists, so only
+# what cannot be a name is refused (a path, a comma list, a run or page word). Another module's name
+# for the code (`Deep research (CP-2A)`) is accepted: a known limit.
+_NOT_A_NAME = re.compile(r"[/,]|\b(?:earlier run|run comparison|page)\b", re.IGNORECASE)
+
+
+def _three_forms(item: str) -> str:
+    return (
+        f"Basis item `{item}` is not one of the three forms this module uses: "
+        f"`{BASIS_COMPARISON}` for the comparison pack, `<plain module name> (<code>)` for a "
+        "handoff of this run, `<plain module name> (<code>), earlier run` for a handoff of "
+        "the earlier run. Separate items with `; `, give no page and name no file."
+    )
+
+
+def _basis_item_issue(item: str, ran: Mapping[str, tuple[bool, bool]]) -> str | None:
+    """Why a Basis item is refused, or None: `Run comparison`, `<plain module name> (<code>)` for a
+    handoff of this run, or the same with `, earlier run` for a handoff of the earlier run."""
+    if item == BASIS_COMPARISON:
+        return None
+    earlier = BASIS_EARLIER_RUN.fullmatch(item)
+    found = earlier or BASIS_EARLIER_RUN.fullmatch(f"{item}, earlier run")
+    if found is None:
+        return _three_forms(item)
+    code = found["code"]
+    name = found.string.removesuffix(", earlier run").removesuffix(f" ({code})")
+    if _NOT_A_NAME.search(name):
+        return _three_forms(item)
+    both = ran.get(code, (False, False))
+    if both[0 if earlier else 1]:
+        return None
+    if not any(both):
+        return f"Basis item `{item}`: `{code}` ran in neither run: remove the item."
+    where, write = (
+        ("the earlier run", f"{name} ({code})")
+        if earlier
+        else ("this run", f"{name} ({code}), earlier run")
+    )
+    return f"Basis item `{item}`: `{code}` did not run in {where}: write `{write}` instead."
+
+
+def _basis_issues(lines: Sequence[str], pack: Mapping[str, Any]) -> list[str]:
+    """CP-8's Basis items, each in one of the three forms and naming a handoff that exists."""
+    ran = {m["module"]: (m["ran_prior"], m["ran_current"]) for m in pack["modules"]}
+    items = (
+        item.strip()
+        for line in lines
+        if line.strip().startswith("Basis: ")
+        for item in line.strip().removeprefix("Basis: ").removesuffix(".").split("; ")
+    )
+    return [issue for item in items if (issue := _basis_item_issue(item, ran))]
 
 
 def _held_sizes(texts: Sequence[str]) -> frozenset[Decimal]:
@@ -1317,7 +1335,7 @@ def cp8_issues(text: str, pack: Mapping[str, Any], held: Sequence[str] = ()) -> 
         for key, found in _rows_by_measure(issuer, pack).items()
         if any(_says(row, NOT_COMPARABLE) for row in found)
     )
-    issues += _basis_issues(lines)
+    issues += _basis_issues(lines, pack)
     issues += _outside_ref_issues(lines, pack)
     issues += _passage_issues(lines, pack, said_nc, sizes)
     return tuple(dict.fromkeys(issues))
