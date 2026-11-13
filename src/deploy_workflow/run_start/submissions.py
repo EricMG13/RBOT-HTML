@@ -31,7 +31,13 @@ from deploy_workflow.inbox.runs import EFFORTS, MODELS, config_for
 from deploy_workflow.inbox.startup import STANDING_RULING
 from deploy_workflow.model.adapter import KEY_VARIABLES
 from deploy_workflow.owners.cpos import web_search_run
-from deploy_workflow.owners.cpos_launch import NO_PRIOR, LaunchRefused, prepare, read_documents
+from deploy_workflow.owners.cpos_launch import (
+    NO_PRIOR,
+    LaunchRefused,
+    prepare,
+    read_documents,
+    refuse_deactivated,
+)
 from deploy_workflow.platform_io import regular_open
 
 MAX_FILE = 50 * 1024 * 1024
@@ -721,6 +727,7 @@ def _summarise(layout: Layout, sid: str, answers: Answers, *, cap: Decimal) -> d
                     log.warning("summary %s: the files could not be read: %s", sid, error)
                     return {"error": _CHANGED}
                 run = load_context(context_bytes(answers))
+                refuse_deactivated(run.run.pathway)
                 if len(run.identity.issuer_id) > MAX_ISSUER_ID:
                     raise Refused(
                         f"issuer_id is {len(run.identity.issuer_id)} characters; "

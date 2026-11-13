@@ -41,6 +41,7 @@ PathwayId = Literal[
     "distressed_restructuring",
     "portfolio_decision",
     "short_snapshot",
+    "lite_credit_assessment",
 ]
 # Requested module set per Pathway (decision 0009). Required producers are added when a view
 # or plan is built (registry.dependencies), so these list the modules the Front Page asks for.
@@ -69,8 +70,16 @@ _PRESETS: dict[PathwayId, tuple[str, ...]] = {
     ),
     # Owner, 2026-11-11: its own pathway, one page; no CP-DR, CP-2E, CP-MODEL or CP-2G.
     "short_snapshot": ("CP-0", "CP-1", "CP-L10"),
+    # The lite credit assessment: the credit snapshot's CP-1, CP-1A and CP-2 sections plus CP-2A's
+    # two downside blocks. CP-MODEL follows CP-1 because the composition holds Model-owned blocks.
+    "lite_credit_assessment": ("CP-0", "CP-1", "CP-MODEL", "CP-1A", "CP-2", "CP-2A"),
 }
 PATHWAY_MODULES: Mapping[PathwayId, tuple[str, ...]] = MappingProxyType(_PRESETS)
+# Pathways that no longer take a new run. Their presets stay wired so retained runs still read and
+# their instructions still build; only the launch entry points refuse
+# (``cpos_launch.refuse_deactivated``).
+DEACTIVATED_PATHWAYS: frozenset[PathwayId] = frozenset({"short_snapshot"})
+DEACTIVATED_MESSAGE = "The short credit snapshot is deactivated. Use the lite credit assessment."
 
 
 class Contract(BaseModel):

@@ -30,6 +30,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import IO, Any
 
+from deploy_workflow.context import load_context
 from deploy_workflow.inbox import activity, filing, layout, runs, startup
 from deploy_workflow.inbox.runs import Record
 from deploy_workflow.inbox.startup import StartupRefused
@@ -253,6 +254,11 @@ class Scheduler:
         with self.lock:
             answers = submissions.validated(answers)
             submissions.require_provider_key(answers)
+            try:  # a context the launcher would refuse, or a deactivated pathway, is a 400
+                run = load_context(submissions.context_bytes(answers)).run
+                cpos_launch.refuse_deactivated(run.pathway)
+            except ValueError as refusal:
+                raise submissions.Refused(str(refusal)) from refusal
             if not isinstance(sid, str) or not _SID.fullmatch(sid):
                 raise submissions.Refused("unknown submission")
             for record in self._records.values():

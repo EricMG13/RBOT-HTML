@@ -40,6 +40,7 @@ from deploy_workflow.owners.cpos import (
     RetainedHandoff,
     _checked_handoff,
     _handoff,
+    run_live_handoffs,
 )
 from deploy_workflow.owners.cpos_launch import (
     METHODS,
@@ -47,6 +48,7 @@ from deploy_workflow.owners.cpos_launch import (
     checker,
     main,
     prepare,
+    refuse_deactivated,
     without_for,
 )
 from deploy_workflow.run_expectations import RULES, Item
@@ -110,8 +112,32 @@ PRESET_ANSWER_KEY = {
     # Owner, 2026-11-11 ("3. approved"): its own pathway of CP-0, CP-1 and one CP-L10 page; it gets
     # no CP-DR, CP-2E, CP-MODEL or CP-2G.
     "short_snapshot": "CP-0 CP-1 CP-L10",
+    # The lite credit assessment (owner): the credit snapshot's CP-1, CP-1A and CP-2 sections plus
+    # CP-2A's two downside blocks. CP-MODEL is listed because it holds Model-owned blocks.
+    "lite_credit_assessment": "CP-0 CP-1 CP-MODEL CP-1A CP-2 CP-2A",
 }
 SHORT_SNAPSHOT = ("CP-0", "CP-1", "CP-L10")
+# Run order of the lite pathway and its report blocks, written by hand from the Front Page: the
+# credit snapshot's blocks that CP-1, CP-1A and CP-2 write, then CP-2A's two downside blocks.
+LITE_MODULES = ("CP-0", "CP-1", "CP-1A", "CP-2", "CP-2A")
+LITE_BLOCKS = (
+    "key-findings",
+    "company-operating-model",
+    "model-chart-strip",
+    "financials-credit-metrics",
+    "strengths-weaknesses",
+    "company-profile",
+    "transaction-summary",
+    "downside-stress",
+    "break-points",
+)
+# The credit snapshot's own blocks and modules, unchanged by the lite pathway (hand-written).
+FULL_BLOCKS = (
+    *("key-findings", "company-operating-model", "model-chart-strip", "capital-structure"),
+    *("financials-credit-metrics", "strengths-weaknesses", "relative-value", "company-profile"),
+    *("transaction-summary", "portfolio-fit", "committee-challenge", "what-changed"),
+)
+DEACTIVATED = "The short credit snapshot is deactivated. Use the lite credit assessment."
 
 
 def context_file(tmp_path: Path, pathway: str = "covenant_refinancing") -> Path:
@@ -1106,8 +1132,101 @@ def test_cp_l10_is_a_prose_module_sent_the_reader_passages_and_its_own_method(tm
     assert "financial change screen" not in method.lower()
 
 
-def test_a_short_snapshot_runs_end_to_end_to_a_verified_delivery(tmp_path, provider, capsys):
-    argv = launch(tmp_path, "--live", "--ruling", str(RULING), pathway="short_snapshot")
+def test_a_short_snapshot_still_runs_end_to_end_through_the_lower_level_functions(
+    tmp_path, provider, capsys
+):
+    """The launcher refuses a new short-snapshot run (`main`); `prepare` and `run_live_handoffs`,
+    which read past and retained runs, still carry it to a verified delivery."""
+    launch(tmp_path, pathway="short_snapshot")  # writes the context and the issuer folder
+    prepared = prepare(
+        tmp_path / "context.json",
+        tmp_path / "issuer",
+        tmp_path / "out",
+        config="sol-medium",
+        cap="50",
+    )
+    routes = list(prepared.plan.layout.routes)
+    provider.answer = lambda context: short_snapshot_answer(context, routes)
+    run_live_handoffs(
+        prepared.manifest,
+        prepared.directory,
+        ruling=RULING,
+        check=checker(prepared.layout),
+        config="sol-medium",
+    )
+    out = tmp_path / "out"
+    assert tuple(c[0] for c in provider.calls) == SHORT_SNAPSHOT
+    delivered = next((out / "deliveries").glob("*/delivery.json"))
+    assert verify_delivery(next(out.glob("delivery-*.json")), delivered.parent) == delivered
+    assert "Short Credit Snapshot" in json.loads(delivered.read_text())["scope"]
+
+
+# --- The lite and full credit assessments; the deactivated short snapshot ---------------
+
+
+def test_the_lite_pathway_plans_exactly_cp0_cp1_cp1a_cp2_cp2a_in_order(tmp_path):
+    prepared, _ = all_instructions(tmp_path, "lite_credit_assessment")
+    assert tuple(prepared.plan.instructions) == LITE_MODULES
+    assert prepared.ordered == LITE_MODULES
+    assert prepared.plan.run.requested_modules == (*LITE_MODULES[:2], *LITE_MODULES[2:])
+    assert prepared.layout.title.endswith("Lite credit assessment")
+
+
+def test_every_lite_block_is_routed_to_a_module_in_the_run(tmp_path):
+    from deploy_vii.report_view import pathways
+
+    lite = next(p for p in pathways() if p.id == "lite_credit_assessment")
+    assert lite.blocks == LITE_BLOCKS
+    assert lite.title == "Lite credit assessment"
+    prepared, _ = all_instructions(tmp_path, "lite_credit_assessment")
+    assert prepared.omitted == ()
+    assert prepared.layout.blocks == LITE_BLOCKS
+    assert {r.module_id for r in prepared.layout.routes} <= set(LITE_MODULES)
+    by_block = {r.block_id: r.module_id for r in prepared.layout.routes}
+    assert by_block["key-findings"] == "CP-2"
+    assert by_block["company-operating-model"] == "CP-1A"
+    assert by_block["downside-stress"] == by_block["break-points"] == "CP-2A"
+
+
+def test_the_credit_snapshot_is_the_full_credit_assessment_with_its_modules_and_blocks_unchanged():
+    from deploy_vii.contracts import PATHWAY_MODULES as PRESETS
+    from deploy_vii.report_view import pathways
+
+    full = next(p for p in pathways() if p.id == "credit_snapshot")
+    assert full.title == "Full credit assessment"
+    assert full.blocks == FULL_BLOCKS
+    assert tuple(PRESETS["credit_snapshot"]) == (
+        *("CP-0", "CP-1", "CP-MODEL", "CP-1A", "CP-DR", "CP-2", "CP-2A", "CP-2E", "CP-2G"),
+        *("CP-4", "CP-3", "CP-5", "CP-6"),
+    )
+
+
+def test_the_launcher_refuses_a_new_short_snapshot_run_with_the_message(tmp_path, capsys):
+    argv = launch(tmp_path, pathway="short_snapshot")
+    assert main(argv) == 2
+    assert DEACTIVATED in capsys.readouterr().err
+    assert not (tmp_path / "out").exists()
+
+
+def test_the_helper_refuses_only_a_deactivated_pathway():
+    with pytest.raises(LaunchRefused, match=re.escape(DEACTIVATED)):
+        refuse_deactivated("short_snapshot")
+    for pathway in (*PRESET_ANSWER_KEY, "unknown"):
+        if pathway != "short_snapshot":
+            refuse_deactivated(pathway)
+
+
+def test_the_short_snapshot_instructions_still_build_through_the_lower_level_function(tmp_path):
+    _, texts = all_instructions(tmp_path, "short_snapshot")
+    assert tuple(texts) == SHORT_SNAPSHOT
+
+
+def test_the_lite_pathway_runs_end_to_end_to_a_verified_delivery_with_a_synthetic_provider(
+    tmp_path, provider, capsys
+):
+    """A synthetic run: a fake provider answers from hand-written text, so this proves the wiring,
+    the checks and the delivered layout, and no model or analytical quality."""
+    argv = launch(tmp_path, "--live", "--ruling", str(RULING), pathway="lite_credit_assessment")
     routes = list(
         prepare(
             tmp_path / "context.json",
@@ -1117,88 +1236,52 @@ def test_a_short_snapshot_runs_end_to_end_to_a_verified_delivery(tmp_path, provi
             cap="50",
         ).plan.layout.routes
     )
-    provider.answer = lambda context: short_snapshot_answer(context, routes)
+    provider.answer = lambda context: answer(context, routes)
     assert main(argv) == 0
     out = tmp_path / "out"
-    assert tuple(c[0] for c in provider.calls) == SHORT_SNAPSHOT
+    assert tuple(c[0] for c in provider.calls) == LITE_MODULES
     receipt = next((out / "deliveries").glob("*/delivery.json"))
     assert verify_delivery(next(out.glob("delivery-*.json")), receipt.parent) == receipt
-    assert "Short Credit Snapshot" in json.loads(receipt.read_text())["scope"]
+    delivered = json.loads(receipt.read_text())
+    assert "Lite credit assessment" in delivered["scope"]
+    assert "Sections not produced: none." in delivered["scope"]
+    report = ReportView.model_validate_json((receipt.parent / "report-view.json").read_text())
+    assert tuple(block.block_id for block in report.blocks) == LITE_BLOCKS
 
 
-def short_snapshot_issues(
-    tmp_path, change, cp1=b"# upstream\nCover 3.1x; refinancing USD 1,250 million."
-):
-    prepared, task, context = good_task(tmp_path, "CP-L10", "short_snapshot")
-    task = dataclasses.replace(task, handoffs={"CP-1": cp1})
-    context["handoffs"] = {"CP-1": {"sha256": hashlib.sha256(cp1).hexdigest()}}
-    raw = change(short_snapshot_answer(context, list(prepared.plan.layout.routes)))
-    return _checked_handoff(task, raw.encode(), checker(prepared.layout))
+# Prompt-size budget: the most characters (head plus method text, CP-8 left out) each pathway's
+# instructions may total. An answer key of literal numbers: the lite and full credit assessments'
+# are the owner's; each other pathway's is its measured total (2026-11-13: covenant_refinancing
+# 1,091,950; distressed_restructuring 1,124,925; earnings_update 518,628; portfolio_decision
+# 902,476; relative_value 1,017,908; short_snapshot 140,075) rounded up to the next 10,000 plus 5%.
+# credit_snapshot measured 1,273,034 and lite_credit_assessment 397,486.
+INSTRUCTION_BUDGET = {
+    "lite_credit_assessment": 420_000,
+    "credit_snapshot": 1_340_000,
+    "covenant_refinancing": 1_155_000,
+    "distressed_restructuring": 1_186_500,
+    "earnings_update": 546_000,
+    "portfolio_decision": 955_500,
+    "relative_value": 1_071_000,
+    "short_snapshot": 157_500,
+}
 
 
-def test_the_checker_accepts_a_good_short_snapshot(tmp_path):
-    assert short_snapshot_issues(tmp_path, lambda raw: raw) == ()
+def test_the_budget_names_every_pathway():
+    from deploy_vii.contracts import PATHWAY_MODULES as PRESETS
+
+    assert set(INSTRUCTION_BUDGET) == set(PRESETS)
 
 
-def test_a_key_figure_that_cp1_never_states_is_refused_naming_it(tmp_path):
-    """The figure is in the Key figures table and the Bottom line, so the fidelity check alone
-    accepts it; the Key figures check holds it to the CP-1 handoff the module was sent."""
-    issues = short_snapshot_issues(tmp_path, lambda raw: raw.replace("3.1x", "9.9x"))
-    assert any("Key figures" in i and "9.9" in i for i in issues), issues
-
-
-def test_the_good_short_snapshot_passes_the_key_figures_check(tmp_path):
-    assert short_snapshot_issues(tmp_path, lambda raw: raw) == ()
-
-
-def test_a_key_figure_that_drops_cp1s_sign_is_refused(tmp_path):
-    cp1 = b"# upstream\nChange -3.1x; refinancing USD 1,250 million."
-    issues = short_snapshot_issues(tmp_path, lambda raw: raw, cp1=cp1)
-    assert any("Key figures" in i and "3.1x" in i for i in issues), issues
-
-
-def test_a_second_key_figures_table_is_refused(tmp_path):
-    extra = "\n\n" + KEY_FIGURES.replace("3.1x", "9.9x")
-    issues = short_snapshot_issues(
-        tmp_path, lambda raw: raw.replace(KEY_FIGURES, KEY_FIGURES + extra)
+@pytest.mark.parametrize("pathway", sorted(INSTRUCTION_BUDGET))
+def test_a_pathways_instructions_stay_within_their_size_budget(tmp_path, pathway):
+    _, texts = all_instructions(tmp_path, pathway)
+    total = sum(len(text) for module, text in texts.items() if module != "CP-8")
+    ceiling = INSTRUCTION_BUDGET[pathway]
+    assert total <= ceiling, (
+        f"{pathway}: the instructions grew to {total:,} characters, {total - ceiling:,} over "
+        f"the {ceiling:,} budget"
     )
-    assert any("Key figures" in i and "9.9x" in i for i in issues), issues
-    assert any("exactly one table" in i for i in issues), issues
-
-
-def test_no_cp1_handoff_means_the_key_figures_are_refused_not_skipped(tmp_path):
-    prepared, task, context = good_task(tmp_path, "CP-L10", "short_snapshot")
-    task = dataclasses.replace(task, handoffs={})
-    context["handoffs"] = {}
-    raw = short_snapshot_answer(context, list(prepared.plan.layout.routes))
-    issues = _checked_handoff(task, raw.encode(), checker(prepared.layout))
-    assert any("cannot be checked" in i for i in issues), issues
-
-
-def test_a_key_figures_table_with_other_columns_is_refused(tmp_path):
-    bad = "| Thing | Number |\n| --- | --- |\n| Interest cover | 3.1x |"
-    issues = short_snapshot_issues(tmp_path, lambda raw: raw.replace(KEY_FIGURES, bad))
-    assert any("Key figures" in i and "Measure | Value | Period | Source" in i for i in issues)
-
-
-@pytest.mark.parametrize(
-    ("change", "complaint"),
-    [
-        # Check 8 (figures in a reader passage are held in a table): 4.5x is in no table.
-        (lambda raw: raw.replace("cover is thin at 3.1x, so", "cover is thin at 4.5x, so"), "4.5"),
-        # Check 1: the Bottom line must lead.
-        (lambda raw: raw.replace("### Bottom line", "### Summary"), "Prose check 1"),
-        # Check 2: a module code in a sentence.
-        (lambda raw: raw.replace("little room", "little room per CP-1"), "Prose check 2"),
-        # The report selector: the Key figures table is required.
-        (lambda raw: raw.replace("### Key figures", "### Figures"), "Key figures"),
-    ],
-)
-def test_the_checker_refuses_a_short_snapshot_that_breaks_the_reader_checks(
-    tmp_path, change, complaint
-):
-    issues = short_snapshot_issues(tmp_path, change)
-    assert any(complaint in i for i in issues), issues
 
 
 @pytest.mark.parametrize("pathway", sorted(PATHWAY_MODULES))
@@ -2581,6 +2664,7 @@ CHART_HEADERS = {
     [
         *("credit_snapshot", "earnings_update", "relative_value", "covenant_refinancing"),
         *("distressed_restructuring", "portfolio_decision", "short_snapshot"),
+        "lite_credit_assessment",
     ],
 )
 def test_every_pathway_asks_cp1_for_the_four_chart_tables_and_requires_them(tmp_path, pathway):
@@ -4054,19 +4138,24 @@ def test_a_short_snapshot_run_in_the_library_is_listed_with_its_label_and_cp_l10
     """Owner, 2026-11-11: CP-2 and CP-6 do not run in a short snapshot, so CP-L10 leads (H5)."""
     from test_library_page_browser import visit
 
-    argv = launch(tmp_path, "--live", "--ruling", str(RULING), pathway="short_snapshot")
-    argv[argv.index("--out") + 1] = str(tmp_path / "runs" / RUN_ID)
-    routes = list(
-        prepare(
-            tmp_path / "context.json",
-            tmp_path / "issuer",
-            tmp_path / "preview",
-            config="sol-medium",
-            cap="50",
-        ).plan.layout.routes
+    launch(tmp_path, pathway="short_snapshot")  # writes the context and the issuer folder
+    prepared = prepare(
+        tmp_path / "context.json",
+        tmp_path / "issuer",
+        tmp_path / "runs" / RUN_ID,
+        config="sol-medium",
+        cap="50",
     )
+    routes = list(prepared.plan.layout.routes)
     provider.answer = lambda context: short_snapshot_answer(context, routes)
-    assert main(argv) == 0
+    run_live_handoffs(
+        prepared.manifest,
+        prepared.directory,
+        ruling=RULING,
+        check=checker(prepared.layout),
+        config="sol-medium",
+    )
+    cpos_launch._refresh_library(prepared.directory)
     assert "Library not updated" not in capsys.readouterr().err
     text = (tmp_path / "library/data.js").read_text(encoding="utf-8")
     data = json.loads(text.removeprefix("window.CREDIT_OS_DATA=").rstrip().removesuffix(";"))
@@ -5840,6 +5929,7 @@ NET_DEBT_HEADER = (
     [
         *("credit_snapshot", "earnings_update", "relative_value", "covenant_refinancing"),
         *("distressed_restructuring", "portfolio_decision", "short_snapshot"),
+        "lite_credit_assessment",
     ],
 )
 def test_every_pathway_asks_cp1_for_the_net_debt_table_and_states_every_rule_the_checker_holds(
@@ -5916,6 +6006,7 @@ POST_BS_SENTENCE = "state the pro forma figure beside it"
     [
         *("credit_snapshot", "earnings_update", "relative_value", "covenant_refinancing"),
         *("distressed_restructuring", "portfolio_decision", "short_snapshot"),
+        "lite_credit_assessment",
     ],
 )
 def test_cp1_is_asked_for_the_post_balance_sheet_table_and_others_for_the_pro_forma_sentence(

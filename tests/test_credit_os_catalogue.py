@@ -209,7 +209,7 @@ def test_identity_from_context(tmp_path):
     assert (run["period"], run["period_kind"], run["title"]) == (
         "FY-2024",
         "Annual",
-        "Credit Snapshot",
+        "Full credit assessment",
     )
     assert run["summary"] == "CP-1 bottom line."
     assert run["gaps"] == ["Synthetic fixture only."]
