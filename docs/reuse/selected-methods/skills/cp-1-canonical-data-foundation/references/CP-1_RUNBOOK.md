@@ -27,7 +27,7 @@ Audited statements > unaudited with auditor > unaudited > lender or sponsor mate
 
 ## Definition conflict, worked
 BAD: "Net Debt/EBITDA was 4.2x based on the lender presentation." The presentation uses adjusted EBITDA; the reported-basis ratio is 5.1x and the difference is not disclosed.
-GOOD: "Net Debt/EBITDA is 5.1x on reported EBITDA (annual report p.45) and 4.2x on adjusted EBITDA (lender presentation p.12); EUR 25m of add-backs account for the difference." One definition-conflict row logs it.
+GOOD: "Net Debt/EBITDA is 5.1x on reported EBITDA (annual report) and 4.2x on adjusted EBITDA (lender presentation); EUR 25m of add-backs account for the difference." One definition-conflict row logs it.
 
 ## Fail or restrict
 Unsupported claim | missing trace | undocumented calculation | unresolved conflict | malformed table | blocked upstream | classification from a file name | currency switch | definition change without a log entry.

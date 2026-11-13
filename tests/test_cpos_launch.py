@@ -2469,7 +2469,6 @@ def test_cp1_method_has_no_workbook_routing_script_or_front_matter_text():
         "CP-MODEL",
         "T4.14",
         "T4.15",
-        "T4.18",
         "T4.19",
         "table-id",
         "cp1.",
@@ -2594,7 +2593,8 @@ def test_cp1_method_states_the_debt_and_ebitda_basis():
     for phrase in (
         "debt totals use carrying values",
         "Principal and commitment are kept separately and are not substitutes",
-        "A lease liability is not in total debt",
+        "Lease liabilities the issuer presents on their own balance-sheet lines are not added",
+        "A lease or other obligation the issuer carries inside its debt lines stays in",
         "Reported EBITDA is the primary denominator",
         "adjusted EBITDA beside it, labelled, when the issuer states it",
         "gross principal is never the leverage denominator",
@@ -2602,8 +2602,64 @@ def test_cp1_method_states_the_debt_and_ebitda_basis():
     ):
         assert phrase.lower() in text.lower(), phrase
     # The method no longer prefers or treats adjusted EBITDA as the primary denominator.
-    assert "adjusted_ebitda when present" not in text
-    assert "Adjusted EBITDA is primary" not in text
+    # Wording the source did contain (Canon Core debt basis, and its example with locators).
+    assert "Canonical debt basis" not in text
+    assert "Source: AR p.45" not in text
+    assert "A lease liability is not in total debt" not in text
+
+
+STEP13_RULES = (
+    # (rule, phrase the sent text must hold)
+    ("outflows negative", "Outflows are negative and inflows positive"),
+    ("cash interest and tax are cash paid", "cash paid, not accrued expense"),
+    ("lease and interest cash classification", "lease principal paid (financing activities"),
+    ("debt instruments table", "### T4.18 Debt instruments"),
+    ("carrying and principal separate", "carrying value and principal are separate columns"),
+    ("no inference from the name", "never inferred from the instrument name"),
+    ("not stated is not evidence of ranking", "it is not evidence of either"),
+    ("bullet amortisation is 0", "0 for a bullet"),
+    ("financing cost adjustment row", "`Financing cost adjustment` row"),
+    ("instruments reconcile to Total Debt", "plus that row reconcile to `Total Debt`"),
+    ("one row per add-back, issuer label", "one row per add-back with the issuer's own label"),
+    ("realisation never inferred", "that is never inferred from the classification"),
+    (
+        "add-backs never merged, no plug",
+        "Add-backs are never merged, and no plug or balancing line",
+    ),
+    ("bridge feeds the host table", "write no second bridge table"),
+    ("reported quarter first", "a reported discrete quarter comes first"),
+    ("Q3 from 9M less H1", "Q3 is 9M less H1 only when the quarters are absent"),
+    ("Q4 from FY less 9M, labelled", "Q4 is FY less 9M only when no Q4 is reported"),
+    ("reported year not replaced", "A reported fiscal year is never replaced by a sum of quarters"),
+    ("balance-sheet LTM is the latest end", "last-twelve-months figure is the latest period end"),
+    ("reconciliation list", "segment revenue to reported revenue, the EBITDA bridge"),
+    ("difference never forced to zero", "it is never forced to zero"),
+    (
+        "segment corporate and eliminations",
+        "Corporate and eliminations are one separate row per period",
+    ),
+    ("operating KPI series", "never join non-comparable series"),
+    ("pro forma only when a source states it", "never construct one the source does not state"),
+    ("pro forma out of period figures", "They stay out of period figures"),
+    ("evidence tier labels", "2a unaudited with auditor review"),
+    ("no independent recommendation", "No independent credit recommendation"),
+)
+
+
+def test_cp1_method_restates_step_13s_analytical_rules_without_its_tagged_tables():
+    text = cp1_method()
+    for rule, phrase in STEP13_RULES:
+        assert phrase in text, rule
+
+
+def test_cp1_example_sentences_carry_no_bracket_label_and_no_page_locator():
+    """The host prose checks 3 and 4 refuse both in a sentence; the method names where they go."""
+    text = cp1_method()
+    for label in ("[Normalized]", "[Calculated]", "[Analyst Judgement]"):
+        assert label not in text, label
+    assert not re.search(r"\bpp?\.\s*\d|\bpages?\s+\d", text, re.IGNORECASE)
+    assert "Page locators go in `Source` columns and Basis lines, never in a sentence" in text
+    assert "never inside a sentence: reported (with its source)" in text
 
 
 def test_cp1_method_files_are_archived_with_hashes_and_named_edits():
@@ -2634,6 +2690,14 @@ def test_cp1_method_files_are_archived_with_hashes_and_named_edits():
         "(d) project conventions",
         "(e) operand tables",
         "(f) debt basis and EBITDA",
+        "(g) step 13's analytical rules restated without its tagged tables",
+        "expense-block reconciliation",
+        "compare to the precision",
+        "a balance sheet is an instant",
+        "never replace a directly reported period",
+        "prohibited conclusion, reader question and decision drivers",
+        "FFO/Debt trajectory",
+        "WC inclusion",
     ):
         assert named in edits, named
 
@@ -2764,7 +2828,7 @@ def test_every_module_is_told_what_stands_for_acceptance_scripts_and_questions(t
 # correctly marked "Earlier methods" for CP-1. The score section follows, as for every skill module.
 METHOD_TEXT_SHA256_AT_1B41E65 = {
     "CP-0": "e8d3e77bc48bc98e2fd8595e7b46ee7fc786e859591cf244325f3508b7d5dac9",
-    "CP-1": "e14d4e6c44c5c7b0c8661a365bef007ada2cebafc76a9190b74f45e4fa2ab9f3",
+    "CP-1": "0f7f1b36d36ab909834c8afee048f20005997d343489695318a6246da644c6c6",
     "CP-1A": "4c8efcfafe748cd01e6c856041349397c77384c3c82566b1f36a429535c01639",
     "CP-1B": "38d9fa7b075d1ce5d0cd21bcc216f57f37369cd4db395b3f1fb65498697a509f",
     "CP-1C": "9353afdbce820f59c2dcabc951fc1ff3813174b3c84e79b47bc22bea97f3bbe8",
@@ -6575,7 +6639,10 @@ def test_every_pathway_asks_cp1_for_the_net_debt_table_and_states_every_rule_the
     for stated in (
         "Gross debt is total debt at balance-sheet carrying value (current plus long-term",
         "net of issuance costs and discounts), not principal",
-        "what gross debt includes (for example securitization) and states the principal total",
+        (
+            "what gross debt includes (for example securitization and finance leases the issuer "
+            "carries within its debt lines) and states the principal total"
+        ),
         "beside it. Cash is",
         "the same figure as the Cash column of the `Chart data: liquidity` table",
         "Net debt is gross debt less cash, worked with `calculate`",

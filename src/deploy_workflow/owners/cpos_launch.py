@@ -690,8 +690,9 @@ NET_DEBT = OwnerTable(
     rules=(
         "Gross debt is total debt at balance-sheet carrying value (current plus long-term, net of"
         " issuance costs and discounts), not principal, and the Basis and limitation cell says "
-        "what gross debt includes (for example securitization) and states the principal total "
-        "beside it. Cash is the same figure as the Cash column of the `Chart data: liquidity` "
+        "what gross debt includes (for example securitization and finance leases the issuer "
+        "carries within its debt lines) and states the principal total beside it. Cash is the "
+        "same figure as the Cash column of the `Chart data: liquidity` "
         "table for that period. Net debt is gross debt less cash, worked with `calculate` and "
         "listed in `## Calculations`. Write one row per period you state, at least the latest "
         "balance-sheet date. `Period` is `FY2024 / 2024-09-30` for a fiscal year end (fiscal "
