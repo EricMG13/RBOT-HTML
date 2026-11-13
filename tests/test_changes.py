@@ -4070,6 +4070,45 @@ def test_a_basis_item_with_another_modules_plain_name_is_accepted_a_recorded_lim
     assert basis_issues("Basis: Deep research (CP-2A)") == []
 
 
+RATES_PACK = {
+    **PACK,
+    "modules": [
+        {"module": "CP-2E", "ran_prior": False, "ran_current": True},
+        {"module": "CP-1", "ran_prior": True, "ran_current": True},
+        {"module": "CP-2A", "ran_prior": True, "ran_current": True},
+    ],
+}
+
+
+def rates_issues(basis: str, pack: dict = RATES_PACK) -> list[str]:
+    return [i for i in cp8_issues(_with_basis(basis), pack) if i.startswith("Basis item")]
+
+
+def test_the_listed_name_with_a_comma_is_accepted_for_the_run_that_held_the_module():
+    assert rates_issues("Basis: Rates, FX & hedging (CP-2E)") == []
+    ran_before = {
+        **RATES_PACK,
+        "modules": [{"module": "CP-2E", "ran_prior": True, "ran_current": False}],
+    }
+    assert rates_issues("Basis: Rates, FX & hedging (CP-2E), earlier run", ran_before) == []
+
+
+def test_a_listed_name_is_read_after_the_checks_white_space_normalisation():
+    assert rates_issues("Basis: Rates,  FX & hedging (CP-2E)") == []
+
+
+def test_a_name_that_is_not_the_listed_one_and_has_a_comma_is_refused_naming_the_item_to_write():
+    (this,) = rates_issues("Basis: Rates, FX and hedging (CP-2E)")
+    assert THREE_FORMS in this and "write `Rates, FX & hedging (CP-2E)`" in this
+    (earlier,) = rates_issues("Basis: Rates, FX and hedging (CP-2E), earlier run")
+    assert "write `Rates, FX & hedging (CP-2E), earlier run`" in earlier
+
+
+def test_the_models_own_names_for_a_code_stay_accepted():
+    assert rates_issues("Basis: Financial data foundation (CP-1)") == []
+    assert rates_issues("Basis: Deep research (CP-2A)") == []
+
+
 def cell_issues(prior: str, current: str, pack: dict | None = None) -> list[str]:
     row = f"| Total debt / EBITDA | {prior} | {current} | New period | Leverage fell by 0.60x. |"
     found = cp8_issues(REGISTERS.replace(LEVERAGE_ROW, row), pack or PACK)
