@@ -77,6 +77,7 @@ from deploy_workflow.model.handoff import (
     REQUEST_OVERHEAD,
     WEB_SEARCH_CALLS_PER_TURN,
     WEB_SEARCH_CASE_KINDS,
+    FAILED_NO_USAGE,
     Check,
     _pages,
     web_search_offered,
@@ -102,6 +103,7 @@ from deploy_workflow.owners.cpos import (
 )
 from deploy_workflow.prose_checks import (
     DATA_MODULES,
+    ISO_4217,
     READER_HEADINGS,
     figure_issues,
     key_figures_issues,
@@ -1414,10 +1416,7 @@ def _stated_gap(cell: str) -> bool:
     return cell.startswith(NOT_SUPPLIED) and bool(cell.removeprefix(NOT_SUPPLIED).strip())
 
 
-CURRENCY_CODES = (
-    "USD", "EUR", "GBP", "JPY", "CHF", "CAD", "AUD", "NZD", "SEK", "NOK", "DKK", "CNY", "HKD",
-    "SGD", "INR", "BRL", "MXN", "ZAR", "PLN", "CZK", "HUF", "TRY", "RUB", "KRW",
-)  # fmt: skip
+CURRENCY_CODES = ISO_4217  # the repo's one list of real codes; LTM, PIK, RCF, TTM are not in it
 
 
 def _unit_advice(spec: OwnerTable, unit: str) -> str:
@@ -1426,7 +1425,7 @@ def _unit_advice(spec: OwnerTable, unit: str) -> str:
     the advice is to cut the cell, never to replace the amounts with gaps. When the rest names
     another currency code or symbol the amounts may really be in it, so the gap advice stays."""
     rest = unit.removeprefix(spec.chart_unit)
-    codes = "|".join(CURRENCY_CODES)
+    codes = "|".join(sorted(CURRENCY_CODES))
     other_currency = re.search(rf"\b(?:{codes})\b|[$\u20ac\u00a3\u00a5]", rest)
     if rest != unit and rest[:1] and not rest[:1].isalnum() and not other_currency:
         return (
@@ -3002,9 +3001,6 @@ def _dropped_value_lines(events: Sequence[Mapping[str, Any]]) -> list[str]:
         for module in failed
     ]
     return lines
-
-
-FAILED_NO_USAGE = "failed, no usage reported"  # the reason handoff.py writes with a completion
 
 
 def _attempt(event: Mapping[str, Any]) -> str:

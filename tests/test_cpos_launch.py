@@ -5460,7 +5460,18 @@ def test_a_real_other_unit_keeps_the_gap_advice_and_the_issue_count():
     assert len(two) == 2
 
 
-@pytest.mark.parametrize("unit", ["US$m / EUR m", "US$m; EUR amounts", "US$m (GBP)"])
+@pytest.mark.parametrize(
+    "unit",
+    [
+        "US$m / EUR m",
+        "US$m; EUR amounts",
+        "US$m (GBP)",
+        "US$m (ILS)",
+        "US$m; TWD amounts",
+        "US$m / AED m",
+        "US$m (SAR)",
+    ],
+)
 def test_a_unit_cell_naming_another_currency_keeps_the_gap_advice(unit):
     (issue,) = debt_stack_issues(DEBT_UNIT_ROW.format(unit))
     assert f"write `Not supplied: reported in {unit}`" in issue

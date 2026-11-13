@@ -92,6 +92,9 @@ REDACTION_FAILED = "redaction failed; the failure detail is withheld"
 # every measurement. The hold itself does not depend on it: a Sol call holds the whole context.
 BYTES_PER_TOKEN_BOUND = 2
 REQUEST_OVERHEAD = 4096
+FAILED_NO_USAGE = (
+    "failed, no usage reported"  # the reason written when a failed call reports no usage
+)
 # Reads stop once the request reaches this many bytes: 268,000 tokens at the lowest 4.11 bytes per
 # token measured, under the 272,000-token long-context price, with the 1,050,000-token context
 # left for drafts and repairs. At 700,000, run tdg-all-001 refused every read CP-3 and CP-5 made.
@@ -1026,9 +1029,7 @@ class HandoffExecutor:
                 **_with_id(c, tokens),
             )
             if _uncharged_failure(c):
-                self._uncharged(
-                    task, index, c.tokens_before, "failed, no usage reported", c.attempt_id
-                )
+                self._uncharged(task, index, c.tokens_before, FAILED_NO_USAGE, c.attempt_id)
 
     def _uncharged(
         self,
