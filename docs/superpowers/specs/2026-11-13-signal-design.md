@@ -122,8 +122,16 @@ digests to happen; a digest whose time passed while it was down runs once at the
   fetched from a proposed source.
 - Fetch rules: `https` only; the host must be a plain DNS name (no IP-address literals) that
   resolves only to public addresses, checked at fetch time and at each of at most three
-  redirect hops; 10 seconds for the whole fetch; no proxies; 2 MB cap; conditional requests
-  (`ETag`, `Last-Modified`); each source at most every 10 minutes **(call)**.
+  redirect hops (a hop must be https, a plain host name and the default port); the
+  connection is made to the address that was checked, never to a second lookup; 10 seconds for
+  the whole fetch; no proxies; 2 MB cap; conditional requests (`ETag`, `Last-Modified`, sent
+  to the first address only); each source at most every 10 minutes **(call)**.
+- Prior art: the fetcher reuses `research.webfetch` (public-address rule, pinned connection,
+  deadline budget) and adds only what feeds need: conditional requests, 304, the feed `Accept`
+  value and the refusal of NAT64 and IPv4-compatible IPv6 forms. The first version built its
+  own transport; the pre-merge review of PR 101 found it a weaker duplicate (it connected to
+  an address it had not checked, accepted site-local and multicast addresses, and followed
+  redirects to any port), so it was replaced.
 - Parsing: RSS 2.0 and Atom with `xml.etree.ElementTree`. A feed with a DTD or entity
   declarations is rejected. A feed that fails to parse marks the source "Failing" in settings
   with the reason; it never fails silently.
