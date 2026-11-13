@@ -1,0 +1,111 @@
+diff --git a/VERIFICATION.md b/VERIFICATION.md
+index dc31985..ba4d6ed 100644
+--- a/VERIFICATION.md
++++ b/VERIFICATION.md
+@@ -4,6 +4,15 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
+ engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
+ `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
+ 
++## 2026-11-13 — Status checklist: a long state no longer squeezes the row label to zero width (branch `claude/eloquent-colden-9607aa`)
++Scope: presentation only, offline, one CSS declaration; no provider or model call, no markup or cell text change. Seen in PR 100's reader check, older than it.
++- Cause: `.ck-head` in `screen.css` was a grid of `minmax(0,1fr) auto auto`; a long state badge took its full text width in the `auto` track and left the label 0 px. Fix: the badge track is `fit-content(50%)`, so a short badge keeps its own width and a long one wraps at half the row.
++- Test first: `test_a_status_row_with_a_long_state_keeps_its_label_readable` (synthetic new-format run, one status table with a 173-character label and a 132-character state; expected values written by hand before the fix). Before the fix at 1440 px: label 0, state 723.6 of a 771.6 px row, `assert 0 >= 300` failed. After: label 337.8, state 385.8, no overlap, no page overflow; at 420 px label 254, state below the label on its own row; label and state text equal the cells at both widths.
++- Reader check, scope: TWO real runs (`tdg-full-copilot-sol-001-resume`, `tdg-full-copilot-sol-high-001-resume`; TransDigm, as of 30 September 2024, new format, copied from another session's scratch workspace), every status checklist row on the 13 module pages measured by a scratch probe (not shipped), and the one affected row of the first run read by the controller in a 1440 px screenshot beside one September VMO2 screenshot (Evidence Trace table, where every cell wraps on words). Before the fix, first run at 1440 px: 135 rows, 1 with a 0 px label (Rates, FX & hedging, "Remediation accruals…", label 3,126 px tall beside a 724 px badge). After: 135 and 139 rows, none with a label under 338 px, no badge over half its row, no overlap, no page overflow; the other 134 rows of the first run measure the same as before (short badges unchanged). At 420 px: every label 254 px, badges on their own row, no overflow. Verdict: pass for this row layout; the label and state read as sentences. Nothing else on the pages was read.
++- Gates, each exit 0: the new test 2 passed; `tests/test_library_page_browser.py` whole file 104 passed, 1 skipped (opt-in screenshot test; run by the implementer before a lint-only rewrap of the new test's constants, the new test re-run after); `node --test apps/issuer-library/credit_os/web/*.test.cjs` 787 passed; `uv run python tools/quality_gate.py` 0 findings.
++- Review: implementation by mx-feature, task review by mx-precise: approve, no High or Medium finding. Low, left open: between 561 and 1024 px a long state is wider than its label (1024: label 201 / state 249; 561: 162 / 210), both wrapping on words with no overlap; a smaller cap (40%) would rebalance it. The reviewer's probe measured short badges unchanged ("Complete" 100 px, "Open" 75 px, one line, at 1440 and 800 px).
++- Not verified: widths between 561 and 1439 px by test (reviewer's probe only); whether a long word breaks mid-word (box sizes were measured, not line breaks); a status row with no trace control or no state; print, forced colours, a screen reader; browsers other than Chrome; any issuer other than TransDigm; the earlier-format page, which draws status tables as plain tables. The oldest entry of this file (2026-11-10, names not codes) was trimmed to stay under 1,000 lines; git history keeps it.
++
+ ## 2026-11-13 — Forecast page: a Markdown file is no longer called HTML; the Pro forma column's reason is true however CP-1 words pro forma (branch `claude/forecast-true-labels`)
+ Scope: offline, base `8e3954a`, fixes `f005b7d` and `5e82133`; no provider or model call; no figure moved, computed or placed. When the pinned model file is not `.html`, the link reads "Download published model (Markdown)" and the "Published model (original HTML)" frame is not drawn; an HTML model is unchanged. The PF column's reason is always "pro forma figures are not placed in this column; the financial foundation shows any it states" (was "no handoff states pro forma adjustments", false when CP-1 prints them); nothing in CP-1 is detected, after the adversarial review found a header-only match misses "PF", "pro-forma", body cells and row labels and misfires on "Pro forma adjustments: none".
+ - Failing first: `test_pf_reason_is_true_however_cp1_words_pro_forma` (seven wordings, all seven failed before `5e82133`) and the new Forecast test in `static.test.cjs` failed before the fix for the stated cause (implementer's report; not re-run on the parent by the reviewer or controller).
+diff --git a/apps/issuer-library/credit_os/web/screen.css b/apps/issuer-library/credit_os/web/screen.css
+index 38270ad..b124016 100644
+--- a/apps/issuer-library/credit_os/web/screen.css
++++ b/apps/issuer-library/credit_os/web/screen.css
+@@ -1347,7 +1347,7 @@ td .basis-link{margin-left:4px}
+ .ck-list{list-style:none;border:1px solid var(--rule);border-radius:12px;background:Canvas;padding:0 20px}
+ .ck-row{padding:14px 0;border-top:1px solid var(--rule);min-width:0}
+ .ck-row:first-child{border-top:0}
+-.ck-head{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px 12px;align-items:start}
++.ck-head{display:grid;grid-template-columns:minmax(0,1fr) fit-content(50%) auto;gap:6px 12px;align-items:start}
+ .ck-label{margin:0;font:600 14px/1.45 'Red Hat Text',sans-serif;color:var(--text-primary);overflow-wrap:anywhere}
+ .ck-row .rec-fields{grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:8px 20px}
+ @media(max-width:560px){.ck-head{grid-template-columns:minmax(0,1fr) auto}.ck-head .state{grid-column:1/-1;grid-row:2}.ck-list{padding:0 14px}}
+diff --git a/tests/test_library_page_browser.py b/tests/test_library_page_browser.py
+index 151b40f..624d820 100644
+--- a/tests/test_library_page_browser.py
++++ b/tests/test_library_page_browser.py
+@@ -1663,6 +1663,73 @@ def with_chart_in_findings(text: str) -> str:
+     return text.replace(marker, MATURITIES + marker, 1)
+ 
+ 
++# Synthetic: a status table as a module writes it, with long cells in the label and the state.
++CK_LABEL = (
++    "Environmental liability balances are in audited financial notes. Climate, emissions target, "
++    "labour and risk narrative are management disclosures; separate emissions assurance not "
++    "supplied."
++)
++CK_STATE = (
++    "Completed with Limitations — operating exposure identified; asset-level transition costs "
++    "and sustainability-linked terms not established"
++)
++CK_SOURCE = "Annual report, pages 13–13; annual report, pages 18–26; annual report, pages 160–161"
++CK_FLAG = (
++    "No evidenced misrepresentation established. “Science-aligned” target and relatively low "
++    "emissions are management characterizations, not independent assurance or creditor protection."
++)
++LONG_STATE = (
++    "\n### Synthetic: source reliability status\n\n"
++    "| Source | Reliability (audited/assured vs self-reported) | Greenwashing Flag |"
++    " Module Status |\n"
++    "| --- | --- | --- | --- |\n"
++    f"| {CK_SOURCE} | {CK_LABEL} | {CK_FLAG} | {CK_STATE} |\n"
++)
++CK_MEASURE = (
++    "(() => { const box = q => document.querySelector('.ck-head ' + q).getBoundingClientRect();"
++    " const head = document.querySelector('.ck-head').getBoundingClientRect();"
++    " const trace = document.querySelector('.ck-head button');"
++    " const parts = ['.ck-label', '.state'].map(q => box(q));"
++    " if (trace) parts.push(trace.getBoundingClientRect());"
++    " const overlap = parts.some((a, i) => parts.some((b, j) => i < j && a.width && b.width"
++    " && a.top < b.bottom && b.top < a.bottom"
++    " && a.left < b.right - 0.5 && b.left < a.right - 0.5));"
++    " const de = document.documentElement;"
++    " return { head: head.width, label: box('.ck-label').width, state: box('.state').width,"
++    " labelBottom: box('.ck-label').bottom, stateTop: box('.state').top, overlap,"
++    " fits: de.scrollWidth <= de.clientWidth,"
++    " labelText: document.querySelector('.ck-head .ck-label').textContent,"
++    " stateText: document.querySelector('.ck-head .state-w').textContent }; })()"
++)
++
++
++@pytest.mark.parametrize("width", [1440, 420])
++def test_a_status_row_with_a_long_state_keeps_its_label_readable(tmp_path, width):
++    page = synthetic_workspace(tmp_path, with_status_in_findings)
++    seen = cdp_measure(
++        page,
++        f"#CP-2?c={NEW_FORMAT_RUN}",
++        CK_MEASURE,
++        ".ck-head",
++        {"width": width},
++    )
++    assert seen["labelText"] == CK_LABEL and seen["stateText"] == CK_STATE, seen
++    assert seen["overlap"] is False and seen["fits"] is True, seen
++    if width == 1440:
++        assert seen["label"] >= 300, seen
++        assert seen["state"] <= seen["head"] / 2 + 1, seen
++    else:
++        assert seen["label"] >= 250, seen
++        assert seen["stateTop"] >= seen["labelBottom"], seen
++
++
++def with_status_in_findings(text: str) -> str:
++    """The synthetic CP-2 handoff with one status table under its Findings part."""
++    marker = "\n## Calculations"
++    assert marker in text
++    return text.replace(marker, LONG_STATE + marker, 1)
++
++
+ def test_the_earlier_format_module_page_takes_the_redesign_layout(tmp_path):
+     seen = read_module_page(nine_part_library(tmp_path), "#CP-1/head?c=run-a")
+     delivery = next((tmp_path / "runs/run-a/deliveries").iterdir()).name

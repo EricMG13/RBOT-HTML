@@ -80,6 +80,22 @@ Scope: OFFLINE only. Tests, reviewer probes (`.superpowers/sdd/quality-defects/p
 Gates: quality gate exit 0; affected tests (`tests/model`, `test_handoff_loop.py`, `test_cpos_launch.py`, `test_credit_os_store.py`) only the three known failures (`tests/known-failures.txt`: `test_gate` x2, `test_o5_done_when`). Probes that exit 1 by ruling: `t2-p3-mask`, `t2fix-p4-correction`, and `branch-guarded-twin-suite.py` (shows a rejected simplification); `t3adv-p1`, `t3adv-p4-cap` and `t3adv-p2` were rerun after the fix round and exit 0; the branch probes for M1 and L1 to L3 exit 0 after the fix wave.
 Not demonstrated: a live Copilot run on this code; `drain_compactions` against the real SDK; the `Review:` and `Charged excludes` lines on a real run; the `run_comparison` call site (unreachable today); the 3.85 bytes-per-token estimate beyond the 15 modules measured; the opus limit; mutation and property tests (not run); PR size over the 800-line guide (ruled).
 
+## 2026-11-13 — Status checklist: a long state no longer squeezes the row label to zero width (branch `claude/eloquent-colden-9607aa`)
+Scope: presentation only, offline, one CSS declaration; no provider or model call, no markup or cell text change. Seen in PR 100's reader check, older than it.
+- Cause: `.ck-head` in `screen.css` was a grid of `minmax(0,1fr) auto auto`; a long state badge took its full text width in the `auto` track and left the label 0 px. Fix: the badge track is `fit-content(50%)`, so a short badge keeps its own width and a long one wraps at half the row.
+- Test first: `test_a_status_row_with_a_long_state_keeps_its_label_readable` (synthetic new-format run, one status table with a 173-character label and a 132-character state; expected values written by hand before the fix). Before the fix at 1440 px: label 0, state 723.6 of a 771.6 px row, `assert 0 >= 300` failed. After: label 337.8, state 385.8, no overlap, no page overflow; at 420 px label 254, state below the label on its own row; label and state text equal the cells at both widths.
+- Reader check, scope: TWO real runs (`tdg-full-copilot-sol-001-resume`, `tdg-full-copilot-sol-high-001-resume`; TransDigm, as of 30 September 2024, new format, copied from another session's scratch workspace), every status checklist row on the 13 module pages measured by a scratch probe (not shipped), and the one affected row of the first run read by the controller in a 1440 px screenshot beside one September VMO2 screenshot (Evidence Trace table, where every cell wraps on words). Before the fix, first run at 1440 px: 135 rows, 1 with a 0 px label (Rates, FX & hedging, "Remediation accruals…", label 3,126 px tall beside a 724 px badge). After: 135 and 139 rows, none with a label under 338 px, no badge over half its row, no overlap, no page overflow; the other 134 rows of the first run measure the same as before (short badges unchanged). At 420 px: every label 254 px, badges on their own row, no overflow. Verdict: pass for this row layout; the label and state read as sentences. Nothing else on the pages was read.
+- Gates, each exit 0: the new test 2 passed; `tests/test_library_page_browser.py` whole file 104 passed, 1 skipped (opt-in screenshot test; run by the implementer before a lint-only rewrap of the new test's constants, the new test re-run after); `node --test apps/issuer-library/credit_os/web/*.test.cjs` 787 passed; `uv run python tools/quality_gate.py` 0 findings.
+- Review: implementation by mx-feature, task review by mx-precise: approve, no High or Medium finding. Low, left open: between 561 and 1024 px a long state is wider than its label (1024: label 201 / state 249; 561: 162 / 210), both wrapping on words with no overlap; a smaller cap (40%) would rebalance it. The reviewer's probe measured short badges unchanged ("Complete" 100 px, "Open" 75 px, one line, at 1440 and 800 px).
+- Not verified: widths between 561 and 1439 px by test (reviewer's probe only); whether a long word breaks mid-word (box sizes were measured, not line breaks); a status row with no trace control or no state; print, forced colours, a screen reader; browsers other than Chrome; any issuer other than TransDigm; the earlier-format page, which draws status tables as plain tables. The oldest entry of this file (2026-11-10, names not codes) was trimmed to stay under 1,000 lines; git history keeps it.
+
+## 2026-11-13 — Forecast page: a Markdown file is no longer called HTML; the Pro forma column's reason is true however CP-1 words pro forma (branch `claude/forecast-true-labels`)
+Scope: offline, base `8e3954a`, fixes `f005b7d` and `5e82133`; no provider or model call; no figure moved, computed or placed. When the pinned model file is not `.html`, the link reads "Download published model (Markdown)" and the "Published model (original HTML)" frame is not drawn; an HTML model is unchanged. The PF column's reason is always "pro forma figures are not placed in this column; the financial foundation shows any it states" (was "no handoff states pro forma adjustments", false when CP-1 prints them); nothing in CP-1 is detected, after the adversarial review found a header-only match misses "PF", "pro-forma", body cells and row labels and misfires on "Pro forma adjustments: none".
+- Failing first: `test_pf_reason_is_true_however_cp1_words_pro_forma` (seven wordings, all seven failed before `5e82133`) and the new Forecast test in `static.test.cjs` failed before the fix for the stated cause (implementer's report; not re-run on the parent by the reviewer or controller).
+- Reader and fidelity check, scope: TWO real runs of one issuer (`tdg-full-copilot-sol-high-001-resume`, `tdg-full-copilot-sol-001-resume`, TransDigm, as of 30 September 2024), headless Chrome from disk at 1440 and 420 px, read by the controller; no screenshot was read against the September VMO2 reference because only one link's text and one absent frame change. Before: link "Download original HTML" to `annual.md`, frame drawn. After: link "Download published model (Markdown)" to `annual.md`, no frame, page fits, both runs, both widths. PF column re-derived from each run's own CP-1 and CP-2G handoffs with `model_files(history=True)`: every cell missing with that reason (re-run at `5e82133`, exit 0), the other seven history columns equal to the delivered ones.
+- Gates (controller): `uv run pytest tests/test_cpos_periods.py -q` exit 0, 180 passed; `node --test apps/issuer-library/credit_os/web/static.test.cjs` exit 0; `uv run pytest tests/test_credit_os_store.py tests/test_library_page_browser.py -q -k "pf or pro_forma or forecast or model"` exit 0, 26 passed, 1 skipped; `uv run python tools/quality_gate.py` exit 0, 0 findings. The pinned hash of `calculation.json` in `test_a_block_without_column_publishes_the_files_it_always_did` changed with the reason text (the other four pins unchanged; the new hash comes from the code under test). Task review of `f005b7d`: approve, one Low (a missing `href` would read as Markdown; the store always sets it); `5e82133` answers the adversarial review's W1 and is re-reviewed by the coordinator.
+- Not verified: a delivery already made keeps its old PF reason until it is delivered again (the reason is written at delivery, not at page build); a real run with a published `model.html`; the full suite; Windows. Open for the owner, not fixed here: the page's Downside case differs from the forward credit model's own downside on these runs (coverage 2.41x against 1.68x; `rate_increase` read as proportional by the code and sent as an additive yield by the module).
+
 ## 2026-11-13 — Signal slice 2: service and feed page (branch `claude/signal-2-service-pages`, tip `ba04ff7` plus this entry)
 Scope: Signal's HTTP service, feed API and feed page, its packaging, and the optional Signal link on the run start rail. No AI pass, no groups or threads, no settings pages, no login, no model call, no cost. The reader check in `AGENTS.md` applies to the issuer report and is not owed here.
 - `uv run pytest` on the ten `tests/test_signal_*.py` unit files, `tests/test_run_start_service.py` and `tests/test_issuer_library_packaging.py`: exit 0, 377 passed.
@@ -964,28 +980,3 @@ run", then "Yes" to working out web search for CP-DR. No provider was called; no
     next hold no longer fits the cap. A stop there can be resumed.
   - The paid run needs the owner's machine, which has the TDG files and the key.
 
-## 2026-11-10 — Context form against live run tdg-all-001 (branch `claude/optimistic-johnson-bmnwip`, after main `53a5632`)
-
-Owner: "Yes do that" (compare tdg-all-001 with the form's forecast), "Your recommendation", then
-"Cp-dr supplies the peers, the user does not provide them unless they specifically want to in the
-context file…" and "User can provide peers but it is optional". Design note section 8. Compared
-against the run's record below. The run folder was not read.
-
-- Forecasts were made before the run reported. Of the 10 modules with a recorded outcome, the form
-  flagged 9 and the launcher's `run_expectations` 5. The form's miss was CP-DR: Ready, but Blocked.
-  The form's 4 Gaps for a missing source (CP-1C, CP-2H, CP-3D, CP-3) came back Blocked.
-  CP-1D's Gap came back Restricted.
-- CP-1D: no bridge is now Limited (its reads worked in the run).
-- CP-DR: the form no longer asks for the peers' filings. Supplying peers is optional: add the
-  peers' filings to the folder, which CP-DR is told to read, or give your own peer figures. CP-DR
-  carries a Note, not counted: CP-OS gives no module a web search tool (`model/handoff.py`
-  `TOOLS`). CP-OS sends CP-DR both cp-os's SKILL v1.1 (2026-07-22, web or hybrid research; blocks
-  without web) and `cpdr.md` (2026-10-31, LOCAL). Neither reaches public peers here.
-- Not changed: CP-2H, CP-3D and CP-3 had every read refused in the run, so they wait for a rerun.
-  The registry keeps CP-DR optional for CP-1C and CP-2. That is a registry decision, not a form
-  one.
-- Tests: `test_the_research_module_supplies_the_peers_and_the_bridge_is_forecast_as_run` fails on
-  the first version of this change, which asked about peer files, and passes now.
-  `tests/test_library_page_browser.py` and `tests/test_context_form.py`: 45 passed. Quality gate: 0
-  findings.
-- Not verified: no live run of the changed forecast; one issuer, one date.

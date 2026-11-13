@@ -487,7 +487,15 @@ def test_connections_beyond_the_ceiling_are_closed_at_once(service_factory, monk
             assert extra.recv(10) == b""  # closed with no handler thread and no reply
         idle.pop().close()  # a freed slot is usable again
         deadline = time.monotonic() + 5
-        while held.call("GET", "/api/runs/none").status != 404:
+
+        def served() -> bool:
+            # Until the server sees the idle socket close, the ceiling still closes this one.
+            try:
+                return held.call("GET", "/api/runs/none").status == 404
+            except ConnectionError:
+                return False
+
+        while not served():
             assert time.monotonic() < deadline
             time.sleep(0.05)
     finally:

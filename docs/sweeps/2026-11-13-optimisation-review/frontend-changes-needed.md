@@ -52,8 +52,8 @@ Status: **Done** (in a PR), **Needed** (the screen is wrong or incomplete withou
 | 18 | Reported EBITDA is primary; adjusted shown beside it | Overview, charts | Label which EBITDA each ratio uses | Needed | T6 ruling |
 | 19 | CP-1 tables get a fixed row vocabulary | Financials grid, company profile | Row counts varied 83 against 16 between two runs; confirm the grid is stable and complete with the new tables | Check | Comparison report |
 | 20 | A CP-1 written before the code check may fail it | Run-start (resume) | Say why an older run cannot be resumed | Decide | T6 ruling |
-| 20a | A non-USD issuer cannot state leverage (the US$m tables are gaps and the tie refuses a stated ratio) | Overview, Forecast, charts | Leverage is empty for GBP and EUR issuers, VMO2 included, until the owner decides | Needed (owner decision) | PR 111 ruling; review of PR 111 |
-| 20b | The leverage chart ties to reported EBITDA only | Overview, charts | An issuer that states only adjusted EBITDA shows no headline leverage; adjusted leverage is in the register only | Needed (owner decision) | Review of PR 111 |
+| 20a | A non-USD issuer cannot state leverage (the US$m tables are gaps and the tie refuses a stated ratio) | Overview, Forecast, charts | Owner, 2026-11-13: leverage in the issuer's own currency. Axis, table and chart labels must carry that currency; nothing is converted | Needed (T6 building) | PR 111 ruling; review of PR 111 |
+| 20b | The leverage chart ties to reported EBITDA only | Overview, charts | Owner, 2026-11-13: headline leverage on adjusted EBITDA is allowed, labelled as adjusted on every ratio, column and chart | Needed (T6 building) | Review of PR 111 |
 | 20c | CP-1 now writes a Period table, a debt reconciliation and `### Confidence inputs` | Modules (CP-1), Changes | Confirm each is drawn once and the Changes page reads periods by date | Check | PR 111 ruling |
 
 ## From `run_script` (T7, not started)
@@ -92,6 +92,16 @@ Status: **Done** (in a PR), **Needed** (the screen is wrong or incomplete withou
 | # | Cause | Screen | Change | Status | Source |
 | --- | --- | --- | --- | --- | --- |
 | 32 | The run-start service can show a Signal link | Run-start rail | Shown only when started with `--signal-url`; a change to the run-start page, so it needs the reader check | Check | Review of PR 109 |
+
+## From the Forecast label fixes (PR 112)
+
+| # | Cause | Screen | Change | Status | Source |
+| --- | --- | --- | --- | --- | --- |
+| 33 | A delivery with no `model.html` pins `annual.md` | Forecast | Link reads "Download published model (Markdown)" and no HTML frame is drawn | Done in PR 112; owner accepted it without the VMO2 reader check, 2026-11-13 | Review of PR 112 |
+| 34 | The Pro forma column said no handoff states pro forma adjustments | Forecast | One reason for every run: "pro forma figures are not placed in this column; the financial foundation shows any it states"; deliveries already made keep the old sentence | Done in PR 112 (`5e82133`); owner accepted it without the VMO2 reader check, 2026-11-13 | Re-review of PR 112 |
+| 35 | The page's Downside case differs from the forward credit model's own (coverage 2.41x against 1.68x on TDG) | Forecast, Overview | Owner, 2026-11-13: "A": the page's Downside uses the forward model's downside drivers plus the upstream shock (reverses the 2026-11-10 ruling); existing runs differ until re-run | Built in PR 113 (label "Downside stress (shock on downside drivers)" and its note); not merged | PR 112 body; not checked here |
+| 36 | The new Downside can run out of cash (TDG: funding gap from FY2026) | Forecast, Overview | Net leverage and liquidity are still published for those years though the forward model calls them not calculable | Needed (owner decision) | Review of PR 113 |
+| 37 | The Downside basis changes between an old and a new run | Changes | Show it as a method change, not a change in the issuer | Needed | Review of PR 113 |
 
 ## Not verified
 
