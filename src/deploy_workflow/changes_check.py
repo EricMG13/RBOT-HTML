@@ -50,7 +50,10 @@ it refuses, naming the line, a CP-8 handoff in which:
 - a fact row (a row naming no pack measure) prints a figure equal to a pack measure's earlier or
   current value, or one held in no evidence (K11);
 - a pack measure has no row of its own in the issuer register: every pack measure needs exactly
-  one, its first cell the pack's label (K14).
+  one, its first cell the pack's label (K14);
+- while a difference is withheld, a number word directly followed by a listed unit word
+  (`thirty million`, `two hundred bps`) is written in a checked passage (W). Only that form is
+  refused; a size in words with any other wording is not read (see the limit at `_WORDED`).
 
 A "figure" is a number that is not a date, a period label, a year or (in a passage) a whole number
 below 100 without a unit (a count); in a measure's Earlier and Current cells every number counts.
@@ -921,19 +924,21 @@ def _blanks(match: re.Match[str]) -> str:
 
 # Check W: when a difference is withheld, an amount, ratio or difference is written in digits with
 # its unit (`two` to `nineteen`, the tens, `hundred` and `thousand` are number words). A number word
-# directly before a unit, or after a direction word (a count noun after it makes it a count), is
-# refused. A size in words with neither is not read: a known limit.
+# (a run of adjacent ones) directly followed by a listed unit word is refused.
+# ponytail: a withheld size written in words is refused only when a listed unit word directly
+# follows it (`thirty million`). Any other wording passes: `the gap is thirty`, `fell by thirty`,
+# `net debt is eighty lower`, `fell by one hundred and ten`, a hyphenated or marked-up form. The
+# method text tells the model to write every amount in digits; this check does not enforce it.
 _NUMBER_WORD = (
     r"(?:two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen"
     r"|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety"
     r"|hundred|thousand)"
 )
 _WRITTEN_UNIT = (
-    r"\s*(?P<unit>%|US\$|(?:million|billion|thousand|percent|per cent|basis points?|bps?|x|USD|EUR"
+    r"(?:%|US\$|(?:million|billion|thousand|percent|per cent|basis points?|bps?|x|USD|EUR"
     r"|GBP|dollars|euros|pounds)\b)"
 )
-_AFTER_DIRECTION = rf"(?P<lead>\b(?:{_UP}|{_DOWN})\b\s+(?:by\s+)?(?:(?:about|roughly|nearly)\s+)?)"
-_WORDED = re.compile(rf"{_AFTER_DIRECTION}?\b{_NUMBER_WORD}\b(?:{_WRITTEN_UNIT})?", re.IGNORECASE)
+_WORDED = re.compile(rf"\b(?:{_NUMBER_WORD}\s+)*{_NUMBER_WORD}\s*{_WRITTEN_UNIT}", re.IGNORECASE)
 
 
 def _worded_issues(line: str) -> list[str]:
@@ -943,7 +948,6 @@ def _worded_issues(line: str) -> list[str]:
         "of things (`three modules`). If the figure is a difference the pack withholds, leave it "
         "out."
         for m in _WORDED.finditer(line)
-        if m["unit"] or (m["lead"] and not _COUNT_AFTER.match(line, m.end()))
     ]
 
 

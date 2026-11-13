@@ -3046,7 +3046,7 @@ def test_a_bare_count_is_still_no_figure_of_a_held_line():
     assert cp8_issues(with_row(LEVERAGE_ROW, said), PACK) == ()
 
 
-# --- fix round 1: a line-start number is a list marker only on a real list item ---------------
+# --- fix round 1: a line-start number after a wrapped line is read as a figure ------------------
 
 
 @pytest.mark.parametrize(
@@ -3123,8 +3123,11 @@ def test_a_number_wrapped_onto_a_line_after_a_bullet_is_a_figure(passage):
         "- item\n1. first sub-item",
     ],
 )
-def test_a_list_marker_after_a_bullet_one_or_elsewhere_is_no_figure(passage):
+def test_a_list_number_is_read_as_a_figure_so_it_is_no_issue_only_when_it_equals_no_withheld_size(
+    passage,
+):
     assert _says(passage) == ()
+    assert any("figure 1 " in i for i in _says(passage, _cash_pack("-1", "905")))
 
 
 @pytest.mark.parametrize(
@@ -3234,7 +3237,7 @@ def test_a_spelled_ordinal_fraction_or_decimal_is_still_not_read(sentence, pack)
     assert _says(sentence, pack) == ()
 
 
-# --- the year problem, the counts and a spelled size across lines (owner, 2026-11-12: "fix 1 and
+# --- the year problem, the counts and a number word across lines (owner, 2026-11-12: "fix 1 and
 # 2"; controller rulings R1 to R3). Expectations hand-written from the rulings.
 
 
@@ -3343,6 +3346,7 @@ def test_a_bare_number_beside_no_count_noun_is_still_a_withheld_size(sentence):
 @pytest.mark.parametrize(
     "text",
     [
+        # No unit word follows a number word, so none is read (the recorded limit of W).
         "Debt is one hundred\n\nten.",
         "Debt is one hundred\n| Cash | ten |",
         "Debt is one hundred\n- ten",
@@ -3350,12 +3354,13 @@ def test_a_bare_number_beside_no_count_noun_is_still_a_withheld_size(sentence):
         "Debt is one hundred\nand then nothing.",
     ],
 )
-def test_a_spelled_number_is_not_joined_over_a_blank_line_row_heading_or_item(text):
+def test_a_number_word_with_no_unit_after_it_is_no_issue_across_a_line_break(text):
     assert _hold(text) == ()
 
 
 # --- fix round 1 of the counts branch: a year before a comma, ISO dates whole, two nouns dropped,
-# a count noun on the next line, a table delimiter without outer pipes, a code after a year.
+# a digit count whose noun is on the next line, a table delimiter without outer pipes, a code
+# after a year.
 # Expectations hand-written from the controller's rulings.
 
 
@@ -3434,7 +3439,7 @@ def test_change_and_difference_are_not_count_nouns(sentence):
         "Cash fell by 30\n### modules",
     ],
 )
-def test_a_count_noun_over_a_blank_line_heading_row_or_item_makes_no_count(text):
+def test_a_digit_count_with_a_noun_on_another_line_stays_a_withheld_size(text):
     found = _hold(text)
     assert any("figure 30 is the difference" in i for i in found), found
 
@@ -4230,22 +4235,20 @@ W_REFUSAL = (
 @pytest.mark.parametrize(
     ("sentence", "phrase"),
     [
-        ("Cash fell by thirty million.", "fell by thirty million"),
-        ("Cash fell thirty percent.", "fell thirty percent"),
+        ("Cash fell by thirty million.", "thirty million"),
+        ("Cash fell thirty percent.", "thirty percent"),
         ("Cash was about thirty basis points lower.", "thirty basis points"),
-        ("Leverage fell by twenty per cent.", "fell by twenty per cent"),
-        ("Leverage rose by roughly four x.", "rose by roughly four x"),
+        ("Leverage fell by twenty per cent.", "twenty per cent"),
+        ("Leverage rose by roughly four x.", "four x"),
         ("Cash is twelve US$ lower.", "twelve US$"),
         ("Cash was nearly ninety USD.", "ninety USD"),
-        ("Leverage is two hundred bps wider.", "hundred bps"),
-        ("Cash is Seventy Five Million.", "Five Million"),
+        ("Leverage is two hundred bps wider.", "two hundred bps"),
+        ("Cash is Seventy Five Million.", "Seventy Five Million"),
     ],
 )
-def test_a_number_word_with_a_unit_or_after_a_direction_word_is_refused_with_the_form(
-    sentence, phrase
-):
+def test_a_number_word_directly_before_a_unit_word_is_refused_with_the_form_once(sentence, phrase):
     found = _w_issues(sentence)
-    assert any(f"`{phrase}`: {W_REFUSAL}" in i for i in found), found
+    assert [i for i in found if W_REFUSAL in i] == [f"`{phrase}`: {W_REFUSAL}"], found
 
 
 @pytest.mark.parametrize(
@@ -4257,6 +4260,9 @@ def test_a_number_word_with_a_unit_or_after_a_direction_word_is_refused_with_the
         "The lender added three covenants.",
         "Leverage was six times covered.",
         "The two runs differ.",
+        "This run added four new modules, so their conclusions are new.",
+        "The issuer added two term loans.",
+        "Each moved the outlook up two steps.",
     ],
 )
 def test_a_number_word_that_is_a_name_or_a_count_is_accepted(sentence):
@@ -4268,9 +4274,19 @@ def test_a_number_word_is_not_refused_when_no_difference_is_withheld():
     assert found == ()
 
 
-def test_a_size_in_words_with_neither_a_unit_nor_a_direction_word_passes_the_known_limit():
-    # The residual limit of E3: "thirty" with no unit and no direction word is no longer read.
-    assert _w_issues("The gap is thirty.") == ()
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "The gap is thirty.",
+        "Gross debt fell by one hundred and ten.",
+        "Net debt is eighty lower.",
+        "Cash fell by thirty.",
+    ],
+)
+def test_a_size_in_words_with_no_unit_word_after_it_passes_the_recorded_limit(sentence):
+    # The recorded limit of W (`ponytail:` at `_WORDED`): only a listed unit word directly after a
+    # number word is refused; a size in words after a direction word is not read.
+    assert _w_issues(sentence) == ()
 
 
 def test_a_digit_count_beside_a_count_noun_is_accepted_and_a_new_noun_is_refused():
