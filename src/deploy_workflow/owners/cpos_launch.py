@@ -1507,15 +1507,17 @@ def _millions_of(unit: str, codes: Collection[str]) -> bool:
     return bool(re.fullmatch(rf"{token}\s*{_MILLIONS}|{_MILLIONS}\s+{token}", unit.strip()))
 
 
-_PREFIXED = re.compile(rf"[A-Za-z][{''.join(_SYMBOL_CODE)}]")
+_PREFIXED = re.compile(rf"[A-Za-z]\s*[{''.join(_SYMBOL_CODE)}]")
+_PREFIXED_RUN = re.compile(rf"[A-Za-z]+\s*[{''.join(_SYMBOL_CODE)}]")
 
 
 def _unidentified_symbols(unit: str) -> tuple[bool, str]:
-    """Whether `unit` has a currency symbol with a letter right before it (`C$`, `A$`, `CN\u00a5`):
-    the symbol alone does not say which currency it is. `US$` is the launcher's own spelling of
-    USD, so it is not one. Also returns `unit` with those prefixed symbols removed."""
+    """Whether `unit` has a currency symbol with a letter right before it, spaced or not (`C$`,
+    `C $`, `A$`, `CN\u00a5`): the symbol alone does not say which currency it is. `US$` is the
+    launcher's own spelling of USD, so it is not one. Also returns `unit` with those prefixed
+    symbols removed."""
     text = unit.replace("US$", "USD")
-    return bool(_PREFIXED.search(text)), re.sub(rf"[A-Za-z]+[{''.join(_SYMBOL_CODE)}]", "", text)
+    return bool(_PREFIXED.search(text)), _PREFIXED_RUN.sub("", text)
 
 
 def _money_advice(money: str, unit: str) -> str:

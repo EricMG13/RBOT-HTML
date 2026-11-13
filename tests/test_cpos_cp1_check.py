@@ -1958,6 +1958,9 @@ def test_another_currency_at_another_scale_keeps_only_the_gap_advice(unit):
         ("USD", "NZ$m"),
         ("USD", "R$m"),
         ("USD", "C$ thousands"),
+        ("USD", "C $m"),
+        ("USD", "A $m"),
+        ("USD", "HK $ thousands"),
         ("JPY", "CN\u00a5m"),
     ],
 )
@@ -1971,6 +1974,24 @@ def test_a_letter_prefixed_symbol_is_not_the_statement_currency_and_keeps_the_ga
     (issue,) = chart_issues(text, _spec("Chart data: debt stack"), money=money_unit)
     named(issue, f"write `Not supplied: reported in {unit}`")
     assert "restate" not in issue
+
+
+@pytest.mark.parametrize(("code", "unit"), [("USD", "$m"), ("GBP", "\u00a3m"), ("USD", "1$m")])
+def test_a_bare_symbol_is_still_told_the_definite_advice_with_no_gap_option(code, unit):
+    money_unit = money(code)
+    text = complete(relabel(build(), code), money_unit).replace(
+        f"| 12,000 | 3.1 | {money_unit} |", f"| 12,000 | 3.1 | {unit} |"
+    )
+    (issue,) = chart_issues(text, _spec("Chart data: debt stack"), money=money_unit)
+    if unit == "1$m":
+        named(
+            issue,
+            f"restate the figure in millions of the statement currency and write `{money_unit}`",
+        )
+        assert "Not supplied" not in issue
+        return
+    named(issue, f"use `{money_unit}`.")
+    assert "Not supplied" not in issue and "if the figure" not in issue
 
 
 def test_a_prefixed_dollar_on_an_aud_issuer_is_not_told_only_to_write_a_gap():
