@@ -1,0 +1,128 @@
+diff --git a/VERIFICATION.md b/VERIFICATION.md
+index ab7f8c6..dc31985 100644
+--- a/VERIFICATION.md
++++ b/VERIFICATION.md
+@@ -4,6 +4,13 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
+ engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
+ `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
+ 
++## 2026-11-13 — Forecast page: a Markdown file is no longer called HTML; the Pro forma column's reason is true however CP-1 words pro forma (branch `claude/forecast-true-labels`)
++Scope: offline, base `8e3954a`, fixes `f005b7d` and `5e82133`; no provider or model call; no figure moved, computed or placed. When the pinned model file is not `.html`, the link reads "Download published model (Markdown)" and the "Published model (original HTML)" frame is not drawn; an HTML model is unchanged. The PF column's reason is always "pro forma figures are not placed in this column; the financial foundation shows any it states" (was "no handoff states pro forma adjustments", false when CP-1 prints them); nothing in CP-1 is detected, after the adversarial review found a header-only match misses "PF", "pro-forma", body cells and row labels and misfires on "Pro forma adjustments: none".
++- Failing first: `test_pf_reason_is_true_however_cp1_words_pro_forma` (seven wordings, all seven failed before `5e82133`) and the new Forecast test in `static.test.cjs` failed before the fix for the stated cause (implementer's report; not re-run on the parent by the reviewer or controller).
++- Reader and fidelity check, scope: TWO real runs of one issuer (`tdg-full-copilot-sol-high-001-resume`, `tdg-full-copilot-sol-001-resume`, TransDigm, as of 30 September 2024), headless Chrome from disk at 1440 and 420 px, read by the controller; no screenshot was read against the September VMO2 reference because only one link's text and one absent frame change. Before: link "Download original HTML" to `annual.md`, frame drawn. After: link "Download published model (Markdown)" to `annual.md`, no frame, page fits, both runs, both widths. PF column re-derived from each run's own CP-1 and CP-2G handoffs with `model_files(history=True)`: every cell missing with that reason (re-run at `5e82133`, exit 0), the other seven history columns equal to the delivered ones.
++- Gates (controller): `uv run pytest tests/test_cpos_periods.py -q` exit 0, 180 passed; `node --test apps/issuer-library/credit_os/web/static.test.cjs` exit 0; `uv run pytest tests/test_credit_os_store.py tests/test_library_page_browser.py -q -k "pf or pro_forma or forecast or model"` exit 0, 26 passed, 1 skipped; `uv run python tools/quality_gate.py` exit 0, 0 findings. The pinned hash of `calculation.json` in `test_a_block_without_column_publishes_the_files_it_always_did` changed with the reason text (the other four pins unchanged; the new hash comes from the code under test). Task review of `f005b7d`: approve, one Low (a missing `href` would read as Markdown; the store always sets it); `5e82133` answers the adversarial review's W1 and is re-reviewed by the coordinator.
++- Not verified: a delivery already made keeps its old PF reason until it is delivered again (the reason is written at delivery, not at page build); a real run with a published `model.html`; the full suite; Windows. Open for the owner, not fixed here: the page's Downside case differs from the forward credit model's own downside on these runs (coverage 2.41x against 1.68x; `rate_increase` read as proportional by the code and sent as an additive yield by the module).
++
+ ## 2026-11-13 — Signal slice 2: service and feed page (branch `claude/signal-2-service-pages`, tip `ba04ff7` plus this entry)
+ Scope: Signal's HTTP service, feed API and feed page, its packaging, and the optional Signal link on the run start rail. No AI pass, no groups or threads, no settings pages, no login, no model call, no cost. The reader check in `AGENTS.md` applies to the issuer report and is not owed here.
+ - `uv run pytest` on the ten `tests/test_signal_*.py` unit files, `tests/test_run_start_service.py` and `tests/test_issuer_library_packaging.py`: exit 0, 377 passed.
+diff --git a/apps/issuer-library/credit_os/web/static.test.cjs b/apps/issuer-library/credit_os/web/static.test.cjs
+index 941dee6..b1eda72 100644
+--- a/apps/issuer-library/credit_os/web/static.test.cjs
++++ b/apps/issuer-library/credit_os/web/static.test.cjs
+@@ -4307,6 +4307,22 @@ test('Forecast page with a model: the register, the limitations and Built from d
+   assert.ok(!strip(html.slice(html.indexOf('forecast-register'), html.indexOf('</details>', html.indexOf('forecast-register')))).includes('A-01'), 'the id column is Evidence\'s');
+ });
+ 
++test('Forecast page: the download link and the model frame say HTML only when the published model is an HTML file', () => {
++  const draw = (file) => {
++    const model = pickModel(HASH_1, {
++      mode: 'candidate', qualification: 'partial', download: file, href: file, scope: 'A forecast.',
++      cashflow: { units: 'USD millions', columns: gridColumns, notes: [], limits: [], rows: [gridRow('Revenue', 'Revenue', false, [cell('value', '1,000'), cell('value', '1,050')])], other: null },
++      sources: [],
++    });
++    return fcPage(undefined, { models: [model], runFields: PICK_RUNS }).forecastView(RUN, HASH_1);
++  };
++  const html = draw('../d/model.html?v=1');
++  assert.ok(html.includes('>Download original HTML</a>') && html.includes('<summary>Published model (original HTML)</summary>') && html.includes('class="model-original"'));
++  const md = draw('../d/annual.md?v=1');
++  assert.ok(md.includes('>Download published model (Markdown)</a>'), 'the Markdown link says Markdown');
++  assert.ok(!md.includes('original HTML') && !md.includes('model-original') && !md.includes('model-preview'), 'no HTML frame for a Markdown file');
++});
++
+ test('Forecast charts: an earlier-format run draws the same cards and links each to its module\'s Key numbers; a new-format run links the Charts part', () => {
+   const earlier = fcPage().forecastCharts(RUN);
+   assert.equal(fcCards(earlier).length, 5);
+diff --git a/apps/issuer-library/credit_os/web/views.js b/apps/issuer-library/credit_os/web/views.js
+index 56d6ea4..6ad46b5 100644
+--- a/apps/issuer-library/credit_os/web/views.js
++++ b/apps/issuer-library/credit_os/web/views.js
+@@ -1323,8 +1323,10 @@ function forecastView(context,id) {
+   const built=model.sources.length?`<section class="forecast-built"><h2>Built from</h2><ul class="fc-built">${model.sources.map(source).join('')}</ul>${differing?'<p class="forecast-attempts">These inputs come from different attempts.</p>':''}</section>`:'';
+   // The frame names the run by its period and pathway only (the select's labels may carry a delivery tag or a relationship).
+   const label=contexts[context]?runName(contexts[context]):'This run';
+-  const frame=`<details class="model-original"><summary>Published model (original HTML)</summary><div class="frame-host"><div class="frame-head"><h2>Published model</h2><span>${esc(label)}</span></div><p class="frame-status" role="status" hidden></p><iframe id="model-preview" data-download="${esc(model.download)}" data-src="${esc(model.href)}" title="Published model, ${esc(label)}" sandbox="allow-scripts allow-downloads" referrerpolicy="no-referrer"></iframe></div></details>`;
+-  return `<div class="forecast">${forecastCharts(context)}<div class="report-tools forecast-tools">${select}${acceptance.html}<a href="${esc(model.download)}" download>Download original HTML</a></div>${cashflowSection(model)}${assumptions}${model.cashflow?`<section class="forecast-limits"><h2>Model limitations</h2><ul>${limitList}</ul></section>`:''}${why}${built}${frame}</div>`;
++  // Only an HTML file can be framed and called HTML; the catalogue pins annual.md when a delivery has no model.html.
++  const isHtml=/\.html$/i.test(String(model.href).split(/[?#]/)[0]);
++  const frame=!isHtml?'':`<details class="model-original"><summary>Published model (original HTML)</summary><div class="frame-host"><div class="frame-head"><h2>Published model</h2><span>${esc(label)}</span></div><p class="frame-status" role="status" hidden></p><iframe id="model-preview" data-download="${esc(model.download)}" data-src="${esc(model.href)}" title="Published model, ${esc(label)}" sandbox="allow-scripts allow-downloads" referrerpolicy="no-referrer"></iframe></div></details>`;
++  return `<div class="forecast">${forecastCharts(context)}<div class="report-tools forecast-tools">${select}${acceptance.html}<a href="${esc(model.download)}" download>${isHtml?'Download original HTML':'Download published model (Markdown)'}</a></div>${cashflowSection(model)}${assumptions}${model.cashflow?`<section class="forecast-limits"><h2>Model limitations</h2><ul>${limitList}</ul></section>`:''}${why}${built}${frame}</div>`;
+ }
+ // The Library screen. The served catalogue (window.DESIGN_CATALOGUE) is screened and sorted by LibraryLogic (screening.js); this places it. Nothing here calculates, converts or rescales a value.
+ const METRIC_NAMES={revenue:'Revenue',ebitda:'EBITDA',leverage:'Leverage',net_leverage:'Net leverage',coverage:'Interest coverage',cash:'Closing cash',undrawn:'Undrawn facilities',cashflow:'Cash flow measure'};
+diff --git a/src/deploy_workflow/owners/cpos_periods.py b/src/deploy_workflow/owners/cpos_periods.py
+index fa0b131..18b18c8 100644
+--- a/src/deploy_workflow/owners/cpos_periods.py
++++ b/src/deploy_workflow/owners/cpos_periods.py
+@@ -438,7 +438,9 @@ NOT_DATED = (
+ )
+ NO_YTD = "the latest reported period is fiscal year {label}; there is no year to date"
+ NEEDS = "needs {labels}, which the table holding the named row does not print"
+-NO_PF = "no handoff states pro forma adjustments"
++NO_PF = (
++    "pro forma figures are not placed in this column; the financial foundation shows any it states"
++)
+ NOT_EXACT = "the figures cannot be added exactly"
+ PART_YEAR = "a ratio to part-year earnings is not shown"
+ NO_COLUMN = "the tables holding the named rows print no {group} column Python can read"
+diff --git a/tests/test_cpos_periods.py b/tests/test_cpos_periods.py
+index 627b630..9ff9faa 100644
+--- a/tests/test_cpos_periods.py
++++ b/tests/test_cpos_periods.py
+@@ -371,6 +371,33 @@ def test_pf_is_unavailable_with_its_reason():
+     assert all(v == {"amount": None, "reason": NO_PF} for v in column["values"].values())
+ 
+ 
++PF_REASON = (
++    "pro forma figures are not placed in this column; the financial foundation shows any it states"
++)
++
++
++@pytest.mark.parametrize(
++    "extra",
++    [
++        [["Metric", "Pro forma net debt"], ["Net debt", "1"]],
++        [["Metric", "PF net debt"], ["Net debt", "1"]],
++        [["Metric", "Pro-forma net debt"], ["Net debt", "1"]],
++        [
++            ["Metric", "Net debt", "Basis and limitation"],
++            ["Net debt", "1", "pro forma for the dividend"],
++        ],
++        [["Metric", "Net debt"], ["Pro forma net debt", "1"]],
++        [["Metric", "Pro forma adjustments: none"], ["Net debt", "1"]],
++        [["Metric", "Net debt"], ["Net debt", "1"]],
++    ],
++    ids=["header", "pf", "hyphen", "body-cell", "row-label", "none", "no-mention"],
++)
++def test_pf_reason_is_true_however_cp1_words_pro_forma(extra):
++    column = history([*TABLES, extra], OPERANDS)["columns"][-1]
++    assert column["reason"] == PF_REASON
++    assert all(v == {"amount": None, "reason": PF_REASON} for v in column["values"].values())
++
++
+ FY_ONLY = """| Reported label | FY2024 | FY2023 | Locator |
+ | --- | --- | --- | --- |
+ | Net sales | 1,000 | 940 | p.2 |
+@@ -1382,8 +1409,10 @@ def test_the_unread_headers_limit_lists_the_headers_of_located_lines_only():
+ PINNED_FILES = {  # sha256 of the files before `column` existed: a block without it is unchanged
+     "annual.md": "6b2a22771cdc76eb8735645c457db14eea4db57c0ecea10552cabd571bd63ca9",
+     # F1 reworded the NEEDS reason (11 cells of this file, nothing else): the pin before it was
+-    # c3691af45dd03b055f5a70b512ba359e409c96477b53ea0043b1fb9df825ace4.
+-    "calculation.json": "7c4c73bc4084a4e68473b8ae5e348c50b9833073a75dc5fa9256dda5596e02ad",
++    # c3691af45dd03b055f5a70b512ba359e409c96477b53ea0043b1fb9df825ace4. W1 reworded the PF reason
++    # (its cells of this file, nothing else): the pin before it was
++    # 7c4c73bc4084a4e68473b8ae5e348c50b9833073a75dc5fa9256dda5596e02ad.
++    "calculation.json": "a771bf82fda009bf7855a9b5cc152d07570ed28fc67e4aadf0c1886b8fd61618",
+     "forecast.md": "fb1471c434a81a15af24362b963077f77c88f83f54cdac2648395a067bea43ea",
+     "forecast_exact.json": "0e27b0a291c29ad6c8e72713190adfaf7b955fc9b178db9aea27a1c9cc831303",
+     "quarter.md": "2ebd4cd19a8d654820261be9ed74bfecc81da5ebf89b39fbc2d963434a49e74f",

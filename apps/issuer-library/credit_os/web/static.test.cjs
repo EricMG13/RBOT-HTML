@@ -4307,6 +4307,22 @@ test('Forecast page with a model: the register, the limitations and Built from d
   assert.ok(!strip(html.slice(html.indexOf('forecast-register'), html.indexOf('</details>', html.indexOf('forecast-register')))).includes('A-01'), 'the id column is Evidence\'s');
 });
 
+test('Forecast page: the download link and the model frame say HTML only when the published model is an HTML file', () => {
+  const draw = (file) => {
+    const model = pickModel(HASH_1, {
+      mode: 'candidate', qualification: 'partial', download: file, href: file, scope: 'A forecast.',
+      cashflow: { units: 'USD millions', columns: gridColumns, notes: [], limits: [], rows: [gridRow('Revenue', 'Revenue', false, [cell('value', '1,000'), cell('value', '1,050')])], other: null },
+      sources: [],
+    });
+    return fcPage(undefined, { models: [model], runFields: PICK_RUNS }).forecastView(RUN, HASH_1);
+  };
+  const html = draw('../d/model.html?v=1');
+  assert.ok(html.includes('>Download original HTML</a>') && html.includes('<summary>Published model (original HTML)</summary>') && html.includes('class="model-original"'));
+  const md = draw('../d/annual.md?v=1');
+  assert.ok(md.includes('>Download published model (Markdown)</a>'), 'the Markdown link says Markdown');
+  assert.ok(!md.includes('original HTML') && !md.includes('model-original') && !md.includes('model-preview'), 'no HTML frame for a Markdown file');
+});
+
 test('Forecast charts: an earlier-format run draws the same cards and links each to its module\'s Key numbers; a new-format run links the Charts part', () => {
   const earlier = fcPage().forecastCharts(RUN);
   assert.equal(fcCards(earlier).length, 5);
