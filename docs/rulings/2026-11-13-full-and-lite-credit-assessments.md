@@ -31,12 +31,18 @@ Owner's words, 2026-11-13: "create full credit snapshot (full credit assessment)
 
 ## Controller rulings, told to the owner, which the owner can reverse
 
-- CP-MODEL stays in the lite preset. The plan said "no CP-MODEL". CP-MODEL makes no model call. It is
-  listed because the lite report holds the Model-owned chart strip and credit metrics, and the contracts
-  rule requires CP-MODEL with them. The analytical run is therefore CP-0, CP-1, CP-1A, CP-2 and CP-2A,
-  and a lite run also publishes the CP-1-only forecast (no CP-2G scenarios, no downside case), as
-  `relative_value` and `portfolio_decision` do. Reversing this drops the chart strip and the credit
-  metrics from lite and publishes no forecast.
+- Lite has no CP-MODEL and publishes no forecast, as the approved plan said ("No CP-MODEL, so no
+  forecast is published"). An earlier controller ruling kept CP-MODEL on the belief that the lite chart
+  strip and credit metrics blocks need it; the whole-branch review disproved that, and this ruling
+  reverses it. The launcher routes `model-chart-strip` and `financials-credit-metrics` to CP-1 with or
+  without CP-MODEL, and a five-module lite run delivers the same nine blocks. The Forecast page states
+  that no forecast was published for a lite run, as it does for past short-snapshot runs. The chart strip
+  and credit metrics are still delivered, routed to CP-1. Adding CP-MODEL back would add a CP-1-only
+  base-case forecast (as `relative_value` and `portfolio_decision` have) at about 5,700 more characters
+  of CP-1 prompt (measured 5,717) plus a period table and a JSON block of output; no live model has yet
+  written that block. It is one preset entry to reverse. The "CP-MODEL follows CP-1 when the composition
+  holds Model-owned blocks" rule in `contracts.py` is a convention that no test or runtime check
+  enforces; lite is a deliberate exception.
 - The `model_testing/configs.py` case list has no lite case. It drives paid stage plans and needs an
   issuer case folder, which is not chosen. Deferred until the paid lite run.
 - An earlier owner ruling (M1, M2) put CP-DR and CP-2E in every preset. Lite has neither, by the owner's
@@ -45,11 +51,11 @@ Owner's words, 2026-11-13: "create full credit snapshot (full credit assessment)
 ## Prompt size
 
 Instruction characters per pathway (head plus method, CP-8 excluded), measured after merging `main`
-(Task 1 report, fix round 1). Each ceiling is a test; lite's 420,000 was given.
+(Task 1 report, fix round 1); lite's figure is re-measured after CP-MODEL was removed from it. Each ceiling is a test; lite's 420,000 was given.
 
 | pathway | measured | ceiling |
 | --- | --- | --- |
-| lite_credit_assessment | 398,146 | 420,000 |
+| lite_credit_assessment | 392,429 | 420,000 |
 | credit_snapshot | 1,273,692 | 1,340,000 |
 | covenant_refinancing | 1,092,608 | 1,155,000 |
 | distressed_restructuring | 1,125,583 | 1,186,500 |
@@ -60,15 +66,19 @@ Instruction characters per pathway (head plus method, CP-8 excluded), measured a
 
 ## Cost
 
-Baseline, run `tdg-proof-snapshot-opus-002`, per module in USD: CP-0 0.7486, CP-1 1.1002, CP-1A 1.0643,
+Baseline, run `tdg-proof-snapshot-opus-002` (configuration opus-medium: every module at medium effort),
+per module in USD: CP-0 0.7486, CP-1 1.1002, CP-1A 1.0643,
 CP-2 0.7788, CP-2A 1.3824; the five total 5.07. That run was measured before the 2026-11-13 method change
 that enlarged the prompts of CP-0, CP-1A and CP-2, so 5.07 is an estimate for a lite run today. The old
 short snapshot run `tdg-proof-short-opus-001` cost USD 1.95. No lite run has been made, so lite's cost is
-an estimate, not a measurement.
+an estimate, not a measurement. The run-start page's default configuration runs some modules at high
+effort, so a run started from the page can cost more than 5.07. CP-8 runs from the second lite run of an
+issuer and adds its own cost, which is not in 5.07.
 
 ## Status
 
-Built and tested offline. A synthetic lite run with no model reaches an accepted delivery with the
-forecast published (`test_the_lite_pathway_runs_end_to_end_to_a_verified_delivery_with_a_synthetic_provider`).
+Built and tested offline. A synthetic lite run with no model reaches a verified delivery with all nine
+blocks populated and no forecast published
+(`test_the_lite_pathway_runs_end_to_end_to_a_verified_delivery_with_a_synthetic_provider`).
 Not accepted: AGENTS.md requires a reader check of one real run against the September VMO2 reference for a
 presentation change, and no real lite run has been read.

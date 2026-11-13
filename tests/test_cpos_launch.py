@@ -113,8 +113,9 @@ PRESET_ANSWER_KEY = {
     # no CP-DR, CP-2E, CP-MODEL or CP-2G.
     "short_snapshot": "CP-0 CP-1 CP-L10",
     # The lite credit assessment (owner): the credit snapshot's CP-1, CP-1A and CP-2 sections plus
-    # CP-2A's two downside blocks. CP-MODEL is listed because it holds Model-owned blocks.
-    "lite_credit_assessment": "CP-0 CP-1 CP-MODEL CP-1A CP-2 CP-2A",
+    # CP-2A's two downside blocks. No CP-MODEL (ruling 2026-11-13): the chart strip and credit
+    # metrics are routed to CP-1 and no forecast is published.
+    "lite_credit_assessment": "CP-0 CP-1 CP-1A CP-2 CP-2A",
 }
 SHORT_SNAPSHOT = ("CP-0", "CP-1", "CP-L10")
 # Run order of the lite pathway and its report blocks, written by hand from the Front Page: the
@@ -1239,6 +1240,13 @@ def test_the_checker_refuses_a_short_snapshot_that_breaks_the_reader_checks(
 # --- The lite and full credit assessments; the deactivated short snapshot ---------------
 
 
+def test_the_lite_preset_is_cp0_cp1_cp1a_cp2_cp2a_with_no_cp_model():
+    from deploy_vii.contracts import PATHWAY_MODULES as PRESETS
+
+    assert PRESETS["lite_credit_assessment"] == LITE_MODULES
+    assert "CP-MODEL" not in PRESETS["lite_credit_assessment"]
+
+
 def test_the_lite_pathway_plans_exactly_cp0_cp1_cp1a_cp2_cp2a_in_order(tmp_path):
     prepared, _ = all_instructions(tmp_path, "lite_credit_assessment")
     assert tuple(prepared.plan.instructions) == LITE_MODULES
@@ -1261,6 +1269,13 @@ def test_every_lite_block_is_routed_to_a_module_in_the_run(tmp_path):
     assert by_block["key-findings"] == "CP-2"
     assert by_block["company-operating-model"] == "CP-1A"
     assert by_block["downside-stress"] == by_block["break-points"] == "CP-2A"
+    # No CP-MODEL: the chart strip and credit metrics are CP-1's, and its instruction asks for
+    # neither the period table nor the layer-1 forecast block (ruling 2026-11-13).
+    assert by_block["model-chart-strip"] == by_block["financials-credit-metrics"] == "CP-1"
+    assert prepared.plan.publish_forecast is False
+    cp1 = (prepared.directory / "instructions/CP-1.md").read_text()
+    assert cpos_launch.LAYER1_FORECAST_BLOCK not in cp1
+    assert cpos_launch.PERIOD_TABLE_BLOCK not in cp1
 
 
 def test_the_credit_snapshot_is_the_full_credit_assessment_with_its_modules_and_blocks_unchanged():
@@ -1311,14 +1326,16 @@ def test_the_lite_pathway_runs_end_to_end_to_a_verified_delivery_with_a_syntheti
             cap="50",
         ).plan.layout.routes
     )
-    # CP-1 ends with a valid Layer-1 forecast-inputs block: there is no CP-2G in this pathway.
-    provider.answer = lambda context: forecast_answer(context, routes, None, layer1_block())
+    # No CP-MODEL and no CP-2G: CP-1 writes no forecast block, and none is published.
+    provider.answer = lambda context: answer(context, routes)
     assert main(argv) == 0
     seen = capsys.readouterr()
+    # Nothing was requested, so nothing is reported as withheld (as for a short-snapshot run).
     assert "Model not published" not in seen.err
     out = tmp_path / "out"
     completed = json.loads(next(out.glob("completed-*.json")).read_text())
-    assert completed["cp_forecast_published"] is True and completed["forecast_failure"] is None
+    assert completed["cp_forecast_published"] is False and completed["forecast_failure"] is None
+    assert completed["cp_model_published"] is False
     assert tuple(c[0] for c in provider.calls) == LITE_MODULES
     receipt = next((out / "deliveries").glob("*/delivery.json"))
     assert verify_delivery(next(out.glob("delivery-*.json")), receipt.parent) == receipt
@@ -1334,7 +1351,7 @@ def test_the_lite_pathway_runs_end_to_end_to_a_verified_delivery_with_a_syntheti
 # are the owner's; each other pathway's is its measured total (2026-11-13: covenant_refinancing
 # 1,091,950; distressed_restructuring 1,124,925; earnings_update 518,628; portfolio_decision
 # 902,476; relative_value 1,017,908; short_snapshot 140,075) rounded up to the next 10,000 plus 5%.
-# credit_snapshot measured 1,273,034 and lite_credit_assessment 397,486.
+# credit_snapshot measured 1,273,034 and lite_credit_assessment 392,429 once CP-MODEL was removed (2026-11-13).
 INSTRUCTION_BUDGET = {
     "lite_credit_assessment": 420_000,
     "credit_snapshot": 1_340_000,
