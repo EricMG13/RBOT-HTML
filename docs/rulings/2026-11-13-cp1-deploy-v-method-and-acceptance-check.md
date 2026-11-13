@@ -90,19 +90,18 @@ written "to stop the model from self validation and calculation"; CP-OS runs non
 - T7 (`run_script`) builds on the `calculate` change; the check's fixed row names are the
   interface a script would read.
 
-## Open after the whole-branch review (for the owner; the check has used its three fix rounds)
+## Open after the whole-branch review (for the owner)
 
-- Defect: when an interim balance sheet is stated, the net debt rule makes Period cells date-only and
-  the calculation register copies them, but the leverage and cover charts may still say `FY2024`.
-  The chart tie matches by the form of the cell, not by the Period table's dates, so a correct
-  handoff is refused, with a message that wrongly says the register value is not stated
-  (probe `probe_branch_chart_fy_form_vs_dated_register.py`). Fix: match chart rows to register rows
-  by the Period-table fiscal year, as the statement ties already do.
+- Fixed in a fourth round the owner approved (`8424d1b`, adversarial re-review: pass): rows of
+  different checked tables are matched by the period the Period table dates, so `FY2024` in a
+  chart, `FY2024 / 2024-09-30` and `2024-09-30` are one period, and a correct handoff with an
+  interim balance sheet is no longer refused.
 - Decision: a non-USD issuer can no longer state leverage. The US$m net debt cells are gaps for
   such an issuer, and the two-sided tie then refuses a stated ratio. Either tie the numerator to
   the balance sheet's `Total Debt` when the net debt cell is a currency gap, or accept the loss and
   say so in the launcher block and `run_expectations.py`. The reference issuer VMO2 reports in GBP.
-- Lower: the Period table has no heading rule (ask for `### Period table`); a blocked CP-1 still
+- Lower: two fiscal labels given the same End in the Period table are treated as one period (a
+  self-contradictory Period table is not refused); the Period table has no heading rule (ask for `### Period table`); a blocked CP-1 still
   has to write a period column header and a `Unit`; a second table under a statement heading is
   not read; a register header one letter off hides the register's other issues until the next
   write; an `LTM` statement column is refused and nothing says it belongs in the derived-period
