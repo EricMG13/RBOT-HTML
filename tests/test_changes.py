@@ -1180,7 +1180,12 @@ CLOSED_ROW = (
     "| E1 | — | The covenant package gap. | Closed "
     "| The Macro handoff (CP-2E) now shows the package. |"
 )
-REGISTERS = """## Findings
+COVER_ROW = (
+    "| EBITDA / cash interest | Not stated | 3.60x (FY2024) | New source "
+    "| Not comparable: the earlier run does not state it. |"
+)
+REGISTERS = (
+    """## Findings
 
 ### What changed: the issuer
 
@@ -1188,6 +1193,7 @@ REGISTERS = """## Findings
 | --- | --- | --- | --- | --- |
 | Total debt / EBITDA | 4.20x (FY2023) | 3.60x (FY2024) | New period | Leverage fell by 0.60x. |
 @@CASH@@
+@@COVER@@
 
 ### What changed: the analysis
 
@@ -1206,7 +1212,10 @@ REGISTERS = """## Findings
 | E2 | C2 | Segment data is missing. | Remaining | — |
 
 ## Calculations
-""".replace("@@CASH@@", CASH_ROW).replace("@@CLOSED@@", CLOSED_ROW)
+""".replace("@@CASH@@", CASH_ROW)
+    .replace("@@COVER@@", COVER_ROW)
+    .replace("@@CLOSED@@", CLOSED_ROW)
+)
 
 
 def issues_after(old: str, new: str) -> tuple[str, ...]:
@@ -1256,11 +1265,6 @@ def test_a_complete_cp8_handoff_is_accepted():
             "Not comparable: cash fell by 50 US$m.",
             "difference",
         ),  # not comparable: the difference is not printed
-        (
-            "Same definition: cash fell by 50 US$m.",
-            "Not comparable: the definition differs, so cash weakened.",
-            "trend",
-        ),  # not comparable: no trend is drawn
         (
             "Same definition: cash fell by 50 US$m.",
             "Same definition, and not comparable: cash fell by 50 US$m.",
@@ -1313,21 +1317,15 @@ def test_a_fact_row_without_figures_is_free_text_and_one_with_a_figure_names_a_m
 def test_a_measure_the_pack_cannot_compare_is_stated_as_not_stated_or_not_comparable():
     row = (
         "| EBITDA / cash interest | not stated | 3.60x (FY2024) | New source "
-        "| The earlier run does not state it, so it is not comparable. |\n"
+        "| The earlier run does not state it, so it is not comparable. |"
     )
-    text = REGISTERS.replace(
-        "\n### What changed: the analysis", row + "\n### What changed: the analysis", 1
-    )
+    text = REGISTERS.replace(COVER_ROW, row, 1)  # the pack measure's own row, worded differently
     assert cp8_issues(text, PACK) == ()
     bare = row.replace("The earlier run does not state it, so it is not comparable.", "Cover rose.")
-    again = REGISTERS.replace(
-        "\n### What changed: the analysis", bare + "\n### What changed: the analysis", 1
-    )
+    again = REGISTERS.replace(COVER_ROW, bare, 1)
     assert any("not comparable" in i.lower() for i in cp8_issues(again, PACK))
     wrong = row.replace("not stated |", "2.90x (FY2023) |")
-    third = REGISTERS.replace(
-        "\n### What changed: the analysis", wrong + "\n### What changed: the analysis", 1
-    )
+    third = REGISTERS.replace(COVER_ROW, wrong, 1)
     assert any("earlier figure 2.90" in i for i in cp8_issues(third, PACK))
 
 
@@ -1461,10 +1459,9 @@ def test_a_register_with_a_header_and_no_row_or_no_table_is_refused():
 
 def test_a_row_for_no_material_change_is_accepted_with_cause_none():
     text = REGISTERS.replace(
-        REGISTERS[
-            REGISTERS.index("| Total debt") : REGISTERS.index("### What changed: the analysis")
-        ],
-        "| No material change | — | — | None | Nothing material moved. |\n\n",
+        "\n\n### What changed: the analysis",
+        "\n| No material change | — | — | None | Nothing material moved. |\n\n"
+        "### What changed: the analysis",
     )
     assert cp8_issues(text, PACK) == ()
 
@@ -1712,6 +1709,22 @@ def cp8_answer(context: dict) -> str:
         (
             "| Cash | 300 US$m (FY2023) | 275 US$m (FY2024) | Unresolved "
             "| Not comparable: definition differs. |"
+        ),
+        (
+            "| Undrawn committed facilities | 450 US$m (FY2023) | 400 US$m (FY2024) | Unresolved "
+            "| Not comparable: the facility definitions differ. |"
+        ),
+        (
+            "| EBITDA / cash interest | Not stated | 3.40x (FY2024) | New source "
+            "| Not comparable: the earlier run does not state it. |"
+        ),
+        (
+            "| Gross debt | Not stated | 1400 US$m (FY2024) | New source "
+            "| Not comparable: the earlier run does not state it. |"
+        ),
+        (
+            "| Net debt | Not stated | 1125 US$m (FY2024) | New source "
+            "| Not comparable: the earlier run does not state it. |"
         ),
         "",
         "### What changed: the analysis",
@@ -2680,6 +2693,24 @@ def test_equal_net_debt_rows_of_one_period_are_flagged_with_zero_differences():
     assert (change["change_in_gross_debt"], change["change_in_cash"]) == ("0", "0")
 
 
+# The rows of the two net debt measures `_ndpack` adds: a pack measure needs its own row, and
+# both say `Not comparable` so that they print nothing.
+ND_GROSS = (
+    "| Gross debt | 7100 US$m (FY2024) | 6990 US$m (FY2024) | Unresolved "
+    "| Not comparable: the basis differs. |"
+)
+ND_NET = (
+    "| Net debt | 6190 US$m (FY2024) | 6110 US$m (FY2024) | Unresolved "
+    "| Not comparable: the basis differs. |"
+)
+
+
+def nd_row(row: str, passage: str = "", gaps: str = "") -> str:
+    """`with_row` for `_ndpack`: its Gross debt and Net debt rows, unless `row` brings its own."""
+    extra = [r for r in (ND_GROSS, ND_NET) if r.split("|")[1] not in row]
+    return with_row("\n".join([row, *extra]), passage, gaps)
+
+
 def _nd_measure(key, label, values, difference, same_period=True):
     prior, current = values
     side = {**CASH_PRIOR, "label": label, "period": "FY2024"}
@@ -2736,17 +2767,17 @@ def _ndpack(same_period=True, with_flag=True):
     ],
 )
 def test_a_same_period_net_debt_difference_is_printed_in_no_passage(sentence):
-    assert cp8_issues(with_row(LEVERAGE_ROW, sentence + "\n\n"), _ndpack()), "accepted"
+    assert cp8_issues(nd_row(LEVERAGE_ROW, sentence + "\n\n"), _ndpack()), "accepted"
 
 
 def test_the_two_values_of_a_same_period_net_debt_may_be_stated():
     said = "Net debt is 6,190 US$m earlier and 6,110 US$m now; cash is 910 and 880 US$m.\n\n"
-    assert cp8_issues(with_row(LEVERAGE_ROW, said), _ndpack()) == ()
+    assert cp8_issues(nd_row(LEVERAGE_ROW, said), _ndpack()) == ()
 
 
 @pytest.mark.parametrize("pack", [_ndpack(same_period=False), _ndpack(with_flag=False)])
 def test_a_net_debt_change_of_two_periods_or_without_the_flag_may_be_said_to_have_moved(pack):
-    assert cp8_issues(with_row(LEVERAGE_ROW, "Cash fell by 30 US$m.\n\n"), pack) == ()
+    assert cp8_issues(nd_row(LEVERAGE_ROW, "Cash fell by 30 US$m.\n\n"), pack) == ()
 
 
 # --- a withheld difference is printed in no register cell but its own issuer row's Effect ------
@@ -2776,16 +2807,16 @@ WITHHELD_KINDS = {
         "Leverage fell by 0.56x.",
         "0.56",
     ),
-    "net debt, cash": (_ndpack(), with_row(LEVERAGE_ROW), "Cash fell by 30 US$m.", "30"),
+    "net debt, cash": (_ndpack(), nd_row(LEVERAGE_ROW), "Cash fell by 30 US$m.", "30"),
     "net debt, net debt": (
         _ndpack(),
-        with_row(LEVERAGE_ROW),
+        nd_row(LEVERAGE_ROW),
         "Net debt is 80 US$m lower.",
         "80",
     ),
     "net debt, gross debt": (
         _ndpack(),
-        with_row(LEVERAGE_ROW),
+        nd_row(LEVERAGE_ROW),
         "Gross debt fell by 110 US$m.",
         "110",
     ),
@@ -2812,7 +2843,7 @@ def test_the_exemption_is_that_measures_issuer_row_only():
     found = cp8_issues(_in_cell(handoff, WHY_CELL, "Leverage fell by 0.56x."), PACK2)
     assert any("0.56" in i and "difference" in i for i in found), found
     fact = "| Refinancing | — | — | New source | Net debt fell by 80 US$m. |"
-    found = cp8_issues(with_row(LEVERAGE_ROW + "\n" + fact), _ndpack())
+    found = cp8_issues(nd_row(LEVERAGE_ROW + "\n" + fact), _ndpack())
     assert any("80" in i and "difference" in i for i in found), found
 
 
@@ -2839,11 +2870,11 @@ def _own_value_pack():
     ("pack", "handoff", "sentence"),
     [
         (PACK2, with_row(NC_ROW), "Leverage is 6.57x earlier and 6.01x now."),
-        (_ndpack(), with_row(LEVERAGE_ROW), "Net debt is 6,190 US$m earlier and 6,110 US$m now."),
+        (_ndpack(), nd_row(LEVERAGE_ROW), "Net debt is 6,190 US$m earlier and 6,110 US$m now."),
         (_zero_pack(), with_row(LEVERAGE_ROW), "Net debt is 6,190 US$m in both runs."),
-        (_ndpack(same_period=False), with_row(LEVERAGE_ROW), "Cash fell by 30 US$m."),
-        (_ndpack(), with_row(LEVERAGE_ROW), "Total debt / EBITDA was 4.20x earlier."),
-        (_own_value_pack(), with_row(LEVERAGE_ROW), "Cash is 60 US$m earlier and 30 US$m now."),
+        (_ndpack(same_period=False), nd_row(LEVERAGE_ROW), "Cash fell by 30 US$m."),
+        (_ndpack(), nd_row(LEVERAGE_ROW), "Total debt / EBITDA was 4.20x earlier."),
+        (_own_value_pack(), nd_row(LEVERAGE_ROW), "Cash is 60 US$m earlier and 30 US$m now."),
     ],
     ids=["both values", "net debt values", "zero", "unflagged", "other measure", "own value"],
 )
@@ -2927,7 +2958,7 @@ def _cash_nc_text(**kw):
 
 
 def _lever_text(**kw):
-    return with_row(LEVERAGE_ROW, **kw)
+    return nd_row(LEVERAGE_ROW, **kw)
 
 
 def _nc_text(**kw):
@@ -2963,12 +2994,12 @@ def test_a_withheld_difference_without_a_unit_is_refused_wherever_one_with_a_uni
 
 @pytest.mark.parametrize("sentence", ["Cash moved -30.", "Cash fell by -30.", "Cash fell by 30 ."])
 def test_a_signed_or_spaced_bare_withheld_difference_is_refused(sentence):
-    found = cp8_issues(with_row(LEVERAGE_ROW, sentence + "\n\n"), _ndpack())
+    found = cp8_issues(nd_row(LEVERAGE_ROW, sentence + "\n\n"), _ndpack())
     assert any("30" in i and "difference" in i for i in found), found
 
 
 def test_the_refusal_names_the_figure_and_the_measure():
-    found = cp8_issues(with_row(LEVERAGE_ROW, "Cash fell by 30.\n\n"), _ndpack())
+    found = cp8_issues(nd_row(LEVERAGE_ROW, "Cash fell by 30.\n\n"), _ndpack())
     assert any("figure 30" in i and "difference of Cash" in i for i in found), found
 
 
@@ -2986,13 +3017,13 @@ def test_a_bare_decimal_withheld_difference_is_refused():
     ],
 )
 def test_a_bare_count_that_equals_no_withheld_size_is_accepted(sentence):
-    assert cp8_issues(with_row(LEVERAGE_ROW, sentence + "\n\n"), _ndpack()) == ()
+    assert cp8_issues(nd_row(LEVERAGE_ROW, sentence + "\n\n"), _ndpack()) == ()
 
 
 def test_a_module_code_or_list_number_is_no_bare_count():
     pack = _ndpack()
     pack["net_debt_change"] |= {"change_in_cash": "-2", "current_cash": "908"}
-    text = with_row(LEVERAGE_ROW, "1. The credit view (CP-2) ran.\n\n")
+    text = nd_row(LEVERAGE_ROW, "1. The credit view (CP-2) ran.\n\n")
     assert cp8_issues(text, pack) == ()
 
 
@@ -3003,16 +3034,16 @@ def test_a_bare_withheld_difference_is_accepted_in_its_own_issuer_row():
         "| Net debt | 6190 US$m (FY2024) | 6110 US$m (FY2024) | Correction "
         "| Same definition; net debt is 80 lower after the correction. |"
     )
-    assert cp8_issues(with_row(LEVERAGE_ROW + "\n" + net), _ndpack()) == ()
+    assert cp8_issues(nd_row(LEVERAGE_ROW + "\n" + net), _ndpack()) == ()
     elsewhere = net.replace("Net debt |", "Refinancing |")
-    found = cp8_issues(with_row(LEVERAGE_ROW + "\n" + elsewhere), _ndpack())
+    found = cp8_issues(nd_row(LEVERAGE_ROW + "\n" + elsewhere), _ndpack())
     assert any("80" in i and "difference" in i for i in found), found
 
 
 def test_a_bare_size_equal_to_the_measures_own_value_is_accepted():
     pack = _ndpack()
     pack["net_debt_change"] |= {"prior_cash": "60", "current_cash": "30", "change_in_cash": "-30"}
-    assert cp8_issues(with_row(LEVERAGE_ROW, "Cash is 60 earlier and 30 now.\n\n"), pack) == ()
+    assert cp8_issues(nd_row(LEVERAGE_ROW, "Cash is 60 earlier and 30 now.\n\n"), pack) == ()
 
 
 def test_a_zero_difference_withholds_nothing():
@@ -3039,13 +3070,13 @@ def test_a_bare_count_is_still_no_figure_of_a_held_line():
     ],
 )
 def test_a_number_starting_a_continuation_line_is_a_figure(passage, size):
-    found = cp8_issues(with_row(LEVERAGE_ROW, passage), _ndpack())
+    found = cp8_issues(nd_row(LEVERAGE_ROW, passage), _ndpack())
     assert any(size in i for i in found), found
 
 
 def test_a_number_starting_a_fact_rows_effect_cell_is_a_figure():
     row = "| Refinancing | — | — | New source | 80. Net debt is lower. |"
-    found = cp8_issues(with_row(LEVERAGE_ROW + "\n" + row), _ndpack())
+    found = cp8_issues(nd_row(LEVERAGE_ROW + "\n" + row), _ndpack())
     assert any("80" in i and "difference" in i for i in found), found
 
 
@@ -3058,7 +3089,7 @@ def test_a_number_starting_a_fact_rows_effect_cell_is_a_figure():
     ],
 )
 def test_a_real_list_item_number_equal_to_a_withheld_size_is_accepted(passage):
-    assert cp8_issues(with_row(LEVERAGE_ROW, passage), _ndpack()) == ()
+    assert cp8_issues(nd_row(LEVERAGE_ROW, passage), _ndpack()) == ()
 
 
 @pytest.mark.parametrize(
@@ -3071,12 +3102,12 @@ def test_a_real_list_item_number_equal_to_a_withheld_size_is_accepted(passage):
     ],
 )
 def test_a_day_of_month_equal_to_a_withheld_size_is_no_size(sentence):
-    assert cp8_issues(with_row(LEVERAGE_ROW, sentence + "\n\n"), _ndpack()) == ()
+    assert cp8_issues(nd_row(LEVERAGE_ROW, sentence + "\n\n"), _ndpack()) == ()
 
 
 def test_a_number_near_but_not_beside_a_month_is_still_a_size():
     said = "Cash fell by 30 in September.\n\n"
-    found = cp8_issues(with_row(LEVERAGE_ROW, said), _ndpack())
+    found = cp8_issues(nd_row(LEVERAGE_ROW, said), _ndpack())
     assert any("30" in i and "difference" in i for i in found), found
 
 
@@ -3093,7 +3124,7 @@ def test_the_verdict_words_doubled_in_another_cell_and_the_effect_cell_are_refus
 
 
 def _says(passage, pack=None):
-    return cp8_issues(with_row(LEVERAGE_ROW, passage + "\n\n"), pack or _ndpack())
+    return cp8_issues(nd_row(LEVERAGE_ROW, passage + "\n\n"), pack or _ndpack())
 
 
 @pytest.mark.parametrize(
@@ -3218,9 +3249,9 @@ def test_a_size_in_words_is_accepted_in_its_own_issuer_row():
         "| Net debt | 6190 US$m (FY2024) | 6110 US$m (FY2024) | Correction "
         "| Same definition; net debt is eighty lower after the correction. |"
     )
-    assert cp8_issues(with_row(LEVERAGE_ROW + "\n" + net), _ndpack()) == ()
+    assert cp8_issues(nd_row(LEVERAGE_ROW + "\n" + net), _ndpack()) == ()
     elsewhere = net.replace("Net debt |", "Refinancing |")
-    found = cp8_issues(with_row(LEVERAGE_ROW + "\n" + elsewhere), _ndpack())
+    found = cp8_issues(nd_row(LEVERAGE_ROW + "\n" + elsewhere), _ndpack())
     assert any("80" in i and "difference" in i for i in found), found
 
 
@@ -3310,7 +3341,7 @@ def test_a_unicode_hyphen_does_not_split_a_spelled_size(hyphen):
 
 
 def _hold(text, pack=None, held=()):
-    return cp8_issues(with_row(LEVERAGE_ROW, text + "\n\n"), pack or _ndpack(), held)
+    return cp8_issues(nd_row(LEVERAGE_ROW, text + "\n\n"), pack or _ndpack(), held)
 
 
 @pytest.mark.parametrize(
@@ -3857,3 +3888,210 @@ def test_the_currency_code_list_holds_the_fixed_set():
         "AED", "QAR", "KWD", "ILS", "EGP", "NGN", "CLP", "COP", "PEN", "ARS",
     ]  # fmt: skip
     assert sorted(_CODES.split("|")) == sorted(wanted)
+
+
+# --- C1: a pack measure with no row, the trend list, a calculation ID, own-row differences -------
+
+
+def _held(key, label, prior, current, difference):
+    side = {"label": label, "unit": "US$m", "period": "FY2024", "definition": "Cash."}
+    return {
+        "key": key,
+        "label": label,
+        "unit": "US$m",
+        "comparable": "yes",
+        "reason": None,
+        "prior": {**side, "value": prior},
+        "current": {**side, "value": current},
+        "difference": difference,
+        "same_period": True,
+    }
+
+
+# One period, two values, for four measures: the sizes 30 (cash), 100 (gross debt), 130 (net debt)
+# and 8 (undrawn) are all withheld. The limitation ref C12 is a legitimate ref number.
+PACKC = {
+    "measures": [
+        _held("cash", "Cash", "6261", "6231", "-30"),
+        _held("gross_debt", "Gross debt", "25068", "25168", "100"),
+        _held("net_debt", "Net debt", "18807", "18937", "130"),
+        _held("undrawn", "Undrawn committed facilities", "843", "851", "8"),
+    ],
+    "net_debt_change": {
+        "unit": "US$m",
+        "prior_net_debt": "18807",
+        "change_in_gross_debt": "100",
+        "change_in_cash": "-30",
+        "current_net_debt": "18937",
+        "convention": "an increase in cash reduces net debt",
+        "same_period": True,
+        "prior_period": "FY2024",
+        "current_period": "FY2024",
+        "prior_gross_debt": "25068",
+        "prior_cash": "6261",
+        "current_gross_debt": "25168",
+        "current_cash": "6231",
+    },
+    "modules": [{"module": "CP-2", "ran_prior": True, "ran_current": True}],
+    "limitations": {
+        "earlier": [{"ref": "E1", "module": "CP-2", "text": "The covenant package is missing."}],
+        "current": [{"ref": "C12", "module": "CP-2", "text": "The covenant package is missing."}],
+    },
+}
+CASH_C = (
+    "| Cash | 6261 US$m (FY2024) | 6231 US$m (FY2024) | Correction "
+    "| Same definition: corrected by USD 30 million. |"
+)
+GROSS_C = (
+    "| Gross debt | 25068 US$m (FY2024) | 25168 US$m (FY2024) | Method change "
+    "| Same definition: the method now counts leases. |"
+)
+NET_C = (
+    "| Net debt | 18807 US$m (FY2024) | 18937 US$m (FY2024) | Method change "
+    "| Not comparable: net debt follows the gross debt basis. |"
+)
+UNDRAWN_C = (
+    "| Undrawn committed facilities | 843 US$m (FY2024) | 851 US$m (FY2024) | Method change "
+    "| Same definition: the method now counts the revolver. |"
+)
+FACT_C = "| Term loan refinancing | Not announced | Announced | New source | Maturities extended. |"
+
+
+def registers_c(*rows: str, passage: str = "") -> str:
+    return f"""## Findings
+
+{passage}### What changed: the issuer
+
+| Measure or fact | Earlier | Current | Cause | Effect on the credit view |
+| --- | --- | --- | --- | --- |
+{chr(10).join(rows)}
+
+### What changed: the analysis
+
+| Module | Status | Cause | Why |
+| --- | --- | --- | --- |
+| Credit view (CP-2) | Unchanged | None | Same view. |
+
+### Limitations ledger
+
+| Earlier ref | Current ref | Limitation | Status | What closed it |
+| --- | --- | --- | --- | --- |
+| E1 | C12 | The covenant package is missing. | Remaining | — |
+
+## Calculations
+"""
+
+
+def test_the_valid_c_fixture_is_accepted():
+    assert cp8_issues(registers_c(CASH_C, GROSS_C, NET_C, UNDRAWN_C, FACT_C), PACKC) == ()
+
+
+def test_every_pack_measure_needs_its_own_row():
+    assert cp8_issues(REGISTERS, PACK) == ()
+    cash = cp8_issues(REGISTERS.replace(CASH_ROW + "\n", "", 1), PACK)
+    assert len(cash) == 1 and "the pack measure `Cash` has no row" in cash[0], cash
+    cover = cp8_issues(REGISTERS.replace(COVER_ROW + "\n", "", 1), PACK)  # comparable: no
+    assert len(cover) == 1 and "the pack measure `EBITDA / cash interest` has no row" in cover[0]
+    both = cp8_issues(REGISTERS.replace(CASH_ROW + "\n", "").replace(COVER_ROW + "\n", ""), PACK)
+    assert len(both) == 2
+
+
+def test_a_row_for_no_material_change_comes_after_the_measure_rows_not_instead_of_them():
+    row = "| No material change | — | — | None | Nothing else changed. |\n"
+    assert cp8_issues(REGISTERS.replace(COVER_ROW + "\n", COVER_ROW + "\n" + row), PACK) == ()
+
+
+def test_not_comparable_may_say_that_no_trend_is_drawn():
+    said = "Not comparable: the EBITDA basis changed, so no trend is drawn."
+    assert issues_after("Same definition: cash fell by 50 US$m.", said) == ()
+
+
+def test_not_comparable_still_refuses_a_movement_of_a_pack_difference():
+    moved = "Not comparable: the EBITDA basis changed, and leverage rose by 0.60x."
+    found = issues_after("Same definition: cash fell by 50 US$m.", moved)
+    assert found and any("0.60" in issue for issue in found), found
+
+
+def test_a_calculation_id_is_refused_with_the_way_to_write_it():
+    passage = "### Bottom line\n\nPer calculation C12 of the earlier financial data handoff.\n\n"
+    text = registers_c(CASH_C, GROSS_C, NET_C, UNDRAWN_C, passage=passage)
+    found = cp8_issues(text, PACKC)
+    assert len(found) == 1, found
+    assert "C12" in found[0] and "describe the calculation in words" in found[0], found
+
+
+def test_the_cash_row_may_print_its_own_difference_and_a_passage_may_not():
+    text = registers_c(CASH_C, GROSS_C, NET_C, UNDRAWN_C)
+    assert cp8_issues(text, PACKC) == ()
+    said = "### Bottom line\n\nCash fell by USD 30 million.\n\n"
+    found = cp8_issues(registers_c(CASH_C, GROSS_C, NET_C, UNDRAWN_C, passage=said), PACKC)
+    assert any("figure 30" in issue and "Cash" in issue for issue in found), found
+
+
+# Gross debt and net debt both differ by 120; gross debt may print it, net debt says Not comparable.
+PACK_120 = {
+    **PACKC,
+    "measures": [
+        _held("gross_debt", "Gross debt", "25068", "25188", "120"),
+        _held("net_debt", "Net debt", "18807", "18927", "120"),
+    ],
+    "net_debt_change": {
+        **PACKC["net_debt_change"],
+        "change_in_gross_debt": "120",
+        "change_in_cash": "0",
+        "current_net_debt": "18927",
+        "current_gross_debt": "25188",
+        "current_cash": "6261",
+        "prior_cash": "6261",
+    },
+}
+GROSS_120 = (
+    "| Gross debt | 25068 US$m (FY2024) | 25188 US$m (FY2024) | Correction "
+    "| Same definition: the current run corrects the earlier total by 120 US$m. |"
+)
+NET_120 = (
+    "| Net debt | 18807 US$m (FY2024) | 18927 US$m (FY2024) | Method change "
+    "| Not comparable: net debt follows the gross debt basis. |"
+)
+
+
+def test_gross_debt_may_print_its_difference_when_net_debt_differs_by_the_same_size():
+    assert cp8_issues(registers_c(GROSS_120, NET_120), PACK_120) == ()
+    net = NET_120.replace("follows the gross debt basis", "moved by 120 US$m")
+    found = cp8_issues(registers_c(GROSS_120, net), PACK_120)
+    assert any("figure 120" in issue and "Net debt" in issue for issue in found), found
+    said = "### Bottom line\n\nNet debt moved by 120 US$m.\n\n"
+    found = cp8_issues(registers_c(GROSS_120, NET_120, passage=said), PACK_120)
+    assert any("figure 120" in issue for issue in found), found
+
+
+def fact_issues(row: str) -> tuple[str, ...]:
+    # The Cash row says `Not comparable` and prints nothing, so only the fact row can print a size.
+    cash = CASH_C.replace("Same definition: corrected by USD 30 million.", "Not comparable: basis.")
+    return cp8_issues(registers_c(cash, GROSS_C, NET_C, UNDRAWN_C, row), PACKC)
+
+
+def test_a_fact_row_prints_no_withheld_size_in_any_of_its_cells():
+    earlier = fact_issues(
+        "| Term loan refinancing | 30 (FY2024) | Announced | New source | Done. |"
+    )
+    assert any("figure 30" in i and "Cash" in i for i in earlier), earlier
+    first = fact_issues("| Cash fell by 30 | Not announced | Announced | New source | Done. |")
+    assert any("figure 30" in i and "Cash" in i for i in first), first
+    count = "| Term loan refinancing | 8 findings | Announced | New source | Done. |"
+    assert fact_issues(count) == ()  # a count noun after the number: a count, not the size 8
+    assert fact_issues(FACT_C) == ()
+
+
+def test_an_empty_issuer_register_is_told_one_row_per_measure_then_no_material_change():
+    lev = (
+        "| Total debt / EBITDA | 4.20x (FY2023) | 3.60x (FY2024) | New period "
+        "| Leverage fell by 0.60x. |\n"
+    )
+    empty = REGISTERS.replace(lev, "").replace(CASH_ROW + "\n", "").replace(COVER_ROW + "\n", "")
+    wording = (
+        "one row per pack measure, then, if nothing changed, "
+        "one `No material change` row after them"
+    )
+    found = cp8_issues(empty, PACK)
+    assert any(wording in i for i in found), found
