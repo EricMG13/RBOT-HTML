@@ -1544,6 +1544,20 @@ def test_a_register_unit_that_is_not_the_money_unit_is_refused():
     assert len(issues) == 12, issues
 
 
+def test_the_adjusted_ebitda_row_in_another_currency_than_the_statements_is_refused():
+    gbp_text = relabel(build())
+    row = "| EBITDA (Adjusted) | 4,173 | 3,395 | GBP millions |"
+    assert row in gbp_text
+    text = gbp_text.replace(row, row.replace("GBP millions", "USD millions"))
+    issues = [i for i in owned(complete(text, "GBPm")) if "currency" in i]
+    assert len(issues) == 1, issues
+    named(issues[0], "GBP", "USD", "EBITDA (Adjusted)")
+
+
+def test_the_adjusted_ebitda_row_in_the_statement_currency_is_not_refused():
+    assert owned(complete(relabel(build()), "GBPm")) == []
+
+
 def test_figures_with_no_single_statement_currency_are_refused_not_assumed_usd():
     text = build().replace("| USD millions |", "| Not supplied: no unit |")
     issues = owned(complete(text))

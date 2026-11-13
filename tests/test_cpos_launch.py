@@ -2598,7 +2598,7 @@ def test_cp1_method_names_the_operand_tables_the_check_reads():
         "`Adjusted EBITDA / cash interest`",
     ):
         assert name in text, name
-    assert "`Unit` is `US$m`" in text
+    assert "`Unit` is the money unit" in text and "`Unit` is `US$m`" not in text
     assert (
         "`Net Cash Change` excludes nothing: it is operating plus investing plus financing" in text
     )
@@ -2679,6 +2679,15 @@ def test_cp1_example_sentences_carry_no_bracket_label_and_no_page_locator():
     assert not re.search(r"\bpp?\.\s*\d|\bpages?\s+\d", text, re.IGNORECASE)
     assert "Page locators go in `Source` columns and Basis lines, never in a sentence" in text
     assert "never inside a sentence: reported (with its source)" in text
+
+
+def test_the_step_file_gives_the_fixed_register_rows_the_money_unit_not_us_dollars():
+    """Owner ruling C1: the six rows' `Unit` is the money unit (`GBPm` for a GBP issuer)."""
+    text = (CP1_DIR / "references/REF_CP-1_STEPS.md").read_text()
+    fixed = next(line for line in text.splitlines() if line.startswith("- Fixed `Metric Name`"))
+    assert "`Unit` is the money unit" in fixed and "US$m" not in fixed
+    for name in CP1_SENT:
+        assert "US$m" not in (CP1_DIR / name).read_text(), name
 
 
 def test_cp1_method_files_are_archived_with_hashes_and_named_edits():
@@ -2846,9 +2855,11 @@ def test_every_module_is_told_what_stands_for_acceptance_scripts_and_questions(t
 # dfff264 skill, runbook and step file, not the STEP_CONTRACTS sections, so runs made before it are
 # correctly marked "Earlier methods" for CP-1. The score section follows, as for every skill module.
 # Fix round 1 of that change (the acceptance check's rulings R2, R5, R9) edited the step file again.
+# Owner ruling C1 (own-currency money tables) edited it once more: the six fixed register rows'
+# `Unit` is the money unit, not `US$m`.
 METHOD_TEXT_SHA256_AT_1B41E65 = {
     "CP-0": "e8d3e77bc48bc98e2fd8595e7b46ee7fc786e859591cf244325f3508b7d5dac9",
-    "CP-1": "30af21ed459c896ff61e5a4c0cb13f064349ae93c74a02ca4371be93e84edf69",
+    "CP-1": "f047d555dd9ae1284a8fbf42feb3b63096b00077c021a303357fa16ce933d493",
     "CP-1A": "4c8efcfafe748cd01e6c856041349397c77384c3c82566b1f36a429535c01639",
     "CP-1B": "38d9fa7b075d1ce5d0cd21bcc216f57f37369cd4db395b3f1fb65498697a509f",
     "CP-1C": "9353afdbce820f59c2dcabc951fc1ff3813174b3c84e79b47bc22bea97f3bbe8",
@@ -7775,6 +7786,41 @@ def test_a_gbp_strip_fact_states_gbp_and_never_usd(tmp_path):
     ]
     assert typed and {f["currency"] for f in typed} == {"GBP"}
     assert b"US$" not in files["report-view.json"]
+
+
+def gapped_gbp_strip(prepared, context, monkeypatch):
+    monkeypatch.setitem(
+        CHART_TABLES, "Chart data: liquidity", NON_USD_TABLES["Chart data: liquidity"]
+    )
+    monkeypatch.setitem(
+        CHART_TABLES, "Chart data: debt maturities", NON_USD_TABLES["Chart data: debt maturities"]
+    )
+    return gbp(answer(context, list(prepared.plan.layout.routes)))
+
+
+def test_an_all_gap_strip_figure_on_a_gbp_handoff_is_labelled_gbpm_not_us_dollars(
+    tmp_path, monkeypatch
+):
+    prepared, task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
+    raw = gapped_gbp_strip(prepared, context, monkeypatch)
+    assert _checked_handoff(task, raw.encode(), checker(prepared.layout)) == ()
+    block = strip_of(prepared, raw, tmp_path, "model-chart-strip")
+    liquidity, ladder = block.figures[2], block.figures[3]
+    assert all(m.value is None for f in (liquidity, ladder) for m in f.chart.marks)
+    assert liquidity.chart.unit == ladder.chart.unit == "GBPm"
+    assert "US$" not in block.model_dump_json()
+
+
+def test_an_all_gap_strip_figure_with_no_single_statement_currency_has_no_unit(
+    tmp_path, monkeypatch
+):
+    prepared, _task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
+    raw = gapped_gbp_strip(prepared, context, monkeypatch).replace(
+        "GBP millions", "Not supplied: no unit"
+    )
+    block = strip_of(prepared, raw, tmp_path, "model-chart-strip")
+    assert block.figures[2].chart.unit is block.figures[3].chart.unit is None
+    assert "US$" not in block.model_dump_json()
 
 
 def test_a_strip_figure_in_two_units_is_refused_by_the_adapter(tmp_path):

@@ -36,6 +36,7 @@ from deploy_vii.report_view import (
     BlockTab,
     CallItem,
     FactCoord,
+    Figure,
     ReportView,
     _call,
     _ChartPoint,
@@ -66,10 +67,6 @@ from deploy_workflow.handoff_delivery import (
 CHART_UNITS: dict[str, UnitClass] = {"x": "multiple", "US$m": "amount", "%": "percent"}
 # CP-1's money figures state the issuer's own currency: `US$m` or its code and `m` (`GBPm`).
 MONEY_UNIT = re.compile(r"US\$m|[A-Z]{3}m", re.ASCII)
-
-
-def _unit_class(unit: str) -> UnitClass:
-    return "amount" if MONEY_UNIT.fullmatch(unit) else CHART_UNITS[unit]
 
 
 def _currency_of(unit: str | None) -> str | None:
@@ -609,8 +606,27 @@ def _figure_money(
     return rows.pop() if len(rows) == 1 and MONEY_UNIT.fullmatch(next(iter(rows))) else None
 
 
+NO_UNIT = "unit not stated"  # stands in only while a figure with no unit is built; see _unitless
+
+
+def _unitless(figure: Figure) -> Figure:
+    """The figure as built with `NO_UNIT`, drawn with no unit: a chart's unit and its table twin's
+    scale may both be absent, so none is stated rather than one assumed."""
+    twin = figure.chart.table_twin.model_copy(update={"scale": None})
+    chart = figure.chart.model_copy(update={"unit": None, "table_twin": twin})
+    return figure.model_copy(update={"chart": chart})
+
+
+def _handoff_money(raw: bytes | None) -> str | None:
+    """The money unit the handoff's statement tables state (`US$m`, `GBPm`); None when they state
+    no single currency, so nothing is assumed."""
+    from deploy_workflow.owners.cpos_cp1_check import money_unit
+
+    return None if raw is None else money_unit(raw.decode())
+
+
 def _numeric_observations(
-    module: ModuleView, table: ReportTable, route: MarkdownRoute
+    module: ModuleView, table: ReportTable, route: MarkdownRoute, money: str | None = None
 ) -> tuple[ModuleView, tuple[str, ...], tuple[_ChartPoint, ...], str]:
     """Copy explicitly selected cells into the existing charts without calculating finance."""
     columns = [column.label for column in table.columns]
@@ -627,7 +643,8 @@ def _numeric_observations(
     selected = [row for row in table.rows if not route.row_labels or row.label in route.row_labels]
     facts = {fact.fact_id: fact for fact in module.facts}
     figure_unit = _figure_money(facts, selected, columns, route) if _is_money(route) else None
-    label_unit = figure_unit or route.chart_unit or ""
+    # A money figure with no stated cell takes the handoff's money unit, else no unit.
+    label_unit = (figure_unit or money or "") if _is_money(route) else route.chart_unit or ""
     tid = "chart-" + route.block_id + "-" + str(route.figure_id)
     values: list[Fact] = []
     rows: list[TableRow] = []
@@ -991,7 +1008,7 @@ def markdown_files(  # noqa: C901, PLR0912, PLR0915 - pre-existing complexity
     source_of: dict[tuple[str, str], str] = {}  # typed chart copy -> its source table
     yield_charts: dict[str, tuple[str, tuple[str, ...], tuple[_ChartPoint, ...]]] = {}
     strip_charts: dict[
-        str, dict[str, tuple[str, str, str, tuple[str, ...], tuple[_ChartPoint, ...]]]
+        str, dict[str, tuple[str, str, str, tuple[str, ...], tuple[_ChartPoint, ...], UnitClass]]
     ] = {}
     for route in layout.routes:
         module = next(m for m in module_views if m.module_id == route.module_id)
@@ -1024,7 +1041,10 @@ def markdown_files(  # noqa: C901, PLR0912, PLR0915 - pre-existing complexity
             figure_specs = strip_charts.setdefault(route.block_id, {})
             if route.figure_id in figure_specs:
                 raise ValueError("markdown_chart: exactly one selector per figure")
-            updated, series, points, label_unit = _numeric_observations(module, table, route)
+            money = (
+                _handoff_money(files.get(module.module_id + ".md")) if _is_money(route) else None
+            )
+            updated, series, points, label_unit = _numeric_observations(module, table, route, money)
             if module.module_id != "CP-MODEL":
                 module_views[module_views.index(module)] = updated
                 typed = updated.tables[-1]
@@ -1045,6 +1065,7 @@ def markdown_files(  # noqa: C901, PLR0912, PLR0915 - pre-existing complexity
                 label_unit,
                 series,
                 points,
+                CHART_UNITS[route.chart_unit or ""],
             )
             continue
         if route.block_id == "yield-against-maturity":
@@ -1146,26 +1167,25 @@ def markdown_files(  # noqa: C901, PLR0912, PLR0915 - pre-existing complexity
                     )
                 figures = []
                 for fig_id in STRIP_FIGURES[block_id]:
-                    module_id, title, unit, series, points = specs[fig_id]
-                    figures.append(
-                        _figure_of_points(
-                            block_id,
-                            next(m for m in module_views if m.module_id == module_id),
-                            refs,
-                            fig_id=fig_id,
-                            title=title,
-                            kind="grouped" if fig_id in {"S.4", "RV.1"} else "line",
-                            unit_class=_unit_class(unit),
-                            unit=unit,
-                            series=series,
-                            points=points,
-                            placement="above",
-                            summary=(
-                                "Exact selected handoff/Model observations. Dates, definitions and "
-                                "limitations remain in the source evidence; gaps are not zero."
-                            ),
-                        )
+                    module_id, title, unit, series, points, unit_class = specs[fig_id]
+                    figure = _figure_of_points(
+                        block_id,
+                        next(m for m in module_views if m.module_id == module_id),
+                        refs,
+                        fig_id=fig_id,
+                        title=title,
+                        kind="grouped" if fig_id in {"S.4", "RV.1"} else "line",
+                        unit_class=unit_class,
+                        unit=unit or NO_UNIT,
+                        series=series,
+                        points=points,
+                        placement="above",
+                        summary=(
+                            "Exact selected handoff/Model observations. Dates, definitions and "
+                            "limitations remain in the source evidence; gaps are not zero."
+                        ),
                     )
+                    figures.append(figure if unit else _unitless(figure))
                 blocks.append(
                     Block(
                         block_id=block_id,

@@ -822,13 +822,16 @@ def _orderable(period: str) -> bool:
     return period_order(period) is not None or period_of(period) is not None
 
 
-def _currencies(statements: list[Statement | None]) -> list[tuple[str, str, str]]:
-    """(table, row, currency code) of each fixed row whose Unit cell is readable, in order."""
+def _currencies(
+    statements: list[Statement | None], optional: bool = False
+) -> list[tuple[str, str, str]]:
+    """(table, row, currency code) of each fixed row (with `optional`, the optional rows after
+    them, table by table) whose Unit cell is readable, in order."""
     return [
         (found.spec.heading, label, unit[:3])
         for found in statements
         if found
-        for label in found.spec.fixed
+        for label in (*found.spec.fixed, *(found.spec.optional if optional else ()))
         if (unit := found.unit(label)) and _UNIT.fullmatch(unit)
     ]
 
@@ -847,7 +850,8 @@ def money_unit(text: str) -> str | None:
 
 
 def _currency_issues(found: list[tuple[str, str, str]]) -> list[str]:
-    """Fixed rows naming more than one currency are refused, naming the first two that differ."""
+    """Rows (fixed or optional) naming more than one currency are refused, naming the first two
+    that differ."""
     other = next((row for row in found if row[2] != found[0][2]), None) if found else None
     if other is None:
         return []
@@ -1273,7 +1277,7 @@ def cp1_issues(text: str) -> tuple[str, ...]:
         ),
         lambda: [i for found in statements if found for i in _statement_cells(found)],
         lambda: unreadable,
-        lambda: _currency_issues(currencies),
+        lambda: _currency_issues(_currencies(statements, optional=True)),
         lambda: _register_cells(regs, net_debt, code),
         lambda: _long_cells(lines, net_debt),
         lambda: _ratios(regs),
