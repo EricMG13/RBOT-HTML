@@ -2050,11 +2050,11 @@ test('library: a row is one item per column; what left the row is the cell title
     metrics: { leverage: metric('6.5744', 'C9; same "basis"'), net_leverage: metric('0', 'Net of cash'), coverage: null }, ratings: [{ label: 'B+', agency: 'S&P', scope: 'issuer', date: '2024-06-30' }] };
   const cells = [...libraryRow(run, true, false).matchAll(/<td([^>]*)>(.*?)<\/td>/g)].map((m) => [m[1].trim(), m[2]]);
   // Ten columns, in the header's order; a cell holds one value and at most the one control that acts on it.
-  assert.deepEqual(cells.map(([, body]) => strip(body)), ['Zed &amp; Sons', '30 Sept 2024 · Not recorded', 'Telecoms', '30 Sept 2024', '6.5744×', '0×', 'n.a.', 'B+', 'Not assessed', 'Handoffs only']);
+  assert.deepEqual(cells.map(([, body]) => strip(body)), ['Zed &amp; Sons', '30 September 2024 · Not recorded', 'Telecoms', '30 Sept 2024', '6.5744×', '0×', 'n.a.', 'B+', 'Not assessed', 'Handoffs only']);
   assert.ok(cells.every(([, body]) => countOf(body, /<(?!\/)/g) <= 1));
   assert.ok(/^<button class="library-run-name" type="button" data-library-select="0" aria-expanded="true" aria-controls="run-detail"/.test(cells[0][1]), 'a row is chosen by its place in the list: no run code is written into the page');
   // A run the store does not hold has no link; the Run column names it by its date and workflow, never by its code (the column held the run code before library redesign Task 11).
-  assert.deepEqual(cells[1], ['class="run-when"', '30 Sept 2024 · Not recorded']);
+  assert.deepEqual(cells[1], ['class="run-when"', '30 September 2024 · Not recorded']);
   // A ratio's period stays on the cell (its basis is Evidence's); the rating detail stays; a missing figure reads n.a., a zero is a zero.
   assert.equal(cells[4][0], 'title="FY2024"');
   assert.equal(cells[5][0], 'title="FY2024"');
@@ -3237,7 +3237,7 @@ const histRows = html => html.split('<li class="tl-i"').slice(1).map(chunk => {
   const part = re => (re.exec(chunk) || [])[1];
   return { attrs: chunk.slice(0, chunk.indexOf('>')), html: chunk, date: part(/<div class="tl-d">(.*?)<\/div>/s), pathway: part(/<p class="tl-t">(.*?)<\/p>/s), marks: part(/<div class="hist-marks">(.*?)<\/div><div class="hist-dots">/s), dots: part(/<div class="hist-dots">(.*?)<\/div><div class="hist-links">/s), links: part(/<div class="hist-links">(.*?)<\/div><\/div><\/li>|<div class="hist-links">(.*)$/s) };
 });
-const dotLabels = html => [...(html || '').matchAll(/<span role="img" data-tip="([^"]*)"/g)].map(m => m[1]);
+const dotLabels = html => [...(html || '').matchAll(/<span role="img" tabindex="0" data-tip="([^"]*)"/g)].map(m => m[1]);
 
 test('Report history: one entry per run of the issuer, latest as-of date first, a run with no date last; another issuer\'s run is not listed', () => {
   const rows = histRows(histPage().historyView(RUN));
@@ -4451,14 +4451,17 @@ const libCatalogue = () => [
   zedRun({ id: 'run-d', issuer: 'DEL', name: 'Delta Foods', sector: 'Consumer', workflow: 'Credit Snapshot', date: '2025-05-31', completion: 75, metrics: {}, ratings: [{ label: 'BBB', agency: 'S&P', scope: 'issuer', date: '2025-01-01' }] }),
   zedRun({ id: 'run-n', issuer: 'NOC', name: 'Nocontext Ltd', sector: 'Consumer', workflow: 'Credit Snapshot', date: '2025-02-28', metrics: { leverage: libMetric('6.0'), net_leverage: libMetric('5.0'), coverage: libMetric('3.0') }, ratings: [{ label: 'CCC', agency: 'S&P', scope: 'issuer', date: '2025-01-01' }] }),
 ];
-function libPage(more = {}) {
+function libBase() {
   const b = [libOut('run-b', 'CP-0', 'Sources are ready.', 'Ready'), libOut('run-b', 'CP-2A', 'Not assessable: no inputs were supplied.', 'Blocked'), libOut('run-b', 'CP-6', 'Hold the position. Leverage is high.', 'Restricted')];
   const b0 = [libOut('run-b0', 'CP-0', 'Sources are ready.')], d = [libOut('run-d', 'CP-0', 'Sources are ready.')];
+  return { b, b0, d, contexts: { 'run-b': libCtx('run-b', 'bet', 'Beta Aero Inc', '2025-06-30', b), 'run-b0': libCtx('run-b0', 'bet', 'Beta Aero Inc', '2024-06-30', b0), 'run-g': libCtx('run-g', 'gam', 'Gamma', '2025-01-31', []), 'run-d': libCtx('run-d', 'del', 'Delta Foods', '2025-05-31', d) }, data: Object.fromEntries([...b, ...b0, ...d]) };
+}
+function libPage(more = {}) {
+  const base = libBase();
   const models = [{ id: LIB_HASH, runId: 'x', runFolder: RUN, href: `../runs/${RUN}/deliveries/${LIB_HASH}/annual.md`, mode: 'candidate' }];
   return runPage(() => overviewData(realSections()), [], m => m, { record: steps(['CP-1', 'CP-6']), catalogue: libCatalogue(), models,
     runFields: { issuerKey: 'alp', issuer: 'Alpha Telecom plc', title: 'Alpha Telecom plc', run: LIB_CODE, asOf: '2025-03-31', pathway: 'credit_snapshot' },
-    contexts: { 'run-b': libCtx('run-b', 'bet', 'Beta Aero Inc', '2025-06-30', b), 'run-b0': libCtx('run-b0', 'bet', 'Beta Aero Inc', '2024-06-30', b0), 'run-g': libCtx('run-g', 'gam', 'Gamma', '2025-01-31', []), 'run-d': libCtx('run-d', 'del', 'Delta Foods', '2025-05-31', d) },
-    data: Object.fromEntries([...b, ...b0, ...d]), ...more });
+    contexts: base.contexts, data: base.data, ...more });
 }
 const libIds = page => page.libraryRows().rows.map(r => r.id);
 const libIssuers = page => new Set(page.libraryRows().rows.map(r => r.issuer)).size;
@@ -4617,12 +4620,12 @@ test('library cards: one card per issuer, each with its name, ticker and sector,
   const [alpha, beta, gamma, delta, noc] = cards; // the catalogue's order of first appearance
   // Beta: two runs in the library, drawn from the later one; its declared state and first sentence are the Committee decision's.
   assert.ok(beta.includes('<h3 class="lc-name" id="lc-1">Beta Aero Inc</h3><p class="lc-meta">BET · Aerospace</p>'));
-  assert.ok(beta.includes('<p class="lc-when">30 June 2025 · Credit snapshot</p><span class="state warn"><svg') && strip(beta).includes('Restricted'));
+  assert.ok(beta.includes('<p class="lc-when">30 June 2025</p><span class="badge badge-gray lc-path">Credit snapshot</span><span class="state warn"><svg') && strip(beta).includes('Restricted'));
   assert.ok(beta.includes('<p class="lc-lead">Hold the position.</p>'));
   assert.deepEqual(dotLabels(beta).map(label => label), ['Source readiness: Ready', 'Downside: Not assessable', 'Committee decision: Restricted']);
   assert.ok(beta.includes('<a class="lc-open" href="#W-Overview/overview?c=run-b" aria-label="Open overview: Beta Aero Inc, 30 June 2025 · Credit snapshot">Open overview<img'));
   assert.ok(beta.includes('<a class="lc-hist" href="#W-Report/history?c=run-b" aria-label="Report history: Beta Aero Inc">2 runs</a>'));
-  assert.ok(beta.includes('<button class="tertiary-action" type="button" data-library-select="1" aria-controls="run-detail" aria-label="Details: Beta Aero Inc, 30 June 2025 · Credit snapshot">Details</button>'));
+  assert.ok(beta.includes('<button class="secondary-action lc-details" type="button" data-library-select="1" aria-expanded="false" aria-controls="run-detail" aria-label="Details: Beta Aero Inc, 30 June 2025 · Credit snapshot">Details</button>'));
   // Alpha: a lead with no declared state has no badge; its first sentence still shows.
   assert.ok(alpha.includes('<p class="lc-lead">Hold the position.</p>') && !alpha.includes('class="state'), 'a missing declared state draws no badge');
   assert.deepEqual(dotLabels(alpha), ['Financial foundation', 'Committee decision']);
@@ -4658,19 +4661,19 @@ test('library: the cards and the list are two panes of one block with the shared
   const rows = [...html.matchAll(/<tr[^>]*>(.*?)<\/tr>/gs)].filter(m => m[1].includes('<td')).map(m => [...m[1].matchAll(/<td[^>]*>(.*?)<\/td>/gs)].map(c => decode(strip(c[1]))));
   assert.equal(rows.length, 5);
   assert.equal(rows[1][1], '30 June 2025 · Credit snapshot', 'the Run column names the run by period and pathway');
-  assert.equal(rows[4][1], '28 Feb 2025 · Credit Snapshot', 'a run the store does not hold keeps its catalogue date and workflow');
+  assert.equal(rows[4][1], '28 February 2025 · Credit Snapshot', 'a run the store does not hold keeps its catalogue date and workflow');
   assert.ok(!html.includes('run-id'), 'no run id column');
   // Two runs of one issuer with one name (Any run lists both of Beta\'s: the same period would name both alike) are told apart by a fixed word.
   assert.deepEqual(page.sameNameWords([{ group: 'bet', name: 'A', date: '2025-06-30' }, { group: 'bet', name: 'A', date: '2025-03-31' }, { group: 'bet', name: 'B', date: '2025-01-01' }, { group: 'alp', name: 'A', date: '2025-01-01' }]), ['Latest', 'Earlier', '', '']);
   assert.deepEqual(page.sameNameWords([{ group: 'bet', name: 'A', date: '2025-03-31' }, { group: 'bet', name: 'A', date: '2025-06-30' }]), ['Earlier', 'Latest']);
 });
 
-test('library home: no calculation ID, run code, run folder, delivery id, file name, hash or method code in its text or its attributes (the one named exception is the leverage-basis filter\'s own options)', () => {
+test('library home: no calculation ID, run code, run folder, delivery id, file name, hash or method code in its text or its attributes (every control, options included)', () => {
   const page = libPage({ activity: { updated: 'T', runs: [{ id: 'r1', status: 'running', issuer_name: 'Northbridge', folder: LIB_CODE, pathway: 'credit_snapshot', submitted_by: 'ann', spent: 'USD 3.10', modules: [['CP-0', 'done'], ['CP-1', 'running']] }] } });
   for (const view of ['cards', 'list']) {
     const html = page.libraryView().replace(/<div data-pane="(cards|list)"/g, (m, pane) => (pane === view ? m : `${m} hidden`));
-    const withoutBasis = html.replace(/<select id="library-basis".*?<\/select>/s, '');
-    assert.ok(html.includes('<select id="library-basis"') && /<details id="metric-filters" >/.test(html), 'the basis filter stays, inside a closed group');
+    const withoutBasis = html;
+    assert.ok(!html.includes('library-basis'), 'the Leverage basis filter is gone: basis text is calculation material and Evidence\'s');
     const attrs = [...withoutBasis.matchAll(/\s([\w-]+)="([^"]*)"/g)].filter(m => m[1] !== 'href').map(m => decode(m[2]));
     const text = decode(strip(withoutBasis)).replace(/&#39;/g, "'");
     for (const [name, found] of [['text', text], ['attributes', attrs.join('\n')]]) {
@@ -4709,18 +4712,19 @@ const LIVE = { updated: 'T', cap: '20', runs: [
   { id: 'r1', status: 'running', issuer_name: 'Northbridge <Synthetic> & Co', folder: 'nb-run-folder', pathway: 'credit_snapshot', submitted_by: 'ann', spent: 'USD 3.10', modules: [['CP-0', 'done'], ['CP-1', 'running'], ['CP-2A', 'waiting'], ['CP-6', 'waiting']] },
   { id: 'r2', status: 'queued', issuer_name: 'Waiting Ltd', modules: [['CP-0', 'waiting']] }, { id: 'r3', status: 'finished', issuer_name: 'Done Ltd' }, null, 'junk'] };
 
-test('library home: a running run is a row with the C31 mark and the C13 steps: which module is running and how many are done of how many; no cost, no folder, no submitter; waiting and finished runs are not drawn', () => {
+test('library home: a running run is a row with the C31 mark and the C13 steps: which module is running and how many are done of how many; no cost, no folder, no submitter; a waiting run shows its mark only; finished runs are not drawn', () => {
   const html = libPage({ activity: LIVE }).libraryLive();
-  assert.equal(countOf(html, /<li class="live-row">/g), 1);
+  assert.equal(countOf(html, /<li class="live-row">/g), 2, 'the running run and the waiting one');
   assert.ok(html.startsWith('<section class="lib-live" aria-labelledby="lib-live-h"><h2 class="eyebrow lib-eyebrow" id="lib-live-h">Running now</h2>'));
   assert.ok(html.includes('<strong class="lv-name">Northbridge &lt;Synthetic&gt; &amp; Co</strong><span class="lv-pathway">Credit snapshot</span>'));
   assert.ok(html.includes('<span class="state new rmark running"><span class="lat" aria-hidden="true">') && html.includes('<span class="state-w">Running</span>'), 'the mark has its word');
   assert.deepEqual([...html.matchAll(/<li class="step (\w+)" data-tip="([^"]*)"/g)].map(m => [m[1], m[2]]), [['done', 'Source readiness: done'], ['running', 'Financial foundation: running'], ['waiting', 'Downside: waiting'], ['waiting', 'Committee decision: waiting']]);
   assert.ok(html.includes('<span class="steps-k">Running</span> Financial foundation') && html.includes('<span class="steps-n">1 of 4 done</span>'));
-  for (const gone of ['USD 3.10', 'nb-run-folder', 'ann', 'Waiting Ltd', 'Done Ltd', 'CP-']) assert.ok(!html.includes(gone), gone);
-  assert.ok(libPage({ activity: { updated: 'T', runs: [{ status: 'running', modules: [['CP-1', 'running']], stalled: true }] } }).libraryLive().includes('Running · stalled'));
+  for (const gone of ['USD 3.10', 'nb-run-folder', 'ann', 'Done Ltd', 'CP-']) assert.ok(!html.includes(gone), gone);
+  assert.ok(html.includes('Waiting Ltd') && html.includes('<span class="state same rmark queued">'));
+  assert.ok(libPage({ activity: { updated: 'T', runs: [{ status: 'running', modules: [['CP-1', 'running']], stalled: true }] } }).libraryLive().includes('<span class="state-w">Stalled</span>'));
   // Nothing running, nothing malformed: nothing drawn. A run with no name or no module list still draws its mark.
-  for (const activity of [undefined, null, 'x', [], { runs: 'x' }, { runs: [] }, { runs: [{ status: 'queued' }] }]) assert.equal(libPage({ activity }).libraryLive(), '', JSON.stringify(activity));
+  for (const activity of [undefined, null, 'x', [], { runs: 'x' }, { runs: [] }, { runs: [{ status: 'finished' }] }]) assert.equal(libPage({ activity }).libraryLive(), '', JSON.stringify(activity));
   const bare = libPage({ activity: { runs: [{ status: 'running' }] } }).libraryLive();
   assert.ok(bare.includes('Run in progress') && bare.includes('Running</span>') && !bare.includes('steps-w'));
   // It leads the page, before the filter bar.
@@ -4781,9 +4785,9 @@ test('library home: markup for a very long name wraps inside its card and a badg
 test('library home: the page names no run by code in any state: an issuer with no run page, a run with no modules and one with a missing state draw by name', () => {
   const page = libPage();
   const html = page.libraryView();
-  const text = decode(strip(html.replace(/<select id="library-basis".*?<\/select>/s, '')));
+  const text = decode(strip(html));
   for (const code of [LIB_CODE, 'RUN-B-CODE', 'RUN-B0-CODE', 'RUN-G-CODE', 'RUN-D-CODE']) assert.ok(!text.includes(code), code);
-  const attrs = [...html.replace(/<select id="library-basis".*?<\/select>/s, '').matchAll(/\s([\w-]+)="([^"]*)"/g)].filter(m => m[1] !== 'href').map(m => m[2]).join('\n');
+  const attrs = [...html.matchAll(/\s([\w-]+)="([^"]*)"/g)].filter(m => m[1] !== 'href').map(m => m[2]).join('\n');
   for (const code of [LIB_CODE, 'RUN-B-CODE', 'run-b0']) assert.ok(!attrs.includes(code), code);
 });
 
@@ -4862,4 +4866,157 @@ test('L3 consequence: calculation ids that are id values of the run (as on every
   const page = runPage(() => ({ [outId('CP-1')]: fcOutput({ sections, charts }), [outId('CP-X')]: calcs }), [], m => m, { record: steps(['CP-1', 'CP-X']), runFields: { asOf: '2025-03-31' } });
   const html = page.forecastCharts(RUN);
   assert.ok(!html.includes('C48') && !html.includes('C05'));
+});
+
+// ======== Task 11, fix round 1 ========
+const startedRecord = at => ({ steps: [{ module: 'CP-0', started: at, accepted: null }], edges: [], timed: true });
+const compared = (asOf = '2024-01-01') => ({ lead: 'CP-2', first_run: false, pack: { prior: { run: 'x', as_of: asOf, pathway: 'credit_snapshot' }, measures: [] } });
+
+test('M1 history: What changed is drawn when the run\'s own record says a comparison exists (the Changes page\'s condition), not only when another listed run shares the pathway; a recorded first run has none', () => {
+  const base = libBase();
+  const page = changes => libPage({ contexts: { ...base.contexts, ...Object.fromEntries(Object.entries(changes).map(([k, c]) => [k, { ...base.contexts[k], changes: c }])) } });
+  const links = (p, ctx) => histRows(p.historyView(ctx)).map(r => r.links.includes('What changed'));
+  // run-b0 is the oldest run of BET and the only one of its pathway before run-b; its own record says it was compared with a run the library does not list.
+  assert.deepEqual(links(page({ 'run-b0': compared() }), 'run-b'), [true, true]);
+  // A run whose record says it is a first run has no link, even with an earlier listed run of its pathway.
+  assert.deepEqual(links(page({ 'run-b': { first_run: true } }), 'run-b'), [false, false]);
+  // A run that records nothing is not a first run: absence is not read as one. With an earlier listed run of its pathway it keeps the link; the oldest has none.
+  assert.deepEqual(links(page({}), 'run-b'), [true, false]);
+  // A pack that could not be read, or a note that none was produced, still say a comparison was meant: the Changes page explains it.
+  assert.deepEqual(links(page({ 'run-b0': { first_run: false, note: 'changes: not produced — no prior' } }), 'run-b'), [true, true]);
+  assert.deepEqual(links(page({ 'run-b0': { problem: 'unreadable' } }), 'run-b'), [true, true]);
+});
+
+test('M2 list: Latest/Earlier is decided by as-of date, then run start, never by row order, and agrees with the history', () => {
+  const words = items => libPage().sameNameWords(items);
+  const it = (id, date, started) => ({ id, group: 'bet', name: 'N', date, started });
+  assert.deepEqual(words([it('a', '2025-06-30', '2025-07-01T09:00:00Z'), it('b', '2025-06-30', '2025-07-05T09:00:00Z')]), ['Earlier', 'Latest'], 'the later start is the later run');
+  assert.deepEqual(words([it('b', '2025-06-30', '2025-07-05T09:00:00Z'), it('a', '2025-06-30', '2025-07-01T09:00:00Z')]), ['Latest', 'Earlier'], 'whatever the row order');
+  assert.deepEqual(words([it('a', '2025-07-30', null), it('b', '2025-06-30', '2025-07-05T09:00:00Z')]), ['Latest', 'Earlier'], 'the date first');
+  assert.deepEqual(words([it('a', '2025-06-30', null), it('b', '2025-06-30', '2025-07-05T09:00:00Z')]), ['Earlier', 'Latest'], 'a run with no start is the older');
+  assert.deepEqual(words([it('b', '2025-06-30', null), it('a', '2025-06-30', null)]), ['Earlier', 'Latest'], 'all equal: the folder order the history uses (the smaller folder is listed first, so is Latest)');
+  // Through the page: both sort directions give each run the same word, and the history gives the same.
+  const base = libBase(), cat = libCatalogue();
+  cat.push(zedRun({ id: 'run-b1', issuer: 'BET', name: 'Beta Aero Inc', sector: 'Aerospace', workflow: 'Credit Snapshot', date: '2025-06-30', metrics: { leverage: libMetric('9.9') } }));
+  const b1 = [libOut('run-b1', 'CP-0', 'Sources are ready again.', 'Ready')];
+  const contexts = { ...base.contexts, 'run-b': { ...base.contexts['run-b'], record: startedRecord('2025-07-01T09:00:00Z') }, 'run-b1': { ...libCtx('run-b1', 'bet', 'Beta Aero Inc', '2025-06-30', b1), record: startedRecord('2025-07-05T09:00:00Z') } };
+  const make = direction => { const p = libPage({ catalogue: cat, contexts, data: { ...base.data, ...Object.fromEntries(b1) } }); p.libraryFilters.runs = 'any'; Object.assign(p.libraryState, { sortKey: 'leverage', direction }); return p; };
+  const wordOf = (p, id) => { const view = p.libraryRows(), n = view.rows.findIndex(r => r.id === id); return /badge-gray">(Latest|Earlier)</.exec([...p.libraryResults(view, 'list').matchAll(/<td class="run-when">(.*?)<\/td>/g)][n][1])?.[1]; };
+  for (const direction of ['asc', 'desc']) assert.deepEqual([wordOf(make(direction), 'run-b'), wordOf(make(direction), 'run-b1')], ['Earlier', 'Latest'], direction);
+  const history = histRows(make('asc').historyView('run-b'));
+  assert.deepEqual(history.slice(0, 2).map(r => /(Latest|Earlier)</.exec(r.marks)?.[1]), ['Latest', 'Earlier'], 'the history lists the later run first and gives it Latest');
+});
+
+const homeOf = activity => libPage({ activity });
+test('M3 home: the live row draws running and waiting runs; the reload runs only while one is drawn; an ended run is gone and the loader with it', () => {
+  const html = homeOf({ runs: [{ status: 'running', issuer_name: 'Run One', modules: [['CP-1', 'running']] }, { status: 'queued', issuer_name: 'Wait Two' }, { status: 'finished', issuer_name: 'Done' }] }).libraryLive();
+  assert.ok(html.includes('Run One') && html.includes('Wait Two') && !html.includes('Done'));
+  assert.ok(html.includes('<span class="state same rmark queued">') && html.includes('Waiting'));
+  assert.equal(countOf(html, /rmark running/g), 1, 'one moving loader, for the running run only');
+  // The re-load rule: the same timer as Run activity, but only while the home has a running or waiting run to follow.
+  const text = read('views.js'), start = text.indexOf('// Run activity (ruling decision 10)'), end = text.indexOf('function workspaceView(');
+  const rule = live => new Function('esc', 'icon', 'window', `${text.slice(start, end)}; return nextActivityReload;`)(esc, n => n, { Components: require('./components.js'), RUN_ACTIVITY: live });
+  assert.equal(rule({ runs: [{ status: 'running' }] })({ module: 'W-Library' }), 30000);
+  assert.equal(rule({ runs: [{ status: 'queued' }] })({ module: 'W-Library' }), 30000);
+  for (const live of [{ runs: [{ status: 'finished' }] }, { runs: [] }, undefined, null, 'x', { runs: 'x' }]) assert.equal(rule(live)({ module: 'W-Library' }), null, JSON.stringify(live));
+  assert.equal(rule({ runs: [{ status: 'running' }] })({ module: 'CP-1A' }), null, 'no other view follows runs');
+  assert.equal(rule({ runs: [] })({ module: 'CP-OS' }), 30000);
+  // The page: a snapshot that arrives while the home shows refreshes its live row and then lets the timer lapse; no second timer and no new kind of timer.
+  const screen = read('screen.js'), handler = screen.slice(screen.indexOf('window.onRunActivity='), screen.indexOf("window.addEventListener('hashchange',syncActivityTimer)"));
+  const calls = [];
+  const fn = new Function('window', 'state', 'refreshLibraryLive', 'syncActivityTimer', 'nextActivityReload', '$', 'moduleBody', 'activityEnded', 'lastActivity', 'previousRunning', `${handler.replace(/\bcurrent\b/g, 'state.current')}; return window.onRunActivity;`)(
+    { RUN_ACTIVITY: { runs: [] } }, { current: { module: 'W-Library' } }, () => calls.push('refresh'), () => calls.push('sync'), () => null, () => { throw new Error('the home is not re-rendered whole'); }, () => { throw new Error('no run page body'); }, () => ({ toasts: [], running: [] }), null, null);
+  fn();
+  assert.deepEqual(calls, ['refresh', 'sync']);
+  assert.ok(!/setInterval\(/.test(screen) && screen.split('setTimeout(').length - 1 === (read('screen.js').match(/setTimeout\(/g) || []).length);
+  assert.ok(text.includes('function refreshLibraryLive()'), 'the live section is refreshed in place');
+});
+
+test('L1 the chip numbers in the Show-them view are the cards that view draws', () => {
+  const page = libPage();
+  page.libraryFilters.leverageMin = '1';
+  const cov = page.libraryRows().coverage, group = Object.keys(cov).find(g => cov[g].hidden > 0);
+  assert.ok(group, 'a group hides a run in the fixture');
+  page.libraryState.hidden = group;
+  const chips = [...page.libraryFacets().matchAll(/data-library-chip="(\w+)" data-value="([^"]*)" data-count="(\d+)"/g)].map(m => ({ key: m[1], value: decode(m[2]), count: Number(m[3]) }));
+  for (const c of chips) {
+    const p = libPage();
+    p.libraryFilters.leverageMin = '1'; p.libraryState.hidden = group; p.libraryFilters[c.key] = c.value;
+    assert.equal(countOf(p.libraryResults(p.libraryRows(), 'cards'), /<article class="lib-card"/g), c.count, `${c.key}=${c.value}`);
+  }
+});
+
+test('L2 the Cards/List choice is library state: kept through an empty result, written by the toggle click, drawn from state', () => {
+  const page = libPage();
+  page.libraryState.view = 'list';
+  const html = page.libraryResults(page.libraryRows());
+  assert.ok(html.includes('data-view="list"') && html.includes('data-view-pick="list" aria-pressed="true"'));
+  page.libraryFilters.search = 'nothing matches this';
+  assert.ok(!page.libraryResults(page.libraryRows()).includes('data-block'));
+  page.libraryFilters.search = '';
+  assert.ok(page.libraryResults(page.libraryRows()).includes('data-view="list"'), 'List survives the empty result');
+  const screen = read('screen.js');
+  assert.ok(screen.includes("if(window.Components.handleClick(event.target)){const block=event.target.closest?.('.lib-block');if(block)libraryState.view=block.dataset.view;return;}"));
+  assert.ok(screen.includes("view:'cards'") && !read('views.js').includes("querySelector('[data-block]')?.dataset.view"), 'state, not the DOM');
+});
+
+test('L3 dots: every dot is the same size with a glyph; completed carries a check, a declared state its icon, not assessable its mark, an unchosen output a hollow ring; each can take focus', () => {
+  const html = C0.moduleDots([{ title: 'A', state: null }, { title: 'B', state: 'Ready' }, { title: 'C', state: 'Blocked' }, { title: 'D', blocked: true }, { title: 'E', choose: true }, { title: 'F', state: 'Draft Only' }]);
+  const dots = html.split('<li ').slice(1);
+  assert.deepEqual(dots.map(d => /class="mdot (\w+)"/.exec(d)[1]), ['done', 'ok', 'bad', 'warn', 'none', 'info']);
+  assert.ok(dots.slice(0, 4).concat(dots[5]).every(d => d.includes('<svg class="i"')), 'every module that ran has a glyph');
+  assert.ok(dots[0].includes('M20 6 9 17l-5-5'), 'completed is a check');
+  assert.ok(dots[3].includes('M12 9v4'), 'not assessable is the warning mark');
+  assert.ok(!dots[4].includes('<svg'), 'an unchosen output is a hollow ring');
+  assert.ok(dots.every(d => d.includes('role="img" tabindex="0"')), 'a dot takes focus so its tooltip shows from the keyboard');
+  const css = read('screen.css');
+  assert.ok(css.includes('.mdot.info>[role=img]{') && css.includes('.mdot>[role=img]:focus-visible{outline:2px solid var(--blue)'));
+  assert.ok(/\.mdot>\[role=img\]\{[^}]*box-sizing:border-box;[^}]*width:20px;height:20px|\.mdot>\[role=img\]\{[^}]*width:20px;height:20px;[^}]*box-sizing:border-box/.test(css), 'one size');
+});
+const C0 = require('./components.js');
+
+test('card: the lead sentence is clamped to four lines; Details is a button with aria-expanded that follows the open panel; the pathway is a pill; the catalogue-only date is the long form', () => {
+  const css = read('screen.css');
+  assert.ok(/\.lc-lead\{[^}]*-webkit-line-clamp:4;line-clamp:4;overflow:hidden/.test(css));
+  const page = libPage(), view = page.libraryRows();
+  const cards = () => page.libraryResults(page.libraryRows(), 'cards').split('<article class="lib-card"').slice(1);
+  assert.ok(cards()[1].includes('<span class="badge badge-gray lc-path">Credit snapshot</span>') && cards()[1].includes('<p class="lc-when">30 June 2025</p>'));
+  assert.ok(cards()[1].includes('class="secondary-action lc-details"') && cards()[1].includes('aria-expanded="false"'));
+  page.libraryState.selected = 'run-b'; page.libraryState.opened = true;
+  assert.ok(cards()[1].includes('aria-expanded="true"') && cards()[0].includes('aria-expanded="false"'));
+  assert.equal(page.libraryRunName(view.rows.find(r => r.id === 'run-n')), '28 February 2025 · Credit Snapshot');
+  assert.ok(page.libraryView().includes('data-chosen'), 'an opened panel is drawn open');
+});
+
+test('basis and limitation filters: the Leverage basis select is gone and an old address carrying it is ignored; a limitation is an option only when it is clean under the strict findings rule', () => {
+  const panel = libPage().libraryPanel();
+  assert.ok(!panel.includes('library-basis') && !/Leverage basis|definitions differ/.test(panel));
+  assert.ok(!('basis' in libraryDefaults()));
+  const page = libPage(), io = libHash(page, '#W-Library/cases?basis=Total%20debt%20%2F%20EBITDA&sector=Aerospace');
+  assert.doesNotThrow(() => io.readLibraryHash());
+  assert.equal(page.libraryFilters.sector, 'Aerospace');
+  const dirty = libCatalogue(); dirty[1].gaps = ['No peer set was supplied.', 'See K_10.htm.jsonl for the split', 'Net figure (calculation C11)', 'CP-2A GAP-001'];
+  const html = libPage({ catalogue: dirty }).libraryPanel();
+  const options = [...html.matchAll(/<select id="library-limitation"[^>]*>(.*?)<\/select>/gs)][0][1];
+  assert.deepEqual([...options.matchAll(/<option value="([^"]*)"/g)].map(m => m[1]), ['', 'No peer set was supplied.']);
+});
+
+test('history dots follow the catalogue\'s order, not the order the run ran its modules in', () => {
+  const ran = { ...HIST.contexts['run-b'], record: { steps: [{ module: 'CP-2A' }, { module: 'CP-0' }] } };
+  const page = runPage(d => d, [], m => m, { ...HIST, contexts: { ...HIST.contexts, 'run-b': ran } });
+  const [, b] = histRows(page.historyView(RUN));
+  assert.deepEqual(dotLabels(b.dots).map(l => l.split(': ')[0]), ['Source readiness', 'Downside'], 'the run ran Downside first; the strip keeps the catalogue order');
+  assert.deepEqual(page.libraryModules('run-b').map(m => m.title), ['Source readiness', 'Downside']);
+});
+
+test('M3 timer: entering the home with a run to follow starts the timer without an immediate re-load when the file was just loaded with the page; the tick re-loads; a lapsed run stops it', () => {
+  const screen = read('screen.js'), block = screen.slice(screen.indexOf('let activityTimer=null;'), screen.indexOf('window.onRunActivity='));
+  const timers = new Map(); let id = 1; const swaps = []; const state = { current: { module: 'W-Library' }, wait: 30000 };
+  const api = new Function('state', 'nextActivityReload', 'swapActivityScript', 'setTimeout', 'clearTimeout', 'document', 'Date', `${block.replace(/\bcurrent\b/g, 'state.current')}; return {syncActivityTimer};`)(
+    state, () => state.wait, (d, now) => swaps.push(now), fn => { timers.set(id, fn); return id++; }, k => timers.delete(k), {}, { now: () => 5 });
+  api.syncActivityTimer(true);
+  assert.deepEqual(swaps, [], 'the page just loaded the file'); assert.equal(timers.size, 1);
+  const [tick] = timers.values(); timers.clear(); tick(); assert.deepEqual(swaps, [5]); assert.equal(timers.size, 1);
+  state.wait = null; api.syncActivityTimer(); assert.equal(timers.size, 0, 'no run left to follow: the timer stops');
+  state.wait = 30000; api.syncActivityTimer(Object.create(null)); assert.equal(swaps.length, 2, 'a hashchange event is not "fresh": navigating back re-loads at once');
 });

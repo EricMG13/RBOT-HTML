@@ -1230,16 +1230,17 @@ test('gapState: the stated reason of the build stands in only when the table sta
 
 // ---- Library home and report history (library redesign, Task 11): the module dot strip, the run mark, the run steps, the shared toggle and timeline extensions.
 const tagText = html => html.replace(/<[^>]+>/g, '');
-const dotLabelsOf = html => [...html.matchAll(/<span role="img" data-tip="([^"]*)" aria-label="([^"]*)"/g)].map(m => [m[1], m[2]]);
+const dotLabelsOf = html => [...html.matchAll(/<span role="img" tabindex="0" data-tip="([^"]*)" aria-label="([^"]*)"/g)].map(m => [m[1], m[2]]);
 
 test('moduleDots (C21): one dot per module in the order given, each an image named by its title (and its state word) with the tooltip attributes; state is icon and token, never colour alone', () => {
   const html = C.moduleDots([{ title: 'Source readiness', state: 'Ready' }, { title: 'Downside', state: null, blocked: true }, { title: 'Committee decision', state: 'Restricted' }, { title: 'Liquidity', state: null }, { title: 'Pricing', choose: true }, { title: 'Review', state: 'Failed' }]);
   assert.deepEqual(dotLabelsOf(html), [['Source readiness: Ready', 'Source readiness: Ready'], ['Downside: Not assessable', 'Downside: Not assessable'], ['Committee decision: Restricted', 'Committee decision: Restricted'], ['Liquidity', 'Liquidity'], ['Pricing: saved outputs, none chosen', 'Pricing: saved outputs, none chosen'], ['Review: Failed', 'Review: Failed']]);
-  assert.deepEqual([...html.matchAll(/<li class="mdot (\w+)">/g)].map(m => m[1]), ['ok', 'warn', 'warn', 'none', 'none', 'bad']);
+  assert.deepEqual([...html.matchAll(/<li class="mdot (\w+)">/g)].map(m => m[1]), ['ok', 'warn', 'warn', 'done', 'none', 'bad']);
   assert.ok(html.startsWith('<ul class="mdots" aria-label="Modules in this run: 6">'));
   const dots = html.split('<li ').slice(1);
   assert.ok(dots.filter((_, n) => [0, 1, 2, 5].includes(n)).every(dot => dot.includes('<svg class="i"')), 'a dot with a state carries its icon');
-  assert.ok(dots.filter((_, n) => [3, 4].includes(n)).every(dot => !dot.includes('<svg')), 'a module with no usable state is a hollow dot');
+  assert.ok(dots[3].includes('M20 6 9 17l-5-5'), 'a module with no declared state that ran is a check');
+  assert.ok(!dots[4].includes('<svg'), 'unchosen saved outputs are a hollow ring');
   assert.equal(tagText(html), '', 'the module names are labels, not text');
   assert.equal(C.moduleDots([]), '');
 });

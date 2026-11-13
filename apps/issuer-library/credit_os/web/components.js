@@ -733,9 +733,10 @@
     if (!items.length) return '';
     const dot = item => {
       const usable = item.state && findingCell(item.state, {}).html !== undefined;
-      const mark = item.blocked ? {tone: 'warn', icon: 'triangle-alert'} : usable ? stateOf(item.state) : null;
+      // A module that ran has a glyph: its declared state's icon, the warning mark when not assessable, else the check of a completed module. Only unchosen saved outputs are a hollow ring.
+      const mark = item.blocked ? {tone: 'warn', icon: 'triangle-alert'} : usable ? stateOf(item.state) : item.choose ? null : {tone: 'done', icon: 'check'};
       const word = item.blocked ? 'Not assessable' : usable ? plain(item.state).trim() : item.choose ? 'saved outputs, none chosen' : '';
-      return `<li class="mdot ${mark ? mark.tone : 'none'}"><span role="img" ${tipAttributes(word ? `${item.title}: ${word}` : item.title)}>${mark ? icon(mark.icon) : ''}</span></li>`;
+      return `<li class="mdot ${mark ? mark.tone : 'none'}"><span role="img" tabindex="0" ${tipAttributes(word ? `${item.title}: ${word}` : item.title)}>${mark ? icon(mark.icon) : ''}</span></li>`;
     };
     return `<ul class="mdots" aria-label="Modules in this run: ${items.length}">${items.map(dot).join('')}</ul>`;
   }

@@ -50,9 +50,9 @@ const evidence = new Map();
 const lastSection = new Map(), lastFile = new Map();
 const readingPositions = new Map();
 // Screening state, kept while the reader is on another screen. Filter names are LibraryLogic's.
-const LIBRARY_DEFAULTS = {search:'',sector:'',workflow:'',completion:'',availability:'',basis:'',period:'',leverageMin:'',leverageMax:'',coverageMin:'',coverageMax:'',issuer:'',runs:'latest',classification:'',currency:'',ratingBelow:'',ratingAbove:'',ratingScope:'issuer',netLeverageMin:'',netLeverageMax:'',cashMin:'',cashMax:'',undrawnMin:'',undrawnMax:'',talkMin:'',talkMax:'',marginMin:'',marginMax:'',couponMin:'',couponMax:'',priceMin:'',priceMax:'',yieldMin:'',yieldMax:'',limitation:''};
+const LIBRARY_DEFAULTS = {search:'',sector:'',workflow:'',completion:'',availability:'',period:'',leverageMin:'',leverageMax:'',coverageMin:'',coverageMax:'',issuer:'',runs:'latest',classification:'',currency:'',ratingBelow:'',ratingAbove:'',ratingScope:'issuer',netLeverageMin:'',netLeverageMax:'',cashMin:'',cashMax:'',undrawnMin:'',undrawnMax:'',talkMin:'',talkMax:'',marginMin:'',marginMax:'',couponMin:'',couponMax:'',priceMin:'',priceMax:'',yieldMin:'',yieldMax:'',limitation:''};
 const libraryFilters = {...LIBRARY_DEFAULTS};
-const libraryState = {selected:'',sortKey:'',direction:'asc',hidden:''};
+const libraryState = {selected:'',sortKey:'',direction:'asc',hidden:'',view:'cards',opened:false}; // view: Cards or List; opened: the details panel was asked for
 let current = null, returnTrigger = null, returnScroll = 0, returnContentScroll = 0;
 installDestinations();
 const appDestinations=new Set(['W-Library','CP-OS']); // These need no selected run.
@@ -432,8 +432,7 @@ function writeLibraryHash() {
 }
 function resetLibrary() {
   Object.assign(libraryFilters,LIBRARY_DEFAULTS);
-  Object.assign(libraryState,{selected:'',sortKey:'',direction:'asc',hidden:''});
-  delete $('run-detail').dataset.chosen; // the card view shows the details panel only once an issuer's Details was used
+  Object.assign(libraryState,{selected:'',sortKey:'',direction:'asc',hidden:'',opened:false}); // the card view shows the details panel only once an issuer's Details was used; the chosen view stays
   updateLibrary(true);
 }
 // Clicks inside the Library screen; true when one was handled.
@@ -449,9 +448,10 @@ function libraryClick(target) {
     updateLibrary(true);$('library-facets').focus({preventScroll:true});
   } else if(choose) {
     const run=libraryRows().rows[Number(choose.dataset.librarySelect)]; // a row or card is chosen by its place in the list: no run code is written into the page
+    const close=!!run&&libraryState.opened&&libraryState.selected===run.id&&target.closest('.lib-card'); // Details on the open issuer's card closes the panel
     if(run)libraryState.selected=run.id;
-    $('run-detail').dataset.chosen='1';updateLibrary();
-    $('run-detail').focus({preventScroll:true});$('run-detail').scrollIntoView({block:'start'});
+    libraryState.opened=!close;updateLibrary();
+    if(!close){$('run-detail').focus({preventScroll:true});$('run-detail').scrollIntoView({block:'start'});}
   } else if(sort) {
     const key=sort.dataset.librarySort;
     libraryState.direction=libraryState.sortKey===key&&libraryState.direction==='asc'?'desc':'asc';libraryState.sortKey=key;
@@ -649,7 +649,7 @@ document.addEventListener('change',event=>{
 document.addEventListener('click',event=>{
   if(event.target.closest('#rail-search')){focusSearch();return;}
   if(window.Evidence.handleClick(event.target))return;
-  if(window.Components.handleClick(event.target))return;
+  if(window.Components.handleClick(event.target)){const block=event.target.closest?.('.lib-block');if(block)libraryState.view=block.dataset.view;return;}
   const searchHit=event.target.closest('.search-hit');
   if(searchHit){returnTrigger=$('module-search');showNavigator(false);if(searchHit.hash===location.hash)$('canvas').focus();}
   if(libraryClick(event.target))return;
@@ -728,10 +728,11 @@ document.fonts?.ready.then(placeTabsPill);
 // and only when the runs changed; every load announces a run that has ended (C23) and moves the elapsed clock.
 let activityTimer=null;
 let activityShowing=false;
-function syncActivityTimer() {
+// `fresh`: the file was loaded with the page a moment ago, so entering needs no re-load at once.
+function syncActivityTimer(fresh=false) {
   const wait=nextActivityReload(current);
   if(wait===null){clearTimeout(activityTimer);activityTimer=null;activityShowing=false;return;}
-  if(!activityShowing){activityShowing=true;swapActivityScript(document,Date.now());}
+  if(!activityShowing){activityShowing=true;if(fresh!==true)swapActivityScript(document,Date.now());}
   if(activityTimer!==null)return;
   activityTimer=setTimeout(()=>{activityTimer=null;if(nextActivityReload(current)===null)return;swapActivityScript(document,Date.now());syncActivityTimer();},wait);
 }
@@ -739,6 +740,8 @@ let lastActivity=null;
 // The running set of the previous load, in memory only: a run in it that has ended on this load is announced once (C23).
 let previousRunning=null;
 window.onRunActivity=()=>{
+  // The library home follows the file only for its Running now section: refresh it in place, then let the one timer lapse when no run is left to follow.
+  if(current.module==='W-Library'){refreshLibraryLive();syncActivityTimer();return;}
   if(nextActivityReload(current)===null)return;
   const content=$('content'),live=window.RUN_ACTIVITY,top=content.scrollTop;
   const ended=activityEnded(previousRunning,live);
@@ -758,4 +761,4 @@ window.onRunActivity=()=>{
 };
 window.addEventListener('hashchange',syncActivityTimer);
 renderRoute();
-syncActivityTimer();
+syncActivityTimer(true);

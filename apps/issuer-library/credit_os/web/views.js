@@ -1053,14 +1053,20 @@ function runLabel(module,context) {
 // ---- Report history (decision 4; library redesign Task 11): the issuer's runs as a vertical timeline (C15), latest as-of date first, one entry per run. An entry is the date as written and the pathway, then the
 // declared state of the lead module, the Completed status with the number of modules not assessable, the module dot strip (C21) and the links. "What changed" opens that run's Changes page; the first run of a
 // pathway has no earlier run of it to be compared with and carries no such link (CP-8 compares a run with the earlier run of the same issuer and pathway). Two runs with one name are told apart by Latest and Earlier.
+// Whether a run has an earlier run to be compared with, by the Changes page's own reading of the run's record: a recorded first run has none; a comparison, a note that none was produced or an unreadable pack say one was meant;
+// a run that records nothing is not a first run (absence is never read as one), so it is compared when an earlier listed run shares its pathway.
+function comparedWithEarlier(run,earlier) {
+  const state=ChangesView.changesState(run.changes);
+  return state==='first'?false:state==='unrecorded'?earlier.some(other=>other.pathway===run.pathway):true;
+}
 function historyView(context) {
   const ctx=contexts[context],keyOf=new Map(Object.entries(contexts).map(([key,run])=>[run,key])),runs=issuerRuns(context);
-  const words=sameNameWords(runs.map(run=>({group:'',name:runName(run),date:run.asOf||''})));
+  const words=sameNameWords(runs.map(run=>({id:run.folder,group:'',name:runName(run),date:run.asOf||'',started:run.record?.steps?.[0]?.started??null})));
   const slot=(row,n)=>{
     const run=runs[n],key=keyOf.get(run),lead=libraryLead(key),codes=runModuleCodes(run),label=`${runDate(run)}, ${runPathway(run)}`;
     const notAssessable=codes.filter(code=>{const id=run.modules[code].default;return id&&blocked(data[id].sections,data[id].state);}).length;
     const marks=[lead?.state?window.Components.stateBadge(lead.state,{}):'',`<span class="hist-status">Completed${notAssessable?` · ${notAssessable} not assessable`:''}</span>`,earlierFormat(run)?EARLIER_FORMAT_BADGE:'',earlierMethods(run)?EARLIER_METHODS_BADGE:'',words[n]?`<span class="badge badge-gray">${words[n]}</span>`:'',key===context?'<span class="badge badge-gray">Showing</span>':''].filter(Boolean).join(' ');
-    const modules=libraryModules(key),changed=runs.slice(n+1).some(other=>other.pathway===run.pathway);
+    const modules=libraryModules(key),changed=comparedWithEarlier(run,runs.slice(n+1));
     return `<div class="hist-marks">${marks}</div><div class="hist-dots">${modules.length?window.Components.moduleDots(modules):`<p class="lc-none">No module output is retained for this run.</p>`}</div><div class="hist-links"><a class="text-action" href="${esc(routeHref('W-Overview','overview',null,key))}" aria-label="${esc(`Open run: ${label}`)}">Open overview${icon('arrow-right')}</a>${changed?`<a class="text-action" href="${esc(routeHref('W-Changes','changes',null,key))}" aria-label="${esc(`What changed in the run of ${label}`)}">What changed${icon('git-compare')}</a>`:''}</div>`;
   };
   const block={headers:['Date','Event'],rows:runs.map(run=>({cells:[runDate(run),runPathway(run)]}))};
@@ -1325,7 +1331,7 @@ const TERM_LABELS={size_m:'Size',tenor_years:'Tenor',talk_spread_bps_low:'Spread
 const CLASSIFICATIONS={investment_grade:'Investment grade',high_yield:'High yield'},RATING_SCOPES={issuer:'Issuer',facility:'Facility'};
 // Coverage group names as the screen says them; the first four hold no figure, so their hidden rows have none recorded.
 const COVERAGE_NAMES={classification:'Classification',currency:'Currency',rating:'Rating',limitation:'Accepted limitations',leverage:'Leverage',net_leverage:'Net leverage',coverage:'Interest coverage',cash:'Cash',undrawn:'Undrawn facilities',talk:'Spread talk',margin:'Margin',coupon:'Coupon',price:'Price',yield:'Yield'};
-const LIBRARY_GROUPS={metric:['basis','period','leverageMin','leverageMax','coverageMin','coverageMax','netLeverageMin','netLeverageMax','cashMin','cashMax','undrawnMin','undrawnMax'],rating:['classification','currency','ratingBelow','ratingAbove','ratingScope'],deal:['talkMin','talkMax','marginMin','marginMax','couponMin','couponMax','priceMin','priceMax','yieldMin','yieldMax'],limit:['limitation']};
+const LIBRARY_GROUPS={metric:['period','leverageMin','leverageMax','coverageMin','coverageMax','netLeverageMin','netLeverageMax','cashMin','cashMax','undrawnMin','undrawnMax'],rating:['classification','currency','ratingBelow','ratingAbove','ratingScope'],deal:['talkMin','talkMax','marginMin','marginMax','couponMin','couponMax','priceMin','priceMax','yieldMin','yieldMax'],limit:['limitation']};
 const catalogueRuns=()=>window.DESIGN_CATALOGUE?.real||[];
 // A date that is not a real calendar day is shown as served, never as another day.
 function libraryDate(value) {
@@ -1366,13 +1372,19 @@ function libraryArtifactName(artifact) {
 }
 // Search also reads the issuer name and terms the store recorded for the joined run, appended to the title the search reads; counts, hidden rows, the option counts and the list all see the same text.
 const libraryShadows=runs=>runs.map(run=>{const held=contexts[libraryRunKey(run)];return {...run,title:[run.title,held?.issuer,...(held?.issuerTerms||[])].filter(Boolean).join(' ')};});
+// The runs the screen lists for filters `f`: the Latest-run rule and the criteria, or, in a "Show them" view, exactly the logic's hidden rows. The list, its counts and the option numbers all read this.
+function libraryListed(shadows,f,hiddenGroup) {
+  const coverage=LibraryLogic.coverage(shadows,f),hidden=Object.hasOwn(coverage,hiddenGroup)?hiddenGroup:'';
+  const entries=LibraryLogic.screened(shadows,f);
+  return {coverage,hidden,entries,runs:hidden?LibraryLogic.hiddenBy(shadows,f,hidden):entries.map(e=>e.run)};
+}
 function libraryRows() {
   const runs=catalogueRuns(),f={...libraryFilters},shadows=libraryShadows(runs);
   const original=new Map(runs.map(run=>[run.id,run])),back=list=>list.map(run=>original.get(run.id));
-  const coverage=LibraryLogic.coverage(shadows,f);
-  if(!Object.hasOwn(coverage,libraryState.hidden))libraryState.hidden='';
-  const entries=LibraryLogic.screened(shadows,f),skipped=new Set(entries.filter(e=>e.notScreened).map(e=>e.run.id));
-  const matching=back(libraryState.hidden?LibraryLogic.hiddenBy(shadows,f,libraryState.hidden):entries.map(e=>e.run)); // "Show them" lists exactly the logic's hidden rows
+  const listed=libraryListed(shadows,f,libraryState.hidden),{coverage,entries}=listed;
+  libraryState.hidden=listed.hidden;
+  const skipped=new Set(entries.filter(e=>e.notScreened).map(e=>e.run.id));
+  const matching=back(listed.runs);
   const rows=libraryState.sortKey?LibraryLogic.sortRuns(matching,libraryState.sortKey,libraryState.direction,f):matching;
   if(!rows.some(r=>r.id===libraryState.selected))libraryState.selected=rows[0]?.id??'';
   const unscreened=f.runs==='any'?0:LibraryLogic.filterRuns(shadows,{...f,runs:'any'}).length-entries.length; // rows Any run would add under these filters
@@ -1398,17 +1410,21 @@ function libraryRatingCell(run) {
   return lowest?`<td title="${esc(libraryRatingText(lowest))}">${esc(lowest.label)}</td>`:'<td class="missing" title="No rating recorded">n.a.</td>';
 }
 // A catalogue run is named as every run page names it, by its period and pathway; a run the store does not hold keeps its catalogue date and workflow. Never by its code or folder.
-const libraryRunName=run=>{const held=contexts[libraryRunKey(run)];return held?runName(held):`${libraryDate(run.date)} · ${run.workflow||'Not recorded'}`;};
-// Two runs of one issuer that carry the same name are told apart by a fixed word and nothing else: Latest for the newest, Earlier for the rest. `items` are {group, name, date}; the word for each, in order ('' for a name held once).
+const libraryRunParts=run=>{const held=contexts[libraryRunKey(run)];return held?[runDate(held),runPathway(held)]:[run.date?displayDate(run.date):'Not recorded',run.workflow||'Not recorded'];};
+const libraryRunName=run=>libraryRunParts(run).join(' · ');
+// Two runs of one issuer that carry the same name are told apart by a fixed word and nothing else: Latest for the later, Earlier for the rest. Which is later is a fact about the runs, never about the row order:
+// the as-of date, then the run's start (a run with no start is the older), then the folder order Report history uses (the smaller folder is listed first). `items` are {id, group, name, date, started}; the word for each, in order ('' for a name held once).
+const laterRun=(a,b)=>((a.date||'')!==(b.date||'')?(a.date||'')>(b.date||''):(a.started||null)!==(b.started||null)?b.started==null||(a.started!=null&&a.started>b.started):String(a.id)<String(b.id));
 function sameNameWords(items) {
   const same=(a,b)=>a.group===b.group&&a.name===b.name;
-  return items.map((item,n)=>{
+  return items.map(item=>{
     const peers=items.filter(other=>same(item,other));
     if(peers.length<2)return '';
-    const newest=peers.reduce((best,other)=>other.date>best.date?other:best,peers[0]);
-    return items.indexOf(newest)===n?'Latest':'Earlier';
+    return peers.every(other=>other===item||laterRun(item,other))?'Latest':'Earlier';
   });
 }
+// The start of a run's first step, the order Report history breaks a date tie by.
+const runStarted=key=>contexts[key]?.record?.steps?.[0]?.started??null;
 // The name selects the row (its panel is below the table), by the row's place in the list; the run's name opens the run when the store holds it.
 function libraryRow(run,selected,skipped,index=0,word='') {
   const key=libraryRunKey(run),artifact=primaryArtifact(run),when=libraryRunName(run),label=`${run.name}, ${when}`;
@@ -1450,8 +1466,8 @@ function libraryCard(group,index,at) {
   const modules=key?libraryModules(key):[],id=`lc-${index}`;
   const dots=modules.length?window.Components.moduleDots(modules):`<p class="lc-none">${key?'No module output is retained for this run.':'No run page is held for this issuer.'}</p>`;
   const meta=[run.issuer!==name?run.issuer:'',run.sector].filter(Boolean).join(' · ');
-  const label=`${name}, ${when}`;
-  return `<article class="lib-card" aria-labelledby="${id}"><header class="lc-head"><h3 class="lc-name" id="${id}">${esc(name)}</h3>${meta?`<p class="lc-meta">${esc(meta)}</p>`:''}</header><div class="lc-run"><p class="lc-when">${esc(when)}</p>${lead?.state?window.Components.stateBadge(lead.state,{}):''}</div>${lead?.sentence?`<p class="lc-lead">${lead.sentence}</p>`:''}<div class="lc-dots">${dots}</div><footer class="lc-foot">${key?`<a class="lc-open" href="${routeHref('W-Overview','overview',null,key)}" aria-label="${esc(`Open overview: ${label}`)}">Open overview${icon('arrow-right')}</a>`:''}<button class="tertiary-action" type="button" data-library-select="${at}" aria-controls="run-detail" aria-label="${esc(`Details: ${label}`)}">Details</button>${key?`<a class="lc-hist" href="${routeHref('W-Report','history',null,key)}" aria-label="${esc(`Report history: ${name}`)}">${plural(issuerRuns(key).length,'run')}</a>`:''}</footer></article>`;
+  const label=`${name}, ${when}`,[whenDate,whenPathway]=libraryRunParts(run),open=!!libraryState.opened&&libraryState.selected===run.id;
+  return `<article class="lib-card" aria-labelledby="${id}"><header class="lc-head"><h3 class="lc-name" id="${id}">${esc(name)}</h3>${meta?`<p class="lc-meta">${esc(meta)}</p>`:''}</header><div class="lc-run"><p class="lc-when">${esc(whenDate)}</p><span class="badge badge-gray lc-path">${esc(whenPathway)}</span>${lead?.state?window.Components.stateBadge(lead.state,{}):''}</div>${lead?.sentence?`<p class="lc-lead">${lead.sentence}</p>`:''}<div class="lc-dots">${dots}</div><footer class="lc-foot">${key?`<a class="lc-open" href="${routeHref('W-Overview','overview',null,key)}" aria-label="${esc(`Open overview: ${label}`)}">Open overview${icon('arrow-right')}</a>`:''}<button class="secondary-action lc-details" type="button" data-library-select="${at}" aria-expanded="${open}" aria-controls="run-detail" aria-label="${esc(`Details: ${label}`)}">Details</button>${key?`<a class="lc-hist" href="${routeHref('W-Report','history',null,key)}" aria-label="${esc(`Report history: ${name}`)}">${plural(issuerRuns(key).length,'run')}</a>`:''}</footer></article>`;
 }
 // The cards of the listed runs: issuers in order of their first listed run; each card's Details button selects the run it draws, by its place in the list.
 function libraryCards(rows) {
@@ -1463,12 +1479,12 @@ function librarySortSelect() {
   const options=[['','Default order'],...LIBRARY_COLUMNS.filter(([key])=>key).flatMap(([key,label])=>[[`${key}:asc`,`${label}, ascending`],[`${key}:desc`,`${label}, descending`]])];
   return `<label class="lib-sort"><span>Sort</span><select id="library-sort" data-library-sort-select>${options.map(([value,text])=>`<option value="${value}"${value===chosen?' selected':''}>${esc(text)}</option>`).join('')}</select></label>`;
 }
-function libraryResults({runs,rows,skipped,hidden},shown='cards') {
+function libraryResults({runs,rows,skipped,hidden},shown=libraryState.view??'cards') {
   if(!runs.length)return window.DESIGN_APP?.problem?`<div class="library-empty"><h2>The library could not read this workspace</h2><p>Nothing can be listed until its data file loads. Rebuild the data file and open this page again.</p></div>`:window.Components.emptyState('No issuers in this library yet',['The data file holds no retained runs.'],'<p class="es-do">Start a run on an issuer, then rebuild the library data file to list it here.</p>');
   if(!rows.length)return '<div class="library-empty"><h2>No issuers match these filters</h2><p>Try a wider range or include unavailable values. Workflow completeness is not assessed for retained runs.</p><button id="library-empty-reset" class="primary-action" type="button">Reset filters</button></div>';
   const sort=key=>libraryState.sortKey===key?libraryState.direction==='asc'?'ascending':'descending':'none';
   const head=LIBRARY_COLUMNS.map(([key,label])=>key?`<th scope="col" aria-sort="${sort(key)}"><button type="button" data-library-sort="${key}">${label} <span aria-hidden="true">${{ascending:'↑',descending:'↓',none:'↕'}[sort(key)]}</span></button></th>`:`<th scope="col">${label}</th>`).join('');
-  const words=sameNameWords(rows.map(r=>({group:LibraryLogic.issuerKey(r.issuer),name:libraryRunName(r),date:r.date||''})));
+  const words=sameNameWords(rows.map(r=>({id:r.id,group:LibraryLogic.issuerKey(r.issuer),name:libraryRunName(r),date:r.date||'',started:runStarted(libraryRunKey(r))})));
   const heading=hidden?`<div class="hidden-head"><h2 id="library-hidden-title" tabindex="-1">${esc(`Hidden by ${COVERAGE_NAMES[hidden]}: ${['classification','currency','rating','limitation'].includes(hidden)?'not':'no figure'} recorded`)}</h2><button type="button" class="secondary-action" data-library-back>Back to results</button></div>`:'';
   const table=`<div class="table-scroll" role="region" aria-label="Issuer runs table; scroll horizontally for all columns" tabindex="0"><table class="library-table"><caption class="sr-only">Issuer runs, credit metrics, completeness and report availability</caption><thead><tr>${head}</tr></thead><tbody>${rows.map((r,n)=>libraryRow(r,r.id===libraryState.selected,skipped.has(r.id),n,words[n])).join('')}</tbody></table></div>`;
   const bar=`<div class="shape-bar lib-resultbar"><div class="shape-bar-l">${librarySortSelect()}</div><div class="shape-bar-r">${window.Components.viewToggle('Issuers as cards or as a list',[['cards','Cards'],['list','List']],shown)}</div></div>`;
@@ -1498,7 +1514,9 @@ function libraryDetail({rows}) {
 // Options of every select the screen sends to LibraryLogic, as [value, text]. The Library query accepts only these values.
 function libraryChoices() {
   const runs=catalogueRuns(),values=pick=>[...new Set(runs.flatMap(pick).filter(Boolean))].sort().map(v=>[v,v]);
-  return {sector:values(r=>r.sector),workflow:values(r=>r.workflow),issuer:issuerGroups(runs).filter(g=>g[0].issuer).map(g=>[g[0].issuer,new Set(g.map(r=>r.name)).size===1?g[0].name:g[0].issuer]).sort((a,b)=>a[1].localeCompare(b[1])),basis:values(r=>r.metrics.leverage?.basis),period:values(r=>r.period_kind),currency:values(r=>r.currency),limitation:values(r=>r.gaps||[]),
+  return {sector:values(r=>r.sector),workflow:values(r=>r.workflow),issuer:issuerGroups(runs).filter(g=>g[0].issuer).map(g=>[g[0].issuer,new Set(g.map(r=>r.name)).size===1?g[0].name:g[0].issuer]).sort((a,b)=>a[1].localeCompare(b[1])),period:values(r=>r.period_kind),currency:values(r=>r.currency),
+    // A limitation is an option only when it is clean under the strict findings rule (no file name, id, calculation ID or module code), and carries no register or module code either; the rest are Evidence's.
+    limitation:values(r=>(r.gaps||[]).filter(gap=>window.Components.findingCell(gap,{strict:true}).html!==undefined&&!/\b(?:EV|GAP|MON|DP|SRC)-\d{2,3}\b|\bCP-[0-9A-Z]+\b/.test(gap))),
     // No run records a completeness until a checklist is supplied; a filter that nothing can match is not offered, by the screen or the address.
     completion:runs.some(run=>run.completion!=null)?[['75','75% or above'],['50','50% or above'],['100','100% complete'],['unassessed','Not assessed']]:[],availability:[['report','Report available'],['handoff','No report available']],
     runs:[['latest','Latest run per issuer'],['any','Any run']],classification:[...Object.entries(CLASSIFICATIONS),['not_stated','Not stated']],
@@ -1510,7 +1528,7 @@ const libraryActive=group=>LIBRARY_GROUPS[group].filter(k=>libraryFilters[k]&&li
 // ---- The filter bar (C26, library redesign Task 11). The same filters, state and address as before; what changed is how the common ones are chosen. Each option is a button (aria-pressed) that shows
 // how many issuers the screen lists once it is chosen, the other filters as they stand; the issuer has a select (one option per issuer). A pressed option pressed again clears its filter. Chosen filters repeat in one row, each with its own clear.
 const LIBRARY_CHIPS=[['runs','Runs'],['sector','Sector'],['workflow','Workflow'],['completion','Completeness'],['availability','Deliverables']];
-const LIBRARY_LABELS={search:'Search',runs:'Runs',issuer:'Issuer',sector:'Sector',workflow:'Workflow',completion:'Completeness',availability:'Deliverables',classification:'Classification',currency:'Currency',ratingBelow:'Rating at or below',ratingAbove:'Rating at or above',ratingScope:'Rating scope',basis:'Leverage basis',period:'Financial period',limitation:'Accepted limitation'};
+const LIBRARY_LABELS={search:'Search',runs:'Runs',issuer:'Issuer',sector:'Sector',workflow:'Workflow',completion:'Completeness',availability:'Deliverables',classification:'Classification',currency:'Currency',ratingBelow:'Rating at or below',ratingAbove:'Rating at or above',ratingScope:'Rating scope',period:'Financial period',limitation:'Accepted limitation'};
 const RANGE_NAMES={leverage:'Leverage',coverage:'Coverage',netLeverage:'Net leverage',cash:'Cash',undrawn:'Undrawn facilities',talk:'Spread talk',margin:'Margin',coupon:'Coupon',price:'Price',yield:'Yield'};
 const libraryLabel=key=>{const range=/^(.+?)(Min|Max)$/.exec(key);return LIBRARY_LABELS[key]??(range&&RANGE_NAMES[range[1]]?`${RANGE_NAMES[range[1]]}, ${range[2]==='Min'?'minimum':'maximum'}`:key);};
 // What choosing an option sets: the option, or the filter's default when it is the one already chosen; null when the filter does not offer that option (nothing is set).
@@ -1519,7 +1537,7 @@ function libraryChipValue(key,value) {
   return libraryFilters[key]===value?LIBRARY_DEFAULTS[key]:value;
 }
 // The issuers the screen lists when `overrides` replace some filters: the number beside an option.
-const libraryIssuerCount=(shadows,overrides)=>issuerGroups(LibraryLogic.filterRuns(shadows,{...libraryFilters,...overrides})).length;
+const libraryIssuerCount=(shadows,overrides)=>issuerGroups(libraryListed(shadows,{...libraryFilters,...overrides},libraryState.hidden).runs).length;
 function libraryFacets() {
   const f=libraryFilters,choices=libraryChoices(),shadows=libraryShadows(catalogueRuns());
   const group=(key,label,body)=>`<div class="lf-group" id="library-${key}" role="group" aria-labelledby="lf-${key}"><span class="lf-lab" id="lf-${key}">${label}</span><div class="lf-chips">${body}</div></div>`;
@@ -1545,26 +1563,34 @@ function libraryPanel() {
   const group=(name,title,body,hint='')=>{const n=libraryActive(name);return `<details id="${name}-filters" ${n?'open':''}><summary>${title} <span id="${name}-filter-count">${n?`· ${n} active`:''}</span></summary><div class="library-filters">${body}</div>${hint}</details>`;};
   return `<div class="search-row"><label class="library-search"><span class="sr-only">Search issuer, run or sector</span>${icon('search')}<input id="library-query" data-library-filter="search" type="search" value="${esc(f.search)}" placeholder="Search issuer, run or sector…" autocomplete="off" aria-controls="library-results"></label><button id="library-clear" class="tertiary-action" type="button"${libraryFiltered()?'':' hidden'}>Reset filters</button></div><div id="library-facets" class="lf" tabindex="-1">${libraryFacets()}</div>`
     +group('rating','Classification, rating &amp; currency',`${select('classification','Classification','Any')}${select('currency','Currency','Any')}${select('ratingBelow','Rating at or below','Any')}${select('ratingAbove','Rating at or above','Any')}${select('ratingScope','Rating scope')}`)
-    +group('metric','Credit metrics &amp; period',`${select('basis','Leverage basis','All bases · definitions differ')}${select('period','Financial period','All period types')}${pair('leverage','Leverage','x')}${pair('coverage','Coverage','x')}${pair('netLeverage','Net leverage','x')}${pair('cash','Cash','as reported unit')}${pair('undrawn','Undrawn facilities','as reported unit')}`,'<p class="hint">Numeric filters exclude unavailable values. Select a leverage basis to keep definitions consistent; the definition of each ratio is in Evidence.</p>')
+    +group('metric','Credit metrics &amp; period',`${select('period','Financial period','All period types')}${pair('leverage','Leverage','x')}${pair('coverage','Coverage','x')}${pair('netLeverage','Net leverage','x')}${pair('cash','Cash','as reported unit')}${pair('undrawn','Undrawn facilities','as reported unit')}`,'<p class="hint">Numeric filters exclude unavailable values. The definition of each ratio is in Evidence.</p>')
     +group('deal','Facilities &amp; quotes',`${pair('talk','Spread talk','bps')}${pair('margin','Margin','bps')}${pair('coupon','Coupon','%')}${pair('price','Price')}${pair('yield','Yield','%')}`,'<p class="hint">Matched within one facility: talk and bid–ask by overlap, single values inside the range. Values are shown as entered.</p>')
     +group('limit','Accepted limitations',select('limitation','Accepted limitation','Any'));
 }
 // A panel rebuild shows an unreadable number box empty, so its stored 'invalid' bound is dropped to keep the filter and the control in agreement.
 const clearInvalidBounds=()=>Object.keys(libraryFilters).forEach(k=>{if(libraryFilters[k]==='invalid')libraryFilters[k]='';});
-// A run in progress, from the live activity file (the Run activity page owns the full picture): its issuer and pathway, the C31 mark and the C13 steps, which module is running and how many are done of how many.
-// Only strings reach the page; a run with no module list shows its mark alone. Cost and the run's folder are not shown. Nothing is drawn when no run is running.
+// Runs in progress, from the live activity file (the Run activity page owns the full picture): a running run shows its issuer and pathway, the C31 mark and the C13 steps (which module is running, how many are
+// done of how many); a waiting run shows its issuer, pathway and mark. Only strings reach the page; cost and the run's folder are not shown. Nothing is drawn when no run is running or waiting.
+// Defined with the other live readers below: homeFollowsRuns says whether this section has a run to follow.
 function libraryLive() {
   const live=window.RUN_ACTIVITY;
-  if(!live||typeof live!=='object'||Array.isArray(live)||!Array.isArray(live.runs))return '';
-  const running=live.runs.filter(run=>run&&typeof run==='object'&&!Array.isArray(run)&&run.status==='running');
-  if(!running.length)return '';
+  if(!liveReadable(live))return '';
+  const shown=liveRuns(live).filter(run=>run.status==='running'||run.status==='queued');
+  if(!shown.length)return '';
   const text=value=>typeof value==='string'?value.trim():'';
   const row=run=>{
-    const steps=(Array.isArray(run.modules)?run.modules:[]).filter(item=>Array.isArray(item)&&typeof item[0]==='string').map(([module,state])=>({title:moduleLabel(module)??module,state}));
+    const steps=run.status==='running'?(Array.isArray(run.modules)?run.modules:[]).filter(item=>Array.isArray(item)&&typeof item[0]==='string').map(([module,state])=>({title:moduleLabel(module)??module,state})):[];
     const pathway=text(run.pathway)?pathwayTitle(run.pathway):'';
-    return `<li class="live-row"><div class="lv-head"><strong class="lv-name">${esc(text(run.issuer_name)||'Run in progress')}</strong>${pathway?`<span class="lv-pathway">${esc(pathway)}</span>`:''}${window.Components.runMark('running',run.stalled?'stalled':'')}</div>${window.Components.runSteps(steps)}</li>`;
+    const mark=window.Components.runMark(run.stalled?'stalled':run.status==='running'?'running':'queued');
+    return `<li class="live-row"><div class="lv-head"><strong class="lv-name">${esc(text(run.issuer_name)||'Run in progress')}</strong>${pathway?`<span class="lv-pathway">${esc(pathway)}</span>`:''}${mark}</div>${window.Components.runSteps(steps)}</li>`;
   };
-  return `<section class="lib-live" aria-labelledby="lib-live-h"><h2 class="eyebrow lib-eyebrow" id="lib-live-h">Running now</h2><ul class="live-rows">${running.map(row).join('')}</ul></section>`;
+  return `<section class="lib-live" aria-labelledby="lib-live-h"><h2 class="eyebrow lib-eyebrow" id="lib-live-h">Running now</h2><ul class="live-rows">${shown.map(row).join('')}</ul></section>`;
+}
+// The section follows a new snapshot in place: redrawn while a run is shown, removed (loader and all) when none is.
+function refreshLibraryLive() {
+  const old=document.querySelector('.lib-live'),html=libraryLive();
+  if(!html){if(old)old.remove();return;}
+  if(old)old.outerHTML=html;else $('library-filters').insertAdjacentHTML('beforebegin',html);
 }
 // Read when the library was built: the run folders it does not show, with the reason, and the issues the build found. Closed by default; it changes nothing.
 function libraryNotShown(activity) {
@@ -1578,7 +1604,7 @@ function libraryNotShown(activity) {
 function libraryView() {
   clearInvalidBounds();
   const view=libraryRows();
-  return `<div class="library-main">${libraryLive()}<form id="library-filters" class="library-panel" role="search" aria-label="Screen issuers">${libraryPanel()}</form><section class="library-results-panel" aria-label="Issuer results"><h2 class="sr-only">Issuers</h2><p id="library-count" role="status" aria-live="polite">${libraryCount(view)}</p><div id="library-coverage" class="library-coverage" role="status" aria-live="polite">${libraryCoverage(view)}</div><div id="library-results">${libraryResults(view)}</div></section><section id="run-detail" class="run-detail" aria-label="Selected issuer details" tabindex="-1" ${view.rows.some(r=>r.id===libraryState.selected)?'':'hidden'}>${libraryDetail(view)}</section></div>${libraryNotShown(window.DESIGN_ACTIVITY)}`;
+  return `<div class="library-main">${libraryLive()}<form id="library-filters" class="library-panel" role="search" aria-label="Screen issuers">${libraryPanel()}</form><section class="library-results-panel" aria-label="Issuer results"><h2 class="sr-only">Issuers</h2><p id="library-count" role="status" aria-live="polite">${libraryCount(view)}</p><div id="library-coverage" class="library-coverage" role="status" aria-live="polite">${libraryCoverage(view)}</div><div id="library-results">${libraryResults(view)}</div></section><section id="run-detail" class="run-detail" aria-label="Selected issuer details" tabindex="-1" ${libraryState.opened?'data-chosen ':''}${view.rows.some(r=>r.id===libraryState.selected)?'':'hidden'}>${libraryDetail(view)}</section></div>${libraryNotShown(window.DESIGN_ACTIVITY)}`;
 }
 // The counted options and the chosen-filters row follow every change, and focus stays on the option the reader used. The search box and the criteria groups keep their focus: only a reset rebuilds them.
 function refreshFacets() {
@@ -1590,12 +1616,13 @@ function refreshFacets() {
 // Re-places the results from the current filters; the panel itself is only rebuilt on a reset so typing keeps its focus.
 function updateLibrary(panel=false) {
   if(panel)clearInvalidBounds();
-  const view=libraryRows(),shown=$('library-results').querySelector('[data-block]')?.dataset.view||'cards';
+  const view=libraryRows();
   if(panel)$('library-filters').innerHTML=libraryPanel();else refreshFacets();
   $('library-count').textContent=libraryCount(view);
-  $('library-results').innerHTML=libraryResults(view,shown);
+  $('library-results').innerHTML=libraryResults(view);
   $('run-detail').innerHTML=libraryDetail(view);
   $('run-detail').hidden=!view.rows.some(r=>r.id===libraryState.selected);
+  $('run-detail').toggleAttribute('data-chosen',!!libraryState.opened);
   $('library-coverage').innerHTML=libraryCoverage(view);
   $('library-clear').hidden=!libraryFiltered();
   // What was redrawn is named as the route's own draw names it.
@@ -1817,8 +1844,12 @@ function activityEnded(previous,live) {
   });
   return {toasts,running};
 }
-// The Run activity view re-loads activity.js every 30 s while it is showing; no other view schedules anything.
-function nextActivityReload(route) {return route&&route.module==='CP-OS'?ACTIVITY_RELOAD_MS:null;}
+// The Run activity view re-loads activity.js every 30 s while it is showing, and the library home does the same, on the same timer, only while its Running now section shows a running or waiting run; no other view schedules anything.
+const homeFollowsRuns=live=>liveReadable(live)&&liveRuns(live).some(run=>run.status==='running'||run.status==='queued');
+function nextActivityReload(route) {
+  if(route&&route.module==='CP-OS')return ACTIVITY_RELOAD_MS;
+  return route&&route.module==='W-Library'&&homeFollowsRuns(window.RUN_ACTIVITY)?ACTIVITY_RELOAD_MS:null;
+}
 // Adds a fresh copy of the script and removes the previous one. A missing file only logs in the browser; the page carries on.
 function swapActivityScript(doc,now) {
   const previous=doc.head.querySelector('script[data-run-activity]');
