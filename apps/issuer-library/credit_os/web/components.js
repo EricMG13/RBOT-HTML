@@ -779,10 +779,10 @@
   // A stalled run (running or waiting) is a warning mark with its word, never colour alone, and no loader.
   const RUN_MARKS = {running: ['new', 'Running'], queued: ['same', 'Waiting'], done: ['ok', 'Done'], failed: ['bad', 'Failed'], stalled: ['warn', 'Stalled']};
   const LATTICE = `<span class="lat" aria-hidden="true">${'<i></i>'.repeat(9)}</span>`;
-  function runMark(status, note = '') {
+  function runMark(status, note = '', after = '') {
     if (!Object.hasOwn(RUN_MARKS, status)) return '';
     const [tone, word] = RUN_MARKS[status], glyph = {running: LATTICE, queued: icon('history'), done: icon('circle-check'), failed: icon('x'), stalled: icon('triangle-alert')}[status];
-    return `<span class="state ${tone} rmark ${status}">${glyph}<span class="state-w">${word}${note ? ` · ${escapeHtml(note)}` : ''}</span></span>`;
+    return `<span class="state ${tone} rmark ${status}">${glyph}<span class="state-w">${word}${note ? ` · ${escapeHtml(note)}` : ''}</span>${after}</span>`;
   }
   // C13 (Task 11): a run's progress as connected steps, one segment per module in the order given. `steps` are {title, state} with state done, running or waiting (anything else waits).
   // Under the segments: the module(s) running now and how many are done of how many (counts of listed items). Only the running segment moves, by the stylesheet's own rule.
@@ -797,7 +797,8 @@
     const runningName = step => `${escapeHtml(step.title)}${step.note ? `<span class="steps-el"${step.since ? ` data-since="${escapeHtml(step.since)}"` : ''}> · ${escapeHtml(step.note)}</span>` : ''}`;
     const segment = step => `<li class="step ${kind(step)}" ${tipAttributes(`${step.title}: ${STEP_WORDS[kind(step)]}`)}></li>`;
     const clock = step => (step.note ? `<span class="steps-el"${step.since ? ` data-since="${escapeHtml(step.since)}"` : ''}> · ${escapeHtml(step.note)}</span>` : '');
-    const labelled = step => `<li class="step ${kind(step)}"><span class="st-n">${escapeHtml(step.title)}</span>${runMark({done: 'done', running: step.stalled ? 'stalled' : 'running', waiting: 'queued'}[kind(step)])}${kind(step) === 'running' ? clock(step) : ''}</li>`;
+    // State mark first, then the module name; a running step's clock is part of its mark ("Running · 37 min into the run"), so the phrase stays on the mark's line and wraps as one.
+    const labelled = step => `<li class="step ${kind(step)}">${runMark({done: 'done', running: step.stalled ? 'stalled' : 'running', waiting: 'queued'}[kind(step)], '', kind(step) === 'running' ? clock(step) : '')}<span class="st-n">${escapeHtml(step.title)}</span></li>`;
     if (options.labelled) return `<div class="steps-w"><ol class="steps steps-l" aria-label="Modules, ${done} of ${steps.length} done">${steps.map(labelled).join('')}</ol><p class="steps-t"><span class="steps-n">${done} of ${steps.length} done</span></p></div>`;
     return `<div class="steps-w"><ol class="steps" aria-label="Modules, ${done} of ${steps.length} done">${steps.map(segment).join('')}</ol><p class="steps-t">${running.length ? `<span class="steps-now"><span class="steps-k">Running</span> ${running.map(runningName).join(', ')}</span>` : ''}<span class="steps-n">${done} of ${steps.length} done</span></p></div>`;
   }

@@ -1450,3 +1450,17 @@ test('B7: a stated absence in a measure tile is its own line, not a CHANGE tag; 
   assert.ok(mixed.includes('<p class="tile-a">Not calculated: no prior period</p>') && countOf(mixed, /tag-k/g) === 1 && !mixed.includes('tiles-absent'));
   for (const cell of ['USD 5 million (3%)', 'Not calculated: no prior period', 'USD 1 million', 'USD 2 million', '>M0<', '>M1<']) assert.equal(countOf(mixed, new RegExp(cell.replace(/[()]/g, '\\$&'), 'g')), 1, cell);
 });
+
+test('B9: labelled run steps are connected steps, each with its state mark first and then its module name; the running clock is part of the mark\'s phrase; the compact row is unchanged', () => {
+  const steps = [{ title: 'Source readiness', state: 'done' }, { title: 'Credit view', state: 'running', note: '37 min into the run', since: '2026-11-09T13:41:00Z' }, { title: 'Downside', state: 'waiting' }];
+  const html = C.runSteps(steps, { labelled: true });
+  const items = [...html.matchAll(/<li class="step (\w+)">(.*?)<\/li>/g)];
+  assert.equal(items.length, 3);
+  for (const [, , inner] of items) assert.ok(inner.indexOf('rmark') < inner.indexOf('class="st-n"'), 'the mark comes first');
+  assert.ok(items[1][2].includes('<span class="state-w">Running</span><span class="steps-el" data-since="2026-11-09T13:41:00Z"> · 37 min into the run</span></span><span class="st-n">Credit view</span>'), 'the clock sits inside the mark, one phrase');
+  assert.equal(countOf(html, /steps-el/g), 1);
+  assert.ok(!C.runSteps(steps).includes('rmark') && C.runSteps(steps).includes('<li class="step done"'), 'the home row keeps its unlabelled segments');
+  const css = require('node:fs').readFileSync(require('node:path').join(__dirname, 'screen.css'), 'utf8');
+  assert.ok(/\.steps-l \.step:not\(:last-child\)::after\{[^}]*height:14px/.test(css) && /@container \(min-width:560px\)\{[^]*width:28px!important/.test(css), 'a connector between consecutive steps, vertical when stacked and horizontal across a row');
+  assert.ok(/\.steps-l \.step\{[^}]*min-height:44px/.test(css), 'one height for every step');
+});
