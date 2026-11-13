@@ -1,0 +1,4194 @@
+diff --git a/README.md b/README.md
+index a544cac..d554e37 100644
+--- a/README.md
++++ b/README.md
+@@ -256,6 +256,27 @@ folder (read access only if they open `library.html` from it); only the service'
+   library README) but stays in `issuers\`.
+ - Whether USD 20 covers a full pathway on `sol-medium` has not been measured.
+ 
++## 4. Signal (news feed, command line only)
++
++Signal collects stories from news, regulator and ratings feeds that the owner has approved, folds
++duplicate stories and keeps them in a local SQLite store under `<root>/signal/`. Slice 1 is the
++store and the command line; pages, the AI pass, digests and login are later slices.
++
++```
++python -m deploy_workflow.signal --root <root> users add <name> --role <reader|writer|owner>
++python -m deploy_workflow.signal --root <root> sources propose <name> --kind <kind> --url <url> --by <name>
++python -m deploy_workflow.signal --root <root> sources approve <id>     # or: sources pause <id>
++python -m deploy_workflow.signal --root <root> sources list
++python -m deploy_workflow.signal --root <root> ingest                   # add --loop for a pass every 60 s
++python -m deploy_workflow.signal --root <root> stories --limit 20
++```
++
++Only approved sources are fetched. Design: `docs/superpowers/specs/2026-11-13-signal-design.md`.
++Candidate sources: `docs/signal/sources.json` (85 checked on 2026-11-13, 60 meet tier A (fetched and parsed with dated items); none
++is approved until the owner approves it).
++
++Known limits: the connection goes to the address that was checked; the one system DNS lookup per hop cannot be interrupted; redirects go only to https hosts on the default port; and two ingest passes running at once may both fetch a due source.
++
+ ## Current limits
+ 
+ - The automated checks cover handoff structure, issuer/date/source/upstream anchors and report
+diff --git a/VERIFICATION.md b/VERIFICATION.md
+index 006a5d8..c6ce877 100644
+--- a/VERIFICATION.md
++++ b/VERIFICATION.md
+@@ -4,6 +4,35 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
+ engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
+ `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
+ 
++## 2026-11-13 — Signal slice 1: command line (branch `claude/signal-1b-store-ingest-cli`, tip after the pre-merge review fixes)
++Scope: Signal slice 1 command line only (`python -m deploy_workflow.signal`); no pages, no AI pass, no login, no model call, no cost.
++- `uv run pytest tests/test_signal_store.py tests/test_signal_feeds.py tests/test_signal_fetch.py tests/test_signal_fold.py tests/test_signal_ingest.py tests/test_signal_cli.py -q`: exit 0, 234 passed.
++- `uv run python tools/quality_gate.py`: exit 0, output `quality gate: 0 finding(s) in 14 changed file(s), 2642 line(s) in scope`.
++- Security: the fetcher was rebuilt on `research.webfetch` after a pre-merge review found the first version connected to an address it had not checked. A security review of the rebuilt fetcher over real TLS on loopback found nothing High or Medium: every connection went to a checked address; 58 non-public address forms and 50 hostile redirect targets were refused; the 10-second deadline held against dripped headers and bodies. Its probes are kept under `.superpowers/sdd/slice1-review-fixes/probes/`, not in the repository; two of them (`probe_f2_validator_provenance`, `probe_f2_validator_injection`) now exit 1 because the behaviour they demonstrated is gone. The 17 earlier `probe_fetch_*` probes tested the deleted transport and no longer apply.
++- Live fetch of two public feeds (UK CMA cases Atom, BEREC RSS), no model call, no cost; real network, throwaway root outside the repository. All commands exit 0. `<root>` stands for the long scratch folder passed to `--root`. Re-run on 2026-11-13 with the rebuilt fetcher over real TLS (same commands, throwaway root, no model call): CMA cases 50 new, BEREC 10 new, every command exit 0; the transcript below is from the first run.
++```
++$ signal --root <root> sources propose "CMA cases" --kind regulator --url https://www.gov.uk/cma-cases.atom --by owner
++$ signal --root <root> sources propose "BEREC" --kind regulator --url https://www.berec.europa.eu/en/rss.xml --by owner
++$ signal --root <root> sources approve 1
++$ signal --root <root> sources approve 2
++$ signal --root <root> ingest
++CMA cases: ok: 50 new
++BEREC: ok: 10 new
++$ signal --root <root> stories --limit 5
++2026-11-11 12:01  CMA cases  Pilgrim’s / Walkers Deli & Sausage Co merger inquiry
++2026-11-11 07:51  BEREC  BEREC views on roaming topics of draft ITRE report
++2026-11-11 07:30  CMA cases  AkzoNobel / Axalta merger inquiry
++2026-11-11 07:02  CMA cases  McCormick / Unilever merger inquiry
++2026-11-10 14:09  CMA cases  Final recommendation that the Secretary of State replace the Assimilated Technology Transfer Block Exemption
++$ signal --root <root> sources list
++1  approved  healthy  2026-11-11 12:01  CMA cases
++2  approved  healthy  2026-11-11 07:51  BEREC
++$ signal --root <root> ingest
++(no output: sources not due within the minimum interval)
++```
++- Known limits: the one system DNS lookup per hop cannot be interrupted; `webfetch.py` reuses its connect timeout for the TLS handshake, so a slow connect plus a hung handshake can run to about twice the 10-second deadline (no request is sent after the deadline); two simultaneous passes may both fetch a due source; Windows not run.
++- Not verified: Windows; a live failing source, redirect, or conditional-GET (etag) against a real server; `ingest --loop`; stories were not compared with the feeds by hand beyond the five lines shown; the "no output" second ingest was read as "not due", not checked against the interval setting.
++
+ ## 2026-11-13 — Issuer library screens redrawn from a screen-to-component map; source references and audit material moved to Evidence (branch `claude/report-redesign-evidence`)
+ Scope: presentation only, offline, base `517b9fb`, head `d47e3ba` before this entry; no provider or model call, no change to analysis, module instructions or the Python that builds `data.js` (no Python outside `tests/` changed; under `apps/` only the README and `fixtures/shape-key.json` beside the web files changed; under `tests/` 19 files changed, among them `test_library_reader_refs.py`, `test_cpos_launch.py`, `test_run_start_page.py`, `test_library_page_browser.py`, `test_library_changes_browser.py` and the `browser_probe_*.js` helpers, edited to match the new pages). Design: `docs/visualisations/2026-11-13-screen-component-map.md`, plan `docs/superpowers/plans/2026-11-13-library-redesign.md`. Rules applied: findings pages show findings and one trace control per paragraph, row or figure; source references, file names, hashes, ids, calculation ids, registers, gap ledgers and run codes are drawn only on the Evidence page and its drawer; text written for another module is drawn nowhere, search and drawer included; a run is named by period and pathway; nothing is computed or reworded (allowed: counts of listed items, the elapsed clock on Run activity, date display); motion only for live run state.
+ Reviews: tasks 0 to 13 each had a task review and fix rounds (T1 1, T2 1, T3 3, T4 1, T5 2, T6 2, T7 1, T8 1, T9 2, T10 3, T11 1, T12 2, T13 1; the third rounds from a root-cause plan); two end batches closed 30 deferred Low items. Whole-branch review at `ac1164f`: changes needed, 2 High (trace controls dead on Forecast and Changes; search and the drawer reached text written for another module), 6 Medium, 8 Low. A simplification review recommended four rewrites and deletions and compacting the classifier answer key (same parsed JSON). Fix wave `7881b72..47b8f28`, round 2 `53f4070`, round 3 `d47e3ba` (an Evidence search hit is matched by module and line together); each round was re-reviewed, and the re-review of `d47e3ba` approved with no High or Medium finding open.
+@@ -954,36 +983,3 @@ Owner: "Yes, run it", then "Merge now apply corrections on next PR". Ruling
+   cost saving and the reads CP-3 and CP-5 now get are estimates from retained requests; the
+   relaunch refusal for old folders was checked by instruction text (old `CP-0.md` lacks the new
+   sentence), not by a launch.
+-
+-## 2026-11-10 — Names, not codes, on every library screen (branch `claude/names-not-codes`)
+-
+-Owner: "Remove all cp-IDs and methodology step IDs from user facing screens. Replace with module
+-name or other." Display only (`apps/issuer-library/credit_os/web/`); routes, hrefs, download names,
+-`data.js` and the retained handoffs are unchanged. Record: `docs/design/2026-11-10-screens-pass.md`,
+-"Codes off the screen".
+-
+-- Change: module codes read as module names everywhere, including Evidence & audit, the Evidence
+-  tab, the inspector, chips, the coverage strip, the reports' "Built from" table and each delivered
+-  report with its own inspector. `CP-x.md` reads "<name> handoff" and `CP-x_RUNBOOK.md` "<name>
+-  runbook". A method step id (`T4.10`, `T1D.1`, `T4.D1`, `T2G.*`, `T2E.3.r01`) becomes the step's
+-  title from the same output, or "a method step" / "method steps" when there is none. A column of
+-  bare step ids is dropped. Kept as written: register references (`C9`, `G1`, `GAP-001`), a bare
+-  `T<n>` ("T2 Biosystems", "Tier 2 (T2)"), and the quoted issuer source excerpt.
+-- Answer key (scratch crawler, not shipped): every in-app route plus the delivered reports. Text,
+-  option text, title, aria-label, alt and placeholder; one inspector per page. Before: 22,649
+-  module-code and 1,914 step-id hits over 349 routes of the four retained TDG runs. After
+-  (`54d7763`): `counted 0`. After merging main (`715f6f5`): `counted 0` over 186 routes and three
+-  runs. Main's methodology change now excludes `cpos-tdg-sol-medium-all-001` from the library ("not
+-  on the current methodology").
+-- Tests written first and seen failing (15 static, 3 browser). On the merged tree: `node --test`
+-  static + calendar 125 pass; `tests/test_library_page_browser.py` 21 passed; CI fast pytest list
+-  1471 passed, 7 deselected; quality gate 0 findings. All exit 0.
+-- Review: task review and fix round (mx-precise), whole-branch review (mx-architect), one fix
+-  wave and its re-review; implementation by mx-feature. Parked as latent, no retained instance:
+-  - step titles taken from any short second cell;
+-  - a step id cited beside another module's code takes this output's title;
+-  - the `;` joiner merging two untitled clauses;
+-  - `CP-0-A.md`-style names in the app.
+-- Not verified: Windows and Edge, phone widths, a screen reader; live Run activity data; a Forecast
+-  model with step ids; runbook names on a rendered page (string-level test only); any issuer other
+-  than TDG.
+diff --git a/docs/superpowers/plans/2026-11-13-signal-2-service-and-feed-pages.md b/docs/superpowers/plans/2026-11-13-signal-2-service-and-feed-pages.md
+new file mode 100644
+index 0000000..3af870e
+--- /dev/null
++++ b/docs/superpowers/plans/2026-11-13-signal-2-service-and-feed-pages.md
+@@ -0,0 +1,473 @@
++# Signal slice 2: service and feed pages — Implementation Plan
++
++> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
++
++**Goal:** A running Signal service whose feed page shows stored stories (Latest, For you, Saved, each topic), with search, save and topic following, and keeps itself fresh with a background ingest loop.
++
++**Architecture:** Slice 1's store and ingest stay as they are. This slice adds topics and personal marks to the store, a query module for the feed, an identity seam, a standard-library HTTP service with the run start page's request rules, and a static page (HTML, CSS, JavaScript files, no inline script) that calls a small JSON API and polls for new stories. No AI, no groups or threads, no settings pages.
++
++**Tech Stack:** Python 3.13 standard library (`http.server`, `sqlite3` FTS5, `threading`), plain JavaScript and CSS with the library's brand tokens and fonts, pytest, hypothesis, `node --test` for page logic, the repo's Chrome harness for browser tests.
++
++**Spec:** `docs/superpowers/specs/2026-11-13-signal-design.md` (sections 5.1, 5.2, 5.4, 5.6, 5.11, 7, 9 step 2). Mockup: `docs/design/mockups/signal.html`. Builds on slice 1 (`docs/superpowers/plans/2026-11-13-signal-1-store-and-ingest.md`, PRs 101 and 102).
++
++## Global Constraints
++
++- No new dependency. No build toolchain: the page is hand-written files served as they are.
++- One shared instance: `python -m deploy_workflow.signal --root <root> serve --host <address> --port <port>`; `127.0.0.1` by default; a wildcard address (`0.0.0.0`, `::`) is refused.
++- Request rules, same as the run start page (`src/deploy_workflow/run_start/service.py` module docstring): `Host` must be exactly the started `<host>:<port>` (plus `localhost:<port>` for `127.0.0.1`), else 403; every non-GET must carry `Origin: http://<Host>`, else 403; a present `Sec-Fetch-Site` other than `same-origin` or `none` is 403 except a top-level navigation; every response carries `Cross-Origin-Resource-Policy: same-origin` and `X-Content-Type-Options: nosniff`; JSON bodies need `Content-Length` and are at most 64 KiB; one request per connection.
++- Page policy, stricter than run start: `Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`. No inline script, no inline style attribute, no third-party origin.
++- The service serves only its own page files and API. It serves no file from `<root>`.
++- All feed and user text is inserted with `textContent` or escaped; never `innerHTML` with data. "Open source" links: `target="_blank" rel="noopener noreferrer"`, and only `http:`/`https:` links are rendered as links.
++- Identity is not authentication (spec 5.2): a typed display name in a cookie; the role comes from the `users` table; an unknown name is a `reader`. Everything a user can do in this slice (save, follow, search) is personal and open to readers. No owner or writer action is exposed over HTTP.
++- No AI call anywhere. Cards show no AI line, no signal bars, no stage tracker and no rating move; those arrive with slice 5. A card's kind is its source's kind (`regulator`, `news`, `ratings`, `research`).
++- Order is by published time, newest first ("Latest"). The "Top" order needs signal strength and group activity and is not in this slice; the page shows no Top/Latest toggle.
++- Background loop: one ingest pass every 60 seconds in its own thread with its own database connection; each request uses its own connection. A pass that raises is logged and the loop continues at the next tick; the failure is visible at `/api/status`.
++- Design rules (owner, 2026-11-13): each kind of information has its own component; nothing looks lifted from Markdown; no flat grid. The mockup is the reference. Before Task 5 the controller reads the live pages of any component taken from the eight approved libraries and names them in the task brief; none is used from memory. Every view has an empty, a loading and an error state.
++- Accessibility: landmarks and labels as in the mockup, full keyboard use, visible focus, text contrast at least 4.5:1, `prefers-reduced-motion` respected, no information by colour alone.
++- No stub or fake value stands in for real behaviour. No catch-all hides a failure. Tests that replace the network or the clock say so in their names. Expected values in tests come from this plan; the implementer does not edit them or weaken a comparison.
++- No suppression comments (`noqa`, `type: ignore`, `nosec`, `pragma: no cover`).
++- Gates: `uv run pytest tests/test_signal_*.py -q` (quote the glob), `node --test src/deploy_workflow/signal/web/render.test.cjs`, `uv run python tools/quality_gate.py`; all exit 0. Browser tests carry `pytest.mark.browser` and follow `tests/test_library_page_browser.py`'s harness.
++- Every task report ends with `Not verified:`. Ledger line per task: `agent=<name> fix-rounds=<n> gates-first-pass=<y|n|n/a>`.
++- Two pull requests, planned from the start: 2a = Tasks 1 to 4 (store, queries, identity, service); 2b = Tasks 5 to 7 (page, browser proof, packaging and records). Each should stay near the 800-line guideline; say so in the report if a task alone exceeds 400.
++
++## Review Focus
++
++1. Search text typed by a user reaches SQLite's FTS5 query language: `"`, `*`, `NEAR`, `AND`, a lone `-`, unbalanced quotes or an empty string must return results or nothing, never an error and never operator behaviour. Test in Task 2.
++2. A story title or summary containing markup (`<img onerror=…>`, `</script>`) or a `javascript:` link must render as text and never as a link or element. Tests in Task 5 (render logic) and Task 6 (real browser).
++3. A display name with markup, control characters, 500 characters, or only spaces: stored and shown safely, cut to 60 characters, empty refused. Test in Task 3.
++4. A page on another site must not be able to save, follow or set a name through a user's browser: a POST with a foreign or missing `Origin` changes nothing. Test in Task 4.
++5. The ingest loop and page requests write the same database at once: a save during a pass must succeed, and a pass that raises must not stop later passes. Test in Task 4.
++
++## File structure
++
++| File | Responsibility |
++|---|---|
++| `src/deploy_workflow/signal/store.py` (modify) | migration 2: `topics`, `topic_stories`, `topic_follows`, `saves`; pass time in `meta` |
++| `src/deploy_workflow/signal/topics.py` | topic rules: create, match stories, follow |
++| `src/deploy_workflow/signal/feedview.py` | read side: feed pages, counts, search, save |
++| `src/deploy_workflow/signal/identity.py` | `current_user`, name cleaning, cookie value |
++| `src/deploy_workflow/signal/service.py` | HTTP server, request rules, routes, loop thread |
++| `src/deploy_workflow/signal/cli.py` (modify) | `topics add|list`, `serve` |
++| `src/deploy_workflow/signal/ingest.py` (modify) | record pass time; match new stories to topics |
++| `src/deploy_workflow/signal/web/index.html`, `signal.css`, `signal.js`, `render.js`, `render.test.cjs` | the page; `render.js` is pure functions from JSON to DOM |
++| `tests/test_signal_topics.py`, `_feedview.py`, `_identity.py`, `_service.py`, `_page_browser.py` | one test file per unit |
++| `apps/issuer-library/packaging/runtime.py`, `build.py` (modify) | `Start signal.cmd`, ship the page files |
++| `src/deploy_workflow/run_start/service.py`, `docs/templates/context-form.html` (modify) | rail link to Signal when configured |
++
++---
++
++### Task 1: Topics and personal marks in the store
++
++**Files:** modify `store.py`, `ingest.py`, `cli.py`; create `topics.py`; tests `tests/test_signal_topics.py`, additions to `tests/test_signal_cli.py`.
++
++**Interfaces:**
++- Consumes: slice 1 `open_db`, `StoreError`, `add_story`, `run_due`, `KINDS`, the `stories_fts` index.
++- Produces:
++  - Migration 2 (appended to `MIGRATIONS`; migration 1 is not edited): `topics(id, name UNIQUE, keywords, kinds, created_by, created_at)`; `topic_stories(topic_id, story_id, UNIQUE(topic_id, story_id))`; `topic_follows(user_name, topic_id, UNIQUE(user_name, topic_id))`; `saves(user_name, story_id, saved_at, UNIQUE(user_name, story_id))`.
++  - `topics.add_topic(db, name: str, keywords: Sequence[str], kinds: Sequence[str], created_by: str) -> int` — at least one keyword; each keyword 1 to 60 characters after stripping; `kinds` empty means every kind, else each in `KINDS`; `StoreError` otherwise. Matches all existing stories before returning.
++  - `topics.match_story(db, story_id: int) -> list[int]` — topic ids whose rule the story meets (any keyword found as a phrase in title or summary, case-insensitive, via the FTS index; and the story's source kind allowed); writes `topic_stories`; idempotent.
++  - `topics.follow(db, user_name: str, topic_id: int) -> None`, `topics.unfollow(...) -> None` (both idempotent; unknown topic is `StoreError`), `topics.list_topics(db, user_name: str) -> list[sqlite3.Row]` with columns `id, name, following (0/1), stories (count)`.
++  - `store.set_meta(db, key: str, value: str) -> None`, `store.get_meta(db, key: str) -> str | None`.
++  - `ingest.run_due` calls `topics.match_story` for each story `add_story` reports as `"new"`, and sets meta `last_pass_at` to `now` (UTC ISO text) at the end of every pass, including a pass with nothing due.
++  - CLI: `topics add <name> --keywords "<a>,<b>" [--kinds regulator,news] --by <name>`; `topics list` (id, story count, name).
++- A keyword is passed to FTS5 as a quoted phrase with embedded `"` doubled; this helper is `topics.fts_phrase(text: str) -> str` and Task 2 reuses it.
++
++- [ ] **Step 1: Write the failing tests**
++
++```python
++def test_topic_matches_existing_and_later_stories(db_two_sources):   # source 1 regulator, source 2 news
++    t0 = datetime(2026, 11, 13, 9, tzinfo=UTC)
++    add_story(db_two_sources, 1, Entry("Authority opens merger review", "https://a.org/1", t0, "wholesale access remedy"), t0)
++    tid = add_topic(db_two_sources, "Competition", ["merger review", "remedy"], [], "ak")
++    assert rows(db_two_sources, "SELECT story_id FROM topic_stories WHERE topic_id=?", tid) == [(1,)]
++    add_story(db_two_sources, 2, Entry("Operator plans merger", "https://b.org/1", t0, ""), t0)
++    assert match_story(db_two_sources, 2) == []                      # "merger" alone is not the phrase "merger review"
++    add_story(db_two_sources, 2, Entry("Second MERGER REVIEW opened", "https://b.org/2", t0, ""), t0)
++    assert match_story(db_two_sources, 3) == [tid]
++    assert match_story(db_two_sources, 3) == [tid]                   # idempotent
++    assert count(db_two_sources, "topic_stories") == 2
++
++def test_topic_kind_filter(db_two_sources):
++    t0 = datetime(2026, 11, 13, 9, tzinfo=UTC)
++    tid = add_topic(db_two_sources, "Reg only", ["review"], ["regulator"], "ak")
++    add_story(db_two_sources, 2, Entry("News review of the year", "https://b.org/1", t0, ""), t0)
++    add_story(db_two_sources, 1, Entry("Regulator review opens", "https://a.org/1", t0, ""), t0)
++    assert match_story(db_two_sources, 1) == [] and match_story(db_two_sources, 2) == [tid]
++
++@pytest.mark.parametrize("keywords,kinds", [([], []), ([" "], []), (["x" * 61], []), (["ok"], ["blog"])])
++def test_bad_topic_rules_are_refused(db_two_sources, keywords, kinds):
++    with pytest.raises(StoreError):
++        add_topic(db_two_sources, "T", keywords, kinds, "ak")
++
++@pytest.mark.parametrize("keyword", ['say "hello"', "a*", "NEAR", "x AND y", "-", "(", "col:on"])
++def test_keywords_with_query_syntax_are_plain_text(db_two_sources, keyword):
++    add_topic(db_two_sources, f"T {keyword}", [keyword], [], "ak")   # must not raise
++
++@given(st.text(min_size=1, max_size=60).filter(lambda s: s.strip()))
++def test_any_keyword_is_accepted_without_error(keyword):
++    with fresh_db() as db:
++        add_topic(db, "T", [keyword], [], "ak")
++
++def test_follow_is_personal_and_idempotent(db_two_sources):
++    tid = add_topic(db_two_sources, "Competition", ["review"], [], "ak")
++    follow(db_two_sources, "ak", tid); follow(db_two_sources, "ak", tid)
++    assert [(r["id"], r["following"]) for r in list_topics(db_two_sources, "ak")] == [(tid, 1)]
++    assert [(r["id"], r["following"]) for r in list_topics(db_two_sources, "ml")] == [(tid, 0)]
++    unfollow(db_two_sources, "ak", tid); unfollow(db_two_sources, "ak", tid)
++    assert list_topics(db_two_sources, "ak")[0]["following"] == 0
++    with pytest.raises(StoreError):
++        follow(db_two_sources, "ak", 999)
++
++def test_pass_records_its_time_and_matches_new_stories_with_recorded_feed(db_a):   # one approved source, id 1
++    tid = add_topic(db_a, "Opens", ["opens review"], [], "ak")
++    run_due(db_a, NOW, recorded(RSS))                                # RSS from test_signal_feeds: "Authority opens review"
++    assert get_meta(db_a, "last_pass_at") == NOW.isoformat()
++    assert count(db_a, "topic_stories") == 1
++    run_due(db_a, NOW + timedelta(seconds=30), recorded(RSS))        # nothing due
++    assert get_meta(db_a, "last_pass_at") == (NOW + timedelta(seconds=30)).isoformat()
++
++def test_a_slice_1_database_gains_the_new_tables(tmp_path):
++    db = open_db(tmp_path)
++    assert db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0] == "2"
++```
++
++Add to `tests/test_signal_cli.py`: `topics add Competition --keywords "merger review,remedy" --by ak` exits 0 and `topics list` prints one line containing `Competition`; `topics add X --keywords "" --by ak` exits 2 with one line.
++
++- [ ] **Step 2:** `uv run pytest tests/test_signal_topics.py -q` — expected: import error.
++- [ ] **Step 3:** Implement. `fts_phrase` wraps in double quotes and doubles embedded quotes; a keyword that FTS tokenises to nothing (for example `-` or `(`) matches no story and is not an error.
++- [ ] **Step 4:** `uv run pytest tests/test_signal_topics.py tests/test_signal_cli.py tests/test_signal_ingest.py tests/test_signal_store.py -q` — all pass.
++- [ ] **Step 5:** Commit `feat(signal): topics, follows and saves in the store`.
++
++### Task 2: Feed queries
++
++**Files:** create `src/deploy_workflow/signal/feedview.py`; test `tests/test_signal_feedview.py`.
++
++**Interfaces:**
++- Consumes: Task 1 tables and `topics.fts_phrase`.
++- Produces:
++  - `PAGE = 30`; `MAX_QUERY = 100` (characters).
++  - `@dataclass(frozen=True) class Card: id: int; title: str; link: str; summary: str; source: str; kind: str; published_at: str; other_sources: int; saved: bool; topics: tuple[str, ...]`
++  - `@dataclass(frozen=True) class Page: cards: tuple[Card, ...]; next_before: str | None` — `next_before` is the cursor for the following page, `None` on the last page.
++  - `feed(db, user_name: str, view: str, *, kind: str | None = None, query: str = "", before: str | None = None) -> Page` — `view` is `"latest"`, `"foryou"` (stories in topics the user follows), `"saved"`, or `"topic:<id>"`; `kind` filters by source kind; `query` filters by search text; ordered by `published_at` then `id`, both descending; `before` is an opaque cursor `"<published_at>|<id>"`. `ViewError(ValueError)` for an unknown view, kind, malformed cursor or unknown topic.
++  - `new_count(db, user_name: str, view: str, since: str) -> int` — stories in the view with `fetched_at` later than `since`.
++  - `save(db, user_name: str, story_id: int) -> None`, `unsave(...) -> None` — idempotent; unknown story is `ViewError`.
++  - Search: the query is cut to `MAX_QUERY`, split on whitespace, each term passed as an FTS5 quoted phrase (all terms must match); an empty query means no search filter; a query whose terms all tokenise to nothing returns an empty page.
++  - `other_sources` is the number of distinct other sources that carried the story (`COUNT(DISTINCT duplicate_source_id)`).
++
++- [ ] **Step 1: Write the failing tests** (fixture `db_feed`: sources 1 regulator "Authority", 2 news "Wire"; 35 stories from source 1 titled `Story 01`..`Story 35` at one-minute steps ending `2026-11-13T09:35Z`; one story from source 2 "Wire piece on remedy" at `09:36Z`; `Story 35` also carried by source 2 under another link; topic "Remedy" keyword `remedy`)
++
++```python
++def test_latest_pages_by_30_newest_first(db_feed):
++    first = feed(db_feed, "ak", "latest")
++    assert len(first.cards) == 30 and first.cards[0].title == "Wire piece on remedy"
++    assert first.cards[1].title == "Story 35" and first.cards[1].other_sources == 1
++    second = feed(db_feed, "ak", "latest", before=first.next_before)
++    assert [c.title for c in second.cards] == [f"Story {n:02d}" for n in range(6, 0, -1)]
++    assert second.next_before is None
++
++def test_kind_filter_and_card_fields(db_feed):
++    page = feed(db_feed, "ak", "latest", kind="news")
++    (card,) = page.cards
++    assert (card.source, card.kind, card.published_at, card.saved, card.topics) == (
++        "Wire", "news", "2026-11-13T09:36:00+00:00", False, ("Remedy",))
++
++def test_foryou_is_followed_topics_only(db_feed):
++    assert feed(db_feed, "ak", "foryou").cards == ()
++    follow(db_feed, "ak", 1)
++    assert [c.title for c in feed(db_feed, "ak", "foryou").cards] == ["Wire piece on remedy"]
++    assert feed(db_feed, "ml", "foryou").cards == ()
++
++def test_topic_view_and_unknown_topic(db_feed):
++    assert len(feed(db_feed, "ak", "topic:1").cards) == 1
++    with pytest.raises(ViewError):
++        feed(db_feed, "ak", "topic:99")
++
++def test_save_is_personal_idempotent_and_listed(db_feed):
++    save(db_feed, "ak", 5); save(db_feed, "ak", 5)
++    assert [c.id for c in feed(db_feed, "ak", "saved").cards] == [5]
++    assert feed(db_feed, "ml", "saved").cards == ()
++    assert next(c for c in feed(db_feed, "ak", "latest", before="2026-11-13T09:06:00+00:00|6").cards if c.id == 5).saved
++    unsave(db_feed, "ak", 5); unsave(db_feed, "ak", 5)
++    assert feed(db_feed, "ak", "saved").cards == ()
++    with pytest.raises(ViewError):
++        save(db_feed, "ak", 9999)
++
++def test_search_matches_all_terms(db_feed):
++    assert [c.title for c in feed(db_feed, "ak", "latest", query="wire remedy").cards] == ["Wire piece on remedy"]
++    assert feed(db_feed, "ak", "latest", query="wire absent").cards == ()
++
++@pytest.mark.parametrize("query", ['"', 'a"b', "*", "NEAR", "x AND", "-", "(", "title:x", "\x00", "ß" * 300])
++def test_search_text_is_never_query_syntax(db_feed, query):
++    feed(db_feed, "ak", "latest", query=query)                       # must not raise
++
++@given(st.text(max_size=200))
++def test_any_search_text_returns_a_page(query):
++    with feed_db() as db:
++        assert isinstance(feed(db, "ak", "latest", query=query), Page)
++
++@pytest.mark.parametrize("bad", [dict(view="top"), dict(view="latest", kind="blog"), dict(view="latest", before="x"),
++                                 dict(view="topic:abc")])
++def test_bad_requests_raise_view_error(db_feed, bad):
++    with pytest.raises(ViewError):
++        feed(db_feed, "ak", **bad)
++
++def test_new_count(db_feed):                                         # every fixture story fetched at 09:40Z
++    assert new_count(db_feed, "ak", "latest", "2026-11-13T09:39:00+00:00") == 36
++    assert new_count(db_feed, "ak", "latest", "2026-11-13T09:40:00+00:00") == 0
++```
++
++- [ ] **Step 2:** run — import error. **Step 3:** implement (one SQL builder for the four views; no string formatting of user values into SQL). **Step 4:** `uv run pytest tests/test_signal_feedview.py -q` passes. **Step 5:** commit `feat(signal): feed queries, search and saves`.
++
++### Task 3: Identity
++
++**Files:** create `src/deploy_workflow/signal/identity.py`; test `tests/test_signal_identity.py`.
++
++**Interfaces:**
++- Produces:
++  - `COOKIE = "signal_name"`; `MAX_NAME = 60`
++  - `clean_name(raw: str) -> str` — Unicode NFC, control and format characters removed, runs of whitespace to one space, stripped, cut to `MAX_NAME`; `IdentityError(ValueError)` if the result is empty.
++  - `@dataclass(frozen=True) class User: name: str; role: str`
++  - `current_user(db, cookie_header: str | None) -> User | None` — `None` when there is no usable cookie; else the cleaned name and `store.role_of` (unknown name: `reader`).
++  - `cookie_for(name: str) -> str` — the `Set-Cookie` value: `signal_name=<percent-encoded name>; Path=/; Max-Age=31536000; SameSite=Strict; HttpOnly`.
++- This module is the whole seam the landing-page project replaces.
++
++- [ ] **Step 1: tests**
++
++```python
++@pytest.mark.parametrize("raw,want", [
++    ("  A.  Kovac ", "A. Kovac"), ("A\tK\n", "A K"), ("x​y\x00z", "xyz"),
++    ("<b>Eve</b>", "<b>Eve</b>"), ("é" * 500, "é" * 60), ("é", "é"),
++])
++def test_clean_name(raw, want):
++    assert clean_name(raw) == want
++
++@pytest.mark.parametrize("raw", ["", "   ", "\x00​", "\n\t"])
++def test_empty_names_are_refused(raw):
++    with pytest.raises(IdentityError):
++        clean_name(raw)
++
++def test_cookie_round_trip_and_role(db):
++    add_user(db, "A. Kovac", "writer")
++    header = cookie_for("A. Kovac").split(";")[0]
++    assert current_user(db, header) == User("A. Kovac", "writer")
++    assert current_user(db, cookie_for("Nobody").split(";")[0]) == User("Nobody", "reader")
++    assert current_user(db, None) is None and current_user(db, "other=1") is None
++    assert current_user(db, "signal_name=%00%20") is None
++
++def test_cookie_attributes():
++    assert cookie_for("A; B").startswith("signal_name=A%3B%20B; ")
++    assert all(part in cookie_for("x") for part in ("Path=/", "SameSite=Strict", "HttpOnly", "Max-Age=31536000"))
++
++@given(st.text(max_size=300))
++def test_any_cookie_header_is_safe(header):
++    with fresh_db() as db:
++        user = current_user(db, header)
++        assert user is None or (0 < len(user.name) <= 60 and user.role == "reader")
++```
++
++- [ ] **Steps 2-5:** run (import error), implement, `uv run pytest tests/test_signal_identity.py -q` passes, commit `feat(signal): display-name identity behind one seam`.
++
++### Task 4: Service
++
++**Files:** create `src/deploy_workflow/signal/service.py`; modify `cli.py` (`serve` command); test `tests/test_signal_service.py`. Read `src/deploy_workflow/run_start/service.py` first: reuse its approach (`_Server`, `_Reply`, `_check_origin`, `_hosts`, `_wildcard`, body limits) by writing the same rules here; do not import from or change that module.
++
++**Interfaces:**
++- Consumes: Tasks 1 to 3; `ingest.run_due`.
++- Produces:
++  - `make_server(root: Path, host: str, port: int) -> ThreadingHTTPServer`; `serve(root: Path, host: str, port: int, *, tick: float = 60.0) -> int` (starts the loop thread, serves until interrupted); `Loop` object with `run_once(now: datetime) -> None` and `last_error: str | None` so tests drive it without sleeping.
++  - Routes (JSON answers `application/json; charset=utf-8`; a refusal is `{"error": "<plain sentence>"}`):
++    - `GET /` → `web/index.html` with the page policy. `GET /static/<name>` → only `signal.css`, `signal.js`, `render.js`, and the brand files listed in a module constant (`brand.css`, the seven `.woff2` fonts, `symbol.svg`), read from `src/deploy_workflow/signal/web/` and `apps/issuer-library/credit_os/web/`; any other name is 404. `Cache-Control: no-cache`.
++    - `GET /api/me` → `{"name": str, "role": str}` or `{"name": null}`. `POST /api/me` body `{"name": str}` → 200 with `Set-Cookie`, or 400 for an empty name.
++    - `GET /api/feed?view=&kind=&q=&before=` → `{"cards": [Card fields…], "next_before": str | null}`; 400 with the `ViewError` text; 401 `{"error": "choose a display name first"}` when there is no user.
++    - `GET /api/feed/new?view=&since=` → `{"count": int}`.
++    - `POST /api/stories/<id>/save`, `DELETE /api/stories/<id>/save` → `{"saved": bool}`; 404 for an unknown story.
++    - `GET /api/topics` → `[{"id", "name", "following", "stories"}]`; `POST|DELETE /api/topics/<id>/follow` → `{"following": bool}`; 404 for an unknown topic.
++    - `GET /api/status` → `{"last_pass_at": str | null, "sources": {"approved": int, "failing": int}, "loop_error": str | null}`.
++    - Anything else 404; other methods 405.
++  - Unexpected failure: 500 `{"error": "the service failed; see its log"}`, cause to the log only.
++  - CLI: `serve --host <address> --port <port>` (defaults `127.0.0.1`, `8766`); a wildcard host exits 2 with the run start page's message.
++
++- [ ] **Step 1: tests** (fixture `svc`: `make_server(root, "127.0.0.1", 0)` on a thread, with the Task 2 `db_feed` data in `root`; helper `call(method, path, *, body=None, raw=None, origin=<same origin by default>, cookie=None, host=None, headers=None) -> (status, headers, json_or_text)` using `http.client`, no real network beyond loopback)
++
++```python
++def test_page_and_static_files_with_strict_policy(svc):
++    status, headers, text = svc.call("GET", "/")
++    assert status == 200 and "script-src 'self'" in headers["Content-Security-Policy"]
++    assert "'unsafe-inline'" not in headers["Content-Security-Policy"]
++    assert headers["X-Content-Type-Options"] == "nosniff" and headers["Cross-Origin-Resource-Policy"] == "same-origin"
++    assert svc.call("GET", "/static/signal.js")[0] == 200
++    for path in ("/static/../store.py", "/static/store.py", "/static/%2e%2e/cli.py", "/signal/signal.db", "/static/"):
++        assert svc.call("GET", path)[0] == 404
++
++def test_name_then_feed(svc):
++    assert svc.call("GET", "/api/feed?view=latest")[0] == 401
++    status, headers, _ = svc.call("POST", "/api/me", body={"name": "  A.  Kovac "})
++    assert status == 200 and headers["Set-Cookie"].startswith("signal_name=A.%20Kovac;")
++    cookie = headers["Set-Cookie"].split(";")[0]
++    assert svc.call("GET", "/api/me", cookie=cookie)[2] == {"name": "A. Kovac", "role": "reader"}
++    status, _, data = svc.call("GET", "/api/feed?view=latest", cookie=cookie)
++    assert status == 200 and len(data["cards"]) == 30 and data["next_before"]
++    assert set(data["cards"][0]) == {"id", "title", "link", "summary", "source", "kind", "published_at",
++                                    "other_sources", "saved", "topics"}
++    assert svc.call("GET", "/api/feed?view=top", cookie=cookie)[0] == 400
++    assert svc.call("POST", "/api/me", body={"name": "   "})[0] == 400
++
++def test_save_and_follow_round_trip(svc, cookie):
++    assert svc.call("POST", "/api/stories/5/save", cookie=cookie)[2] == {"saved": True}
++    assert [c["id"] for c in svc.call("GET", "/api/feed?view=saved", cookie=cookie)[2]["cards"]] == [5]
++    assert svc.call("DELETE", "/api/stories/5/save", cookie=cookie)[2] == {"saved": False}
++    assert svc.call("POST", "/api/stories/9999/save", cookie=cookie)[0] == 404
++    assert svc.call("POST", "/api/topics/1/follow", cookie=cookie)[2] == {"following": True}
++    assert svc.call("GET", "/api/topics", cookie=cookie)[2][0]["following"] == 1
++    assert svc.call("POST", "/api/topics/99/follow", cookie=cookie)[0] == 404
++
++@pytest.mark.parametrize("origin", [None, "http://evil.example", "https://127.0.0.1:{port}", "null"])
++def test_a_write_from_another_origin_changes_nothing(svc, cookie, origin):
++    assert svc.call("POST", "/api/stories/5/save", cookie=cookie, origin=origin)[0] == 403
++    assert svc.call("POST", "/api/me", body={"name": "Eve"}, origin=origin)[0] == 403
++    assert svc.call("GET", "/api/feed?view=saved", cookie=cookie)[2]["cards"] == []
++
++def test_other_host_names_and_cross_site_reads_are_refused(svc, cookie):
++    assert svc.call("GET", "/", host="evil.example")[0] == 403
++    assert svc.call("GET", "/api/feed?view=latest", cookie=cookie, headers={"Sec-Fetch-Site": "cross-site"})[0] == 403
++
++def test_bodies_are_capped_and_must_be_json(svc):
++    assert svc.call("POST", "/api/me", raw=b"x" * (64 * 1024 + 1))[0] == 413
++    assert svc.call("POST", "/api/me", raw=b"{not json")[0] == 400
++    assert svc.call("POST", "/api/me", raw=b"[]")[0] == 400
++
++def test_search_text_cannot_break_the_api(svc, cookie):
++    for q in ['"', "*", "NEAR(", "%00", "a" * 5000]:
++        assert svc.call("GET", "/api/feed?view=latest&q=" + urllib.parse.quote(q), cookie=cookie)[0] == 200
++
++def test_loop_pass_updates_status_and_survives_a_failing_pass_with_recorded_feed(svc_with_loop):
++    loop, call = svc_with_loop          # one approved source; fetch replaced: first call raises RuntimeError, later calls return RSS
++    loop.run_once(NOW)
++    assert call("GET", "/api/status")[2]["loop_error"]            # the failure is visible
++    loop.run_once(NOW + timedelta(seconds=60))
++    status = call("GET", "/api/status")[2]
++    assert status["loop_error"] is None and status["sources"] == {"approved": 1, "failing": 0}
++    assert status["last_pass_at"] == (NOW + timedelta(seconds=60)).isoformat()
++
++def test_a_save_during_a_pass_succeeds(svc_with_loop, cookie):
++    loop, call = svc_with_loop          # fetch replaced by one that blocks on an Event mid-pass
++    with pass_in_progress(loop):
++        assert call("POST", "/api/stories/1/save", cookie=cookie)[0] == 200
++
++def test_wildcard_host_is_refused():
++    assert main(["--root", "x", "serve", "--host", "0.0.0.0"]) == 2
++```
++
++- [ ] **Steps 2-5:** run (import error); implement; `uv run pytest tests/test_signal_service.py tests/test_signal_cli.py -q` passes; quality gate exit 0; commit `feat(signal): HTTP service with the feed API and the ingest loop`.
++- [ ] **Step 6: PR 2a.** Open the pull request for Tasks 1 to 4 (base: the slice 1 branch or `main` once slice 1 is merged).
++
++### Task 5: The page
++
++**Files:** create `src/deploy_workflow/signal/web/index.html`, `signal.css`, `signal.js`, `render.js`, `render.test.cjs`. Work from `docs/design/mockups/signal.html`; reuse its layout and tokens, drop what this slice does not have.
++
++**Screen map (each kind of information has its own component):**
++
++| Information | Component | Notes |
++|---|---|---|
++| Where am I | Icon rail, Signal active | as the mockup; links to Start a run and Issuer library only when the service is given their address (Task 7) |
++| Views | Channel list: For you, Latest, Saved, then Topics | topic rows carry a follow toggle (star button, `aria-pressed`) and a story count; no Groups or Digests sections in this slice |
++| Who am I | Name chip at the foot of the channel list | role shown as a small label; "not a login" note on hover and focus |
++| First visit | Name dialog | one field, cannot be dismissed empty |
++| Filters | Kind chips (All, Regulators, News, Ratings, Research) and a search field | search is debounced 300 ms; `/` focuses it |
++| Freshness | "Sources checked N min ago" line; "N new stories" pill | static text from `/api/status`; the pill appears from the 45-second poll and loads the new stories when pressed |
++| A story | Card per kind: regulator, ratings, news, research | same skeleton, different kind label and accent token per kind (label text carries the meaning, not colour); source monogram, relative time with the full time as `title`, headline, summary, topic tags, "Also in N other sources", Save toggle, Open source |
++| More stories | "Show older" button | uses `next_before`; no infinite scroll |
++| Nothing to show | Empty state per view | For you: "Follow a topic to fill this view" with the topic list; Saved: "Stories you save appear here"; search: "No story matches …"; Latest with no sources: "No approved sources yet" |
++| Waiting | Skeleton cards | three placeholders; no spinner; respects reduced motion |
++| Trouble | Inline error band | plain sentence and a Retry button; the last good list stays on screen |
++
++No thread column, no post box, no AI line, no signal bars, no stage tracker, no settings link in this slice.
++
++**Interfaces:**
++- `render.js` exports (CommonJS for the test, attached to `window.SignalRender` in the page): `card(doc, story, now) -> Element`, `emptyState(doc, view, query) -> Element`, `relativeTime(iso, now) -> string`, `safeLink(url) -> string | null` (returns the URL only for `http:` or `https:`).
++- `relativeTime`: under 1 minute "just now"; under 60 minutes "N min ago"; under 24 hours "N h ago"; under 7 days "N d ago"; else the date as `13 Nov 2026`. A future time is "just now".
++- `signal.js` holds state and calls the API; it contains no HTML strings with data.
++
++- [ ] **Step 1: `render.test.cjs`** (run with `node --test`; use a minimal DOM double as `apps/issuer-library/credit_os/web/components.test.cjs` does)
++
++```js
++test('relativeTime', () => {
++  const now = new Date('2026-11-13T12:00:00Z');
++  assert.equal(relativeTime('2026-11-13T11:59:40Z', now), 'just now');
++  assert.equal(relativeTime('2026-11-13T11:15:00Z', now), '45 min ago');
++  assert.equal(relativeTime('2026-11-13T03:00:00Z', now), '9 h ago');
++  assert.equal(relativeTime('2026-11-10T12:00:00Z', now), '3 d ago');
++  assert.equal(relativeTime('2026-11-01T12:00:00Z', now), '1 Nov 2026');
++  assert.equal(relativeTime('2026-11-14T12:00:00Z', now), 'just now');
++});
++test('safeLink allows only http and https', () => {
++  assert.equal(safeLink('https://a.org/x'), 'https://a.org/x');
++  for (const bad of ['javascript:alert(1)', 'data:text/html,x', ' JAVASCRIPT:alert(1)', 'file:///etc/passwd', '//a.org/x', ''])
++    assert.equal(safeLink(bad), null);
++});
++test('a card renders hostile text as text', () => {
++  const el = card(doc, {id: 1, title: '<img src=x onerror=alert(1)>', summary: '</script><b>x</b>', link: 'javascript:alert(1)',
++                        source: '<i>S</i>', kind: 'news', published_at: '2026-11-13T11:00:00Z', other_sources: 2, saved: false,
++                        topics: ['<u>T</u>']}, new Date('2026-11-13T12:00:00Z'));
++  assert.equal(el.querySelectorAll('img, b, i, u, script').length, 0);
++  assert.ok(el.textContent.includes('<img src=x onerror=alert(1)>'));
++  assert.equal(el.querySelector('a[href]'), null);                 // no link for a javascript: URL
++  assert.ok(el.textContent.includes('Also in 2 other sources'));
++});
++test('a card links out safely and marks its kind in words', () => {
++  const el = card(doc, {id: 2, title: 'T', summary: '', link: 'https://a.org/x', source: 'Authority', kind: 'regulator',
++                        published_at: '2026-11-13T11:00:00Z', other_sources: 0, saved: true, topics: []}, new Date('2026-11-13T12:00:00Z'));
++  const a = el.querySelector('a[href]');
++  assert.equal(a.getAttribute('rel'), 'noopener noreferrer'); assert.equal(a.getAttribute('target'), '_blank');
++  assert.ok(el.textContent.includes('Regulator'));
++  assert.equal(el.querySelector('[data-action="save"]').getAttribute('aria-pressed'), 'true');
++  assert.ok(!el.textContent.includes('other sources'));
++});
++```
++
++- [ ] **Step 2:** `node --test src/deploy_workflow/signal/web/render.test.cjs` — fails (module missing).
++- [ ] **Step 3:** Write `render.js`, then `index.html`, `signal.css`, `signal.js`. No `style=` attributes and no `<script>` or `<style>` blocks in `index.html` (the policy forbids them). CSS uses the tokens in `apps/issuer-library/credit_os/web/brand.css` and `screen.css` `:root`; body text at least 13px, labels at least 12px.
++- [ ] **Step 4:** `node --test …/render.test.cjs` passes; add it to the `node --test` line in `.github/workflows/checks.yml`.
++- [ ] **Step 5:** Commit `feat(signal): feed page`.
++
++### Task 6: Browser proof
++
++**Files:** create `tests/test_signal_page_browser.py` (marked `browser`), following the Chrome harness in `tests/test_library_page_browser.py` (read how it finds Chrome, runs a node script and reads results; reuse its helpers by import, do not copy them).
++
++Each test starts the real service on loopback with the Task 2 fixture data plus one story whose title is `<img src=x onerror="window.__xss=1">` and whose link is `javascript:window.__xss=1`.
++
++- [ ] **Step 1: tests, each asserting on the live DOM**
++  - First visit shows the name dialog; an empty name keeps it open; "A. Kovac" closes it and the chip shows the name and "Reader".
++  - Latest shows 30 cards, newest first; "Show older" adds the rest; no console error; `window.__xss` is undefined; the hostile title is visible as text; that card has no link.
++  - A kind chip filters; typing `wire remedy` in search leaves one card; clearing restores 30; `/` focuses the search field.
++  - Save toggles `aria-pressed`, and the story is listed under Saved after a reload.
++  - Following the topic from the channel list makes it appear under For you; an empty For you shows its empty state text.
++  - With the service stopped mid-session, the next action shows the error band with Retry and keeps the cards.
++  - The page makes no request to any other origin and the response policy has no `unsafe-inline` (read from the response).
++  - Keyboard only: Tab reaches channel list, search, first card's Save and Open source in that order; focus is visible (computed outline or box-shadow not `none`).
++  - At 375 px width there is no horizontal scroll and the channel list is reachable from a "Channels" button.
++  - Contrast: for every text node in the first three cards and the channel list, computed colour against background is at least 4.5:1 (use the harness's contrast helper if it has one; else compute in the node script).
++- [ ] **Step 2:** `uv run pytest tests/test_signal_page_browser.py -q -m browser` — passes on a machine with Chrome; the report states where it ran.
++- [ ] **Step 3:** Screenshots of Latest (desktop and 375 px) and the empty For you state saved under `docs/design/mockups/signal-slice2-*.png` for the owner; commit `test(signal): browser proof of the feed page`.
++
++### Task 7: Packaging, the rail link and the records
++
++**Files:** modify `apps/issuer-library/packaging/runtime.py` and `build.py`, `tests/test_issuer_library_packaging.py`, `src/deploy_workflow/run_start/service.py`, `docs/templates/context-form.html`, `tests/test_run_start_service.py`, `README.md`, `VERIFICATION.md`. This task touches the run start service, which can start paid runs: it gets a security review as well as the task review.
++
++- [ ] **Step 1: packaging.** Add `Start signal.cmd <shared folder> [address]` beside `Start run page.cmd` in `runtime.py`, same shape and usage text, running `python -m deploy_workflow.signal --root <folder> serve --host <address> --port 8766`; make `build.py` ship `src/deploy_workflow/signal/web/`. Extend the packaging test with the new wrapper's expected lines and the shipped files. Run `uv run pytest tests/test_issuer_library_packaging.py -q`.
++- [ ] **Step 2: rail link, test first.** `run_start` gains `--signal-url <url>`: accepted only if it parses as `http://<host>:<port>/` with no path, query, fragment or userinfo; anything else exits 2. `GET /` then serves the start page with a Signal link in the rail; without the option the page is byte-identical to today. The link is added by replacing one marker comment in `docs/templates/context-form.html` with a fixed anchor whose `href` is the validated URL, HTML-escaped. Tests in `tests/test_run_start_service.py`: with the option the served page contains `id="rail-signal"` and the exact URL once; without it the page has no `rail-signal`; `--signal-url "javascript:alert(1)"`, `"http://a/b"`, `"http://u@a:1/"`, `"https://a:1/"` and `'http://a:1/"><script>'` each exit 2. The existing run start tests pass unchanged.
++- [ ] **Step 3: live proof, free.** With the two feeds the owner's corpus lists (CMA cases, BEREC), on a throwaway root: propose, approve, `topics add`, start `serve`, open the page in the browser pane, set a name, follow the topic, save a story, search; record what was seen and one screenshot. Label it "live fetch of two public feeds, no model call, no cost".
++- [ ] **Step 4: records.** README "Signal" section: the `serve` command, `Start signal.cmd`, what the page does and does not do in this slice, known limits (not a login; no AI; Latest order only). One `VERIFICATION.md` entry at the tip (scope, gates with exit codes, browser proof and where it ran, live proof, `Not verified:`), keeping the file under 1,000 lines. The reader check in `AGENTS.md` applies to the issuer report and is not owed here; say so in the entry.
++- [ ] **Step 5:** all gates; commit `feat(signal): package the service and link it from the run start rail`; open PR 2b.
++
++---
++
++## Not in this plan
++
++Groups, threads, sharing and notifications (slice 3); settings pages, including topic management in the browser (slice 4); the AI line, signal strength, kinds from the model, the Top order and cost control (slice 5); digests (slice 6); the landing page and real login; a Signal link in the static issuer library.
++
++## Open for the owner before or during the build
++
++1. Port 8766 for Signal and a second `.cmd` wrapper are designer's calls.
++2. The page has no Top/Latest toggle until slice 5 supplies signal strength; say if a recency-only "Top" is wanted sooner.
++3. Topics are created from the command line in this slice; the first topic list is yours to supply (or approve one drawn from the corpus sectors).
+diff --git a/src/deploy_workflow/signal/__main__.py b/src/deploy_workflow/signal/__main__.py
+new file mode 100644
+index 0000000..a27a060
+--- /dev/null
++++ b/src/deploy_workflow/signal/__main__.py
+@@ -0,0 +1,7 @@
++"""``python -m deploy_workflow.signal``: the Signal command line."""
++
++import sys
++
++from deploy_workflow.signal.cli import main
++
++sys.exit(main())
+diff --git a/src/deploy_workflow/signal/cli.py b/src/deploy_workflow/signal/cli.py
+new file mode 100644
+index 0000000..98d8c0c
+--- /dev/null
++++ b/src/deploy_workflow/signal/cli.py
+@@ -0,0 +1,176 @@
++"""Command line for Signal users, sources, ingest passes and stories."""
++
++from __future__ import annotations
++
++import argparse
++import sqlite3
++import sys
++import time
++from collections.abc import Sequence
++from datetime import UTC, datetime
++from pathlib import Path
++
++from deploy_workflow.signal.fetch import FetchRefused, check_address
++from deploy_workflow.signal.ingest import health, run_due
++from deploy_workflow.signal.service import serve
++from deploy_workflow.signal.store import (
++    KINDS,
++    ROLES,
++    StoreError,
++    add_user,
++    open_db,
++    propose_source,
++    set_source_state,
++    sources,
++)
++from deploy_workflow.signal.topics import add_topic, list_topics
++
++LOOP_SECONDS = 60
++_STORIES_SQL = """
++SELECT s.id, s.title, s.published_at, src.name AS source_name,
++       (SELECT COUNT(DISTINCT d.duplicate_source_id) FROM story_duplicates d
++        WHERE d.story_id = s.id) AS folded
++FROM stories s JOIN sources src ON src.id = s.source_id
++ORDER BY s.published_at DESC, s.id DESC
++LIMIT ?
++"""
++
++
++def _parser() -> argparse.ArgumentParser:
++    parser = argparse.ArgumentParser(prog="python -m deploy_workflow.signal")
++    parser.add_argument("--root", type=Path, required=True, help="folder holding signal/")
++    commands = parser.add_subparsers(dest="command", required=True)
++
++    users = commands.add_parser("users").add_subparsers(dest="action", required=True)
++    add = users.add_parser("add")
++    add.add_argument("name")
++    add.add_argument("--role", choices=ROLES, required=True)
++
++    srcs = commands.add_parser("sources").add_subparsers(dest="action", required=True)
++    propose = srcs.add_parser("propose")
++    propose.add_argument("name")
++    propose.add_argument("--kind", choices=KINDS, required=True)
++    propose.add_argument("--url", required=True)
++    propose.add_argument("--by", required=True)
++    for action in ("approve", "pause"):
++        srcs.add_parser(action).add_argument("id", type=int)
++    srcs.add_parser("list")
++
++    topics = commands.add_parser("topics").add_subparsers(dest="action", required=True)
++    new_topic = topics.add_parser("add")
++    new_topic.add_argument("name")
++    new_topic.add_argument("--keywords", required=True, help="comma-separated phrases")
++    new_topic.add_argument("--kinds", default="", help="comma-separated; empty means every kind")
++    new_topic.add_argument("--by", required=True)
++    topics.add_parser("list")
++
++    ingest = commands.add_parser("ingest")
++    ingest.add_argument("--loop", action="store_true", help="a pass every 60 seconds")
++
++    serving = commands.add_parser("serve", help="the feed service and its ingest loop")
++    serving.add_argument("--host", default="127.0.0.1")
++    serving.add_argument("--port", type=int, default=8766)
++
++    stories = commands.add_parser("stories")
++    stories.add_argument("--limit", type=_positive_int, default=20)
++    return parser
++
++
++def _stamp(value: datetime | None, missing: str = "") -> str:
++    return missing if value is None else value.astimezone(UTC).strftime("%Y-%m-%d %H:%M")
++
++
++def _list_sources(db: sqlite3.Connection) -> None:
++    now = datetime.now(UTC)
++    for row in sources(db):
++        status = health(db, row["id"], now)
++        why = f"  ({status.reason})" if status.state == "failing" else ""
++        print(
++            f"{row['id']}  {row['state']}  {status.state}  "
++            f"{_stamp(status.last_item, 'no items')}  {row['name']}{why}"
++        )
++
++
++def _ingest_pass(db: sqlite3.Connection) -> None:
++    names = {row["id"]: row["name"] for row in sources(db)}
++    for source_id, ok, reason in run_due(db, datetime.now(UTC)):
++        print(f"{names[source_id]}: {'ok' if ok else 'failed'}: {reason}")
++
++
++def _ingest(db: sqlite3.Connection, loop: bool) -> None:
++    _ingest_pass(db)
++    try:
++        while loop:
++            time.sleep(LOOP_SECONDS)
++            _ingest_pass(db)
++    except KeyboardInterrupt:
++        print("stopped")
++
++
++def _stories(db: sqlite3.Connection, limit: int) -> None:
++    for row in db.execute(_STORIES_SQL, (limit,)):
++        when = _stamp(datetime.fromisoformat(row["published_at"]))
++        folded = f" (+{row['folded']})" if row["folded"] else ""
++        print(f"{when}  {row['source_name']}  {row['title']}{folded}")
++
++
++def _split(text: str) -> list[str]:
++    return [part.strip() for part in text.split(",") if part.strip()]
++
++
++def _topics(db: sqlite3.Connection, args: argparse.Namespace) -> None:
++    if args.action == "add":
++        add_topic(db, args.name, _split(args.keywords), _split(args.kinds), args.by)
++    else:
++        for row in list_topics(db, ""):
++            print(f"{row['id']}  {row['stories']}  {row['name']}")
++
++
++def _dispatch(args: argparse.Namespace) -> None:
++    db = open_db(args.root)
++    try:
++        if args.command == "users":
++            add_user(db, args.name, args.role)
++        elif args.command == "sources":
++            if args.action == "propose":
++                check_address(args.url)
++                propose_source(db, args.name, args.kind, args.url, args.by)
++            elif args.action == "list":
++                _list_sources(db)
++            else:
++                state = "approved" if args.action == "approve" else "paused"
++                set_source_state(db, args.id, state)
++        elif args.command == "topics":
++            _topics(db, args)
++        elif args.command == "ingest":
++            _ingest(db, args.loop)
++        else:
++            _stories(db, args.limit)
++    finally:
++        db.close()
++
++
++def _positive_int(text: str) -> int:
++    try:
++        value = int(text)
++    except ValueError:
++        value = 0
++    if value < 1:
++        raise argparse.ArgumentTypeError("must be an integer >= 1")
++    return value
++
++
++def main(argv: Sequence[str] | None = None) -> int:
++    """Run one command; 2 on a usage error, a store error or a refused address."""
++    try:
++        args = _parser().parse_args(argv)
++    except SystemExit as exit_:
++        return exit_.code if isinstance(exit_.code, int) else 2
++    if args.command == "serve":
++        return serve(args.root, args.host, args.port)
++    try:
++        _dispatch(args)
++    except (StoreError, FetchRefused) as error:
++        print(f"error: {error}", file=sys.stderr)
++        return 2
++    return 0
+diff --git a/src/deploy_workflow/signal/feedview.py b/src/deploy_workflow/signal/feedview.py
+new file mode 100644
+index 0000000..4746a59
+--- /dev/null
++++ b/src/deploy_workflow/signal/feedview.py
+@@ -0,0 +1,215 @@
++"""Read side of Signal: feed pages, search, new-story counts and saves."""
++
++from __future__ import annotations
++
++import sqlite3
++from dataclasses import dataclass
++from datetime import datetime
++from typing import NotRequired, TypedDict, Unpack
++
++from deploy_workflow.signal.store import KINDS, _utc_text, _write_transaction
++from deploy_workflow.signal.topics import fts_phrase
++
++PAGE = 30
++MAX_QUERY = 100
++
++
++class ViewError(ValueError):
++    """An unknown view, kind, topic or story, or a malformed cursor."""
++
++
++@dataclass(frozen=True)
++class Card:
++    id: int
++    title: str
++    link: str
++    summary: str
++    source: str
++    kind: str
++    published_at: str
++    other_sources: int
++    saved: bool
++    topics: tuple[str, ...]
++
++
++@dataclass(frozen=True)
++class Page:
++    cards: tuple[Card, ...]
++    next_before: str | None
++
++
++class Filters(TypedDict):
++    """Optional keyword arguments of `feed`."""
++
++    kind: NotRequired[str | None]
++    query: NotRequired[str]
++    before: NotRequired[str | None]
++
++
++_FOLLOWED = (
++    "EXISTS(SELECT 1 FROM topic_stories ts JOIN topic_follows f ON f.topic_id = ts.topic_id"
++    " WHERE ts.story_id = s.id AND f.user_name = ?)"
++)
++_SAVED = "EXISTS(SELECT 1 FROM saves v WHERE v.story_id = s.id AND v.user_name = ?)"
++_IN_TOPIC = "EXISTS(SELECT 1 FROM topic_stories ts WHERE ts.story_id = s.id AND ts.topic_id = ?)"
++
++
++MAX_ID = 2**63 - 1
++
++
++def _id(number: str, what: str) -> int:
++    """A decimal id that SQLite can hold, else ViewError."""
++    if (
++        not number.isascii()
++        or not number.isdecimal()
++        or len(number) > len(str(MAX_ID))  # before int(): a huge digit string raises ValueError
++        or int(number) > MAX_ID
++    ):
++        raise ViewError(f"invalid {what} {number!r}")
++    return int(number)
++
++
++def _instant(text: str, what: str) -> str:
++    """The stored UTC text of a zoned ISO time, else ViewError."""
++    try:
++        parsed = datetime.fromisoformat(text)
++    except ValueError as exc:
++        raise ViewError(f"malformed {what} {text!r}") from exc
++    if parsed.tzinfo is None or parsed.utcoffset() is None:
++        raise ViewError(f"{what} {text!r} has no time zone")
++    try:
++        return _utc_text(parsed)
++    except OverflowError as exc:  # a year-1 or year-9999 time with an offset leaves the UTC range
++        raise ViewError(f"{what} {text!r} is out of range") from exc
++
++
++def _view_clause(
++    db: sqlite3.Connection, user_name: str, view: str
++) -> tuple[str | None, list[object]]:
++    """The fixed SQL condition for a validated view, with its parameters."""
++    if view == "latest":
++        return None, []
++    if view == "foryou":
++        return _FOLLOWED, [user_name]
++    if view == "saved":
++        return _SAVED, [user_name]
++    prefix, _, number = view.partition(":")
++    if prefix == "topic" and number.isascii() and number.isdecimal():
++        topic_id = _id(number, "topic id")
++        if db.execute("SELECT 1 FROM topics WHERE id=?", (topic_id,)).fetchone() is None:
++            raise ViewError(f"no topic with id {topic_id}")
++        return _IN_TOPIC, [topic_id]
++    raise ViewError(f"unknown view {view!r}")
++
++
++def _cursor(before: str) -> tuple[str, int]:
++    stamp, bar, number = before.rpartition("|")
++    if not bar:
++        raise ViewError(f"malformed cursor {before!r}")
++    return _instant(stamp, "cursor time"), _id(number, "cursor id")
++
++
++def _search_match(query: str) -> str | None:
++    terms = query[:MAX_QUERY].split()
++    return " ".join(fts_phrase(term) for term in terms) if terms else None
++
++
++def _topic_names(db: sqlite3.Connection, story_id: int) -> tuple[str, ...]:
++    rows = db.execute(
++        "SELECT t.name FROM topic_stories ts JOIN topics t ON t.id = ts.topic_id"
++        " WHERE ts.story_id=? ORDER BY t.id",
++        (story_id,),
++    ).fetchall()
++    return tuple(row["name"] for row in rows)
++
++
++def _card(db: sqlite3.Connection, row: sqlite3.Row) -> Card:
++    return Card(
++        id=row["id"],
++        title=row["title"],
++        link=row["link"],
++        summary=row["summary"],
++        source=row["source"],
++        kind=row["kind"],
++        published_at=row["published_at"],
++        other_sources=row["other_sources"],
++        saved=bool(row["saved"]),
++        topics=_topic_names(db, row["id"]),
++    )
++
++
++def feed(
++    db: sqlite3.Connection,
++    user_name: str,
++    view: str,
++    **filters: Unpack[Filters],
++) -> Page:
++    """One page of stories, newest first. Raises ViewError for an invalid request."""
++    kind = filters.get("kind")
++    before = filters.get("before")
++    conditions: list[str] = []
++    params: list[object] = []
++    clause, clause_params = _view_clause(db, user_name, view)
++    if clause is not None:
++        conditions.append(clause)
++        params += clause_params
++    if kind is not None:
++        if kind not in KINDS:
++            raise ViewError(f"unknown kind {kind!r}")
++        conditions.append("src.kind = ?")
++        params.append(kind)
++    match = _search_match(filters.get("query", ""))
++    if match is not None:
++        conditions.append("s.id IN (SELECT rowid FROM stories_fts WHERE stories_fts MATCH ?)")
++        params.append(match)
++    if before is not None:
++        stamp, story_id = _cursor(before)
++        conditions.append("(s.published_at < ? OR (s.published_at = ? AND s.id < ?))")
++        params += [stamp, stamp, story_id]
++    where = " WHERE " + " AND ".join(conditions) if conditions else ""
++    rows = db.execute(
++        "SELECT s.id, s.title, s.link, s.summary, s.published_at, src.name AS source,"
++        " src.kind AS kind,"
++        " (SELECT COUNT(DISTINCT d.duplicate_source_id) FROM story_duplicates d"
++        "  WHERE d.story_id = s.id) AS other_sources,"
++        " EXISTS(SELECT 1 FROM saves me WHERE me.story_id = s.id AND me.user_name = ?) AS saved"
++        " FROM stories s JOIN sources src ON src.id = s.source_id"
++        + where
++        + " ORDER BY s.published_at DESC, s.id DESC LIMIT ?",
++        [user_name, *params, PAGE + 1],
++    ).fetchall()
++    cards = tuple(_card(db, row) for row in rows[:PAGE])
++    more = len(rows) > PAGE
++    last = cards[-1] if more else None
++    return Page(cards, f"{last.published_at}|{last.id}" if last else None)
++
++
++def new_count(db: sqlite3.Connection, user_name: str, view: str, since: str) -> int:
++    """Stories in the view fetched after `since`."""
++    stamp = _instant(since, "since")
++    clause, params = _view_clause(db, user_name, view)
++    where = " AND " + clause if clause is not None else ""
++    row = db.execute(
++        "SELECT COUNT(*) FROM stories s WHERE s.fetched_at > ?" + where, [stamp, *params]
++    ).fetchone()
++    return int(row[0])
++
++
++def _require_story(db: sqlite3.Connection, story_id: int) -> None:
++    if db.execute("SELECT 1 FROM stories WHERE id=?", (story_id,)).fetchone() is None:
++        raise ViewError(f"no story with id {story_id}")
++
++
++def save(db: sqlite3.Connection, user_name: str, story_id: int) -> None:
++    with _write_transaction(db):
++        _require_story(db, story_id)
++        db.execute(
++            "INSERT OR IGNORE INTO saves(user_name, story_id, saved_at) VALUES(?, ?, ?)",
++            (user_name, story_id, _utc_text(datetime.now().astimezone())),
++        )
++
++
++def unsave(db: sqlite3.Connection, user_name: str, story_id: int) -> None:
++    with _write_transaction(db):
++        _require_story(db, story_id)
++        db.execute("DELETE FROM saves WHERE user_name=? AND story_id=?", (user_name, story_id))
+diff --git a/src/deploy_workflow/signal/fold.py b/src/deploy_workflow/signal/fold.py
+new file mode 100644
+index 0000000..134f28e
+--- /dev/null
++++ b/src/deploy_workflow/signal/fold.py
+@@ -0,0 +1,36 @@
++"""Keys and rules for deciding that two feed entries are the same story."""
++
++from __future__ import annotations
++
++import re
++from datetime import timedelta
++from urllib.parse import parse_qsl, urlencode, urlsplit
++
++TITLE_WINDOW = timedelta(hours=48)
++MIN_TITLE_WORDS = 4
++
++_TRACKING_NAMES = ("fbclid", "gclid")
++_RUN = re.compile(r"[\W_]+")
++
++
++def _is_tracking(name: str) -> bool:
++    lowered = name.lower()
++    return lowered.startswith("utm_") or lowered in _TRACKING_NAMES
++
++
++def link_key(link: str) -> str:
++    """Host without `www.`, path without a trailing slash, tracking parameters dropped."""
++    parts = urlsplit(link.strip())
++    host = (parts.hostname or "").removeprefix("www.")
++    if parts.port is not None:
++        host = f"{host}:{parts.port}"
++    kept = sorted(
++        (k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True) if not _is_tracking(k)
++    )
++    query = f"?{urlencode(kept)}" if kept else ""
++    return f"{host}{parts.path.rstrip('/')}{query}"
++
++
++def title_key(title: str) -> str:
++    """Case-folded title with every run of non-alphanumeric characters as one space."""
++    return _RUN.sub(" ", title.casefold()).strip()
+diff --git a/src/deploy_workflow/signal/identity.py b/src/deploy_workflow/signal/identity.py
+new file mode 100644
+index 0000000..1aea45b
+--- /dev/null
++++ b/src/deploy_workflow/signal/identity.py
+@@ -0,0 +1,79 @@
++"""Display-name identity for Signal: a name in a cookie, the role from the store.
++
++This is not authentication. The cookie is a claim; the role is looked up in the
++store. The module is the whole seam the landing-page project replaces.
++"""
++
++from __future__ import annotations
++
++import sqlite3
++import unicodedata
++from dataclasses import dataclass
++from urllib.parse import quote, unquote
++
++from deploy_workflow.signal.store import role_of
++
++COOKIE = "signal_name"
++MAX_NAME = 60
++_MAX_AGE = 31536000
++_WHITESPACE_CONTROLS = {"\t": " ", "\n": " ", "\r": " "}
++
++
++class IdentityError(ValueError):
++    """The display name is empty once cleaned."""
++
++
++@dataclass(frozen=True)
++class User:
++    name: str
++    role: str
++
++
++def _printable(ch: str) -> str:
++    if ch in _WHITESPACE_CONTROLS:
++        return " "
++    return "" if unicodedata.category(ch) in ("Cc", "Cf", "Cs") else ch
++
++
++def _clean(raw: str) -> str:
++    text = unicodedata.normalize("NFC", "".join(_printable(ch) for ch in raw))
++    return " ".join(text.split())[:MAX_NAME].strip()
++
++
++def clean_name(raw: str) -> str:
++    """Return the cleaned display name; IdentityError when nothing is left."""
++    name = _clean(raw)
++    if not name:
++        raise IdentityError("display name is empty")
++    return name
++
++
++def _cookie_value(header: str) -> str | None:
++    """First `signal_name` value in a Cookie header; a plain split is safe on any text."""
++    for part in header.split(";"):
++        key, sep, value = part.partition("=")
++        if sep and key.strip() == COOKIE:
++            value = value.strip()
++            if len(value) >= 2 and value[0] == value[-1] == '"':
++                value = value[1:-1]
++            return value
++    return None
++
++
++def current_user(db: sqlite3.Connection, cookie_header: str | None) -> User | None:
++    if not cookie_header:
++        return None
++    value = _cookie_value(cookie_header)
++    if value is None:
++        return None
++    # errors="replace" makes invalid UTF-8 decode to U+FFFD instead of raising.
++    name = _clean(unquote(value, errors="replace"))
++    if not name:
++        return None
++    return User(name, role_of(db, name))
++
++
++def cookie_for(name: str) -> str:
++    """The Set-Cookie value for a display name."""
++    encoded = quote(clean_name(name), safe="")
++    return f"{COOKIE}={encoded}; Path=/; Max-Age={_MAX_AGE}; SameSite=Strict; HttpOnly"
+diff --git a/src/deploy_workflow/signal/ingest.py b/src/deploy_workflow/signal/ingest.py
+new file mode 100644
+index 0000000..3263cca
+--- /dev/null
++++ b/src/deploy_workflow/signal/ingest.py
+@@ -0,0 +1,121 @@
++"""One ingest pass over the approved sources that are due, and a health summary per source."""
++
++import sqlite3
++from collections.abc import Callable
++from dataclasses import dataclass
++from datetime import datetime, timedelta
++from typing import Literal
++
++from deploy_workflow.signal import fetch
++from deploy_workflow.signal.feeds import FeedError, parse_feed
++from deploy_workflow.signal.fetch import Fetched, FetchRefused
++from deploy_workflow.signal.fold import link_key
++from deploy_workflow.signal.store import (
++    Check,
++    _utc_text,
++    add_story,
++    last_check,
++    record_check,
++    set_meta,
++    sources,
++)
++from deploy_workflow.signal.topics import match_story
++
++MIN_INTERVAL = timedelta(seconds=600)
++QUIET_AFTER = timedelta(days=7)
++HEALTH_WEEKS = 6
++_WEEK = timedelta(days=7)
++
++FetchFn = Callable[[str, str | None, str | None], Fetched]
++
++
++def _is_due(db: sqlite3.Connection, source_id: int, now: datetime) -> bool:
++    previous = last_check(db, source_id)
++    return previous is None or datetime.fromisoformat(previous["at"]) <= now - MIN_INTERVAL
++
++
++def _match_new(db: sqlite3.Connection, source_id: int, link: str) -> None:
++    story = db.execute(
++        "SELECT id FROM stories WHERE source_id=? AND link_key=?", (source_id, link_key(link))
++    ).fetchone()
++    match_story(db, story["id"])
++
++
++def _check_source(
++    db: sqlite3.Connection, source: sqlite3.Row, now: datetime, fetch_fn: FetchFn
++) -> Check:
++    previous = last_check(db, source["id"])
++    etag = previous["etag"] if previous else None
++    modified = previous["modified"] if previous else None
++    try:
++        fetched = fetch_fn(source["url"], etag, modified)
++        if fetched.body is None:
++            return Check(now, True, "not modified", etag, modified, 0)
++        entries = parse_feed(fetched.body)
++    except (FetchRefused, FeedError) as error:
++        return Check(now, False, str(error), etag, modified, 0)
++    new = 0
++    for entry in entries:
++        if add_story(db, source["id"], entry, now) == "new":
++            new += 1
++            _match_new(db, source["id"], entry.link)
++    return Check(now, True, f"{new} new", fetched.etag, fetched.modified, new)
++
++
++def run_due(
++    db: sqlite3.Connection, now: datetime, fetch_fn: FetchFn | None = None
++) -> list[tuple[int, bool, str]]:
++    """Check every approved source with no check in the last MIN_INTERVAL.
++
++    Only a refused fetch or an unreadable feed is recorded as a failed check; any other
++    exception is a bug and propagates, leaving no check row for that source."""
++    results: list[tuple[int, bool, str]] = []
++    for source in sources(db, "approved"):
++        if not _is_due(db, source["id"], now):
++            continue
++        check = _check_source(db, source, now, fetch_fn if fetch_fn is not None else fetch.fetch)
++        record_check(db, source["id"], check)
++        results.append((source["id"], check.ok, check.reason))
++    set_meta(db, "last_pass_at", _utc_text(now))
++    return results
++
++
++@dataclass(frozen=True)
++class Health:
++    state: Literal["healthy", "quiet", "failing", "never checked"]
++    last_check: datetime | None
++    last_item: datetime | None
++    per_week: tuple[int, ...]
++    reason: str
++
++
++def _per_week(published: list[datetime], now: datetime) -> tuple[int, ...]:
++    """Counts per 7-day window ending at `now`, oldest first; a window is (start, end]."""
++    counts = [0] * HEALTH_WEEKS
++    for at in published:
++        age = now - at
++        if timedelta(0) <= age < HEALTH_WEEKS * _WEEK:
++            counts[HEALTH_WEEKS - 1 - age // _WEEK] += 1
++    return tuple(counts)
++
++
++def health(db: sqlite3.Connection, source_id: int, now: datetime) -> Health:
++    rows = db.execute(
++        "SELECT published_at FROM stories WHERE source_id=?"
++        " UNION ALL SELECT published_at FROM story_duplicates WHERE duplicate_source_id=?",
++        (source_id, source_id),
++    ).fetchall()
++    published = [datetime.fromisoformat(row["published_at"]) for row in rows]
++    last_item = max(published, default=None)
++    previous = last_check(db, source_id)
++    if previous is None:
++        return Health("never checked", None, last_item, _per_week(published, now), "")
++    checked = datetime.fromisoformat(previous["at"])
++    state: Literal["healthy", "quiet", "failing"]
++    if not previous["ok"]:
++        state = "failing"
++    elif last_item is None or last_item < now - QUIET_AFTER:
++        state = "quiet"
++    else:
++        state = "healthy"
++    return Health(state, checked, last_item, _per_week(published, now), previous["reason"])
+diff --git a/src/deploy_workflow/signal/service.py b/src/deploy_workflow/signal/service.py
+new file mode 100644
+index 0000000..eb15f95
+--- /dev/null
++++ b/src/deploy_workflow/signal/service.py
+@@ -0,0 +1,608 @@
++"""Signal's HTTP service: the feed API, its page files and the background ingest loop.
++
++Plain ``http.server``; no framework. The service has no login and may be reachable from other
++machines, so every request is hostile input. The rules are those of the run start page's service,
++written again here. Every request is checked before any body byte is read:
++
++* ``Host`` must be exactly ``<host>:<port>`` as started (and ``localhost:<port>`` when the host is
++  ``127.0.0.1``); otherwise 403. On port 80 the port may be left out of ``Host`` and ``Origin``.
++* A request target must be a path (it starts with ``/``): an absolute URI is 400.
++* Every request other than GET must carry ``Origin: http://<Host>``; otherwise 403 and no change.
++  A GET that carries ``Origin`` must carry the same value. Any request whose ``Sec-Fetch-Site`` is
++  present and is not ``same-origin`` or ``none`` is 403, except a top-level navigation: a GET with
++  ``Sec-Fetch-Mode: navigate`` and ``Sec-Fetch-Dest: document``. A request with neither header (not
++  a browser) is served.
++* Every response carries ``Cross-Origin-Resource-Policy: same-origin``, ``nosniff`` and the page
++  policy ``Content-Security-Policy`` (same-origin scripts, styles, fonts and connections, ``data:``
++  images for the brand marks, no framing, no inline script or style).
++* At most ``MAX_CONNECTIONS`` connections are open, and at most ``MAX_PER_ADDRESS`` per remote
++  address; one beyond either is closed at once. A connection is shut down ``2 * SOCKET_TIMEOUT``
++  seconds after it opens, however it trickles. An HTTP/0.9 request line is closed without a reply.
++* A JSON body needs ``Content-Length`` (else 411), is at most 64 KiB (else 413) and must be a JSON
++  object (else 400). Every connection serves one request and closes.
++
++The service serves only its own page files and API. Static names come from the fixed ``STATIC``
++allowlist (URL name -> file and type); a request path is compared with those names and is never
++joined to a directory, so no file under the data root is reachable.
++
++Identity is a display name in a cookie, not authentication. Every API route except ``/api/me`` and
++``/api/status`` needs a name (401 otherwise). No owner or writer action is exposed. Each request
++opens its own database connection and closes it; the ingest loop has its own.
++
++A refusal is ``{"error": "<plain sentence>"}``; an unexpected failure is 500
++``{"error": "the service failed; see its log"}``, its cause in the log only.
++"""
++
++from __future__ import annotations
++
++import dataclasses
++import ipaddress
++import json
++import logging
++import re
++import socket
++import sqlite3
++import sys
++import threading
++import urllib.parse
++from collections.abc import Callable
++from dataclasses import dataclass
++from datetime import UTC, datetime
++from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
++from pathlib import Path
++from typing import Any, cast
++
++from deploy_workflow.signal import feedview, identity, ingest, store, topics
++from deploy_workflow.signal.ingest import FetchFn
++
++__all__ = ["STATIC", "Handler", "Loop", "StartError", "make_server", "serve"]
++
++log = logging.getLogger(__name__)
++
++MAX_JSON = 64 * 1024
++# Seconds one socket read may wait. It is per read, so a client trickling bytes would never hit it;
++# the absolute limit is the connection deadline, 2 * SOCKET_TIMEOUT from accept (Handler.setup).
++SOCKET_TIMEOUT = 60
++# Each connection holds a thread for up to the deadline; a few colleagues use the service.
++MAX_CONNECTIONS = 64
++MAX_PER_ADDRESS = 16  # one remote address may hold this many of the MAX_CONNECTIONS
++MAX_PARAMS = 20
++_POLICY = (
++    "default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; "
++    "img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'; "
++    "frame-ancestors 'none'"
++)
++_JSON = "application/json; charset=utf-8"
++_FAILED = "the service failed; see its log"
++_NEEDS_NAME = "choose a display name first"
++WILDCARD_MESSAGE = (
++    "--host: pass this machine's own address, not 0.0.0.0 (no Host header would match)"
++)
++
++_WEB = Path(__file__).resolve().parent / "web"
++# Located from the repository; a later task handles the packaged layout.
++_BRAND = Path(__file__).resolve().parents[3] / "apps" / "issuer-library" / "credit_os" / "web"
++PAGE = _WEB / "index.html"
++_HTML = "text/html; charset=utf-8"
++_CSS = "text/css; charset=utf-8"
++_JS = "text/javascript; charset=utf-8"
++_FONTS = (
++    "RedHatDisplay-Bold.woff2",
++    "RedHatDisplay-SemiBold.woff2",
++    "RedHatMono-Medium.woff2",
++    "RedHatMono-SemiBold.woff2",
++    "RedHatText-Medium.woff2",
++    "RedHatText-Regular.woff2",
++    "RedHatText-SemiBold.woff2",
++)
++STATIC: dict[str, tuple[Path, str]] = {
++    "signal.css": (_WEB / "signal.css", _CSS),
++    "signal.js": (_WEB / "signal.js", _JS),
++    "render.js": (_WEB / "render.js", _JS),
++    "brand.css": (_BRAND / "brand.css", _CSS),
++    "brand/symbol.svg": (_BRAND / "brand" / "symbol.svg", "image/svg+xml"),
++    **{f"fonts/{name}": (_BRAND / "fonts" / name, "font/woff2") for name in _FONTS},
++}
++
++
++class StartError(Exception):
++    """The service cannot start: a page or brand file it serves is missing."""
++
++
++class _Reply(Exception):  # control flow: it carries the response, not a failure
++    def __init__(self, status: int, body: Any, headers: dict[str, str] | None = None) -> None:
++        super().__init__(status)
++        self.status, self.body, self.headers = status, body, headers or {}
++
++
++def _refuse(status: int, text: str) -> _Reply:
++    return _Reply(status, {"error": text})
++
++
++class Loop:
++    """The background ingest loop: one pass per tick over the approved sources that are due."""
++
++    def __init__(self, root: Path, fetch_fn: FetchFn | None = None) -> None:
++        self.root = root
++        self.fetch_fn = fetch_fn
++        self.last_error: str | None = None
++
++    def run_once(self, now: datetime) -> None:
++        """One pass on this thread's own connection; a failing pass is logged and recorded."""
++        try:
++            db = store.open_db(self.root)
++            try:
++                ingest.run_due(db, now, self.fetch_fn)
++            finally:
++                db.close()
++        except Exception as error:
++            # The one documented fail-open of the loop: whatever a pass raises (a bug, a locked
++            # store) must not end the service, so the traceback goes to the log, the failure is
++            # shown by /api/status (its type only, never the cause), and the next tick tries
++            # again. KeyboardInterrupt and SystemExit (BaseException) are not caught.
++            log.exception("ingest pass failed")
++            self.last_error = f"the last ingest pass failed ({type(error).__name__}); see the log"
++        else:
++            self.last_error = None
++
++    def run_until(self, stop: threading.Event, tick: float) -> None:
++        while True:
++            self.run_once(datetime.now(UTC))
++            if stop.wait(tick):
++                return
++
++
++@dataclass
++class _Req:
++    """What a route handler may use: its own connection, who asked, and the request's parts."""
++
++    db: sqlite3.Connection
++    user: identity.User | None
++    groups: tuple[str, ...]
++    params: dict[str, str]
++    body: Callable[[], dict[str, Any]]
++    loop: Loop | None
++
++    @property
++    def person(self) -> identity.User:
++        if self.user is None:
++            raise _refuse(401, _NEEDS_NAME)
++        return self.user
++
++    def param(self, name: str) -> str:
++        if name not in self.params:
++            raise _refuse(400, f"the request needs {name}")
++        return self.params[name]
++
++
++def _me(req: _Req) -> _Reply:
++    if req.user is None:
++        return _Reply(200, {"name": None})
++    return _Reply(200, {"name": req.user.name, "role": req.user.role})
++
++
++def _set_me(req: _Req) -> _Reply:
++    name = req.body().get("name")
++    if not isinstance(name, str):
++        raise _refuse(400, "the request needs a name")
++    try:
++        cleaned, cookie = identity.clean_name(name), identity.cookie_for(name)
++    except identity.IdentityError as error:
++        raise _refuse(400, str(error)) from None
++    return _Reply(
++        200, {"name": cleaned, "role": store.role_of(req.db, cleaned)}, {"Set-Cookie": cookie}
++    )
++
++
++def _feed(req: _Req) -> _Reply:
++    filters: feedview.Filters = {}
++    if "kind" in req.params:
++        filters["kind"] = req.params["kind"]
++    if "q" in req.params:
++        filters["query"] = req.params["q"]
++    if "before" in req.params:
++        filters["before"] = req.params["before"]
++    try:
++        page = feedview.feed(req.db, req.person.name, req.param("view"), **filters)
++    except feedview.ViewError as error:
++        raise _refuse(400, str(error)) from None
++    cards = [dataclasses.asdict(card) for card in page.cards]
++    return _Reply(200, {"cards": cards, "next_before": page.next_before})
++
++
++def _feed_new(req: _Req) -> _Reply:
++    try:
++        count = feedview.new_count(req.db, req.person.name, req.param("view"), req.param("since"))
++    except feedview.ViewError as error:
++        raise _refuse(400, str(error)) from None
++    return _Reply(200, {"count": count})
++
++
++def _story(
++    req: _Req, action: Callable[[sqlite3.Connection, str, int], None], saved: bool
++) -> _Reply:
++    try:
++        action(req.db, req.person.name, int(req.groups[0]))
++    except feedview.ViewError as error:
++        raise _refuse(404, str(error)) from None
++    return _Reply(200, {"saved": saved})
++
++
++def _topic(req: _Req, action: Callable[[sqlite3.Connection, str, int], None], on: bool) -> _Reply:
++    try:
++        action(req.db, req.person.name, int(req.groups[0]))
++    except store.StoreError as error:
++        raise _refuse(404, str(error)) from None
++    return _Reply(200, {"following": on})
++
++
++def _save(req: _Req) -> _Reply:
++    return _story(req, feedview.save, True)
++
++
++def _unsave(req: _Req) -> _Reply:
++    return _story(req, feedview.unsave, False)
++
++
++def _follow(req: _Req) -> _Reply:
++    return _topic(req, topics.follow, True)
++
++
++def _unfollow(req: _Req) -> _Reply:
++    return _topic(req, topics.unfollow, False)
++
++
++def _topics(req: _Req) -> _Reply:
++    rows = topics.list_topics(req.db, req.person.name)
++    keys = ("id", "name", "following", "stories")
++    return _Reply(200, [{key: row[key] for key in keys} for row in rows])
++
++
++def _status(req: _Req) -> _Reply:
++    now = datetime.now(UTC)
++    approved = store.sources(req.db, "approved")
++    failing = sum(ingest.health(req.db, row["id"], now).state == "failing" for row in approved)
++    return _Reply(
++        200,
++        {
++            "last_pass_at": store.get_meta(req.db, "last_pass_at"),
++            "sources": {"approved": len(approved), "failing": failing},
++            "loop_error": req.loop.last_error if req.loop is not None else None,
++        },
++    )
++
++
++@dataclass(frozen=True)
++class _Route:
++    method: str
++    pattern: re.Pattern[str]
++    handler: Callable[[_Req], _Reply]
++    open_to_all: bool = False  # only /api/me and /api/status work without a display name
++
++
++_ID = "([0-9]{1,18})"  # ASCII digits only (a str pattern's \d also matches other scripts)
++_ROUTES = (
++    _Route("GET", re.compile("/api/me"), _me, open_to_all=True),
++    _Route("POST", re.compile("/api/me"), _set_me, open_to_all=True),
++    _Route("GET", re.compile("/api/status"), _status, open_to_all=True),
++    _Route("GET", re.compile("/api/feed"), _feed),
++    _Route("GET", re.compile("/api/feed/new"), _feed_new),
++    _Route("POST", re.compile(f"/api/stories/{_ID}/save"), _save),
++    _Route("DELETE", re.compile(f"/api/stories/{_ID}/save"), _unsave),
++    _Route("GET", re.compile("/api/topics"), _topics),
++    _Route("POST", re.compile(f"/api/topics/{_ID}/follow"), _follow),
++    _Route("DELETE", re.compile(f"/api/topics/{_ID}/follow"), _unfollow),
++)
++
++
++class _Server(ThreadingHTTPServer):
++    daemon_threads = True
++    root: Path
++    allowed_hosts: frozenset[str]
++    advertised_port: int = 0
++    loop: Loop | None = None
++
++    def __init__(self, *args: Any, **kwargs: Any) -> None:
++        self.active_connections = 0
++        self._per_address: dict[str, int] = {}
++        self._count = threading.Lock()
++        super().__init__(*args, **kwargs)
++
++    def verify_request(self, request: Any, client_address: Any) -> bool:
++        with self._count:
++            address = str(client_address[0])
++            if (
++                self.active_connections >= MAX_CONNECTIONS
++                or self._per_address.get(address, 0) >= MAX_PER_ADDRESS
++            ):
++                return False  # closed by the server loop with no handler thread
++            self.active_connections += 1
++            self._per_address[address] = self._per_address.get(address, 0) + 1
++        return True
++
++    def _release(self, client_address: Any) -> None:
++        address = str(client_address[0])
++        with self._count:
++            self.active_connections -= 1
++            if self._per_address[address] <= 1:
++                del self._per_address[address]
++            else:
++                self._per_address[address] -= 1
++
++    def process_request(self, request: Any, client_address: Any) -> None:
++        try:
++            super().process_request(request, client_address)
++        except BaseException:
++            # the handler thread never ran (the OS refused it), so it cannot release
++            self._release(client_address)
++            raise
++
++    def process_request_thread(self, request: Any, client_address: Any) -> None:
++        try:
++            super().process_request_thread(request, client_address)
++        finally:
++            self._release(client_address)
++
++
++def _params(query: str) -> dict[str, str]:
++    """The query's parameters, blanks kept, the first of a repeated one."""
++    try:
++        found = urllib.parse.parse_qs(
++            query, keep_blank_values=True, errors="strict", max_num_fields=MAX_PARAMS
++        )
++    except (UnicodeDecodeError, ValueError):  # not UTF-8, or too many fields
++        raise _refuse(400, "the query string is not valid") from None
++    return {name: values[0] for name, values in found.items()}
++
++
++def _static(path: str) -> _Reply:
++    """The page for ``/`` or the allowlisted file for ``/static/<name>``; the path is compared with
++    the allowlist's names and never joined to a directory."""
++    entry = (PAGE, _HTML) if path == "/" else STATIC.get(path[len("/static/") :])
++    if entry is None:
++        raise _refuse(404, "not found")
++    return _Reply(
++        200, entry[0].read_bytes(), {"Content-Type": entry[1], "Cache-Control": "no-cache"}
++    )
++
++
++class Handler(BaseHTTPRequestHandler):
++    timeout = SOCKET_TIMEOUT
++    server_version = "Signal"
++    sys_version = ""
++    _deadline: threading.Timer | None = None
++
++    def setup(self) -> None:
++        super().setup()
++        # The absolute limit on this connection: the socket timeout is per read and a trickling
++        # client never reaches it, so a timer shuts the socket down 2 * SOCKET_TIMEOUT after accept.
++        self._deadline = threading.Timer(2 * SOCKET_TIMEOUT, self._expire, args=(self.connection,))
++        self._deadline.daemon = True
++        self._deadline.start()
++
++    @staticmethod
++    def _expire(connection: socket.socket) -> None:
++        try:
++            connection.shutdown(socket.SHUT_RDWR)
++        except OSError:  # already closed by the handler or the peer: nothing left to cut
++            pass
++
++    def finish(self) -> None:
++        if self._deadline is not None:
++            self._deadline.cancel()
++        super().finish()
++
++    @property
++    def _service(self) -> _Server:
++        return cast(_Server, self.server)
++
++    def log_message(self, format: str, *args: Any) -> None:
++        log.info("%s %s", self.address_string(), format % args)
++
++    def do_GET(self) -> None:
++        self._serve()
++
++    do_POST = do_DELETE = do_PUT = do_PATCH = do_HEAD = do_OPTIONS = do_GET
++
++    def _serve(self) -> None:
++        if self.request_version == "HTTP/0.9":
++            self.close_connection = True  # no headers exist to check and none can be sent
++            log.info("%s: HTTP/0.9 request closed", self.address_string())
++            return
++        try:
++            if not self.path.startswith("/"):
++                raise _refuse(400, "the request target must be a path")
++            self._check_origin()
++            if self.headers.get("Transfer-Encoding") is not None:
++                raise _refuse(411, "a body needs Content-Length")
++            self._send(self._dispatch(urllib.parse.urlsplit(self.path)))
++        except _Reply as reply:
++            self._send(reply)
++        except Exception:
++            # The one catch-all of a request, documented: whatever a handler raises becomes a 500
++            # with fixed text. The traceback goes to the log; neither it nor the exception text
++            # reaches the client. KeyboardInterrupt and SystemExit (BaseException) are not caught.
++            log.exception("%s %s", self.command, self.path)
++            self._send(_refuse(500, _FAILED))
++
++    def _check_origin(self) -> None:
++        hosts = self.headers.get_all("Host") or []
++        if len(hosts) != 1 or hosts[0] not in self._service.allowed_hosts:
++            raise _refuse(403, "this address is not the one the service was started on")
++        site = self.headers.get_all("Sec-Fetch-Site")
++        if site is not None and site not in (["same-origin"], ["none"]) and not self._navigation():
++            raise _refuse(403, "the request came from another site")
++        origins = self.headers.get_all("Origin") or []
++        acceptable = [f"http://{hosts[0]}"]
++        if self._service.advertised_port == 80 and hosts[0].endswith(":80"):
++            acceptable.append(f"http://{hosts[0][:-3]}")  # browsers leave the default port out
++        if (self.command != "GET" or origins) and not (
++            len(origins) == 1 and origins[0] in acceptable
++        ):
++            raise _refuse(403, "the request did not come from the service's own page")
++
++    def _navigation(self) -> bool:
++        """A top-level navigation to a document: only a GET with both fetch-metadata values."""
++        return (
++            self.command == "GET"
++            and self.headers.get_all("Sec-Fetch-Mode") == ["navigate"]
++            and self.headers.get_all("Sec-Fetch-Dest") == ["document"]
++        )
++
++    def end_headers(self) -> None:
++        # Here, not in _send, so the replies http.server writes itself (501, 400, 414) carry them.
++        self.send_header("X-Content-Type-Options", "nosniff")
++        self.send_header("Cross-Origin-Resource-Policy", "same-origin")
++        self.send_header("Content-Security-Policy", _POLICY)
++        self.send_header("X-Frame-Options", "DENY")
++        super().end_headers()
++
++    def _send(self, reply: _Reply) -> None:
++        if isinstance(reply.body, bytes):
++            data, headers = reply.body, reply.headers
++        else:
++            data = json.dumps(reply.body, ensure_ascii=False).encode("utf-8")
++            headers = {"Content-Type": _JSON, "Cache-Control": "no-store", **reply.headers}
++        try:
++            self.send_response(reply.status)
++            self.send_header("Content-Length", str(len(data)))
++            for name, value in headers.items():
++                self.send_header(name, value)
++            self.end_headers()
++            if self.command != "HEAD":
++                self.wfile.write(data)
++        except OSError as error:  # the peer went away or stalled: nothing more can be said to it
++            log.info("%s %s: reply not delivered (%s)", self.command, self.path, error)
++
++    def _json_body(self) -> dict[str, Any]:
++        values = self.headers.get_all("Content-Length") or []
++        if not values:
++            raise _refuse(411, "a body needs Content-Length")
++        text = values[0].strip()
++        if len(values) != 1 or not (text.isascii() and text.isdigit()) or len(text) > 15:
++            raise _refuse(400, "Content-Length is not a length")
++        length = int(text)
++        if length > MAX_JSON:
++            raise _refuse(413, f"a request body is at most {MAX_JSON // 1024} KiB")
++        try:
++            data = self.rfile.read(length)
++        except OSError as error:  # the body stalled past the socket timeout or the peer reset
++            log.info("%s %s: request body did not arrive (%s)", self.command, self.path, error)
++            raise _refuse(400, "the request body did not arrive") from None
++        if len(data) != length:
++            raise _refuse(400, "the request body ended early")
++        try:
++            body = json.loads(data.decode("utf-8"))
++        except (ValueError, RecursionError):  # bad UTF-8, bad JSON, or nesting past the parser
++            raise _refuse(400, "the request body is not valid JSON") from None
++        if not isinstance(body, dict):
++            raise _refuse(400, "the request body must be a JSON object")
++        return body
++
++    def _dispatch(self, url: urllib.parse.SplitResult) -> _Reply:
++        path = url.path
++        if path == "/" or path.startswith("/static/"):
++            if self.command != "GET":
++                raise _Reply(405, {"error": "method not allowed"}, {"Allow": "GET"})
++            return _static(path)
++        allowed: list[str] = []
++        for route in _ROUTES:
++            found = route.pattern.fullmatch(path)
++            if found is None:
++                continue
++            if route.method == self.command:
++                return self._api(route, found.groups(), url.query)
++            allowed.append(route.method)
++        if allowed:
++            raise _Reply(405, {"error": "method not allowed"}, {"Allow": ", ".join(allowed)})
++        raise _refuse(404, "not found")
++
++    def _api(self, route: _Route, groups: tuple[str, ...], query: str) -> _Reply:
++        params = _params(query)
++        db = store.open_db(self._service.root)  # this request's own connection
++        try:
++            user = identity.current_user(db, self.headers.get("Cookie"))
++            if user is None and not route.open_to_all:
++                raise _refuse(401, _NEEDS_NAME)
++            request = _Req(db, user, groups, params, self._json_body, self._service.loop)
++            return route.handler(request)
++        finally:
++            db.close()
++
++
++def _wildcard(host: str) -> bool:
++    """True when ``host`` is empty or resolves to an address that means every interface."""
++    if not host:
++        return True
++    try:
++        found = socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)
++    except (socket.gaierror, UnicodeError):
++        return False  # not an address: binding it fails with its own message
++    for *_, sockaddr in found:
++        address = ipaddress.ip_address(str(sockaddr[0]).partition("%")[0])
++        mapped = getattr(address, "ipv4_mapped", None)
++        if address.is_unspecified or (mapped is not None and mapped.is_unspecified):
++            return True
++    return False
++
++
++def _hosts(host: str, port: int) -> frozenset[str]:
++    names = [host, "localhost"] if host == "127.0.0.1" else [host]
++    allowed = {f"{name}:{port}" for name in names}
++    if port == 80:
++        allowed.update(names)  # a browser leaves the default port out of Host
++    return frozenset(allowed)
++
++
++def _require_files() -> None:
++    missing = [str(path) for path, _ in [(PAGE, ""), *STATIC.values()] if not path.is_file()]
++    if missing:
++        raise StartError("page files missing: " + ", ".join(missing))
++
++
++def make_server(
++    root: Path, host: str, port: int, *, loop: Loop | None = None
++) -> ThreadingHTTPServer:
++    """A server bound to ``host:port`` (port 0 picks one); not yet serving.
++
++    Raises ValueError for a wildcard host and StartError for a missing page file, before binding."""
++    if _wildcard(host):
++        raise ValueError(WILDCARD_MESSAGE)
++    _require_files()
++    server = _Server((host, port), Handler)
++    port = server.server_address[1]
++    server.root, server.allowed_hosts, server.advertised_port = root, _hosts(host, port), port
++    server.loop = loop
++    return server
++
++
++def serve(root: Path, host: str, port: int, *, tick: float = 60.0) -> int:
++    """Run the service and its ingest loop until interrupted; 2 when it cannot start."""
++    if not 0 <= port <= 65535:
++        print("--port must be from 0 to 65535", file=sys.stderr)
++        return 2
++    loop = Loop(root)
++    try:
++        server = make_server(root, host, port, loop=loop)
++    except (ValueError, StartError, OSError, OverflowError) as error:  # wildcard, files, address
++        print(error, file=sys.stderr)
++        return 2
++    try:
++        store.open_db(root).close()  # a store that cannot be opened fails here, not per request
++    except (OSError, sqlite3.Error, store.StoreError) as error:
++        server.server_close()
++        print(f"cannot open the store under {root}: {error}", file=sys.stderr)
++        return 2
++    stop = threading.Event()
++    worker = threading.Thread(target=loop.run_until, args=(stop, tick), daemon=True)
++    worker.start()
++    print(f"serving http://{host}:{server.server_address[1]}/", file=sys.stderr)
++    try:
++        server.serve_forever()
++    except KeyboardInterrupt:
++        pass
++    finally:
++        stop.set()
++        server.server_close()
++        worker.join(timeout=5)
++    return 0
+diff --git a/src/deploy_workflow/signal/store.py b/src/deploy_workflow/signal/store.py
+new file mode 100644
+index 0000000..d1f1041
+--- /dev/null
++++ b/src/deploy_workflow/signal/store.py
+@@ -0,0 +1,390 @@
++"""SQLite store for Signal users, sources, checks and stories."""
++
++from __future__ import annotations
++
++import sqlite3
++import time
++from collections.abc import Iterator
++from contextlib import contextmanager
++from dataclasses import dataclass
++from datetime import UTC, datetime
++from pathlib import Path
++from typing import Literal
++
++from deploy_workflow.signal.feeds import Entry
++from deploy_workflow.signal.fold import MIN_TITLE_WORDS, TITLE_WINDOW, link_key, title_key
++
++ROLES = ("reader", "writer", "owner")
++KINDS = ("regulator", "news", "ratings", "research")
++STATES = ("proposed", "approved", "paused")
++
++
++class StoreError(ValueError):
++    """An invalid role, kind, state, empty name or duplicate."""
++
++
++_MIGRATION_1 = """
++CREATE TABLE users(
++    id INTEGER PRIMARY KEY,
++    name TEXT NOT NULL UNIQUE,
++    role TEXT NOT NULL
++);
++CREATE TABLE sources(
++    id INTEGER PRIMARY KEY,
++    name TEXT NOT NULL,
++    kind TEXT NOT NULL,
++    url TEXT NOT NULL UNIQUE,
++    state TEXT NOT NULL,
++    proposed_by TEXT NOT NULL,
++    created_at TEXT NOT NULL
++);
++CREATE TABLE source_checks(
++    id INTEGER PRIMARY KEY,
++    source_id INTEGER NOT NULL REFERENCES sources(id),
++    at TEXT NOT NULL,
++    ok INTEGER NOT NULL,
++    reason TEXT NOT NULL,
++    etag TEXT,
++    modified TEXT,
++    new_stories INTEGER NOT NULL
++);
++CREATE TABLE stories(
++    id INTEGER PRIMARY KEY,
++    source_id INTEGER NOT NULL REFERENCES sources(id),
++    title TEXT NOT NULL,
++    link TEXT NOT NULL,
++    link_key TEXT NOT NULL,
++    title_key TEXT NOT NULL,
++    published_at TEXT NOT NULL,
++    fetched_at TEXT NOT NULL,
++    summary TEXT NOT NULL,
++    UNIQUE(source_id, link_key)
++);
++CREATE TABLE story_duplicates(
++    story_id INTEGER NOT NULL REFERENCES stories(id),
++    duplicate_source_id INTEGER NOT NULL REFERENCES sources(id),
++    link TEXT NOT NULL,
++    link_key TEXT NOT NULL,
++    published_at TEXT NOT NULL,
++    seen_at TEXT NOT NULL,
++    UNIQUE(duplicate_source_id, link_key)
++);
++CREATE INDEX IF NOT EXISTS idx_story_duplicates_link_key ON story_duplicates(link_key);
++CREATE VIRTUAL TABLE stories_fts USING fts5(
++    title, summary, content='stories', content_rowid='id'
++);
++CREATE TRIGGER stories_ai AFTER INSERT ON stories BEGIN
++    INSERT INTO stories_fts(rowid, title, summary) VALUES (new.id, new.title, new.summary);
++END;
++CREATE TRIGGER stories_ad AFTER DELETE ON stories BEGIN
++    INSERT INTO stories_fts(stories_fts, rowid, title, summary)
++    VALUES ('delete', old.id, old.title, old.summary);
++END;
++CREATE TRIGGER stories_au AFTER UPDATE ON stories BEGIN
++    INSERT INTO stories_fts(stories_fts, rowid, title, summary)
++    VALUES ('delete', old.id, old.title, old.summary);
++    INSERT INTO stories_fts(rowid, title, summary) VALUES (new.id, new.title, new.summary);
++END;
++"""
++
++_MIGRATION_2 = """
++CREATE TABLE topics(
++    id INTEGER PRIMARY KEY,
++    name TEXT NOT NULL UNIQUE,
++    keywords TEXT NOT NULL,
++    kinds TEXT NOT NULL,
++    created_by TEXT NOT NULL,
++    created_at TEXT NOT NULL
++);
++CREATE TABLE topic_stories(
++    topic_id INTEGER NOT NULL REFERENCES topics(id),
++    story_id INTEGER NOT NULL REFERENCES stories(id),
++    UNIQUE(topic_id, story_id)
++);
++CREATE TABLE topic_follows(
++    user_name TEXT NOT NULL,
++    topic_id INTEGER NOT NULL REFERENCES topics(id),
++    UNIQUE(user_name, topic_id)
++);
++CREATE TABLE saves(
++    user_name TEXT NOT NULL,
++    story_id INTEGER NOT NULL REFERENCES stories(id),
++    saved_at TEXT NOT NULL,
++    UNIQUE(user_name, story_id)
++);
++"""
++
++# Ordered; later slices append. Index i holds the script that brings the schema to version i + 1.
++MIGRATIONS = [_MIGRATION_1, _MIGRATION_2]
++_BUSY_SECONDS = 30
++
++
++def _schema_version(db: sqlite3.Connection) -> int:
++    has_meta = db.execute(
++        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='meta'"
++    ).fetchone()
++    if has_meta is None:
++        return 0
++    row = db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()
++    return int(row[0]) if row else 0
++
++
++@contextmanager
++def _write_transaction(db: sqlite3.Connection) -> Iterator[None]:
++    """Hold the write lock: commit when the block ends, roll back if it raises."""
++    db.execute("BEGIN IMMEDIATE")
++    try:
++        yield
++        db.execute("COMMIT")
++    except BaseException:
++        if db.in_transaction:
++            db.execute("ROLLBACK")
++        raise
++
++
++def _apply_migration(db: sqlite3.Connection, version: int) -> None:
++    """Apply one migration under the write lock; skip it if another opener already did."""
++    with _write_transaction(db):
++        if _schema_version(db) >= version:
++            return
++        db.execute("CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)")
++        db.executescript(MIGRATIONS[version - 1])
++        db.execute(
++            "INSERT OR REPLACE INTO meta(key, value) VALUES ('schema_version', ?)",
++            (str(version),),
++        )
++
++
++def _migrate(db: sqlite3.Connection) -> None:
++    # executescript leaves an explicit transaction alone only outside legacy transaction control.
++    db.autocommit = True
++    try:
++        for version in range(1, len(MIGRATIONS) + 1):
++            if _schema_version(db) < version:
++                _apply_migration(db, version)
++    finally:
++        db.autocommit = sqlite3.LEGACY_TRANSACTION_CONTROL
++
++
++def _enable_wal(db: sqlite3.Connection) -> None:
++    """Switch to WAL. SQLite ignores the busy timeout for this pragma on a fresh file that
++    another opener is initialising, so retry on "locked" until the same 30 s deadline."""
++    deadline = time.monotonic() + _BUSY_SECONDS
++    while True:
++        try:
++            mode = db.execute("PRAGMA journal_mode=WAL").fetchone()[0]
++            break
++        except sqlite3.OperationalError as exc:
++            if "locked" not in str(exc) or time.monotonic() >= deadline:
++                raise
++            time.sleep(0.02)
++    if str(mode).lower() != "wal":
++        raise StoreError(f"could not enable WAL mode; database reports {mode!r}")
++
++
++def open_db(root: Path) -> sqlite3.Connection:
++    """Open (creating if needed) `<root>/signal/signal.db` and apply migrations."""
++    folder = root / "signal"
++    folder.mkdir(parents=True, exist_ok=True)
++    db = sqlite3.connect(folder / "signal.db", timeout=_BUSY_SECONDS)
++    try:
++        db.row_factory = sqlite3.Row
++        _enable_wal(db)
++        db.execute("PRAGMA foreign_keys=ON")
++        _migrate(db)
++    except BaseException:
++        db.close()
++        raise
++    return db
++
++
++def set_meta(db: sqlite3.Connection, key: str, value: str) -> None:
++    with db:
++        db.execute("INSERT OR REPLACE INTO meta(key, value) VALUES(?, ?)", (key, value))
++
++
++def get_meta(db: sqlite3.Connection, key: str) -> str | None:
++    row = db.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()
++    return str(row["value"]) if row else None
++
++
++def _utc_text(at: datetime) -> str:
++    if at.tzinfo is None or at.utcoffset() is None:
++        raise StoreError("time must be timezone-aware")
++    return at.astimezone(UTC).isoformat()
++
++
++def _require(value: str, allowed: tuple[str, ...], what: str) -> None:
++    if value not in allowed:
++        raise StoreError(f"invalid {what} {value!r}; expected one of {', '.join(allowed)}")
++
++
++def _require_name(name: str) -> None:
++    if not name.strip():
++        raise StoreError("name must not be empty")
++
++
++def add_user(db: sqlite3.Connection, name: str, role: str) -> int:
++    _require_name(name)
++    _require(role, ROLES, "role")
++    try:
++        with db:
++            cur = db.execute("INSERT INTO users(name, role) VALUES(?, ?)", (name, role))
++    except sqlite3.IntegrityError as exc:
++        raise StoreError(f"user {name!r} already exists") from exc
++    assert cur.lastrowid is not None
++    return cur.lastrowid
++
++
++def role_of(db: sqlite3.Connection, name: str) -> str:
++    row = db.execute("SELECT role FROM users WHERE name=?", (name,)).fetchone()
++    return str(row["role"]) if row else "reader"
++
++
++def propose_source(db: sqlite3.Connection, name: str, kind: str, url: str, proposed_by: str) -> int:
++    _require_name(name)
++    _require(kind, KINDS, "kind")
++    if not url.strip():
++        raise StoreError("url must not be empty")
++    try:
++        with db:
++            cur = db.execute(
++                "INSERT INTO sources(name, kind, url, state, proposed_by, created_at)"
++                " VALUES(?, ?, ?, 'proposed', ?, ?)",
++                (name, kind, url, proposed_by, _utc_text(datetime.now(UTC))),
++            )
++    except sqlite3.IntegrityError as exc:
++        raise StoreError(f"source url {url!r} already exists") from exc
++    assert cur.lastrowid is not None
++    return cur.lastrowid
++
++
++def set_source_state(db: sqlite3.Connection, source_id: int, state: str) -> None:
++    _require(state, STATES, "state")
++    with db:
++        cur = db.execute("UPDATE sources SET state=? WHERE id=?", (state, source_id))
++    if cur.rowcount == 0:
++        raise StoreError(f"no source with id {source_id}")
++
++
++def sources(db: sqlite3.Connection, state: str | None = None) -> list[sqlite3.Row]:
++    if state is None:
++        return db.execute("SELECT * FROM sources ORDER BY id").fetchall()
++    _require(state, STATES, "state")
++    return db.execute("SELECT * FROM sources WHERE state=? ORDER BY id", (state,)).fetchall()
++
++
++@dataclass(frozen=True)
++class Check:
++    """The outcome of one fetch of a source."""
++
++    at: datetime
++    ok: bool
++    reason: str
++    etag: str | None
++    modified: str | None
++    new_stories: int
++
++
++def record_check(db: sqlite3.Connection, source_id: int, check: Check) -> None:
++    stamp = _utc_text(check.at)
++    try:
++        with db:
++            db.execute(
++                "INSERT INTO source_checks(source_id, at, ok, reason, etag, modified, new_stories)"
++                " VALUES(?, ?, ?, ?, ?, ?, ?)",
++                (
++                    source_id,
++                    stamp,
++                    int(check.ok),
++                    check.reason,
++                    check.etag,
++                    check.modified,
++                    check.new_stories,
++                ),
++            )
++    except sqlite3.IntegrityError as exc:
++        raise StoreError(f"no source with id {source_id}") from exc
++
++
++def last_check(db: sqlite3.Connection, source_id: int) -> sqlite3.Row | None:
++    row: sqlite3.Row | None = db.execute(
++        "SELECT * FROM source_checks WHERE source_id=? ORDER BY at DESC, id DESC LIMIT 1",
++        (source_id,),
++    ).fetchone()
++    return row
++
++
++def _earliest_match(
++    db: sqlite3.Connection, source_id: int, lkey: str, tkey: str, published: datetime
++) -> int | None:
++    """Id of the earliest story with this link key (as a story or a folded duplicate), or, from
++    another source, this title key within the window. A source never folds into itself by title."""
++    rows = db.execute(
++        "SELECT id, published_at, link_key = ? AS same_link FROM stories"
++        " WHERE link_key = ? OR (title_key = ? AND source_id != ?)"
++        " UNION ALL"
++        " SELECT s.id, s.published_at, 1 AS same_link FROM story_duplicates d"
++        " JOIN stories s ON s.id = d.story_id WHERE d.link_key = ? AND s.source_id != ?",
++        (lkey, lkey, tkey, source_id, lkey, source_id),
++    ).fetchall()
++    long_title = len(tkey.split()) >= MIN_TITLE_WORDS
++    found: list[tuple[datetime, int]] = []
++    for row in rows:
++        at = datetime.fromisoformat(row["published_at"])
++        if row["same_link"] or (long_title and abs(at - published) <= TITLE_WINDOW):
++            found.append((at, row["id"]))
++    return min(found)[1] if found else None
++
++
++def _fold_or_insert(
++    db: sqlite3.Connection, source_id: int, entry: Entry, fetched_at: datetime
++) -> Literal["new", "duplicate", "seen"]:
++    if entry.published is not None:
++        _utc_text(entry.published)  # refuses a time without a zone
++    lkey = link_key(entry.link)
++    tkey = title_key(entry.title)
++    if db.execute(
++        "SELECT 1 FROM stories WHERE source_id=? AND link_key=?"
++        " UNION ALL SELECT 1 FROM story_duplicates WHERE duplicate_source_id=? AND link_key=?",
++        (source_id, lkey, source_id, lkey),
++    ).fetchone():
++        return "seen"
++    published = entry.published
++    if published is None or published > fetched_at:
++        published = fetched_at
++    stamp = _utc_text(published)
++    story_id = _earliest_match(db, source_id, lkey, tkey, published)
++    if story_id is not None:
++        db.execute(
++            "INSERT INTO story_duplicates(story_id, duplicate_source_id, link, link_key,"
++            " published_at, seen_at) VALUES(?, ?, ?, ?, ?, ?)",
++            (story_id, source_id, entry.link, lkey, stamp, _utc_text(fetched_at)),
++        )
++        return "duplicate"
++    db.execute(
++        "INSERT INTO stories(source_id, title, link, link_key, title_key, published_at,"
++        " fetched_at, summary) VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
++        (
++            source_id,
++            entry.title,
++            entry.link,
++            lkey,
++            tkey,
++            stamp,
++            _utc_text(fetched_at),
++            entry.summary,
++        ),
++    )
++    return "new"
++
++
++def add_story(
++    db: sqlite3.Connection, source_id: int, entry: Entry, fetched_at: datetime
++) -> Literal["new", "duplicate", "seen"]:
++    """Store `entry` unless this source has it ("seen") or another story folds it ("duplicate").
++
++    The check and the write share one write-locked transaction, so two writers cannot both
++    insert the same story."""
++    with _write_transaction(db):
++        return _fold_or_insert(db, source_id, entry, fetched_at)
+diff --git a/src/deploy_workflow/signal/topics.py b/src/deploy_workflow/signal/topics.py
+new file mode 100644
+index 0000000..cf4d50f
+--- /dev/null
++++ b/src/deploy_workflow/signal/topics.py
+@@ -0,0 +1,140 @@
++"""Topics: a named keyword rule over stories, matched through the full-text index, and follows."""
++
++from __future__ import annotations
++
++import json
++import sqlite3
++from collections.abc import Sequence
++from datetime import UTC, datetime
++
++from deploy_workflow.signal.store import KINDS, StoreError, _utc_text, _write_transaction
++
++MAX_KEYWORD = 60
++
++
++def fts_phrase(text: str) -> str:
++    """`text` as one quoted FTS5 phrase, so query syntax in it is plain text."""
++    return '"' + text.replace("\x00", " ").replace('"', '""') + '"'
++
++
++def _clean_keywords(keywords: Sequence[str]) -> list[str]:
++    cleaned = [keyword.strip() for keyword in keywords]
++    if not cleaned:
++        raise StoreError("a topic needs at least one keyword")
++    for keyword in cleaned:
++        if not 1 <= len(keyword) <= MAX_KEYWORD:
++            raise StoreError(f"a keyword must be 1 to {MAX_KEYWORD} characters, got {keyword!r}")
++    return cleaned
++
++
++def _clean_kinds(kinds: Sequence[str]) -> list[str]:
++    for kind in kinds:
++        if kind not in KINDS:
++            raise StoreError(f"invalid kind {kind!r}; expected one of {', '.join(KINDS)}")
++    return list(kinds)
++
++
++def _matches(db: sqlite3.Connection, story_id: int, topic: sqlite3.Row) -> bool:
++    """Whether the story meets the topic's rule; one phrase query per keyword."""
++    kinds = json.loads(topic["kinds"])
++    if kinds:
++        kind = db.execute(
++            "SELECT src.kind FROM stories s JOIN sources src ON src.id = s.source_id WHERE s.id=?",
++            (story_id,),
++        ).fetchone()
++        if kind is None or kind["kind"] not in kinds:
++            return False
++    return any(
++        db.execute(
++            "SELECT 1 FROM stories_fts WHERE stories_fts MATCH ? AND rowid=?",
++            (fts_phrase(keyword), story_id),
++        ).fetchone()
++        for keyword in json.loads(topic["keywords"])
++    )
++
++
++def _link(db: sqlite3.Connection, topic_id: int, story_id: int) -> None:
++    db.execute(
++        "INSERT OR IGNORE INTO topic_stories(topic_id, story_id) VALUES(?, ?)",
++        (topic_id, story_id),
++    )
++
++
++def match_story(db: sqlite3.Connection, story_id: int) -> list[int]:
++    """Topic ids whose rule the story meets; records them. Safe to repeat."""
++    with _write_transaction(db):
++        found = [
++            topic["id"]
++            for topic in db.execute("SELECT * FROM topics ORDER BY id").fetchall()
++            if _matches(db, story_id, topic)
++        ]
++        for topic_id in found:
++            _link(db, topic_id, story_id)
++    return found
++
++
++def add_topic(
++    db: sqlite3.Connection,
++    name: str,
++    keywords: Sequence[str],
++    kinds: Sequence[str],
++    created_by: str,
++) -> int:
++    """Create a topic and match every existing story against it before returning."""
++    if not name.strip():
++        raise StoreError("name must not be empty")
++    cleaned = _clean_keywords(keywords)
++    allowed = _clean_kinds(kinds)
++    with _write_transaction(db):
++        try:
++            cur = db.execute(
++                "INSERT INTO topics(name, keywords, kinds, created_by, created_at)"
++                " VALUES(?, ?, ?, ?, ?)",
++                (name, json.dumps(cleaned), json.dumps(allowed), created_by, _utc_text(_now())),
++            )
++        except sqlite3.IntegrityError as exc:
++            raise StoreError(f"topic {name!r} already exists") from exc
++        assert cur.lastrowid is not None
++        topic = db.execute("SELECT * FROM topics WHERE id=?", (cur.lastrowid,)).fetchone()
++        for story in db.execute("SELECT id FROM stories ORDER BY id").fetchall():
++            if _matches(db, story["id"], topic):
++                _link(db, cur.lastrowid, story["id"])
++    return cur.lastrowid
++
++
++def _now() -> datetime:
++    return datetime.now(UTC)
++
++
++def _require_topic(db: sqlite3.Connection, topic_id: int) -> None:
++    if db.execute("SELECT 1 FROM topics WHERE id=?", (topic_id,)).fetchone() is None:
++        raise StoreError(f"no topic with id {topic_id}")
++
++
++def follow(db: sqlite3.Connection, user_name: str, topic_id: int) -> None:
++    _require_topic(db, topic_id)
++    with db:
++        db.execute(
++            "INSERT OR IGNORE INTO topic_follows(user_name, topic_id) VALUES(?, ?)",
++            (user_name, topic_id),
++        )
++
++
++def unfollow(db: sqlite3.Connection, user_name: str, topic_id: int) -> None:
++    _require_topic(db, topic_id)
++    with db:
++        db.execute(
++            "DELETE FROM topic_follows WHERE user_name=? AND topic_id=?", (user_name, topic_id)
++        )
++
++
++def list_topics(db: sqlite3.Connection, user_name: str) -> list[sqlite3.Row]:
++    """Every topic with whether `user_name` follows it and how many stories it holds."""
++    return db.execute(
++        "SELECT t.id, t.name,"
++        " EXISTS(SELECT 1 FROM topic_follows f WHERE f.topic_id = t.id AND f.user_name = ?)"
++        "  AS following,"
++        " (SELECT COUNT(*) FROM topic_stories ts WHERE ts.topic_id = t.id) AS stories"
++        " FROM topics t ORDER BY t.id",
++        (user_name,),
++    ).fetchall()
+diff --git a/src/deploy_workflow/signal/web/index.html b/src/deploy_workflow/signal/web/index.html
+new file mode 100644
+index 0000000..514f2a8
+--- /dev/null
++++ b/src/deploy_workflow/signal/web/index.html
+@@ -0,0 +1,15 @@
++<!doctype html>
++<html lang="en">
++<head>
++<meta charset="utf-8">
++<meta name="viewport" content="width=device-width, initial-scale=1">
++<title>Signal</title>
++<link rel="stylesheet" href="/static/brand.css">
++<link rel="stylesheet" href="/static/signal.css">
++</head>
++<body>
++<main id="app"></main>
++<script src="/static/render.js" defer></script>
++<script src="/static/signal.js" defer></script>
++</body>
++</html>
+diff --git a/src/deploy_workflow/signal/web/render.js b/src/deploy_workflow/signal/web/render.js
+new file mode 100644
+index 0000000..5137cbf
+--- /dev/null
++++ b/src/deploy_workflow/signal/web/render.js
+@@ -0,0 +1 @@
++// The feed page rendering lands in the next task.
+diff --git a/src/deploy_workflow/signal/web/signal.css b/src/deploy_workflow/signal/web/signal.css
+new file mode 100644
+index 0000000..8104aff
+--- /dev/null
++++ b/src/deploy_workflow/signal/web/signal.css
+@@ -0,0 +1 @@
++/* The feed page styles land in the next task. */
+diff --git a/src/deploy_workflow/signal/web/signal.js b/src/deploy_workflow/signal/web/signal.js
+new file mode 100644
+index 0000000..e81aae0
+--- /dev/null
++++ b/src/deploy_workflow/signal/web/signal.js
+@@ -0,0 +1 @@
++// The feed page script lands in the next task.
+diff --git a/tests/test_signal_cli.py b/tests/test_signal_cli.py
+new file mode 100644
+index 0000000..abd7feb
+--- /dev/null
++++ b/tests/test_signal_cli.py
+@@ -0,0 +1,216 @@
++import contextlib
++import io
++from datetime import UTC, datetime
++
++import pytest
++from test_signal_feeds import RSS
++
++from deploy_workflow.signal.cli import main
++from deploy_workflow.signal.feeds import Entry
++from deploy_workflow.signal.fetch import Fetched, FetchRefused
++from deploy_workflow.signal.store import add_story, open_db, propose_source
++
++
++def run(tmp_path, *args):
++    out = io.StringIO()
++    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
++        code = main(["--root", str(tmp_path), *args])
++    return code, out.getvalue()
++
++
++def run_split(tmp_path, *args):
++    out, err = io.StringIO(), io.StringIO()
++    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
++        code = main(["--root", str(tmp_path), *args])
++    return code, out.getvalue(), err.getvalue()
++
++
++def test_propose_approve_list(tmp_path, monkeypatch):
++    monkeypatch.setattr("deploy_workflow.signal.cli.check_address", lambda url: None)
++    assert (
++        run(
++            tmp_path,
++            "sources",
++            "propose",
++            "Authority",
++            "--kind",
++            "regulator",
++            "--url",
++            "https://a.org/f",
++            "--by",
++            "ak",
++        )[0]
++        == 0
++    )
++    code, out = run(tmp_path, "sources", "list")
++    assert code == 0 and "proposed" in out and "never checked" in out and "Authority" in out
++    assert run(tmp_path, "sources", "approve", "1")[0] == 0
++    assert "approved" in run(tmp_path, "sources", "list")[1]
++
++
++def test_proposing_a_private_address_is_refused(tmp_path):
++    code, out = run(
++        tmp_path,
++        "sources",
++        "propose",
++        "X",
++        "--kind",
++        "news",
++        "--url",
++        "https://127.0.0.1/f",
++        "--by",
++        "ak",
++    )
++    assert code == 2 and "plain host name" in out
++    assert run(tmp_path, "sources", "list")[1].strip() == ""
++
++
++def test_proposing_a_name_that_resolves_privately_is_refused(tmp_path, monkeypatch):
++    monkeypatch.setattr("deploy_workflow.signal.fetch._resolve", lambda host: ["10.0.0.5"])
++    code, out = run(
++        tmp_path,
++        "sources",
++        "propose",
++        "X",
++        "--kind",
++        "news",
++        "--url",
++        "https://feeds.example.org/f",
++        "--by",
++        "ak",
++    )
++    assert code == 2 and "public" in out
++    assert run(tmp_path, "sources", "list")[1].strip() == ""
++
++
++def test_invalid_role_exits_2(tmp_path):
++    assert run(tmp_path, "users", "add", "X", "--role", "admin")[0] == 2
++
++
++class _Clock(datetime):
++    @classmethod
++    def now(cls, tz=None):
++        return cls(2026, 11, 13, 10, 0, tzinfo=tz)
++
++
++def test_ingest_and_stories_with_recorded_feed(tmp_path, monkeypatch):
++    monkeypatch.setattr("deploy_workflow.signal.cli.check_address", lambda url: None)
++    monkeypatch.setattr("deploy_workflow.signal.cli.datetime", _Clock)
++    monkeypatch.setattr(
++        "deploy_workflow.signal.ingest.fetch.fetch", lambda u, e, m: Fetched(RSS, None, None)
++    )
++    run(
++        tmp_path,
++        "sources",
++        "propose",
++        "Authority",
++        "--kind",
++        "regulator",
++        "--url",
++        "https://a.org/f",
++        "--by",
++        "ak",
++    )
++    run(tmp_path, "sources", "approve", "1")
++    code, out = run(tmp_path, "ingest")
++    assert code == 0 and "2 new" in out
++    code, out = run(tmp_path, "stories")
++    # the undated item is shown with the fetch time (10:00), the dated one with its own time
++    assert out.splitlines() == [
++        "2026-11-13 10:00  Authority  No date",
++        "2026-11-13 08:00  Authority  Authority opens review",
++    ]
++
++
++def test_sources_list_shows_why_a_source_is_failing(tmp_path, monkeypatch):
++    monkeypatch.setattr("deploy_workflow.signal.cli.check_address", lambda url: None)
++
++    def refuse(u, e, m):
++        raise FetchRefused("server answered HTTP 503")
++
++    monkeypatch.setattr("deploy_workflow.signal.ingest.fetch.fetch", refuse)
++    run(
++        tmp_path,
++        "sources",
++        "propose",
++        "B",
++        "--kind",
++        "news",
++        "--url",
++        "https://b.org/f",
++        "--by",
++        "x",
++    )
++    run(tmp_path, "sources", "approve", "1")
++    run(tmp_path, "ingest")
++    out = run(tmp_path, "sources", "list")[1]
++    assert "failing" in out and "server answered HTTP 503" in out
++
++
++def test_story_count_of_others_counts_sources_not_links(tmp_path):
++    db = open_db(tmp_path)
++    for n in (1, 2):
++        propose_source(db, f"S{n}", "news", f"https://s{n}.org/f", "x")
++    t = datetime(2026, 11, 13, 9, tzinfo=UTC)
++    title = "Authority opens in depth review"
++    add_story(db, 1, Entry(title, "https://s1.org/1", t, ""), t)
++    add_story(db, 2, Entry(title, "https://s2.org/1", t, ""), t)
++    add_story(db, 2, Entry(title, "https://s2.org/2", t, ""), t)
++    db.close()
++    assert run(tmp_path, "stories")[1].splitlines() == [f"2026-11-13 09:00  S1  {title} (+1)"]
++
++
++def test_approving_an_unknown_source_exits_2_with_one_line(tmp_path):
++    code, out, err = run_split(tmp_path, "sources", "approve", "999")
++    assert code == 2 and out == "" and err.splitlines() == ["error: no source with id 999"]
++
++
++def test_adding_a_user_with_an_empty_name_exits_2(tmp_path):
++    code, out, err = run_split(tmp_path, "users", "add", "", "--role", "reader")
++    assert code == 2 and out == "" and err.splitlines() == ["error: name must not be empty"]
++
++
++@pytest.mark.parametrize("limit", ["0", "-1", "x"])
++def test_stories_limit_must_be_a_positive_integer(tmp_path, limit):
++    code, out, err = run_split(tmp_path, "stories", "--limit", limit)
++    assert code == 2 and out == ""
++    assert err.strip().splitlines()[-1].endswith("--limit: must be an integer >= 1")
++
++
++def test_topics_add_and_list(tmp_path):
++    assert (
++        run(
++            tmp_path,
++            "topics",
++            "add",
++            "Competition",
++            "--keywords",
++            "merger review,remedy",
++            "--by",
++            "ak",
++        )[0]
++        == 0
++    )
++    code, out = run(tmp_path, "topics", "list")
++    assert code == 0 and len(out.splitlines()) == 1 and "Competition" in out
++
++
++def test_topic_with_no_keywords_exits_2_with_one_line(tmp_path):
++    code, out, err = run_split(tmp_path, "topics", "add", "X", "--keywords", "", "--by", "ak")
++    assert code == 2 and out == "" and len(err.splitlines()) == 1
++
++
++def test_kinds_with_spaces_after_commas_are_trimmed(tmp_path):
++    code, _ = run(
++        tmp_path,
++        "topics",
++        "add",
++        "T",
++        "--keywords",
++        "review",
++        "--kinds",
++        "regulator, news",
++        "--by",
++        "ak",
++    )
++    assert code == 0
+diff --git a/tests/test_signal_feedview.py b/tests/test_signal_feedview.py
+new file mode 100644
+index 0000000..d705ef2
+--- /dev/null
++++ b/tests/test_signal_feedview.py
+@@ -0,0 +1,183 @@
++import tempfile
++from contextlib import contextmanager
++from datetime import UTC, datetime, timedelta
++from pathlib import Path
++
++import pytest
++from hypothesis import HealthCheck, given, settings
++from hypothesis import strategies as st
++
++from deploy_workflow.signal.feeds import Entry
++from deploy_workflow.signal.feedview import Page, ViewError, feed, new_count, save, unsave
++from deploy_workflow.signal.store import add_story, open_db, propose_source, set_source_state
++from deploy_workflow.signal.topics import add_topic, follow
++
++FETCHED = datetime(2026, 11, 13, 9, 40, tzinfo=UTC)
++LAST = datetime(2026, 11, 13, 9, 35, tzinfo=UTC)
++
++
++def build_feed_db(root: Path):
++    """Two sources, 35 regulator stories one minute apart, a newer wire story, one link fold."""
++    db = open_db(root)
++    for name, kind, url in (
++        ("Authority", "regulator", "https://a.org/f"),
++        ("Wire", "news", "https://w.org/f"),
++    ):
++        set_source_state(db, propose_source(db, name, kind, url, "x"), "approved")
++    for n in range(1, 36):
++        entry = Entry(
++            f"Story {n:02d}",
++            f"https://a.org/{n}",
++            LAST - timedelta(minutes=35 - n),
++            f"Summary {n}",
++        )
++        add_story(db, 1, entry, FETCHED)
++    # Same link as source 1's Story 35: a link fold (titles under four words never fold by title).
++    same_link = Entry("Story 35", "https://a.org/35", LAST, "Summary 35")
++    assert add_story(db, 2, same_link, FETCHED) == "duplicate"
++    wire = Entry(
++        "Wire piece on remedy", "https://w.org/1", LAST + timedelta(minutes=1), "About a remedy"
++    )
++    add_story(db, 2, wire, FETCHED)
++    add_topic(db, "Remedy", ["remedy"], [], "x")
++    return db
++
++
++@pytest.fixture
++def db_feed(tmp_path):
++    db = build_feed_db(tmp_path)
++    yield db
++    db.close()
++
++
++@contextmanager
++def feed_db():
++    with tempfile.TemporaryDirectory() as folder:
++        db = build_feed_db(Path(folder))
++        try:
++            yield db
++        finally:
++            db.close()
++
++
++def test_latest_pages_by_30_newest_first(db_feed):
++    first = feed(db_feed, "ak", "latest")
++    assert len(first.cards) == 30 and first.cards[0].title == "Wire piece on remedy"
++    assert first.cards[1].title == "Story 35" and first.cards[1].other_sources == 1
++    second = feed(db_feed, "ak", "latest", before=first.next_before)
++    assert [c.title for c in second.cards] == [f"Story {n:02d}" for n in range(6, 0, -1)]
++    assert second.next_before is None
++
++
++def test_kind_filter_and_card_fields(db_feed):
++    page = feed(db_feed, "ak", "latest", kind="news")
++    (card,) = page.cards
++    assert (card.source, card.kind, card.published_at, card.saved, card.topics) == (
++        "Wire",
++        "news",
++        "2026-11-13T09:36:00+00:00",
++        False,
++        ("Remedy",),
++    )
++
++
++def test_foryou_is_followed_topics_only(db_feed):
++    assert feed(db_feed, "ak", "foryou").cards == ()
++    follow(db_feed, "ak", 1)
++    assert [c.title for c in feed(db_feed, "ak", "foryou").cards] == ["Wire piece on remedy"]
++    assert feed(db_feed, "ml", "foryou").cards == ()
++
++
++def test_topic_view_and_unknown_topic(db_feed):
++    assert len(feed(db_feed, "ak", "topic:1").cards) == 1
++    with pytest.raises(ViewError):
++        feed(db_feed, "ak", "topic:99")
++
++
++def test_save_is_personal_idempotent_and_listed(db_feed):
++    save(db_feed, "ak", 5)
++    save(db_feed, "ak", 5)
++    assert [c.id for c in feed(db_feed, "ak", "saved").cards] == [5]
++    assert feed(db_feed, "ml", "saved").cards == ()
++    before = "2026-11-13T09:06:00+00:00|6"
++    assert next(c for c in feed(db_feed, "ak", "latest", before=before).cards if c.id == 5).saved
++    unsave(db_feed, "ak", 5)
++    unsave(db_feed, "ak", 5)
++    assert feed(db_feed, "ak", "saved").cards == ()
++    with pytest.raises(ViewError):
++        save(db_feed, "ak", 9999)
++
++
++def test_search_matches_all_terms(db_feed):
++    found = feed(db_feed, "ak", "latest", query="wire remedy").cards
++    assert [c.title for c in found] == ["Wire piece on remedy"]
++    assert feed(db_feed, "ak", "latest", query="wire absent").cards == ()
++
++
++@pytest.mark.parametrize(
++    "query", ['"', 'a"b', "*", "NEAR", "x AND", "-", "(", "title:x", "\x00", "ß" * 300]
++)
++def test_search_text_is_never_query_syntax(db_feed, query):
++    feed(db_feed, "ak", "latest", query=query)  # must not raise
++
++
++@settings(suppress_health_check=[HealthCheck.too_slow], deadline=None, max_examples=50)
++@given(st.text(max_size=200))
++def test_any_search_text_returns_a_page(query):
++    with feed_db() as db:
++        assert isinstance(feed(db, "ak", "latest", query=query), Page)
++
++
++@pytest.mark.parametrize(
++    "bad",
++    [
++        {"view": "top"},
++        {"view": "latest", "kind": "blog"},
++        {"view": "latest", "before": "x"},
++        {"view": "topic:abc"},
++    ],
++)
++def test_bad_requests_raise_view_error(db_feed, bad):
++    with pytest.raises(ViewError):
++        feed(db_feed, "ak", **bad)
++
++
++def test_new_count(db_feed):  # every fixture story fetched at 09:40Z
++    assert new_count(db_feed, "ak", "latest", "2026-11-13T09:39:00+00:00") == 36
++    assert new_count(db_feed, "ak", "latest", "2026-11-13T09:40:00+00:00") == 0
++
++
++@pytest.mark.parametrize(
++    "bad",
++    [
++        {"view": "topic:99999999999999999999"},
++        {"view": "latest", "before": "2026-11-13T09:00:00+00:00|99999999999999999999"},
++        {"view": "latest", "before": "2026-11-13T09:00:00|5"},
++    ],
++)
++def test_oversized_ids_and_zoneless_cursor_raise_view_error(db_feed, bad):
++    with pytest.raises(ViewError):
++        feed(db_feed, "ak", **bad)
++
++
++def test_new_count_compares_instants_not_text(db_feed):
++    assert new_count(db_feed, "ak", "latest", "2026-11-13T04:40:00-05:00") == 0
++
++
++@pytest.mark.parametrize("since", ["garbage", "", "2026-11-13T09:39:00"])
++def test_new_count_refuses_unparseable_or_zoneless_since(db_feed, since):
++    with pytest.raises(ViewError):
++        new_count(db_feed, "ak", "latest", since)
++
++
++def test_ids_of_thousands_of_digits_raise_view_error(db_feed):
++    with pytest.raises(ViewError):
++        feed(db_feed, "ak", "topic:" + "9" * 5000)
++    with pytest.raises(ViewError):
++        feed(db_feed, "ak", "latest", before="2026-11-13T09:00:00+00:00|" + "9" * 5000)
++
++
++@pytest.mark.parametrize("since", ["9999-12-31T23:59:59-23:59", "0001-01-01T00:00:00+23:59"])
++def test_times_that_overflow_utc_raise_view_error(db_feed, since):
++    with pytest.raises(ViewError):
++        new_count(db_feed, "ak", "latest", since)
+diff --git a/tests/test_signal_fold.py b/tests/test_signal_fold.py
+new file mode 100644
+index 0000000..37595b1
+--- /dev/null
++++ b/tests/test_signal_fold.py
+@@ -0,0 +1,128 @@
++from __future__ import annotations
++
++import sqlite3
++from datetime import UTC, datetime, timedelta
++from pathlib import Path
++
++import pytest
++from hypothesis import given
++from hypothesis import strategies as st
++
++from deploy_workflow.signal.feeds import Entry
++from deploy_workflow.signal.fold import link_key, title_key
++from deploy_workflow.signal.store import (
++    StoreError,
++    add_story,
++    open_db,
++    propose_source,
++    set_source_state,
++)
++
++
++@pytest.fixture
++def db2(tmp_path: Path) -> sqlite3.Connection:
++    db = open_db(tmp_path)
++    for n in (1, 2):
++        sid = propose_source(db, f"S{n}", "news", f"https://s{n}.example/feed", "tester")
++        set_source_state(db, sid, "approved")
++    return db
++
++
++@pytest.mark.parametrize(
++    "a,b",
++    [
++        ("https://www.Example.org/news/1/", "http://example.org/news/1"),
++        ("https://example.org/n?id=7&utm_source=x&fbclid=y", "https://example.org/n?id=7"),
++        ("https://example.org/n?b=2&a=1#top", "https://example.org/n?a=1&b=2"),
++    ],
++)
++def test_link_key_equates(a: str, b: str) -> None:
++    assert link_key(a) == link_key(b)
++
++
++def test_link_key_keeps_meaningful_query() -> None:
++    assert link_key("https://example.org/n?id=7") != link_key("https://example.org/n?id=8")
++
++
++def test_title_key() -> None:
++    got = title_key("  Authority opens  in-depth review — Northwave! ")
++    assert got == "authority opens in depth review northwave"
++
++
++@given(st.text())
++def test_title_key_is_idempotent(t: str) -> None:
++    assert title_key(title_key(t)) == title_key(t)
++
++
++def test_same_link_from_two_sources_folds(db2: sqlite3.Connection) -> None:
++    t = datetime(2026, 11, 13, 9, tzinfo=UTC)
++    first = Entry("A long enough headline here", "https://e.org/1", t, "")
++    second = Entry("Different words entirely now", "https://www.e.org/1/", t, "")
++    assert add_story(db2, 1, first, t) == "new"
++    assert add_story(db2, 2, second, t) == "duplicate"
++    assert db2.execute("SELECT count(*) FROM stories").fetchone()[0] == 1
++    assert db2.execute("SELECT count(*) FROM story_duplicates").fetchone()[0] == 1
++
++
++def test_same_title_within_48_hours_folds_and_after_does_not(db2: sqlite3.Connection) -> None:
++    t = datetime(2026, 11, 13, 9, tzinfo=UTC)
++    add_story(db2, 1, Entry("Authority opens in-depth review", "https://a.org/1", t, ""), t)
++    near, far = t + timedelta(hours=47), t + timedelta(hours=49)
++    e_near = Entry("Authority opens in depth review", "https://b.org/9", near, "")
++    e_far = Entry("Authority opens in depth review", "https://b.org/10", far, "")
++    assert add_story(db2, 2, e_near, near) == "duplicate"
++    assert add_story(db2, 2, e_far, far) == "new"
++
++
++def test_short_generic_titles_do_not_fold(db2: sqlite3.Connection) -> None:
++    t = datetime(2026, 11, 13, 9, tzinfo=UTC)
++    add_story(db2, 1, Entry("Press release", "https://a.org/1", t, ""), t)
++    assert add_story(db2, 2, Entry("Press release", "https://b.org/1", t, ""), t) == "new"
++
++
++def test_same_source_same_link_is_seen_and_writes_nothing(db2: sqlite3.Connection) -> None:
++    t = datetime(2026, 11, 13, 9, tzinfo=UTC)
++    e = Entry("A long enough headline here", "https://e.org/1", t, "")
++    add_story(db2, 1, e, t)
++    assert add_story(db2, 1, e, t) == "seen"
++    assert db2.execute("SELECT count(*) FROM story_duplicates").fetchone()[0] == 0
++
++
++def test_missing_or_future_date_becomes_fetch_time(db2: sqlite3.Connection) -> None:
++    now = datetime(2026, 11, 13, 9, tzinfo=UTC)
++    add_story(db2, 1, Entry("No date on this story", "https://e.org/1", None, ""), now)
++    future = Entry("Future date on this story", "https://e.org/2", now + timedelta(days=400), "")
++    add_story(db2, 1, future, now)
++    got = [r[0] for r in db2.execute("SELECT published_at FROM stories ORDER BY id")]
++    assert got == [now.isoformat(), now.isoformat()]
++
++
++def test_same_source_same_title_different_links_do_not_fold(db2: sqlite3.Connection) -> None:
++    t = datetime(2026, 11, 13, 9, tzinfo=UTC)
++    first = Entry("Town and Country Planning notice", "https://a.org/1", t, "")
++    second = Entry("Town and Country Planning notice", "https://a.org/2", t, "")
++    other = Entry("Town and Country Planning notice", "https://b.org/1", t, "")
++    assert add_story(db2, 1, first, t) == "new"
++    assert add_story(db2, 1, second, t) == "new"
++    assert add_story(db2, 2, other, t) == "duplicate"
++
++
++def test_naive_published_time_is_a_store_error(db2: sqlite3.Connection) -> None:
++    t = datetime(2026, 11, 13, 9, tzinfo=UTC)
++    entry = Entry("A long enough headline here", "https://e.org/1", datetime(2026, 11, 13, 9), "")
++    with pytest.raises(StoreError, match="timezone"):
++        add_story(db2, 1, entry, t)
++    assert db2.execute("SELECT count(*) FROM stories").fetchone()[0] == 0
++
++
++def test_folded_undated_entry_stays_folded_on_later_passes(db2: sqlite3.Connection) -> None:
++    t = datetime(2026, 11, 13, 9, tzinfo=UTC)
++    title = "Authority opens in-depth review of Northwave"
++    add_story(db2, 1, Entry(title, "https://a.org/1", t, ""), t)
++    undated = Entry(title, "https://b.org/9", None, "")
++    assert add_story(db2, 2, undated, t) == "duplicate"
++    for hours in (1, 47, 49, 72):
++        assert add_story(db2, 2, undated, t + timedelta(hours=hours)) == "seen"
++    assert db2.execute("SELECT count(*) FROM stories").fetchone()[0] == 1
++    row = db2.execute("SELECT link_key, published_at FROM story_duplicates").fetchone()
++    assert (row["link_key"], row["published_at"]) == ("b.org/9", t.isoformat())
+diff --git a/tests/test_signal_identity.py b/tests/test_signal_identity.py
+new file mode 100644
+index 0000000..2bd1854
+--- /dev/null
++++ b/tests/test_signal_identity.py
+@@ -0,0 +1,114 @@
++"""Tests for the Signal display-name identity seam."""
++
++from __future__ import annotations
++
++import sqlite3
++import tempfile
++from collections.abc import Iterator
++from contextlib import contextmanager
++from pathlib import Path
++
++import pytest
++from hypothesis import given, settings
++from hypothesis import strategies as st
++
++from deploy_workflow.signal.identity import (
++    IdentityError,
++    User,
++    clean_name,
++    cookie_for,
++    current_user,
++)
++from deploy_workflow.signal.store import add_user, open_db
++
++
++@pytest.fixture
++def db(tmp_path: Path) -> Iterator[sqlite3.Connection]:
++    conn = open_db(tmp_path)
++    yield conn
++    conn.close()
++
++
++@contextmanager
++def fresh_db() -> Iterator[sqlite3.Connection]:
++    with tempfile.TemporaryDirectory() as tmp:
++        conn = open_db(Path(tmp))
++        try:
++            yield conn
++        finally:
++            conn.close()
++
++
++@pytest.mark.parametrize(
++    "raw,want",
++    [
++        ("  A.  Kovac ", "A. Kovac"),
++        ("A\tK\n", "A K"),
++        ("x\u200by\x00z", "xyz"),
++        ("<b>Eve</b>", "<b>Eve</b>"),
++        ("é" * 500, "é" * 60),
++        ("é", "é"),
++    ],
++)
++def test_clean_name(raw: str, want: str) -> None:
++    assert clean_name(raw) == want
++
++
++@pytest.mark.parametrize("raw", ["", "   ", "\x00\u200b", "\n\t"])
++def test_empty_names_are_refused(raw: str) -> None:
++    with pytest.raises(IdentityError):
++        clean_name(raw)
++
++
++def test_cookie_round_trip_and_role(db: sqlite3.Connection) -> None:
++    add_user(db, "A. Kovac", "writer")
++    header = cookie_for("A. Kovac").split(";")[0]
++    assert current_user(db, header) == User("A. Kovac", "writer")
++    assert current_user(db, cookie_for("Nobody").split(";")[0]) == User("Nobody", "reader")
++    assert current_user(db, None) is None and current_user(db, "other=1") is None
++    assert current_user(db, "signal_name=%00%20") is None
++
++
++def test_cookie_attributes() -> None:
++    assert cookie_for("A; B").startswith("signal_name=A%3B%20B; ")
++    assert all(
++        part in cookie_for("x")
++        for part in ("Path=/", "SameSite=Strict", "HttpOnly", "Max-Age=31536000")
++    )
++
++
++def test_clean_name_drops_invisible_characters_before_composing() -> None:
++    raw = "e\u200b\u0301"
++    assert clean_name(raw) == "é"
++    assert clean_name(clean_name(raw)) == clean_name(raw)
++
++
++def test_lone_surrogate_is_dropped(db: sqlite3.Connection) -> None:
++    assert clean_name("Eve\ud800") == "Eve"
++    assert cookie_for(clean_name("Eve\ud800")).startswith("signal_name=Eve; ")
++    assert current_user(db, "signal_name=Eve\ud800") == User("Eve", "reader")
++
++
++def test_quoted_cookie_value_loses_one_pair_of_quotes(db: sqlite3.Connection) -> None:
++    assert current_user(db, 'signal_name="Al"') == User("Al", "reader")
++
++
++@settings(deadline=None, max_examples=100)
++@given(st.text(max_size=200))
++def test_clean_name_is_stable_through_the_cookie(raw: str) -> None:
++    try:
++        name = clean_name(raw)
++    except IdentityError:
++        return
++    assert clean_name(name) == name
++    with fresh_db() as db:
++        user = current_user(db, cookie_for(name).split(";")[0])
++    assert user is not None and user.name == name
++
++
++@settings(deadline=None, max_examples=50)
++@given(st.text(max_size=300))
++def test_any_cookie_header_is_safe(header: str) -> None:
++    with fresh_db() as db:
++        user = current_user(db, header)
++        assert user is None or (0 < len(user.name) <= 60 and user.role == "reader")
+diff --git a/tests/test_signal_ingest.py b/tests/test_signal_ingest.py
+new file mode 100644
+index 0000000..c2d5403
+--- /dev/null
++++ b/tests/test_signal_ingest.py
+@@ -0,0 +1,139 @@
++from datetime import UTC, datetime, timedelta
++
++import pytest
++from test_signal_feeds import RSS
++
++from deploy_workflow.signal.fetch import Fetched, FetchRefused
++from deploy_workflow.signal.ingest import health, run_due
++from deploy_workflow.signal.store import open_db, propose_source, set_source_state
++
++NOW = datetime(2026, 11, 13, 9, tzinfo=UTC)
++
++
++@pytest.fixture
++def db(tmp_path):
++    return open_db(tmp_path)
++
++
++@pytest.fixture
++def db_a(db):
++    a = propose_source(db, "A", "news", "https://a.org/f", "x")
++    set_source_state(db, a, "approved")
++    return db
++
++
++def recorded(body, etag='"v1"'):
++    calls = []
++
++    def fn(url, etag_in, modified_in):
++        calls.append((url, etag_in, modified_in))
++        return Fetched(body, etag, None)
++
++    fn.calls = calls
++    return fn
++
++
++def test_only_approved_sources_are_fetched_with_recorded_feed(db):
++    a = propose_source(db, "A", "news", "https://a.org/f", "x")
++    set_source_state(db, a, "approved")
++    propose_source(db, "B", "news", "https://b.org/f", "x")  # stays proposed
++    p = propose_source(db, "P", "news", "https://p.org/f", "x")
++    set_source_state(db, p, "paused")
++    fn = recorded(RSS)
++    assert run_due(db, NOW, fn) == [(a, True, "2 new")]
++    assert [c[0] for c in fn.calls] == ["https://a.org/f"]
++
++
++def test_source_is_not_checked_again_within_600_seconds_with_recorded_feed(db_a):
++    fn = recorded(RSS)
++    run_due(db_a, NOW, fn)
++    assert run_due(db_a, NOW + timedelta(seconds=599), fn) == []
++    assert len(run_due(db_a, NOW + timedelta(seconds=600), fn)) == 1
++
++
++def test_second_pass_sends_validators_and_adds_nothing_with_recorded_feed(db_a):
++    fn = recorded(RSS)
++    run_due(db_a, NOW, fn)
++    assert run_due(db_a, NOW + timedelta(hours=1), fn)[0][2] == "0 new"
++    assert fn.calls[1][1] == '"v1"'
++    assert db_a.execute("SELECT count(*) FROM stories").fetchone()[0] == 2
++    assert db_a.execute("SELECT count(*) FROM story_duplicates").fetchone()[0] == 0
++
++
++def test_failing_source_is_recorded_and_others_still_run_with_recorded_feed(db):
++    bad = propose_source(db, "Bad", "news", "https://bad.org/f", "x")
++    set_source_state(db, bad, "approved")
++    good = propose_source(db, "Good", "news", "https://good.org/f", "x")
++    set_source_state(db, good, "approved")
++
++    def fn(url, e, m):
++        if "bad" in url:
++            raise FetchRefused("feed is larger than 2 MB")
++        return Fetched(RSS, None, None)
++
++    assert run_due(db, NOW, fn) == [(bad, False, "feed is larger than 2 MB"), (good, True, "2 new")]
++    assert health(db, bad, NOW).state == "failing"
++    assert health(db, bad, NOW).reason == "feed is larger than 2 MB"
++
++
++def test_unparseable_feed_is_failing_with_the_parser_reason_with_recorded_feed(db_a):
++    run_due(db_a, NOW, recorded(b"not xml"))
++    assert health(db_a, 1, NOW).state == "failing"
++    assert health(db_a, 1, NOW).reason
++
++
++def test_an_unexpected_error_is_not_swallowed_with_recorded_feed(db_a):
++    def fn(url, e, m):
++        raise RuntimeError("bug")
++
++    with pytest.raises(RuntimeError):
++        run_due(db_a, NOW, fn)
++    assert health(db_a, 1, NOW).state == "never checked"
++
++
++def test_not_modified_is_ok_and_keeps_validators_with_recorded_feed(db_a):
++    run_due(db_a, NOW, recorded(RSS))
++    out = run_due(db_a, NOW + timedelta(hours=1), lambda u, e, m: Fetched(None, None, None))
++    assert out == [(1, True, "not modified")]
++    seen = []
++
++    def fn(u, e, m):
++        seen.append(e)
++        return Fetched(RSS, e, None)
++
++    run_due(db_a, NOW + timedelta(hours=2), fn)
++    assert seen == ['"v1"']
++
++
++def test_health_states_and_weekly_counts_with_recorded_feed(db_a):
++    assert health(db_a, 1, NOW).state == "never checked"
++    run_due(db_a, NOW, recorded(RSS))  # one item dated 13 Nov 08:00Z, one undated -> NOW
++    h = health(db_a, 1, NOW)
++    assert (h.state, h.per_week) == ("healthy", (0, 0, 0, 0, 0, 2))
++    later = NOW + timedelta(days=8)
++    run_due(db_a, later, recorded(RSS))
++    assert health(db_a, 1, later).state == "quiet"
++    assert health(db_a, 1, later).per_week == (0, 0, 0, 0, 2, 0)
++
++
++def test_source_whose_items_all_fold_is_healthy_with_its_items(db):
++    body = (
++        b'<rss version="2.0"><channel><item><title>Case 1 merger inquiry opened today</title>'
++        b"<link>https://r.example.org/cases/1</link>"
++        b"<pubDate>Fri, 13 Nov 2026 08:00:00 +0000</pubDate></item></channel></rss>"
++    )
++    for name in ("cases", "news"):
++        sid = propose_source(db, name, "regulator", f"https://r.example.org/{name}.rss", "x")
++        set_source_state(db, sid, "approved")
++    run_due(db, NOW, recorded(body))
++    first, second = health(db, 1, NOW), health(db, 2, NOW)
++    assert db.execute("SELECT count(*) FROM story_duplicates").fetchone()[0] == 1
++    assert second.state == "healthy"
++    assert second.last_item == datetime(2026, 11, 13, 8, tzinfo=UTC)
++    assert second.per_week == first.per_week == (0, 0, 0, 0, 0, 1)
++
++
++def test_story_exactly_seven_days_old_is_in_the_previous_week():
++    from deploy_workflow.signal.ingest import _per_week
++
++    assert _per_week([NOW - timedelta(days=7)], NOW) == (0, 0, 0, 0, 1, 0)
+diff --git a/tests/test_signal_service.py b/tests/test_signal_service.py
+new file mode 100644
+index 0000000..9d87fed
+--- /dev/null
++++ b/tests/test_signal_service.py
+@@ -0,0 +1,522 @@
++"""Signal's HTTP service, run for real on a loopback port over a seeded store.
++
++Every request is hostile input: these tests pin the host and origin checks, the static allowlist,
++the body limits, the display-name rule and that the ingest loop survives a failing pass. Tests whose
++fetch is replaced say so in their names; nothing here reaches beyond loopback.
++"""
++
++from __future__ import annotations
++
++import http.client
++import json
++import logging
++import socket
++import sqlite3
++import threading
++import time
++import urllib.parse
++from collections.abc import Iterator
++from contextlib import contextmanager
++from datetime import UTC, datetime, timedelta
++from http.server import ThreadingHTTPServer
++from pathlib import Path
++from typing import Any
++
++import pytest
++from test_signal_feeds import RSS
++from test_signal_feedview import build_feed_db
++
++from deploy_workflow.signal import service
++from deploy_workflow.signal.cli import main
++from deploy_workflow.signal.feeds import Entry
++from deploy_workflow.signal.fetch import Fetched, FetchRefused
++from deploy_workflow.signal.service import Loop, make_server
++from deploy_workflow.signal.store import add_story, open_db, propose_source, set_source_state
++
++NOW = datetime(2026, 11, 13, 10, 0, tzinfo=UTC)
++SAME = object()  # "the page's own origin", the default for a request that is not a GET
++
++
++class Live:
++    """A server on a thread and the helper that talks to it."""
++
++    def __init__(self, server: ThreadingHTTPServer) -> None:
++        self.server = server
++        self.port = server.server_address[1]
++        self.thread = threading.Thread(
++            target=server.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True
++        )
++        self.thread.start()
++
++    def close(self) -> None:
++        self.server.shutdown()
++        self.server.server_close()
++        self.thread.join(timeout=10)
++
++    def call(self, method: str, path: str, **request: Any) -> tuple[int, Any, Any]:
++        """Keywords: body (JSON object), raw (bytes), origin (default: the page's own; None for
++        none; ``{port}`` is filled in), cookie, host, headers."""
++        sent = {"Host": request.get("host") or f"127.0.0.1:{self.port}"}
++        origin = request.get("origin", SAME)
++        if origin is SAME:
++            origin = f"http://127.0.0.1:{self.port}"
++        if origin is not None and method != "GET":
++            sent["Origin"] = str(origin).replace("{port}", str(self.port))
++        if request.get("cookie"):
++            sent["Cookie"] = request["cookie"]
++        sent.update(request.get("headers") or {})
++        body, raw = request.get("body"), request.get("raw")
++        data = raw if raw is not None else (json.dumps(body).encode() if body is not None else None)
++        connection = http.client.HTTPConnection("127.0.0.1", self.port, timeout=20)
++        try:
++            connection.request(method, path, body=data, headers=sent)
++            response = connection.getresponse()
++            text = response.read().decode("utf-8", errors="replace")
++            kind = response.getheader("Content-Type") or ""
++            return response.status, response.headers, json.loads(text) if "json" in kind else text
++        finally:
++            connection.close()
++
++
++@pytest.fixture
++def svc(tmp_path: Path) -> Iterator[Live]:
++    build_feed_db(tmp_path).close()
++    live = Live(make_server(tmp_path, "127.0.0.1", 0))
++    yield live
++    live.close()
++
++
++@pytest.fixture
++def cookie() -> str:
++    return "signal_name=Reader"
++
++
++def _recorded_feed_fn() -> Any:
++    calls: list[str] = []
++
++    def fetch(url: str, etag: str | None, modified: str | None) -> Fetched:
++        calls.append(url)
++        if len(calls) == 1:
++            raise RuntimeError("the feed host fell over")
++        return Fetched(RSS, None, None)
++
++    return fetch
++
++
++@pytest.fixture
++def svc_with_loop(tmp_path: Path) -> Iterator[tuple[Loop, Any]]:
++    db = open_db(tmp_path)
++    set_source_state(
++        db, propose_source(db, "Authority", "regulator", "https://a.org/f", "x"), "approved"
++    )
++    add_story(db, 1, Entry("Story one", "https://a.org/1", NOW, "Summary"), NOW)
++    db.close()
++    loop = Loop(tmp_path, fetch_fn=_recorded_feed_fn())
++    live = Live(make_server(tmp_path, "127.0.0.1", 0, loop=loop))
++    yield loop, live.call
++    live.close()
++
++
++@contextmanager
++def pass_in_progress(loop: Loop) -> Iterator[None]:
++    """Hold one pass inside its fetch (a recorded feed behind an Event) while the body runs."""
++    entered, release = threading.Event(), threading.Event()
++
++    def blocked(url: str, etag: str | None, modified: str | None) -> Fetched:
++        entered.set()
++        assert release.wait(timeout=20)
++        return Fetched(RSS, None, None)
++
++    loop.fetch_fn = blocked
++    worker = threading.Thread(target=loop.run_once, args=(NOW,))
++    worker.start()
++    try:
++        assert entered.wait(timeout=20)
++        yield
++    finally:
++        release.set()
++        worker.join(timeout=20)
++    assert not worker.is_alive()
++
++
++def test_page_and_static_files_with_strict_policy(svc):
++    status, headers, _ = svc.call("GET", "/")
++    assert status == 200 and "script-src 'self'" in headers["Content-Security-Policy"]
++    assert "'unsafe-inline'" not in headers["Content-Security-Policy"]
++    assert (
++        headers["X-Content-Type-Options"] == "nosniff"
++        and headers["Cross-Origin-Resource-Policy"] == "same-origin"
++    )
++    assert svc.call("GET", "/static/signal.js")[0] == 200
++    for path in (
++        "/static/../store.py",
++        "/static/store.py",
++        "/static/%2e%2e/cli.py",
++        "/signal/signal.db",
++        "/static/",
++    ):
++        assert svc.call("GET", path)[0] == 404
++
++
++def test_page_policy_is_exact_and_on_every_response(svc):
++    policy = (
++        "default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; "
++        "img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'; "
++        "frame-ancestors 'none'"
++    )
++    for path in ("/", "/static/signal.css", "/api/me", "/nowhere"):
++        assert svc.call("GET", path)[1]["Content-Security-Policy"] == policy
++    assert svc.call("GET", "/")[2].lstrip().lower().startswith("<!doctype html>")
++
++
++def test_brand_files_are_served_with_their_types(svc):
++    for name, kind in (
++        ("brand.css", "text/css"),
++        ("fonts/RedHatText-Regular.woff2", "font/woff2"),
++        ("brand/symbol.svg", "image/svg+xml"),
++    ):
++        status, headers, _ = svc.call("GET", "/static/" + name)
++        assert status == 200 and headers["Content-Type"].startswith(kind)
++        assert headers["Cache-Control"] == "no-cache"
++    assert svc.call("GET", "/static/fonts/OFL.txt")[0] == 404
++    assert svc.call("GET", "/static/fonts/../brand.css")[0] == 404
++
++
++def test_a_missing_brand_file_fails_at_start(tmp_path, monkeypatch):
++    monkeypatch.setitem(service.STATIC, "gone.css", (tmp_path / "gone.css", "text/css"))
++    with pytest.raises(service.StartError, match="gone.css"):
++        make_server(tmp_path, "127.0.0.1", 0)
++
++
++def test_name_then_feed(svc):
++    assert svc.call("GET", "/api/feed?view=latest")[0] == 401
++    status, headers, _ = svc.call("POST", "/api/me", body={"name": "  A.  Kovac "})
++    assert status == 200 and headers["Set-Cookie"].startswith("signal_name=A.%20Kovac;")
++    cookie = headers["Set-Cookie"].split(";")[0]
++    assert svc.call("GET", "/api/me", cookie=cookie)[2] == {"name": "A. Kovac", "role": "reader"}
++    status, _, data = svc.call("GET", "/api/feed?view=latest", cookie=cookie)
++    assert status == 200 and len(data["cards"]) == 30 and data["next_before"]
++    assert set(data["cards"][0]) == {
++        "id",
++        "title",
++        "link",
++        "summary",
++        "source",
++        "kind",
++        "published_at",
++        "other_sources",
++        "saved",
++        "topics",
++    }
++    assert svc.call("GET", "/api/feed?view=top", cookie=cookie)[0] == 400
++    assert svc.call("POST", "/api/me", body={"name": "   "})[0] == 400
++
++
++def test_me_without_a_name_and_status_need_no_name(svc):
++    assert svc.call("GET", "/api/me")[2] == {"name": None}
++    assert svc.call("GET", "/api/status")[0] == 200
++
++
++def test_every_other_api_route_needs_a_name(svc):
++    for method, path in (
++        ("GET", "/api/feed?view=latest"),
++        ("GET", "/api/feed/new?view=latest&since=2026-11-13T00:00:00%2B00:00"),
++        ("POST", "/api/stories/5/save"),
++        ("DELETE", "/api/stories/5/save"),
++        ("GET", "/api/topics"),
++        ("POST", "/api/topics/1/follow"),
++        ("DELETE", "/api/topics/1/follow"),
++    ):
++        status, _, data = svc.call(method, path)
++        assert (status, data) == (401, {"error": "choose a display name first"}), path
++
++
++def test_paging_follows_the_cursor(svc, cookie):
++    first = svc.call("GET", "/api/feed?view=latest", cookie=cookie)[2]
++    second = svc.call(
++        "GET",
++        "/api/feed?view=latest&before=" + urllib.parse.quote(first["next_before"]),
++        cookie=cookie,
++    )[2]
++    assert len(second["cards"]) == 6 and second["next_before"] is None
++
++
++def test_feed_parameters(svc, cookie):
++    assert svc.call("GET", "/api/feed", cookie=cookie)[0] == 400
++    assert (
++        svc.call("GET", "/api/feed?view=latest&kind=news", cookie=cookie)[2]["cards"][0]["kind"]
++        == "news"
++    )
++    assert svc.call("GET", "/api/feed?view=latest&kind=bogus", cookie=cookie)[0] == 400
++    assert svc.call("GET", "/api/feed?view=latest&before=junk", cookie=cookie)[0] == 400
++    # a repeated parameter uses the first
++    assert svc.call("GET", "/api/feed?view=saved&view=latest", cookie=cookie)[2]["cards"] == []
++    assert svc.call("GET", "/api/feed?view=%ff", cookie=cookie)[0] == 400
++    assert svc.call("GET", "/api/feed?q=remedy&view=latest", cookie=cookie)[2]["cards"][0][
++        "title"
++    ].startswith("Wire")
++
++
++def test_new_count(svc, cookie):
++    since = urllib.parse.quote("2026-11-13T09:00:00+00:00")
++    assert svc.call("GET", f"/api/feed/new?view=latest&since={since}", cookie=cookie)[2] == {
++        "count": 36
++    }
++    assert svc.call("GET", "/api/feed/new?view=latest", cookie=cookie)[0] == 400
++    assert svc.call("GET", f"/api/feed/new?since={since}", cookie=cookie)[0] == 400
++    assert svc.call("GET", "/api/feed/new?view=latest&since=yesterday", cookie=cookie)[0] == 400
++
++
++def test_save_and_follow_round_trip(svc, cookie):
++    assert svc.call("POST", "/api/stories/5/save", cookie=cookie)[2] == {"saved": True}
++    assert [
++        c["id"] for c in svc.call("GET", "/api/feed?view=saved", cookie=cookie)[2]["cards"]
++    ] == [5]
++    assert svc.call("DELETE", "/api/stories/5/save", cookie=cookie)[2] == {"saved": False}
++    assert svc.call("POST", "/api/stories/9999/save", cookie=cookie)[0] == 404
++    assert svc.call("POST", "/api/topics/1/follow", cookie=cookie)[2] == {"following": True}
++    assert svc.call("GET", "/api/topics", cookie=cookie)[2][0]["following"] == 1
++    assert svc.call("POST", "/api/topics/99/follow", cookie=cookie)[0] == 404
++    assert svc.call("DELETE", "/api/topics/1/follow", cookie=cookie)[2] == {"following": False}
++    topic = svc.call("GET", "/api/topics", cookie=cookie)[2][0]
++    assert set(topic) == {"id", "name", "following", "stories"} and topic["following"] == 0
++
++
++@pytest.mark.parametrize("ident", ["abc", "-1", "5.0", "1" * 19, "%D9%A5", "5%20", ""])
++def test_ids_in_paths_are_ascii_digits_of_at_most_18(svc, cookie, ident):
++    assert svc.call("POST", f"/api/stories/{ident}/save", cookie=cookie)[0] == 404
++    assert svc.call("POST", f"/api/topics/{ident}/follow", cookie=cookie)[0] == 404
++
++
++def test_an_eighteen_digit_story_id_is_an_unknown_story(svc, cookie):
++    assert svc.call("POST", "/api/stories/" + "9" * 18 + "/save", cookie=cookie)[0] == 404
++
++
++@pytest.mark.parametrize(
++    "origin", [None, "http://evil.example", "https://127.0.0.1:{port}", "null"]
++)
++def test_a_write_from_another_origin_changes_nothing(svc, cookie, origin):
++    assert svc.call("POST", "/api/stories/5/save", cookie=cookie, origin=origin)[0] == 403
++    assert svc.call("POST", "/api/me", body={"name": "Eve"}, origin=origin)[0] == 403
++    assert svc.call("GET", "/api/feed?view=saved", cookie=cookie)[2]["cards"] == []
++
++
++def test_other_host_names_and_cross_site_reads_are_refused(svc, cookie):
++    assert svc.call("GET", "/", host="evil.example")[0] == 403
++    assert (
++        svc.call(
++            "GET", "/api/feed?view=latest", cookie=cookie, headers={"Sec-Fetch-Site": "cross-site"}
++        )[0]
++        == 403
++    )
++
++
++def test_host_rules_and_fetch_metadata(svc, cookie):
++    assert svc.call("GET", "/api/me", host=f"localhost:{svc.port}")[0] == 200
++    assert svc.call("GET", "/api/me", host="127.0.0.1")[0] == 403
++    assert svc.call("GET", "/api/me", host=f"evil.example:{svc.port}")[0] == 403
++    for site in ("same-origin", "none"):
++        assert svc.call("GET", "/api/me", headers={"Sec-Fetch-Site": site})[0] == 200
++    navigation = {
++        "Sec-Fetch-Site": "cross-site",
++        "Sec-Fetch-Mode": "navigate",
++        "Sec-Fetch-Dest": "document",
++    }
++    assert svc.call("GET", "/", headers=navigation)[0] == 200
++    assert svc.call("GET", "/api/me", headers=navigation)[0] == 200
++    assert svc.call("POST", "/api/stories/5/save", cookie=cookie, headers=navigation)[0] == 403
++    assert svc.call("GET", "/api/me", headers={"Origin": "http://evil.example"})[0] == 403
++
++
++def test_bodies_are_capped_and_must_be_json(svc):
++    assert svc.call("POST", "/api/me", raw=b"x" * (64 * 1024 + 1))[0] == 413
++    assert svc.call("POST", "/api/me", raw=b"{not json")[0] == 400
++    assert svc.call("POST", "/api/me", raw=b"[]")[0] == 400
++    assert svc.call("POST", "/api/me", body={"name": 5})[0] == 400
++
++
++def test_a_json_body_needs_content_length(svc):
++    connection = http.client.HTTPConnection("127.0.0.1", svc.port, timeout=20)
++    connection.putrequest("POST", "/api/me", skip_accept_encoding=True)
++    connection.putheader("Origin", f"http://127.0.0.1:{svc.port}")
++    connection.endheaders()
++    assert connection.getresponse().status == 411
++    connection.close()
++
++
++def test_search_text_cannot_break_the_api(svc, cookie):
++    for q in ['"', "*", "NEAR(", "%00", "a" * 5000]:
++        assert (
++            svc.call("GET", "/api/feed?view=latest&q=" + urllib.parse.quote(q), cookie=cookie)[0]
++            == 200
++        )
++
++
++def test_unknown_paths_and_methods(svc, cookie):
++    assert svc.call("GET", "/api/nothing", cookie=cookie)[0] == 404
++    assert svc.call("GET", "/nothing")[0] == 404
++    assert svc.call("DELETE", "/api/me", cookie=cookie)[0] == 405
++    assert svc.call("POST", "/api/feed?view=latest", cookie=cookie)[0] == 405
++    assert svc.call("PUT", "/api/me", cookie=cookie)[0] == 405
++    assert svc.call("POST", "/")[0] == 405
++    assert svc.call("GET", "/api/stories/5/save", cookie=cookie)[0] == 405
++
++
++def test_an_unexpected_failure_is_a_plain_500(svc, cookie, monkeypatch, caplog):
++    def boom(*args: object, **kwargs: object) -> None:
++        raise RuntimeError("secret-cause")
++
++    monkeypatch.setattr(service.feedview, "feed", boom)
++    status, _, data = svc.call("GET", "/api/feed?view=latest", cookie=cookie)
++    assert (status, data) == (500, {"error": "the service failed; see its log"})
++    assert "secret-cause" in caplog.text
++
++
++def test_the_service_serves_no_file_from_the_root(svc):
++    for path in ("/signal/signal.db", "/signal.db", "/static/signal.db", "/..%2fsignal/signal.db"):
++        assert svc.call("GET", path)[0] in (403, 404)
++
++
++def test_loop_pass_updates_status_and_survives_a_failing_pass_with_recorded_feed(svc_with_loop):
++    # one approved source; fetch replaced: first call raises RuntimeError, later calls RSS
++    loop, call = svc_with_loop
++    loop.run_once(NOW)
++    assert call("GET", "/api/status")[2]["loop_error"]  # the failure is visible
++    assert "fell over" not in call("GET", "/api/status")[2]["loop_error"]
++    loop.run_once(NOW + timedelta(seconds=60))
++    status = call("GET", "/api/status")[2]
++    assert status["loop_error"] is None and status["sources"] == {"approved": 1, "failing": 0}
++    assert status["last_pass_at"] == (NOW + timedelta(seconds=60)).isoformat()
++
++
++def test_a_save_during_a_pass_succeeds(svc_with_loop, cookie):
++    loop, call = svc_with_loop  # fetch replaced by one that blocks on an Event mid-pass
++    with pass_in_progress(loop):
++        assert call("POST", "/api/stories/1/save", cookie=cookie)[0] == 200
++
++
++def test_status_counts_a_failing_source_with_recorded_feed(svc_with_loop):
++    loop, call = svc_with_loop
++
++    def refused(url: str, etag: str | None, modified: str | None) -> Fetched:
++        raise FetchRefused("not a feed")
++
++    loop.fetch_fn = refused
++    loop.run_once(NOW)
++    assert call("GET", "/api/status")[2]["sources"] == {"approved": 1, "failing": 1}
++    assert call("GET", "/api/status")[2]["loop_error"] is None
++
++
++def test_a_wildcard_host_is_refused_at_start(tmp_path):
++    with pytest.raises(ValueError, match="own address"):
++        make_server(tmp_path, "0.0.0.0", 0)
++    assert not (tmp_path / "signal").exists()
++
++
++def test_wildcard_host_is_refused():
++    assert main(["--root", "x", "serve", "--host", "0.0.0.0"]) == 2
++
++
++def _raw(svc: Live, data: bytes) -> socket.socket:
++    sock = socket.create_connection(("127.0.0.1", svc.port), timeout=10)
++    sock.sendall(data)
++    return sock
++
++
++def _closed_within(sock: socket.socket, seconds: float) -> bool:
++    """True when the server closed the connection (EOF or reset) within ``seconds``."""
++    sock.settimeout(seconds)
++    try:
++        while sock.recv(4096):
++            pass
++    except (ConnectionResetError, BrokenPipeError):
++        return True
++    except TimeoutError:
++        return False
++    return True
++
++
++def test_a_trickling_connection_is_closed_at_the_deadline(svc, monkeypatch):
++    monkeypatch.setattr(service, "SOCKET_TIMEOUT", 0.5)
++    monkeypatch.setattr(service.Handler, "timeout", 5)  # per-read timeout longer than the deadline
++    host = f"127.0.0.1:{svc.port}"
++    sock = _raw(svc, f"GET /api/status HTTP/1.1\r\nHost: {host}\r\nX-Pad: ".encode())
++    stop = threading.Event()
++
++    def trickle() -> None:
++        while not stop.is_set():
++            try:
++                sock.sendall(b"a")
++            except OSError:
++                return
++            time.sleep(0.1)
++
++    thread = threading.Thread(target=trickle, daemon=True)
++    thread.start()
++    try:
++        assert _closed_within(sock, 4)
++    finally:
++        stop.set()
++        thread.join(timeout=5)
++        sock.close()
++    assert svc.call("GET", "/api/status")[0] == 200
++
++
++def test_one_address_has_a_share_of_the_connection_ceiling(svc, monkeypatch):
++    monkeypatch.setattr(service, "MAX_PER_ADDRESS", 3)
++    held = [_raw(svc, b"") for _ in range(3)]
++    try:
++        time.sleep(0.3)
++        extra = _raw(svc, b"")
++        assert _closed_within(extra, 3)
++        extra.close()
++        assert all(not _closed_within(sock, 0.3) for sock in held)
++    finally:
++        for sock in held:
++            sock.close()
++    time.sleep(0.3)
++    assert svc.call("GET", "/api/status")[0] == 200
++
++
++def test_a_short_body_is_a_refusal_not_a_traceback(svc, monkeypatch, caplog):
++    monkeypatch.setattr(service.Handler, "timeout", 1)
++    caplog.set_level(logging.INFO)
++    host = f"127.0.0.1:{svc.port}"
++    head = f"POST /api/me HTTP/1.1\r\nHost: {host}\r\nOrigin: http://{host}\r\n"
++    sock = _raw(svc, (head + 'Content-Length: 50\r\n\r\n{"na').encode())
++    sock.settimeout(10)
++    reply = sock.recv(4096)
++    sock.close()
++    time.sleep(0.2)
++    assert reply.split(b"\r\n")[0].split()[1] == b"400"
++    assert b"the request body did not arrive" in reply
++    assert not [record for record in caplog.records if record.exc_info]
++
++
++def test_an_http_09_request_line_gets_no_500(svc, caplog):
++    sock = _raw(svc, b"GET /api/me\r\n")
++    sock.settimeout(10)
++    reply = b""
++    while chunk := sock.recv(4096):
++        reply += chunk
++    sock.close()
++    time.sleep(0.2)
++    assert b"the service failed" not in reply and b" 500 " not in reply
++    assert not [record for record in caplog.records if record.exc_info]
++
++
++def test_a_save_waits_for_a_held_write_lock(svc_with_loop, cookie, tmp_path):
++    _, call = svc_with_loop
++    other = sqlite3.connect(
++        tmp_path / "signal" / "signal.db", isolation_level=None, check_same_thread=False
++    )
++    other.execute("BEGIN IMMEDIATE")
++    release = threading.Timer(0.5, lambda: other.execute("COMMIT"))
++    release.start()
++    try:
++        started = time.monotonic()
++        assert call("POST", "/api/stories/1/save", cookie=cookie)[0] == 200
++        assert time.monotonic() - started >= 0.3  # it did wait for the lock
++    finally:
++        release.join()
++        other.close()
+diff --git a/tests/test_signal_store.py b/tests/test_signal_store.py
+new file mode 100644
+index 0000000..31d0537
+--- /dev/null
++++ b/tests/test_signal_store.py
+@@ -0,0 +1,243 @@
++from __future__ import annotations
++
++import multiprocessing as mp
++import sqlite3
++from datetime import UTC, datetime
++from multiprocessing.queues import Queue
++from multiprocessing.synchronize import Barrier
++from pathlib import Path
++
++import pytest
++
++from deploy_workflow.signal.store import (
++    Check,
++    StoreError,
++    add_user,
++    last_check,
++    open_db,
++    propose_source,
++    record_check,
++    role_of,
++    set_source_state,
++    sources,
++)
++
++
++def test_open_db_creates_file_in_wal_mode(tmp_path: Path) -> None:
++    db = open_db(tmp_path)
++    assert (tmp_path / "signal" / "signal.db").is_file()
++    assert db.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
++    assert db.execute("PRAGMA foreign_keys").fetchone()[0] == 1
++
++
++def test_open_db_twice_keeps_data(tmp_path: Path) -> None:
++    add_user(open_db(tmp_path), "A. Kovac", "writer")
++    assert role_of(open_db(tmp_path), "A. Kovac") == "writer"
++
++
++def test_unknown_name_is_a_reader(tmp_path: Path) -> None:
++    assert role_of(open_db(tmp_path), "nobody") == "reader"
++
++
++@pytest.mark.parametrize("role", ["admin", "", "Writer"])
++def test_invalid_role_is_refused(tmp_path: Path, role: str) -> None:
++    with pytest.raises(StoreError):
++        add_user(open_db(tmp_path), "X", role)
++
++
++def test_proposed_source_is_not_approved(tmp_path: Path) -> None:
++    db = open_db(tmp_path)
++    sid = propose_source(db, "Authority", "regulator", "https://example.org/feed", "A. Kovac")
++    assert [r["id"] for r in sources(db, "proposed")] == [sid]
++    assert sources(db, "approved") == []
++    set_source_state(db, sid, "approved")
++    assert [r["id"] for r in sources(db, "approved")] == [sid]
++
++
++def test_same_url_cannot_be_proposed_twice(tmp_path: Path) -> None:
++    db = open_db(tmp_path)
++    propose_source(db, "A", "news", "https://example.org/feed", "x")
++    with pytest.raises(StoreError):
++        propose_source(db, "B", "news", "https://example.org/feed", "y")
++
++
++def test_fts_finds_a_story_by_title_word(tmp_path: Path) -> None:
++    db = open_db(tmp_path)
++    sid = propose_source(db, "A", "news", "https://example.org/feed", "x")
++    db.execute(
++        "INSERT INTO stories(source_id,title,link,link_key,title_key,published_at,fetched_at,"
++        "summary) VALUES(?,?,?,?,?,?,?,?)",
++        (
++            sid,
++            "Wholesale access remedy",
++            "https://e.org/1",
++            "e.org/1",
++            "wholesale access remedy",
++            "2026-11-13T09:00:00+00:00",
++            "2026-11-13T09:05:00+00:00",
++            "",
++        ),
++    )
++    hits = db.execute("SELECT rowid FROM stories_fts WHERE stories_fts MATCH 'remedy'").fetchall()
++    assert len(hits) == 1
++
++
++def test_invalid_kind_state_and_empty_name_are_refused(tmp_path: Path) -> None:
++    db = open_db(tmp_path)
++    with pytest.raises(StoreError):
++        propose_source(db, "A", "blog", "https://e.org/f", "x")
++    with pytest.raises(StoreError):
++        propose_source(db, " ", "news", "https://e.org/f", "x")
++    with pytest.raises(StoreError):
++        add_user(db, "", "reader")
++    sid = propose_source(db, "A", "news", "https://e.org/f", "x")
++    with pytest.raises(StoreError):
++        set_source_state(db, sid, "deleted")
++    with pytest.raises(StoreError):
++        sources(db, "deleted")
++    with pytest.raises(StoreError):
++        set_source_state(db, sid + 99, "approved")
++
++
++def test_duplicate_user_is_refused(tmp_path: Path) -> None:
++    db = open_db(tmp_path)
++    add_user(db, "A", "owner")
++    with pytest.raises(StoreError):
++        add_user(db, "A", "reader")
++
++
++def test_last_check_returns_latest_in_utc(tmp_path: Path) -> None:
++    db = open_db(tmp_path)
++    sid = propose_source(db, "A", "news", "https://e.org/f", "x")
++    assert last_check(db, sid) is None
++    t1 = datetime(2026, 11, 13, 9, 0, tzinfo=UTC)
++    t2 = datetime(2026, 11, 13, 10, 0, tzinfo=UTC)
++    record_check(db, sid, Check(t1, False, "timeout", None, None, 0))
++    record_check(db, sid, Check(t2, True, "", "etag1", "Mon", 3))
++    row = last_check(db, sid)
++    assert row is not None
++    assert row["at"] == "2026-11-13T10:00:00+00:00"
++    assert (row["ok"], row["etag"], row["modified"], row["new_stories"]) == (1, "etag1", "Mon", 3)
++
++
++def test_naive_check_time_is_refused(tmp_path: Path) -> None:
++    db = open_db(tmp_path)
++    sid = propose_source(db, "A", "news", "https://e.org/f", "x")
++    with pytest.raises(StoreError):
++        record_check(db, sid, Check(datetime(2026, 11, 13, 9, 0), True, "", None, None, 0))
++
++
++def _open_when_ready(root: str, barrier: Barrier, results: Queue[str]) -> None:
++    barrier.wait(timeout=20)
++    try:
++        db = open_db(Path(root))
++        version = db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0]
++        db.close()
++        results.put(f"ok {version}")
++    except (sqlite3.Error, StoreError) as exc:  # reported to the parent, which asserts on it
++        results.put(f"{type(exc).__name__}: {exc}")
++
++
++def test_concurrent_first_open_all_succeed(tmp_path: Path) -> None:
++    for trial in range(8):
++        root = tmp_path / str(trial)
++        barrier = mp.Barrier(4)
++        results = mp.Queue()
++        procs = [
++            mp.Process(target=_open_when_ready, args=(str(root), barrier, results))
++            for _ in range(4)
++        ]
++        for p in procs:
++            p.start()
++        got = [results.get(timeout=60) for _ in procs]
++        for p in procs:
++            p.join(30)
++        assert got == ["ok 2"] * 4
++
++
++def test_fts_follows_title_update_and_delete(tmp_path: Path) -> None:
++    db = open_db(tmp_path)
++    sid = propose_source(db, "A", "news", "https://e.org/f", "x")
++    sql = (
++        "INSERT INTO stories(source_id,title,link,link_key,title_key,published_at,fetched_at,"
++        "summary) VALUES(?,?,?,?,?,?,?,?)"
++    )
++    for n, title in enumerate(["alpha remedy", "beta ruling"]):
++        db.execute(
++            sql,
++            (
++                sid,
++                title,
++                f"l{n}",
++                f"k{n}",
++                title,
++                "2026-11-13T09:00:00+00:00",
++                "2026-11-13T09:00:00+00:00",
++                "",
++            ),
++        )
++
++    def hits(word: str) -> int:
++        q = "SELECT rowid FROM stories_fts WHERE stories_fts MATCH ?"
++        return len(db.execute(q, (word,)).fetchall())
++
++    db.execute("UPDATE stories SET title='gamma access' WHERE link_key='k0'")
++    assert (hits("alpha"), hits("gamma")) == (0, 1)
++    db.execute("DELETE FROM stories WHERE link_key='k1'")
++    assert hits("beta") == 0
++
++
++def test_link_first_seen_as_a_folded_duplicate_folds_again(tmp_path: Path) -> None:
++    from datetime import timedelta
++
++    from deploy_workflow.signal.feeds import Entry
++    from deploy_workflow.signal.store import add_story
++
++    db = open_db(tmp_path)
++    for n in (1, 2, 3):
++        sid = propose_source(db, f"S{n}", "news", f"https://s{n}.example/feed", "tester")
++        set_source_state(db, sid, "approved")
++    t = datetime(2026, 11, 13, 9, tzinfo=UTC)
++    title = "Authority opens in depth review of Northwave"
++    assert add_story(db, 1, Entry(title, "https://e.org/l1", t, ""), t) == "new"
++    later = t + timedelta(hours=2)
++    assert add_story(db, 2, Entry(title, "https://e.org/l2", later, ""), later) == "duplicate"
++    other = Entry("Completely different words appear now", "https://e.org/l2", later, "")
++    assert add_story(db, 3, other, later) == "duplicate"
++    assert db.execute("SELECT count(*) FROM stories").fetchone()[0] == 1
++    rows = db.execute("SELECT story_id FROM story_duplicates").fetchall()
++    assert [r["story_id"] for r in rows] == [1, 1]
++
++
++def test_story_duplicates_link_key_has_an_index(tmp_path: Path) -> None:
++    db = open_db(tmp_path)
++    plan = db.execute(
++        "EXPLAIN QUERY PLAN SELECT story_id FROM story_duplicates WHERE link_key = ?", ("k",)
++    ).fetchall()
++    assert any("idx_story_duplicates_link_key" in row["detail"] for row in plan)
++
++
++def test_a_storys_own_source_is_never_recorded_as_its_duplicate(tmp_path: Path) -> None:
++    from datetime import timedelta
++
++    from deploy_workflow.signal.feeds import Entry
++    from deploy_workflow.signal.store import add_story
++
++    db = open_db(tmp_path)
++    for n in (1, 2):
++        sid = propose_source(db, f"S{n}", "news", f"https://s{n}.example/feed", "tester")
++        set_source_state(db, sid, "approved")
++    t = datetime(2026, 11, 13, 9, tzinfo=UTC)
++    later = t + timedelta(hours=2)
++    title = "Authority opens in depth review of Northwave"
++    assert add_story(db, 1, Entry(title, "https://e.org/l1", t, ""), t) == "new"
++    assert add_story(db, 2, Entry(title, "https://e.org/l2", later, ""), later) == "duplicate"
++    again = Entry("Completely different words appear now", "https://e.org/l2", later, "")
++    assert add_story(db, 1, again, later) == "new"
++    assert db.execute("SELECT count(*) FROM stories").fetchone()[0] == 2
++    assert db.execute("SELECT count(*) FROM story_duplicates").fetchone()[0] == 1
++    own = db.execute(
++        "SELECT count(*) FROM story_duplicates d JOIN stories s ON s.id = d.story_id"
++        " WHERE d.duplicate_source_id = s.source_id"
++    ).fetchone()[0]
++    assert own == 0
+diff --git a/tests/test_signal_topics.py b/tests/test_signal_topics.py
+new file mode 100644
+index 0000000..536408a
+--- /dev/null
++++ b/tests/test_signal_topics.py
+@@ -0,0 +1,145 @@
++import tempfile
++from contextlib import contextmanager
++from datetime import UTC, datetime, timedelta
++from pathlib import Path
++
++import pytest
++import test_signal_ingest
++from hypothesis import given
++from hypothesis import strategies as st
++from test_signal_feeds import RSS
++from test_signal_ingest import NOW, recorded
++
++from deploy_workflow.signal.feeds import Entry
++from deploy_workflow.signal.ingest import run_due
++from deploy_workflow.signal.store import (
++    StoreError,
++    add_story,
++    get_meta,
++    open_db,
++    propose_source,
++)
++from deploy_workflow.signal.topics import (
++    add_topic,
++    follow,
++    list_topics,
++    match_story,
++    unfollow,
++)
++
++# Slice 1 fixtures, reused as they are (pytest registers them by this module's names).
++db = test_signal_ingest.db
++db_a = test_signal_ingest.db_a
++
++
++@contextmanager
++def fresh_db():
++    with tempfile.TemporaryDirectory() as folder:
++        db = open_db(Path(folder))
++        try:
++            yield db
++        finally:
++            db.close()
++
++
++@pytest.fixture
++def db_two_sources(tmp_path):
++    db = open_db(tmp_path)
++    propose_source(db, "Authority", "regulator", "https://a.org/f", "x")
++    propose_source(db, "Paper", "news", "https://b.org/f", "x")
++    return db
++
++
++def rows(db, sql, *params):
++    return [tuple(r) for r in db.execute(sql, params).fetchall()]
++
++
++def count(db, table):
++    return db.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
++
++
++def test_topic_matches_existing_and_later_stories(db_two_sources):
++    t0 = datetime(2026, 11, 13, 9, tzinfo=UTC)
++    add_story(
++        db_two_sources,
++        1,
++        Entry("Authority opens merger review", "https://a.org/1", t0, "wholesale access remedy"),
++        t0,
++    )
++    tid = add_topic(db_two_sources, "Competition", ["merger review", "remedy"], [], "ak")
++    assert rows(db_two_sources, "SELECT story_id FROM topic_stories WHERE topic_id=?", tid) == [
++        (1,)
++    ]
++    add_story(db_two_sources, 2, Entry("Operator plans merger", "https://b.org/1", t0, ""), t0)
++    assert match_story(db_two_sources, 2) == []
++    add_story(
++        db_two_sources, 2, Entry("Second MERGER REVIEW opened", "https://b.org/2", t0, ""), t0
++    )
++    assert match_story(db_two_sources, 3) == [tid]
++    assert match_story(db_two_sources, 3) == [tid]
++    assert count(db_two_sources, "topic_stories") == 2
++
++
++def test_topic_kind_filter(db_two_sources):
++    t0 = datetime(2026, 11, 13, 9, tzinfo=UTC)
++    tid = add_topic(db_two_sources, "Reg only", ["review"], ["regulator"], "ak")
++    add_story(db_two_sources, 2, Entry("News review of the year", "https://b.org/1", t0, ""), t0)
++    add_story(db_two_sources, 1, Entry("Regulator review opens", "https://a.org/1", t0, ""), t0)
++    assert match_story(db_two_sources, 1) == [] and match_story(db_two_sources, 2) == [tid]
++
++
++@pytest.mark.parametrize(
++    "keywords,kinds", [([], []), ([" "], []), (["x" * 61], []), (["ok"], ["blog"])]
++)
++def test_bad_topic_rules_are_refused(db_two_sources, keywords, kinds):
++    with pytest.raises(StoreError):
++        add_topic(db_two_sources, "T", keywords, kinds, "ak")
++
++
++@pytest.mark.parametrize("keyword", ['say "hello"', "a*", "NEAR", "x AND y", "-", "(", "col:on"])
++def test_keywords_with_query_syntax_are_plain_text(db_two_sources, keyword):
++    add_topic(db_two_sources, f"T {keyword}", [keyword], [], "ak")
++
++
++@given(st.text(min_size=1, max_size=60).filter(lambda s: s.strip()))
++def test_any_keyword_is_accepted_without_error(keyword):
++    with fresh_db() as db:
++        add_topic(db, "T", [keyword], [], "ak")
++
++
++def test_nul_in_a_keyword_is_plain_text_and_does_not_poison_matching(db_two_sources):
++    t0 = datetime(2026, 11, 13, 9, tzinfo=UTC)
++    add_topic(db_two_sources, "Nul", ["a\x00b"], [], "ak")
++    add_story(db_two_sources, 1, Entry("Authority review", "https://a.org/1", t0, ""), t0)
++    assert match_story(db_two_sources, 1) == []
++    add_topic(db_two_sources, "Nul again", ["a\x00b"], [], "ak")
++
++
++def test_follow_is_personal_and_idempotent(db_two_sources):
++    tid = add_topic(db_two_sources, "Competition", ["review"], [], "ak")
++    follow(db_two_sources, "ak", tid)
++    follow(db_two_sources, "ak", tid)
++    assert [(r["id"], r["following"]) for r in list_topics(db_two_sources, "ak")] == [(tid, 1)]
++    assert [(r["id"], r["following"]) for r in list_topics(db_two_sources, "ml")] == [(tid, 0)]
++    unfollow(db_two_sources, "ak", tid)
++    unfollow(db_two_sources, "ak", tid)
++    assert list_topics(db_two_sources, "ak")[0]["following"] == 0
++    with pytest.raises(StoreError):
++        follow(db_two_sources, "ak", 999)
++
++
++def test_pass_records_its_time_and_matches_new_stories_with_recorded_feed(db_a):
++    tid = add_topic(db_a, "Opens", ["opens review"], [], "ak")
++    assert tid == 1
++    run_due(db_a, NOW, recorded(RSS))
++    assert get_meta(db_a, "last_pass_at") == NOW.isoformat()
++    assert count(db_a, "topic_stories") == 1
++    run_due(db_a, NOW + timedelta(seconds=30), recorded(RSS))
++    assert get_meta(db_a, "last_pass_at") == (NOW + timedelta(seconds=30)).isoformat()
++
++
++def test_a_slice_1_database_gains_the_new_tables(tmp_path):
++    db = open_db(tmp_path)
++    assert db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0] == "2"
++    names = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
++    assert {"topics", "topic_stories", "topic_follows", "saves"} <= names
