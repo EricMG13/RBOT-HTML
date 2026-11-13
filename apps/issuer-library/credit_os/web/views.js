@@ -259,8 +259,8 @@ function bridgeChart(module,v) {
   const wide=!v.headless&&points.length>=WIDE_STEPS,width=wide?points.length*WIDE_STEP:660 /* a Forecast card numbers its bars, so its steps fit the card without a sideways scroll */,height=210,step=width/points.length,y=n=>height-(n-low)/((high-low)||1)*height;
   // A findings page's bars are not links (the chart's one trace control opens the drawer). A Forecast card prints each step once, in full: bars are numbered and one numbered list names them.
   const name=p=>p.label||cardPlain(module,v,p.row.cells[0]),mark=(p,inner)=>v.plain?`<g class="plot-point" role="img" aria-label="${esc(`${name(p)}, ${p.display??p.row.cells[v.amount]} ${v.unit}`)}"><title>${esc(name(p))}: ${esc(p.display??p.row.cells[v.amount])}</title>${inner}</g>`:`<a class="plot-point" href="${evidenceHref(module,p.row.line)}" data-evidence="${esc(`${module}:${p.row.line}`)}" aria-label="${esc(name(p))}, ${esc(p.display??p.row.cells[v.amount])} ${esc(v.unit)}. View source"><title>${esc(name(p))}: ${esc(p.display??p.row.cells[v.amount])}</title>${inner}</a>`;
-  const axis=(p,i)=>v.headless?[String(i+1)]:axisLines(name(p),step);
-  return `${chartIntro(module,v)}<div class="vector-chart${wide?' bridge-wide':''}"${wide?` role="region" tabindex="0" aria-label="${esc(v.title)}; scroll horizontally for every step"`:''}><svg${wide?` style="min-width:${Math.round((width+20)*WIDE_SCALE)}px"`:v.headless?` style="min-width:${points.length*56}px"`:''} viewBox="-5 -12 ${width+20} ${BRIDGE_HEIGHT}" role="group" aria-label="${esc(v.title)}.${v.plain?'':' Select a movement to inspect its source.'}"><line x1="0" y1="${y(0)}" x2="${width}" y2="${y(0)}" class="axis"/>${points.map((p,i)=>mark(p,`<rect class="${p.total?'total':p.amount<0?'outflow':'movement'}" x="${i*step+10}" y="${y(Math.max(p.start,p.end))}" width="${step-20}" height="${Math.max(1,Math.abs(y(p.end)-y(p.start)))}"/><text x="${i*step+step/2}" y="${y(Math.max(p.start,p.end))-8}" text-anchor="middle">${esc(p.display??p.row.cells[v.amount])}</text><text class="axis-label" x="${i*step+step/2}" y="${AXIS_Y}" text-anchor="middle">${axis(p,i).map((line,at)=>`<tspan x="${i*step+step/2}" dy="${at?'1.2em':0}">${esc(line)}</tspan>`).join('')}</text>${i<points.length-1?`<line class="connector" x1="${i*step+step-10}" y1="${y(p.end)}" x2="${(i+1)*step+10}" y2="${y(p.end)}"/>`:''}`)).join('')}</svg></div>${v.headless?`<ol class="bridge-key bridge-numbered">${points.map((p,i)=>`<li><span class="bridge-n">${i+1}</span><span>${esc(name(p))}</span></li>`).join('')}</ol>`:`<div class="bridge-key">${points.map((p,i)=>`<span>${v.plain?esc(name(p)):`${sourceLink(`${module}:${p.row.line}`,p.label||plain(p.row.cells[0]))}${classTag(evidence.get(`${module}:${p.row.line}`),'row-classification')}`}</span>`).join('')}</div>`}`;
+  const axis=(p,i)=>v.plain?[String(i+1)]:axisLines(name(p),step);
+  return `${chartIntro(module,v)}<div class="vector-chart${wide?' bridge-wide':''}"${wide?` role="region" tabindex="0" aria-label="${esc(v.title)}; scroll horizontally for every step"`:''}><svg${wide?` style="min-width:${Math.round((width+20)*WIDE_SCALE)}px"`:v.headless?` style="min-width:${points.length*56}px"`:''} viewBox="-5 -12 ${width+20} ${BRIDGE_HEIGHT}" role="group" aria-label="${esc(v.title)}.${v.plain?'':' Select a movement to inspect its source.'}"><line x1="0" y1="${y(0)}" x2="${width}" y2="${y(0)}" class="axis"/>${points.map((p,i)=>mark(p,`<rect class="${p.total?'total':p.amount<0?'outflow':'movement'}" x="${i*step+10}" y="${y(Math.max(p.start,p.end))}" width="${step-20}" height="${Math.max(1,Math.abs(y(p.end)-y(p.start)))}"/><text x="${i*step+step/2}" y="${y(Math.max(p.start,p.end))-8}" text-anchor="middle">${esc(p.display??p.row.cells[v.amount])}</text><text class="axis-label" x="${i*step+step/2}" y="${AXIS_Y}" text-anchor="middle">${axis(p,i).map((line,at)=>`<tspan x="${i*step+step/2}" dy="${at?'1.2em':0}">${esc(line)}</tspan>`).join('')}</text>${i<points.length-1?`<line class="connector" x1="${i*step+step-10}" y1="${y(p.end)}" x2="${(i+1)*step+10}" y2="${y(p.end)}"/>`:''}`)).join('')}</svg></div>${v.plain?`<ol class="bridge-key bridge-numbered">${points.map((p,i)=>name(p)===''?'':`<li><span class="bridge-n">${i+1}</span><span>${esc(name(p))}</span></li>`).join('')}</ol>`:`<div class="bridge-key">${points.map((p,i)=>`<span>${v.plain?esc(name(p)):`${sourceLink(`${module}:${p.row.line}`,p.label||plain(p.row.cells[0]))}${classTag(evidence.get(`${module}:${p.row.line}`),'row-classification')}`}</span>`).join('')}</div>`}`;
 }
 function pathChart(module,v) {
   const table=fixtureTable(module,v.table),series=['Reference','Downside','Upside'];
@@ -436,7 +436,8 @@ function recoveryChart(id,v,chips=false,note=true) {
       if(!row)return `<span class="col missing" title="No row for ${esc(scenario)}"><strong style="bottom:${zero}%">not stated</strong></span>`;
       const said=`${cardPlain(id,v,name)}, ${cardPlain(id,v,scenario)}: recovery ${chartNumber(row.cells[v.recovery])===null?'n.a.':row.cells[v.recovery]} ${cardPlain(id,v,unitOf(row))}`;
       // A findings page's column is not a link (the chart's one trace control opens the drawer).
-      if(v.plain)return columnOf(row.cells[v.recovery],i%3,zero,pct,'span',` role="img" aria-label="${esc(said)}"`,statedReason(id,row.cells[v.recovery],v),v.headless);
+      // A Forecast card marks a stated absence only when its sentence is drawn in the class's facts line beneath.
+      if(v.plain){const own=statedReason(id,row.cells[v.recovery],v);return columnOf(row.cells[v.recovery],i%3,zero,pct,'span',` role="img" aria-label="${esc(said)}"`,own,v.headless&&own!=='');}
       return columnOf(row.cells[v.recovery],i%3,zero,pct,'a',` href="${evidenceHref(id,row.line)}" data-evidence="${esc(`${id}:${row.line}`)}" aria-label="${esc(`${said}. View source`)}"`,null);
     }).join('');
     const facts=rows.map(r=>`<small>${cardHtml(id,v,r.cells[v.scenario])}: claim ${stated(id,v,r.cells[v.claim])} ${cardHtml(id,v,unitOf(r))} · recovery ${stated(id,v,r.cells[v.recovery])} · ${stated(id,v,r.cells[v.percent],'%')}</small>`).join('');
@@ -462,8 +463,10 @@ function readerChart(id,chart,chips=false,note=true,onPlainPage=false,card=false
     const key=`${id}:${row.line}`,period=cardPlain(id,chart,row.cells[0]);
     const cols=series.map((c,i)=>{
       const own=chart.plain?statedReason(id,row.cells[c],chart):null;
-      if(chart.headless&&chartNumber(row.cells[c])===null&&String(row.cells[c]??'').trim()!==''&&own!=='')absent.push({period,series:cardHtml(id,chart,table.headers[c]),text:own});
-      return columnOf(row.cells[c],i,zero,pct,'span','',own,chart.headless);
+      // A marker always has its sentence: an empty cell draws none; a stated absence draws the marker and its sentence (or, held back, one link to Evidence).
+      const isStated=chart.headless&&chartNumber(row.cells[c])===null&&String(row.cells[c]??'').trim()!=='';
+      if(isStated)absent.push({period,series:cardHtml(id,chart,table.headers[c]),text:own!==''?own:`<a class="in-ev" href="${esc(window.Evidence.href('registers',data[id].module,data[id].run))}">In Evidence</a>`});
+      return columnOf(row.cells[c],i,zero,pct,'span','',own,isStated);
     }).join('');
     const said=series.map(c=>`${cardPlain(id,chart,table.headers[c])} ${chartNumber(row.cells[c])===null?'n.a.':cardPlain(id,chart,row.cells[c])}`).join(', ');
     const inner=`<span class="plot"><span class="zero-rule" style="bottom:${zero}%"></span>${cols}</span><span class="chart-label">${esc(period)}${chart.sub?`<small>${chart.sub.map(c=>shown(id,chart,row.cells[c])).join(' → ')}</small>`:''}</span>`;
@@ -689,7 +692,17 @@ function drawingCaption(id,table) {
 }
 // A stated reason as the page reads a cell: held back (nothing) when it names an identifier or a calculation.
 // What a chart may draw of a handoff cell. A Forecast card (`v.headless`) reads every text with findingCell strict: a text it holds back is not drawn (the card's table says so).
-const readCtx=(id,v)=>v?.headless?{...moduleTableContext(id),strict:true}:moduleTableContext(id);
+// The id values of every module of a run (Shapes.idTokens), once per run: a Forecast card holds them back wherever they stand in text; any other id-shaped word is ordinary text.
+const runTokenCache=new Map();
+function runTokens(run,own) {
+  if(!runTokenCache.has(run)){
+    const ids=Object.values(contexts[run]?.modules||{}).flatMap(entry=>entry.outputs).filter(out=>data[out]);
+    runTokenCache.set(run,[...new Set((ids.length?ids:[own]).flatMap(out=>moduleTableContext(out).tokens))]);
+  }
+  return runTokenCache.get(run);
+}
+const strictContext=id=>({...moduleTableContext(id),tokens:runTokens(data[id].run,id),strict:true});
+const readCtx=(id,v)=>v?.headless?strictContext(id):moduleTableContext(id);
 const statedReason=(id,text,v)=>window.Components.findingCell(text,readCtx(id,v)).html??'';
 const cardPlain=(id,v,cell)=>{const text=String(cell??'');return !v?.headless||window.Components.findingCell(text,readCtx(id,v)).html!==undefined?plain(text):'';};
 const cardHtml=(id,v,cell)=>v?.headless?statedReason(id,String(cell??''),v):esc(cell);
@@ -1198,7 +1211,7 @@ function packSpans(wanted) {
 }
 const CARD={headless:true};
 // A card's context: strict, so every text it draws is read as a findings page reads it and then some (components.js findingCell).
-const cardContext=(id,title)=>({...moduleTableContext(id),id,module:data[id].module,strict:true,evidenceHref:window.Evidence.href('registers',data[id].module,data[id].run),key:row=>`${id}:${row.line}`,caption:plain(title)});
+const cardContext=(id,title)=>({...strictContext(id),id,module:data[id].module,strict:true,evidenceHref:window.Evidence.href('registers',data[id].module,data[id].run),key:row=>`${id}:${row.line}`,caption:plain(title)});
 const isPairContract=(chart,table)=>(!chart.kind||chart.kind==='grouped')&&(chart.columns||[chart.column]).length===1&&(chart.rows||table.rows).length>=1&&(chart.rows||table.rows).length<=2;
 // Two periods (or one) of a single measure: each period with its own label at the same weight, in the table's order. The contract does not mark which period is
 // later, and the page does not infer it, so nothing is emphasised.
@@ -1231,8 +1244,8 @@ function chartNote(block,ctx) {
 }
 // The empty state a card shows for a chart that was not drawn: a stated reason, or (the build's own message held back) the fixed label and a link.
 const CARD_HELD_LABEL='Not established for this run';
-function chartCard(id,item) {
-  const out=data[id],chart=item.chart||item.gap||item.sent,T=text=>statedReason(id,text,CARD),name=cardPlain(id,CARD,chart.title)||'Chart',title=T(chart.title)||'Chart',ctx=cardContext(id,name);
+function chartCard(id,item,number) {
+  const out=data[id],chart=item.chart||item.gap||item.sent,T=text=>statedReason(id,text,CARD),name=cardPlain(id,CARD,chart.title)||`Chart ${number}`,title=T(chart.title)||esc(name),ctx=cardContext(id,name);
   const owner=`<a class="text-action" href="${routeHref(out.module,tableForm(id,'chart'),null,out.run,out.source)}">${esc(moduleTitle(out.module))}${icon('arrow-right')}</a>`;
   const open=`<article class="fc-card" data-block data-view="chart" aria-label="${esc(name)}">`;
   const evLink=(tab,module=out.module)=>`<a class="in-ev" href="${esc(window.Evidence.href(tab,module,out.run))}">In Evidence</a>`;
@@ -1246,13 +1259,13 @@ function chartCard(id,item) {
     return `${open}${head}${body}<div class="fc-foot">${owner}</div></article>`;
   }
   const known=!chart.kind||FIGURE_KINDS.has(chart.kind);
-  const figure=!known?'':isPairContract(chart,block)?pairTile(id,chart):readerChart(id,chart,false,false,true,true);
+  const figure=!known?'':isPairContract(chart,block)?pairTile(id,chart):readerChart(id,{...chart,title:name},false,false,true,true);
   const unit=chart.unit?T(chart.unit):''; // the run's period is the page's context bar, not each card's
   const toggle=figure?window.Components.viewToggle(`${name}: chart or table`,[['chart','Chart'],['table','Table']]):'';
   const table=window.Components.pane('table',window.Components.chartTable(block,ctx),!figure);
   const fig=figure?window.Components.pane('chart',`<div class="fc-fig" role="region" aria-label="${esc(`${name}, chart`)}" tabindex="0">${figure}</div>`,true):'';
   const note=chartNote(block,ctx);
-  return `${open}<div class="fc-head"><div class="fc-title"><h3>${title}</h3>${unit?`<span class="fc-unit">${unit}</span>`:''}</div><div class="fc-tools">${chartTrace(id,{...chart,plain:true})}${toggle}</div></div>${fig}${table}${note.html}<div class="fc-foot">${note.held?`${evLink('registers')}`:''}${owner}</div></article>`;
+  return `${open}<div class="fc-head"><div class="fc-title"><h3>${title}</h3>${unit?`<span class="fc-unit">${unit}</span>`:''}</div><div class="fc-tools">${chartTrace(id,{...chart,title:name,plain:true})}${toggle}</div></div>${fig}${table}${note.html}<div class="fc-foot">${note.held?`${evLink('registers')}`:''}${owner}</div></article>`;
 }
 // Every chart contract of the run's modules, the stated gaps and the charts sent back, in the order the data holds them. `wide` forms take more of the row.
 function forecastCharts(context) {
@@ -1268,7 +1281,7 @@ function forecastCharts(context) {
     const chart=item.chart||item.gap||item.sent,drawn=!item.gap&&!item.hidden&&!item.sent;
     return !drawn?8:WIDE_KINDS.has(chart.kind)?24:chart.kind==='waterfall'||(chart.rows||fixtureTable(item.id,chart.table).rows).length>4?16:8;
   }),spans=packSpans(wanted);
-  const cards=items.map((item,at)=>`<div class="c${spans[at]}${wanted[at]>=16?' fc-wide':''}">${chartCard(item.id,item)}</div>`).join('');
+  const cards=items.map((item,at)=>`<div class="c${spans[at]}${wanted[at]>=16?' fc-wide':''}">${chartCard(item.id,item,at+1)}</div>`).join('');
   return `${open}<p class="fc-count">${items.length} ${items.length===1?'chart':'charts'}${gaps?`, ${gaps} not drawn`:''}</p><div class="g24 fc-grid">${cards}</div></section>`;
 }
 function forecastView(context,id) {
@@ -1802,9 +1815,10 @@ function evidenceInput(context) {
   const stored=new Set([...(run?.evidence?.sources||[]),...(run?.evidence?.unused||[]),...(run?.evidence?.unrecorded||[])].map(f=>f.name));
   const modules=Object.entries(run?.modules||{}).map(([id,entry])=>({id,outputs:entry.outputs.map(output=>data[output]).filter(Boolean).map(output=>({id:output.id,sections:output.sections,placement:output.placement}))}));
   // The delivered model's own material for Evidence: its scope limits (Gaps), the files it was built from and the charts the build sent back (Run record), each as written.
-  const models=runModels(context).map(model=>{
+  const found=runModels(context),labels=modelOptionLabels(found);
+  const models=found.map((model,at)=>{
     const forecast=model.sources.find(s=>s.role==='forecast'),owner=forecast?.output&&data[forecast.output]?data[forecast.output].module:null;
-    return {name:MODEL_ENTRY[1],module:owner,limits:model.cashflow?.limits||[],sources:model.sources.map(s=>({role:Object.hasOwn(SOURCE_ROLES,s.role)?SOURCE_ROLES[s.role]:s.role,file:sourceFile(s),run:/^runs\/([^/]+)\//.exec(s.path||'')?.[1]||null,sha256:s.sha256,match:s.sha256===null?'invalid':s.changed?'changed':'matches',attempt:/-attempt-(\d+)/.exec(sourceFile(s))?.[1]??null}))};
+    return {name:MODEL_ENTRY[1],label:labels[at],module:owner,limits:model.cashflow?.limits||[],sources:model.sources.map(s=>({role:Object.hasOwn(SOURCE_ROLES,s.role)?SOURCE_ROLES[s.role]:s.role,file:sourceFile(s),run:/^runs\/([^/]+)\//.exec(s.path||'')?.[1]||null,sha256:s.sha256,match:s.sha256===null?'invalid':s.changed?'changed':'matches',attempt:/-attempt-(\d+)/.exec(sourceFile(s))?.[1]??null}))};
   });
   const sentBack=Object.values(run?.modules||{}).map(entry=>entry.default||entry.outputs[0]).filter(id=>id&&data[id]).flatMap(id=>sentBackCharts(id).map(item=>({module:data[id].module,title:item.title,message:item.message})));
   return {

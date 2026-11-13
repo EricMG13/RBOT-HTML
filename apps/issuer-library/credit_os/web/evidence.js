@@ -219,7 +219,7 @@
   // The model's scope limits as the calculation record states them, one counted line each, under a head that counts them.
   function limitsGroup(model, input) {
     if (!model.limits.length) return '';
-    const name = model.module ? input.deps.moduleTitle(model.module) : model.name;
+    const base = model.module ? input.deps.moduleTitle(model.module) : model.name, name = (input.run.models || []).length > 1 && model.label ? `${base} · ${model.label}` : base;
     return `<section class="ev-grp" data-group><div class="ev-grp-h"><span>${esc(name)}</span><span class="ev-cd">Model scope limits</span><span class="ev-ct"><span data-count>${model.limits.length}</span> ${model.limits.length === 1 ? 'scope limit' : 'scope limits'}</span></div><ul class="ev-limits">${model.limits.map(line => `<li data-hay="${hay(name, line)}">${rich(line)}</li>`).join('')}</ul></section>`;
   }
   function gapsPanel(all, input, module) {
@@ -259,7 +259,7 @@
     return `<div>${rows.map(m => {
       const attempts = [...new Set(m.sources.map(s => s.attempt).filter(a => a !== null && a !== undefined))];
       const note = attempts.length > 1 ? `<p class="ev-note" data-find="${hay('attempts', m.sources.map(s => s.file).join(' '))}">These files come from different attempts: ${m.sources.map(s => s.attempt === null || s.attempt === undefined ? '' : `${esc(s.file)} (attempt ${esc(s.attempt)})`).filter(Boolean).join(', ')}</p>` : '';
-      return `<div class="ev-sub-h">Model inputs</div><ul class="ev-hlist ev-card" data-group>${m.sources.map(s => { const [tone, text] = MATCH_BADGE[s.match] || MATCH_BADGE.invalid; return `<li data-hay="${hay(s.role, s.file, s.run, s.sha256, text)}"><div><div class="ev-nm">${esc(s.role)}: ${esc(s.file)}</div><code>${s.run ? `Run ${esc(s.run)} · ` : ''}SHA-256 ${esc(shownOrNot(s.sha256 && s.sha256.slice(0, 12)))}${s.attempt === null || s.attempt === undefined ? '' : ` · attempt ${esc(s.attempt)}`}</code></div><span class="badge badge-${tone}">${esc(text)}</span></li>`; }).join('')}</ul>${note}`;
+      return `<div class="ev-sub-h">Model inputs${models.length > 1 && m.label ? ` · ${esc(m.label)}` : ''}</div><ul class="ev-hlist ev-card" data-group>${m.sources.map(s => { const [tone, text] = MATCH_BADGE[s.match] || MATCH_BADGE.invalid; return `<li data-hay="${hay(s.role, s.file, s.run, s.sha256, text)}"><div><div class="ev-nm">${esc(s.role)}: ${esc(s.file)}</div><code>${s.run ? `Run ${esc(s.run)} · ` : ''}SHA-256 ${esc(shownOrNot(s.sha256 && s.sha256.slice(0, 12)))}${s.attempt === null || s.attempt === undefined ? '' : ` · attempt ${esc(s.attempt)}`}</code></div><span class="badge badge-${tone}">${esc(text)}</span></li>`; }).join('')}</ul>${note}`;
     }).join('')}</div>`;
   }
   // The build's message for each chart section it sent back (the card on the Forecast page says only that it was sent back).

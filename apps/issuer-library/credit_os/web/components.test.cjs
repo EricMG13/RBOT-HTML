@@ -1297,3 +1297,18 @@ test('datedTimeline: a page adds its markup under an entry, marks the current on
   assert.ok(html.includes('<ol class="tl tl-v">'));
   assert.equal(C.datedTimeline({ headers: ['Date', 'Event'], rows: [{ cells: ['31 March 2025', 'Credit snapshot'], line: 1 }] }, { stacked: true, unit: ['run', 'runs'] }).includes('<span data-count>1</span> run<'), true, 'one entry, singular');
 });
+
+test('strict file names (N1): any issuer document extension, chained too, is held; U.S.GAAP and 10-K.Item are not file names', () => {
+  for (const name of ['lender-notes.docx', 'q3_deck.PPTX', 'filing.xml', 'annual-report.xhtml', 'a.tar.zip', 'x.json.md', 'sheet.xlsm', 'rows.tsv', 'memo.doc']) assert.deepEqual(C.findingCell(`Schedule; ${name}, page 4`, { strict: true }), { omitted: true, inEvidence: true }, name);
+  for (const text of ['Under U.S.GAAP rules', '10-K.Item 7 states it', 'Sep. 2024 quarter']) assert.ok(C.findingCell(text, { strict: true }).html !== undefined, text);
+});
+
+test('strict id words (L3): a bare id-shaped word is held only when it is an id value of the run (ctx.tokens); calculation ids and module-code ids stay held always', () => {
+  const words = ['G20 economies', 'P50 production case', 'EU27 sales', 'V03 case'];
+  for (const text of words) assert.ok(C.findingCell(text, { strict: true }).html !== undefined, `${text} drawn without a token`);
+  const tokens = ['V03'];
+  assert.deepEqual(C.findingCell('V03 case', { strict: true, tokens }), { omitted: true, inEvidence: true });
+  assert.ok(C.findingCell('EU27 sales', { strict: true, tokens }).html !== undefined, 'another word is still drawn');
+  assert.deepEqual(C.findingCell('calculation C05 shows it', { strict: true }), { omitted: true, inEvidence: true });
+  assert.deepEqual(C.findingCell('CP-1 C48 states it', { strict: true }), { omitted: true, inEvidence: true });
+});

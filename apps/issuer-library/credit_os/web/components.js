@@ -225,7 +225,7 @@
     return parts.length > 0 && parts.every(part => [...STRONG_REFERENCE, ...WEAK_REFERENCE].some(rx => rx.test(part))) && parts.some(part => STRONG_REFERENCE.some(rx => rx.test(part)));
   }
   const REFERENCE_IN_TEXT = [/[\w-]+\.[A-Za-z]{2,5}\b/, /\bCP-[A-Za-z0-9]+/, /\b[0-9a-f]{32,}\b/i];
-  const STRICT_REFERENCE = [/[\w-]+\.(?:jsonl|htm|html|pdf|xlsx?|csv|json|md|txt)\b/i, /\b(?=[0-9]*[a-f])[0-9a-f]{16,}\b/i, /\bsc\d+\b/i, /\bCP-[0-9A-Z]+\s+[A-Z]{1,2}\d{2}\b/];
+  const STRICT_REFERENCE = [/[\w-]+(?:\.[\w-]+)*\.(?:jsonl|json|xhtml|html|htm|xml|pdf|docx|doc|xlsx|xlsm|xls|csv|tsv|pptx|ppt|txt|md|zip)\b/i, /\b(?=[0-9]*[a-f])[0-9a-f]{16,}\b/i, /\bsc\d+\b/i, /\bCP-[0-9A-Z]+\s+[A-Z]{1,2}\d{2}\b/];
   const tokenPatterns = new WeakMap();
   function tokensIn(text, tokens) {
     if (!Array.isArray(tokens) || !tokens.length) return [];
@@ -239,11 +239,10 @@
     // Only identifiers (an id cell such as "s00"): rule (a), plain omission. An identifier inside other text: rule (b), the link to Evidence.
     if (found.length && /^[\s;,&]*$/.test(found.reduce((text, token) => text.split(token).join(''), raw))) return {omitted: true};
     if (calculationId().test(raw) || found.length) return {omitted: true, inEvidence: true};
-    // `ctx.strict` (the Forecast page): what a findings page never draws is held back the same way when it stands inside other text: a file name (a known extension), a hash
-    // of 16 or more hex characters, a scenario id in any case, a module code followed by an id-shaped word, and a bare id-shaped word that is not a period label.
+    // `ctx.strict` (the Forecast page): what a findings page never draws is held back the same way when it stands inside other text: a file name (an issuer document extension, chained too), a hash
+    // of 16 or more hex characters, a scenario id in any case and a module code followed by an id-shaped word. An id value of the run's own tables is held by `ctx.tokens` as everywhere; another id-shaped word (G20, P50, EU27) is ordinary text.
     // A module code on its own is not held: the page names it. Ordinary prose stays: 3.5x, 2.36x, U.S. GAAP, e.g., Sep. 2024, $1.2bn, FY2024, 10-K, Under U.S.GAAP rules, 10-K.Item 7.
     if (ctx.strict && STRICT_REFERENCE.some(rx => rx.test(readerText().plainText(raw)))) return {omitted: true, inEvidence: true};
-    if (ctx.strict && shapes().idWords(readerText().plainText(raw)).length) return {omitted: true, inEvidence: true};
     return {html: readerText().richText(raw)};
   }
   const evidenceLink = ctx => (ctx.evidenceHref ? `<a class="in-ev" href="${escapeHtml(ctx.evidenceHref)}">In Evidence</a>` : '');

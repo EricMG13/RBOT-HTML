@@ -128,7 +128,7 @@ const evidenceView = (contexts, data = {}) => {
   assert.ok(start >= 0 && end > start, 'evidence view not found');
   const names = { 'CP-0': 'Source readiness', 'CP-1': 'Financial foundation', 'CP-1A': 'Business & governance' };
   const route = {}, win = { Evidence: require('./evidence.js'), CREDIT_OS_DATA: { chips: {} } };
-  const view = new Function('esc', 'icon', 'moduleTitle', 'handoffLabel', 'contexts', 'data', 'current', 'window', 'ChangesView', 'runModels', 'MODEL_ENTRY', 'SOURCE_ROLES', 'sourceFile', `${text.slice(start, end)}; return evidenceView;`)(esc, n => `<i>${n}</i>`, c => names[c] || c, runPage().handoffLabel, contexts, data, route, win, require('./changes.js'), () => [], ['CP-MODEL', 'Cash flow model'], { annual: 'Annual handoff' }, s => (s.output || s.path || '').split('/').at(-1));
+  const view = new Function('esc', 'icon', 'moduleTitle', 'handoffLabel', 'contexts', 'data', 'current', 'window', 'ChangesView', 'runModels', 'MODEL_ENTRY', 'SOURCE_ROLES', 'sourceFile', 'modelOptionLabels', `${text.slice(start, end)}; return evidenceView;`)(esc, n => `<i>${n}</i>`, c => names[c] || c, runPage().handoffLabel, contexts, data, route, win, require('./changes.js'), () => [], ['CP-MODEL', 'Cash flow model'], { annual: 'Annual handoff' }, s => (s.output || s.path || '').split('/').at(-1), () => []);
   return (key, tab = 'sources', module = null) => { Object.assign(route, { tab, evidenceModule: module }); return view(key); };
 };
 const EVIDENCE = {
@@ -4782,4 +4782,68 @@ test('report history: no run code, folder, delivery id, calculation ID or module
   assert.deepEqual([strip(latest.date), strip(earlier.date)], ['30 June 2025', '30 June 2024']);
   assert.ok(!/Latest|Earlier(?! format| methods)/.test(strip(latest.marks) + strip(earlier.marks)), 'two different names need no word');
   assert.ok(latest.links.includes('What changed') && !earlier.links.includes('What changed'), 'the first run has no What changed link');
+});
+
+// ---- Task 10 fix round 2.
+test('N1: a Forecast card holds back any issuer document name in a footnote (docx, pptx, xml, xhtml)', () => {
+  for (const name of ['lender-notes.docx', 'q3_deck.pptx', 'filing.xml', 'annual-report.xhtml']) {
+    const sections = fcSections();
+    sections[2].blocks.find(b => b.type === 'table').rows[1].cells[3] = `Schedule; ${name}, page 4`;
+    assert.ok(!cardOf(fcPage({ sections }).forecastCharts(RUN), 'Debt maturities').includes(name), name);
+  }
+});
+
+test('L3: the run\'s own id values (every module of the run) are held back in a card; other id-shaped words are drawn', () => {
+  const sections = fcSections();
+  sections[2].blocks.find(b => b.type === 'table').rows[1].cells[3] = 'EU27 sales and V03 case';
+  const other = runOutput('CP-X', { sections: [sec('Scenarios', 3, 10, 'consumed', [table(12, ['Scenario id', 'Name'], [[13, 'V03', 'Base']])])], state: { established: true, declared: null }, summary: null, words: {} });
+  const page = runPage(() => ({ [outId('CP-1')]: fcOutput({ sections }), [outId('CP-X')]: other }), [], m => m, { record: steps(['CP-1', 'CP-X']), runFields: { asOf: '2025-03-31' } });
+  const maturities = cardOf(page.forecastCharts(RUN), 'Debt maturities');
+  const note = /<div class="fc-note">.*?<\/div>/s.exec(maturities);
+  assert.ok(!note || !/V03|EU27/.test(note[0]) , 'the whole text is held (it holds the run\'s id V03)');
+  sections[2].blocks.find(b => b.type === 'table').rows[1].cells[3] = 'EU27 sales';
+  assert.ok(cardOf(fcPage({ sections }).forecastCharts(RUN), 'Debt maturities').includes('EU27 sales'));
+});
+
+test('L1: a held-back chart title is not drawn anywhere on its card; the trace control and the card name fall back to "Chart n"', () => {
+  for (const t of ['Interest cover per K_10.htm.jsonl', 'Interest cover SC2']) {
+    const charts = fcOutput().charts.map((c, i) => (i === 0 ? { ...c, title: t } : c));
+    const card = fcCards(fcPage({ charts }).forecastCharts(RUN))[0];
+    assert.ok(!/K_10|SC2/.test(card), t);
+    assert.ok(/aria-label="Chart 1: where it comes from"/.test(card) && /<article class="fc-card"[^>]*aria-label="Chart 1"/.test(card) && card.includes('<h3>Chart 1</h3>'));
+  }
+});
+
+test('L2: an absence marker always has its sentence: an empty cell draws none; a held-back absence draws the marker and one In Evidence line', () => {
+  const revenueWith = value => { const sections = fcSections(); sections[1].blocks.find(b => b.type === 'table').rows[0].cells[2] = value; const card = cardOf(fcPage({ sections }).forecastCharts(RUN), 'Revenue and EBITDA'); const fig = card.split('data-pane="table"')[0]; return { marks: countOf(fig.split('class="fc-absent"')[0], /class="absent-mark"/g), lines: ((fig.match(/<ul class="fc-absent">[\s\S]*?<\/ul>/) || [''])[0].match(/<li>/g) || []).length, fig }; };
+  assert.deepEqual([revenueWith('').marks, revenueWith('').lines], [0, 0]);
+  const held = revenueWith('Not supplied: split in K_10.htm.jsonl');
+  assert.deepEqual([held.marks, held.lines], [1, 1]);
+  assert.ok(held.fig.includes('class="in-ev"') && !held.fig.includes('jsonl'));
+  const drawn = revenueWith('Not supplied: split not read');
+  assert.deepEqual([drawn.marks, drawn.lines], [1, 1]);
+});
+
+test('Info: a held-back bridge label leaves no empty list item; the module-page bridge prints each category once; two models are told apart by run name', () => {
+  const sections = [...passageSections({ bottom: 'Cash is up.' })];
+  const page = runPage(d => { withBridge(d); d[outId('CP-1')].sections.unshift(...sections); const rows = d[outId('CP-1')].sections.flatMap(s => s.blocks).find(b => b.line === 62).rows; rows[1].cells[0] = 'Free cash flow K_10.htm.jsonl'; return d; }, [], m => m, { record: steps(['CP-1']), runFields: { asOf: '2025-03-31' } });
+  const card = cardOf(page.forecastCharts(RUN), 'Liquidity bridge');
+  assert.ok(!/<li><span class="bridge-n">\d+<\/span><span><\/span><\/li>/.test(card) && !card.includes('<span></span>'));
+  const module = page.readerChart(outId('CP-1'), BRIDGE_CHART, false, true, true), visible = strip(module.replace(/<title>.*?<\/title>/g, ''));
+  assert.equal(countOf(visible, /Opening accessible liquidity/g), 1, 'once on the module page');
+  const mk = id => pickModel(id, { mode: 'candidate', download: '../d/m.html', href: '../d/m.html', cashflow: { units: 'U', columns: gridColumns, notes: [], limits: ['One limit.'], rows: [gridRow('Revenue', 'Revenue', false, [cell('value', '1'), cell('value', '2')])], other: null } });
+  const two = fcPage(undefined, { models: [mk(HASH_1), mk(HASH_2)], runFields: { ...PICK_RUNS, evidence: EVIDENCE } }).evidenceInput(RUN);
+  const heads = [...window_Evidence().view(two, { tab: 'gaps', module: null }).matchAll(/<div class="ev-grp-h"><span>([^<]*)<\/span><span class="ev-cd">Model scope limits/g)].map(m => m[1]);
+  assert.equal(new Set(heads).size, 2, heads.join(' | '));
+  assert.ok(heads.every(h => h.includes('31 March 2025 · Credit snapshot')), heads.join(' | '));
+});
+
+test('L3 consequence: calculation ids that are id values of the run (as on every real run) are held in a title and a footnote even without the word "calculation"', () => {
+  const sections = fcSections();
+  sections[2].blocks.find(b => b.type === 'table').rows[1].cells[3] = 'Calculated as C05';
+  const calcs = runOutput('CP-X', { sections: [sec('Calculations', 2, 5, 'consumed', [table(6, ['Calculation ID', 'Result'], [[7, 'C05', '1'], [8, 'C48', '2']])])], state: { established: true, declared: null }, summary: null, words: {} });
+  const charts = fcOutput().charts.map((c, i) => (i === 0 ? { ...c, title: 'Interest cover C48' } : c));
+  const page = runPage(() => ({ [outId('CP-1')]: fcOutput({ sections, charts }), [outId('CP-X')]: calcs }), [], m => m, { record: steps(['CP-1', 'CP-X']), runFields: { asOf: '2025-03-31' } });
+  const html = page.forecastCharts(RUN);
+  assert.ok(!html.includes('C48') && !html.includes('C05'));
 });
