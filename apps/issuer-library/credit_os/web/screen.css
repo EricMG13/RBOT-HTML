@@ -1347,7 +1347,7 @@ td .basis-link{margin-left:4px}
 .ck-list{list-style:none;border:1px solid var(--rule);border-radius:12px;background:Canvas;padding:0 20px}
 .ck-row{padding:14px 0;border-top:1px solid var(--rule);min-width:0}
 .ck-row:first-child{border-top:0}
-.ck-head{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px 12px;align-items:start}
+.ck-head{display:grid;grid-template-columns:minmax(0,1fr) fit-content(50%) auto;gap:6px 12px;align-items:start}
 .ck-label{margin:0;font:600 14px/1.45 'Red Hat Text',sans-serif;color:var(--text-primary);overflow-wrap:anywhere}
 .ck-row .rec-fields{grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:8px 20px}
 @media(max-width:560px){.ck-head{grid-template-columns:minmax(0,1fr) auto}.ck-head .state{grid-column:1/-1;grid-row:2}.ck-list{padding:0 14px}}
