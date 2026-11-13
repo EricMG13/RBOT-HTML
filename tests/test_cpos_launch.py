@@ -2848,7 +2848,7 @@ def test_every_module_is_told_what_stands_for_acceptance_scripts_and_questions(t
 # Fix round 1 of that change (the acceptance check's rulings R2, R5, R9) edited the step file again.
 METHOD_TEXT_SHA256_AT_1B41E65 = {
     "CP-0": "e8d3e77bc48bc98e2fd8595e7b46ee7fc786e859591cf244325f3508b7d5dac9",
-    "CP-1": "6aa23e094a469eec3d945421ec238ddd4ae1741ae263e4483d390e638604852a",
+    "CP-1": "30af21ed459c896ff61e5a4c0cb13f064349ae93c74a02ca4371be93e84edf69",
     "CP-1A": "4c8efcfafe748cd01e6c856041349397c77384c3c82566b1f36a429535c01639",
     "CP-1B": "38d9fa7b075d1ce5d0cd21bcc216f57f37369cd4db395b3f1fb65498697a509f",
     "CP-1C": "9353afdbce820f59c2dcabc951fc1ff3813174b3c84e79b47bc22bea97f3bbe8",

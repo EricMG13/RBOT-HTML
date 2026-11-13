@@ -1,6 +1,6 @@
 One section per step, in order, each with its gate and output; the last two sections bind every run. Steps 4 to 6 always run: with no data for a statement, write its table empty of figures and log the gaps.
 
-Statement tables (T4.4, T4.5, T4.6) share one shape. The first column is headed `Line item`; then one column per period (the year is the fiscal year the period belongs to), then `Unit` (the currency code and `millions` or `thousands`, the same in every statement table), `Basis` and `Source`. The fixed rows named in steps 4 to 6 are added as the checked-tables rule states. A balance sheet is an instant: it has no start date.
+Statement tables (T4.4, T4.5, T4.6) share one shape. The first column is headed `Line item`; then one column per period (the year is the fiscal year the period belongs to), then `Unit` (the currency code and `millions` or `thousands`, the same in every statement table), `Basis` and `Source`. The fixed rows named in steps 4 to 6 are added as the checked-tables rule states.
 
 ## REF_CP-1_01_FileGateSourceValidation.md
 Gate: no financial sources means Blocked; say so in the Bottom line and stop.
@@ -24,14 +24,14 @@ Output `### T4.2 Entity period key`: `Entity Name` | `Entity Role` | `Fiscal Yea
 Gate: source data for at least one period.
 1. Set one basis: one currency (with FX rates and their source), one unit, one perimeter, one accounting basis.
 2. Record every adjustment in the register.
-3. Carry an incompletely normalised figure with a limitation marker. Flag an unresolvable accounting-basis difference; never choose silently.
+3. Carry an incompletely normalised figure with a limitation marker. Flag an unresolvable accounting-basis difference; never choose silently. The basis then applies to every later step.
 
 Output `### T4.3 Normalization register`: `Adjustment Description` | `Source File` | `Adjustment Type` | `Before Value` | `After Value` | `Rationale` | `Affected Periods`
 
 ## REF_CP-1_04_IncomeStatementCoverage.md
 Gate: always runs.
 1. Extract the full income statement for every available period on the step 3 basis.
-2. Cover these lines: Revenue, COGS, Gross Profit, SGA, Other Operating, EBITDA, D&A, EBIT, Interest Expense (total and cash), Interest Income, Other Non-Operating, PBT, Tax (total and cash), Net Income, Exceptionals, SBC. Reconcile the intervening expense block between gross profit and operating profit.
+2. Cover these lines: Revenue, COGS, Gross Profit, SGA, Other Operating, EBITDA, D&A, EBIT, Interest Expense (total and cash), Interest Income, Other Non-Operating, PBT, Tax (total and cash), Net Income, Exceptionals, SBC.
 3. Each line carries its source file, period, currency, unit, value and evidence tier in the `Source` and `Basis` cells.
 4. EBITDA not stated: derive it from components and say so in `Basis` as calculated; if components are insufficient it is `Not calculable: <reason>`.
 
@@ -70,7 +70,7 @@ Gate: sub-period data must exist. Never estimate.
 1. LTM is the latest full year plus the current stub minus the prior-year comparable stub. Construct YTD where applicable. Never replace a directly reported period with a derived one.
    Quarters: a reported discrete quarter comes first. Q2 is H1 less Q1 and Q3 is 9M less H1 only when the quarters are absent. A reported unaudited Q4 stands alone; Q4 is FY less 9M only when no Q4 is reported, and is labelled calculated. A reported fiscal year is never replaced by a sum of quarters. A balance-sheet last-twelve-months figure is the latest period end.
 2. Every component must be available (runbook); stub periods must be comparable, or the result is Not Comparable.
-3. Pro forma adjustments: record only those a source states. They stay out of period figures, in the host's `Post-balance-sheet adjustments` table; never construct one the source does not state.
+3. Pro forma adjustments: record only those a source states (a lender presentation for a transaction; a post-period acquisition, disposal or refinancing), each with its type, the period it applies to, the metric and the amount. They stay out of period figures, in the host's `Post-balance-sheet adjustments` table; never construct one the source does not state.
 
 Output `### T4.8 Constructed period register`: `Metric Name` | `Derived Period Type` | `Full-Year Component` | `Current Stub` | `Prior-Year Stub` | `Derived Value` | `Calculation Status` | `Source Files` | `Limitations`
 
@@ -83,7 +83,7 @@ Gate: normalised data for at least some periods.
 
 Output `### T4.9 Calculation register`, columns exactly: `Metric Name` | `Formula` | `Numerator Value` | `Numerator Source` | `Denominator Value` | `Denominator Source` | `Period` | `Currency` | `Unit` | `Calculated Value` | `Calculation Status` | `Evidence Quality Tier` | `Limitations`
 - `Period` is the period column header (`FY2024`); the six fixed rows are as the checked-tables rule states. `Numerator Value`, `Denominator Value` and `Calculated Value` are each a plain number or `Not supplied:` or `Not calculable:` with a reason, no annotation. `Currency` and `Unit` are never empty; `Unit` is the operands' unit.
-- Fixed `Metric Name` values (other metrics keep free names): `Total debt / EBITDA`, `Net debt / EBITDA`, `EBITDA / cash interest` (reported EBITDA), and, only when the issuer states an adjusted EBITDA, `Total debt / adjusted EBITDA`, `Net debt / adjusted EBITDA`, `Adjusted EBITDA / cash interest`. For these six rows `Unit` is `US$m`, the Net debt table's unit.
+- Fixed `Metric Name` values (other metrics keep free names): `Total debt / EBITDA`, `Net debt / EBITDA`, `EBITDA / cash interest` (reported EBITDA), and, only when the issuer states an adjusted EBITDA, `Total debt / adjusted EBITDA`, `Net debt / adjusted EBITDA`, `Adjusted EBITDA / cash interest`. For these six rows `Unit` is `US$m`, the Net debt table's unit. Each leverage and interest-cover chart figure is that row's `Calculated Value` for the same period.
 
 Output `### T4.10 KPI dashboard`: `KPI Category` | `Metric Name` | one column per period | `Trend Direction` | `Analyst Note`. It also keeps the KPIs T4.9 does not calculate (issuer-reported margins, segment and operating KPIs).
 
@@ -107,7 +107,6 @@ Output: the analysis inside `## Findings`, by analytical dimension.
 ## REF_CP-1_12_CoverageGateDownstreamReadiness.md
 Gate: always runs; the final quality gate.
 1. Consolidate every gap from every prior step as a plain-sentence line under `## Gaps`: what is missing or unreconciled, for which line item or metric and period, what it restricts, its severity (High, Medium, Low) and the action that would close it. Cumulative; no omissions.
-2. Judge readiness of the figures for the requested use: which conclusions and calculations the evidence supports and which stay restricted. Group repeated consequences under their issue.
 
 Output `### T4.13 Readiness`: `Requested Use` | `Readiness Status` (Ready, Ready with Limitations, Not Ready) | `Gaps or Limitations` | `Recommended Actions`
 

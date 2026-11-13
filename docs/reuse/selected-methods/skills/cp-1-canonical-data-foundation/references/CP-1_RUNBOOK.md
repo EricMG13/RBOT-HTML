@@ -23,3 +23,6 @@ Total Debt is balance-sheet carrying value; gross principal is never the leverag
 
 ## Evidence hierarchy
 Audited statements > unaudited with auditor > unaudited > lender or sponsor material > rating agency > internal > external.
+
+## Fail or restrict
+A malformed table (any register, not only the checked ones) and any breach of the step file's Discipline prohibitions fail or restrict the output.
