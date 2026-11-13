@@ -1,0 +1,965 @@
+diff --git a/VERIFICATION.md b/VERIFICATION.md
+index ba4d6ed..6740ac7 100644
+--- a/VERIFICATION.md
++++ b/VERIFICATION.md
+@@ -4,6 +4,14 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
+ engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
+ `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
+ 
++## 2026-11-13 — The Forecast page's Downside follows the forward credit model; the shock's interest figure is proportional and checked against the downside module (branch `claude/downside-follows-forward-model`)
++Scope: offline; no provider or model call; no paid run. Owner ruling `docs/rulings/2026-11-13-downside-follows-forward-model.md` (option A, the owner's words relayed by the coordinator session) reverses the 2026-11-10 ruling: the Downside stress case is the downside module's shock applied to the forward credit model's own downside drivers (base drivers when it sets none); `forecast_exact.json` carries `downside_basis` only then and the page label and note follow it; the CP-2G instruction says both shock values are copied unchanged from one CP-2A scenario and `rate_increase` is proportional, never a yield (+171 characters per pathway with CP-2G, every pathway under its unchanged ceiling); the launcher sends back a block whose shock is no scenario of CP-2A's table T2DS.1, only when it read the whole table without doubt, else it lets the block through and logs why at WARNING, which a run with no logging set up prints to the launcher's stderr (seen by the controller with a table-less CP-2A; not traced into the run-start service's record).
++- Fidelity check, scope: ONE real run (`tdg-full-copilot-sol-high-001-resume`, TransDigm, as of 30 September 2024), re-derived by the controller from its own CP-1 and CP-2G handoffs at `5cbe19d` (exit 0), against the forward credit model's printed downside. With the shock as sent (0.2 / 0.0184): revenue 7,940 and EBITDA 3,338.6112 in every year, equal to the module; interest 1,553.21 and coverage 2.15x against the module's 1,982.94 and 1.68x, because 0.0184 is a yield change read as proportional. With `rate_increase` corrected to 0.3 (what CP-2A states): interest 1,982.6872 / 1,936.467 / 1,929.13552 against the module's 1,982.936 / 1,936.71 / 1,929.3776 (it rounded its yield to 0.0797; the test asserts the exact figure, no tolerance), coverage 1.68x / 1.72x / 1.73x as the module, closing cash 1,553.50 / -309.77 / -2,165.72 against 1,553.26 and funding gaps of 310.26 and 2,166.45. Base, upside and own-drivers cases equal the delivered file. The delivered file has no `downside_basis`, so its page keeps the old label. The page itself was not opened in a browser (no `.js` changed); the VMO2 reader check is not listed, retired by the owner's ruling relayed by the coordinator (PR 103).
++- Reviews: task review approve with one Medium; adversarial review (financial calculation) found no calculation defect (300 random blocks against a hand-merged oracle, 0 mismatches; blocks with no downside drivers or no shock byte-identical to `main`) and one High, two Medium in the launcher check (a correct block sent back unsatisfiably for percent or ambiguous tables; one real table form never read; a control-only table forcing 0 / 0). Fix round 1 `3e49df1`, tests first; scoped re-review: pass, five Low, closed in one batch `5cbe19d` checked against the reviewer's probes (four of five exit 0). CI then failed on `test_cp2g_upside_and_downside_drivers_are_computed_as_their_own_cases`, which encoded the reversed ruling and was outside the controller's `-k` filter; its own Fraction oracle now takes the shock over the downside drivers (`9d04880`). Coordinator's adversarial review at `0e5fc6f`: CONCERNS, W1 (the skip logged at INFO, never shown) answered by `1044de9`.
++- Gates (controller; the first three at `5cbe19d`, the new tests with facilities 98 passed and the quality gate again at `1044de9`): new tests with periods, scale, facilities and packaging 440 passed, exit 0; `tests/test_credit_os_store.py` 254 passed, exit 0; `tests/test_cpos_launch.py -k "budget or forecast_issues or forecast or instruction"` 81 passed, exit 0; `uv run python tools/quality_gate.py` exit 0, 0 findings. One existing expectation changed with the ruling (`test_debt_outside_the_facilities_bears_the_analyst_rate_in_every_case`, re-derived by hand by the reviewer).
++- Open for the owner: replaying the real run's retained CP-2G response now stops with `cpos_retained_rejected` (it carries 0.0184), so that run cannot be delivered again without a paid repair; it agrees with its forward credit model only after a re-run. Python still publishes net leverage and liquidity for downside years with negative cash (FY2026 7.34x and 533.23, FY2027 7.87x and -1,322.72 with the shock at 0.3), which the module calls not calculable (predates this change; the owner's decision, not changed here).
++- Not verified: a live model under the new instruction and repair text; mutation testing (not run; the reviewer's two mutants of the check are killed); a T2DS.1 marker inside a fenced example still misleads the check (reviewer's probe `q02`, one case); how often a real CP-2A table fails open (two real forms seen); the full suite; Windows.
++
+ ## 2026-11-13 — Status checklist: a long state no longer squeezes the row label to zero width (branch `claude/eloquent-colden-9607aa`)
+ Scope: presentation only, offline, one CSS declaration; no provider or model call, no markup or cell text change. Seen in PR 100's reader check, older than it.
+ - Cause: `.ck-head` in `screen.css` was a grid of `minmax(0,1fr) auto auto`; a long state badge took its full text width in the `auto` track and left the label 0 px. Fix: the badge track is `fit-content(50%)`, so a short badge keeps its own width and a long one wraps at half the row.
+diff --git a/apps/issuer-library/credit_os/store.py b/apps/issuer-library/credit_os/store.py
+index f364cfe..5fe861f 100644
+--- a/apps/issuer-library/credit_os/store.py
++++ b/apps/issuer-library/credit_os/store.py
+@@ -1372,6 +1372,9 @@ FORECAST_CASES = (
+     ("DOWNSIDE_DRIVERS", "Downside (CP-2G drivers)"),
+     ("DOWNSIDE", "Downside stress (shock on base drivers)"),
+ )
++# The stress case's name when the model's shock sits on its own downside drivers (the model's
++# `downside_basis`); a model delivered before that field existed keeps the base-drivers name.
++STRESS_ON_DOWNSIDE_DRIVERS = "Downside stress (shock on downside drivers)"
+ NO_VALUE = "the model's source table has no value for this period"
+ PRINTED_DASH = "printed as \u2014 in the source"
+ PRIOR_MISSING = "prior-year period not in the handoffs"
+@@ -1971,6 +1974,8 @@ def forecast_inputs(exact: Any) -> tuple[Forecast, list[str], list[str]]:
+             if not isinstance(year["year"], int):
+                 raise TypeError("year is not a number")
+             checked_entries(year, ("year", "planning_start", "planning_end"))
++        if key == "DOWNSIDE" and exact.get("downside_basis") == "downside_drivers":
++            name = STRESS_ON_DOWNSIDE_DRIVERS
+         cases.append((name, years))
+         keys.append(key)
+     limits = exact["scope_limits"]
+@@ -1982,6 +1987,9 @@ def forecast_inputs(exact: Any) -> tuple[Forecast, list[str], list[str]]:
+ DOWNSIDE_CASE = "Downside case"
+ DOWNSIDE_NOTES = {
+     "DOWNSIDE": "Downside case is the stress case: a shock applied to the base-case drivers.",
++    "DOWNSIDE_ON_DRIVERS": (
++        "Downside case is the stress case: a shock applied to the model's own downside drivers."
++    ),
+     "DOWNSIDE_DRIVERS": (
+         "Downside case is CP-2G's own downside drivers; no CP-2A shock was supplied."
+     ),
+@@ -1995,7 +2003,8 @@ def main_cases(cases: Forecast, keys: list[str]) -> tuple[Forecast, Forecast, st
+ 
+     A case with no years is not computed: it is never the Downside and opens no group.
+     The Downside case is the CP-2A shock (DOWNSIDE) when computed, else CP-2G's own downside
+-    drivers; it is shown as "Downside case". `keys` are the cases' keys in step with `cases`.
++    drivers; it is shown as "Downside case", its note naming the basis the model states.
++    `keys` are the cases' keys in step with `cases`.
+     """
+     named = {key: case for key, case in zip(keys, cases, strict=True) if case[1]}  # computed only
+     chosen = next((key for key in ("DOWNSIDE", "DOWNSIDE_DRIVERS") if key in named), None)
+@@ -2003,7 +2012,8 @@ def main_cases(cases: Forecast, keys: list[str]) -> tuple[Forecast, Forecast, st
+     if chosen is not None:
+         main.append((DOWNSIDE_CASE, named[chosen][1]))
+     other = [case for key, case in named.items() if key not in ("REFERENCE", chosen)]
+-    return main, other, DOWNSIDE_NOTES[chosen]
++    on_drivers = chosen == "DOWNSIDE" and named[chosen][0] == STRESS_ON_DOWNSIDE_DRIVERS
++    return main, other, DOWNSIDE_NOTES["DOWNSIDE_ON_DRIVERS" if on_drivers else chosen]
+ 
+ 
+ def cell_count(rows: int, columns: int) -> int:
+diff --git a/docs/rulings/2026-11-13-downside-follows-forward-model.md b/docs/rulings/2026-11-13-downside-follows-forward-model.md
+new file mode 100644
+index 0000000..62075a4
+--- /dev/null
++++ b/docs/rulings/2026-11-13-downside-follows-forward-model.md
+@@ -0,0 +1,43 @@
++# Ruling: the Forecast page's Downside follows the forward credit model
++
++by: user
++date: 2026-11-13
++
++This ruling lifts no pause and authorises no provider call. It reverses one earlier ruling and
++fixes the meaning of one field.
++
++Reverses: the owner ruling of 2026-11-10 recorded in the comment at
++`src/deploy_workflow/owners/cpos_forecast.py` ("CP-2G's own cases are computed from their changed
++drivers; CP-2A's shock is a separate case on base drivers, never compounded with CP-2G's
++downside").
++
++Why: on the real run `tdg-full-copilot-sol-high-001-resume` (TransDigm, as of 30 September 2024)
++the Forecast page's Downside showed FY2025 EBITDA 3,739.24, interest 1,553.21, coverage 2.41x and
++positive cash in every year, while the forward credit model's own handoff states EBITDA 3,338.61,
++interest 1,982.94, coverage 1.68x and a funding gap from FY2026. Two causes:
++
++- The page applied the downside module's shock to the base drivers (12% growth); the forward
++  credit model's downside is its own drivers (flat sales) with the same shock.
++- The forward credit model put an additive yield change (0.0184) in `rate_increase`, a field the
++  code reads as a proportional increase. The downside module had stated 0.30, proportional. On the
++  run `tdg-full-copilot-sol-001-resume` the same field carried 0.025, proportional.
++
++The owner's words (2026-11-13, given in the coordinator session and relayed to the building
++session): asked which downside the Forecast page shows, "They should be complimentary to the
++forward model. It's assumptions are driven by its upstream"; shown options A, B and C, "A".
++
++Ruled (option A):
++
++1. The Downside stress case is the downside module's shock applied to the forward credit model's
++   own downside drivers. Where the forward credit model sets no downside drivers, the shock is
++   applied to the base drivers, as before.
++2. `downside_shock.rate_increase` is the downside module's proportional increase in cash interest
++   (0 to 1), copied unchanged. It is never a yield change.
++3. The forward credit model's instruction says so, and the launcher sends back for repair a
++   forecast block whose shock is not one of the downside module's stated scenarios.
++4. A run delivered before this ruling is not changed. It agrees with its forward credit model
++   only after it is run again, which is the owner's separate, paid action.
++
++Known limit: the forward credit model of the run above rounded its shocked yield to 0.0797, so its
++printed interest (1,982.94) differs from the exact proportional figure (1,982.69) by 0.25; coverage
++is 1.68x on both.
+diff --git a/src/deploy_workflow/owners/cpos_forecast.py b/src/deploy_workflow/owners/cpos_forecast.py
+index af03733..4f37962 100644
+--- a/src/deploy_workflow/owners/cpos_forecast.py
++++ b/src/deploy_workflow/owners/cpos_forecast.py
+@@ -742,19 +742,24 @@ def model_files(
+             for key, o in inputs.base.items()
+         }
+     )
+-    # Owner, 2026-11-10: CP-2G's own cases are computed from their changed drivers; CP-2A's shock
+-    # is a separate case on base drivers, never compounded with CP-2G's downside.
++    # Owner ruling docs/rulings/2026-11-13-downside-follows-forward-model.md (reverses the owner
++    # ruling of 2026-11-10, which kept CP-2A's shock on base drivers): the stress case is the shock
++    # over the forward model's own downside drivers, or over the base drivers when it sets none.
+     base = inputs.base_drivers
++    stress_basis = base if inputs.downside_drivers is None else inputs.downside_drivers.over(base)
+     cases: dict[str, tuple[cp2g.BaseDrivers, tuple[Decimal, Decimal] | None]] = {
+         "REFERENCE": (base, None)
+     }
+     if inputs.upside_drivers is not None:
+         cases["UPSIDE"] = (inputs.upside_drivers.over(base), None)
+     if inputs.downside_drivers is not None:
+-        cases["DOWNSIDE_DRIVERS"] = (inputs.downside_drivers.over(base), None)
++        cases["DOWNSIDE_DRIVERS"] = (stress_basis, None)
+     if inputs.downside_shock is not None:
+         shock = inputs.downside_shock
+-        cases["DOWNSIDE"] = (base, (Decimal(shock.ebitda_decline), Decimal(shock.rate_increase)))
++        cases["DOWNSIDE"] = (
++            stress_basis,
++            (Decimal(shock.ebitda_decline), Decimal(shock.rate_increase)),
++        )
+     facilities = inputs.facilities
+     plan = None if facilities is None else schedule(facilities)
+     totals = None if plan is None else plan.totals()
+@@ -800,6 +805,13 @@ def model_files(
+             # byte for byte.
+             **_stated("upside_drivers", inputs.upside_drivers),
+             **_stated("downside_drivers", inputs.downside_drivers),
++            # Written only when the shock was applied over downside drivers, so a block without
++            # either is byte for byte what it was.
++            **(
++                {"downside_basis": "downside_drivers"}
++                if inputs.downside_shock is not None and inputs.downside_drivers is not None
++                else {}
++            ),
+             "outputs": outputs,
+             **detail,
+             # Written only when the block states `scale`, so a block without it is byte for byte
+diff --git a/src/deploy_workflow/owners/cpos_launch.py b/src/deploy_workflow/owners/cpos_launch.py
+index 4f6f5e1..885d745 100644
+--- a/src/deploy_workflow/owners/cpos_launch.py
++++ b/src/deploy_workflow/owners/cpos_launch.py
+@@ -14,6 +14,7 @@ import argparse
+ import hashlib
+ import importlib.util
+ import json
++import logging
+ import os
+ import re
+ import sys
+@@ -108,6 +109,8 @@ from deploy_workflow.prose_checks import (
+ from deploy_workflow.run_expectations import Item, edges_for, expectations, guess_kind
+ from deploy_workflow.workflow import _put
+ 
++log = logging.getLogger(__name__)
++
+ ROOT = Path(__file__).resolve().parents[3]
+ HTML_SUFFIXES = frozenset({".htm", ".html"})
+ # Converted to text pages, pinned as ``<name>.jsonl``: HTML filings and Word documents.
+@@ -1881,8 +1884,10 @@ FORECAST_BLOCK = (
+     f"{', '.join(f'`{c}`' for c in get_args(Category))}. When the method gives no forecast "
+     "(for example a blocked dependency), still write the block, with every driver's `values` as "
+     "`[null, null, null]`. `downside_shock` is "
+-    '`{"ebitda_decline": "<0 to 1>", "rate_increase": "<0 to 1>"}` from the CP-2A '
+-    "scenario, or null when no shock was supplied; Python applies it to the base drivers. "
++    '`{"ebitda_decline": "<0 to 1>", "rate_increase": "<0 to 1>"}`: both values are copied '
++    "unchanged from one CP-2A scenario row; `rate_increase` is that row's proportional "
++    "cash-interest increase, never a yield change; null when no shock was supplied; Python "
++    "applies it to your downside drivers, or to the base drivers when you set none. "
+     "`upside_drivers` and `downside_drivers` are your own upside and downside cases: each holds "
+     "only the drivers that differ from base, in the same driver form (every other driver is "
+     "inherited from base), or null when you set no such case. "
+@@ -2811,7 +2816,119 @@ def _forecast_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
+             fix = "Correct the block; if you cannot, set every driver's values to "
+             advice = f"{fix}[null, null, null] and say why in scope_limits."
+         return (f"Forecast inputs: {stem}. {advice}",)
+-    return _unstated_currency(inputs)
++    return (*_unstated_currency(inputs), *_shock_issues(task, inputs))
++
++
++# A Share as cp2g writes one: 0, 1, 0.d to 0.dddd or 1.0 to 1.0000, and nothing numeric after it
++# (so 20%, 0.31606, 1.5000, +0.30 and **0.20** are not read).
++_SHARE_CELL = re.compile(r"^(?:0\.\d{1,4}|1\.0{1,4}|0|1)(?![\d.%])")
++_PERCENT = re.compile(r"(?<![\d.])(\d+(?:\.\d+)?)%")
++_SCENARIO_MARKER = "<!-- table-id: T2DS.1 -->"
++_MAX_LISTED_SCENARIOS = 8
++
++
++def _t2ds_rows(cp2a: str) -> tuple[list[list[str]], str]:
++    """The rows of table T2DS.1 (header, divider, data) and the reason when there are none."""
++    lines = cp2a.replace("\r\n", "\n").split("\n")
++    marker = [i for i, line in enumerate(lines) if line.strip() == _SCENARIO_MARKER]
++    if len(marker) != 1:
++        return [], f"the marker of table T2DS.1 appears {len(marker)} times"
++    tail = lines[marker[0] + 1 :]
++    rows: list[list[str]] = []
++    for n, line in enumerate(tail):
++        if line.startswith("|"):
++            if "\\|" in line:
++                return [], "a table line holds an escaped pipe"
++            rows.append([cell.strip() for cell in line.strip().strip("|").split("|")])
++        elif rows or line.strip():  # blank lines before the table are skipped
++            if rows and "|" in next((after for after in tail[n:] if after.strip()), ""):
++                return [], "a line with a pipe follows the table's last pipe line"
++            break
++    if len(rows) > 1 and not all(re.fullmatch(r"[-: ]+", cell) for cell in rows[1]):
++        return [], "the second table row is not a divider"
++    return rows, "" if len(rows) > 2 else "table T2DS.1 has no data rows"
++
++
++def _t2ds_columns(header: list[str]) -> tuple[int, int] | None:
++    cells = [cell.lower() for cell in header]
++    found = [[i for i, cell in enumerate(cells) if name in cell] for name in _SCENARIO_COLUMNS]
++    if any(len(each) != 1 for each in found) or found[0] == found[1]:
++        return None
++    return found[0][0], found[1][0]
++
++
++_SCENARIO_COLUMNS = ("ebitda decline", "interest increase")
++
++
++def _share(cell: str) -> str | None:
++    found = _SHARE_CELL.match(cell)
++    if found is None:
++        return None
++    percent = Decimal(found.group(0)) * 100
++    rest = _PERCENT.sub(lambda m: "" if Decimal(m[1]) == percent else "0", cell[found.end() :])
++    return None if re.search(r"\d", rest) else found.group(0)
++
++
++def _t2ds_pairs(rows: list[list[str]], columns: tuple[int, int]) -> list[tuple[str, str]] | str:
++    """Every data row's two Shares, or the reason a row does not give them."""
++    pairs = []
++    for row in rows[2:]:  # the header and its divider are not scenarios
++        read = [_share(row[i]) if i < len(row) else None for i in columns]
++        if read[0] is None or read[1] is None:
++            return f"a scenario row has a cell that does not open with a Share: {str(row)[:200]}"
++        pairs.append((read[0], read[1]))
++    return pairs
++
++
++def _cp2a_scenarios(cp2a: str) -> tuple[tuple[str, str], ...]:
++    """The (EBITDA decline, cash-interest increase) pairs of CP-2A's table T2DS.1, each as the
++    Share its cell opens with. Empty (the check does not run) unless Python read the whole table
++    without doubt: one marker, one cell for each column, every data row long enough and both its
++    cells opening with a Share, and at least one row that is not the zero control. Documented
++    fail-open: a repair round costs a paid call, so a block is sent back only for a table Python
++    read completely; the reason is logged at WARNING."""
++    rows, why = _t2ds_rows(cp2a)
++    columns = _t2ds_columns(rows[0]) if not why else None
++    if not why and columns is None:
++        why = "the header lacks exactly one EBITDA decline cell and one interest increase cell"
++    pairs = _t2ds_pairs(rows, columns) if columns else []
++    if isinstance(pairs, str):
++        why, pairs = pairs, []
++    if not why and all(Decimal(s) == 0 and Decimal(k) == 0 for s, k in pairs):
++        why = "no scenario row is other than the zero control"
++    if why:
++        log.warning("CP-2A scenarios not checked against downside_shock: %s", why)
++        return ()
++    return tuple(pairs)
++
++
++def _shock_issues(task: HandoffTask, inputs: cpos_forecast.ForecastInputs) -> tuple[str, ...]:
++    """The block's `downside_shock` must be one of CP-2A's stated scenarios (owner ruling
++    2026-11-13). Documented fail-open, logged at WARNING with its reason (`_cp2a_scenarios`): when
++    CP-2A is not sent, or Python did not read the whole of its T2DS.1 table, nothing is checked
++    and the block is not sent back."""
++    stated = inputs.downside_shock
++    if stated is None:
++        return ()
++    if "CP-2A" not in task.handoffs:
++        log.warning("CP-2A scenarios not checked against downside_shock: CP-2A is not sent")
++        return ()
++    scenarios = _cp2a_scenarios(task.handoffs["CP-2A"].decode("utf-8"))
++    pair = (Decimal(stated.ebitda_decline), Decimal(stated.rate_increase))
++    if not scenarios or pair in {(Decimal(s), Decimal(k)) for s, k in scenarios}:
++        return ()
++    shown = scenarios[:_MAX_LISTED_SCENARIOS]
++    listed = "; ".join(f"{s} / {k}" for s, k in shown)
++    if len(scenarios) > len(shown):
++        listed += f"; and {len(scenarios) - len(shown)} more"
++    issue = (
++        f"Forecast inputs: `downside_shock` ({stated.ebitda_decline} / {stated.rate_increase}) "
++        "is not a CP-2A scenario. It must copy one CP-2A scenario unchanged: `rate_increase` is "
++        "that scenario's proportional increase in cash interest (0 to 1), never a yield change. "
++        f"CP-2A's table T2DS.1 states (EBITDA decline / cash-interest increase): {listed}. "
++        "If you cannot copy one of them, set `downside_shock` to null."
++    )
++    return (issue,)
+ 
+ 
+ def _unstated_currency(inputs: cpos_forecast.ForecastInputs) -> tuple[str, ...]:
+diff --git a/tests/fixtures/tdg_sol_high_2026_11_13/CP-1-tables.md b/tests/fixtures/tdg_sol_high_2026_11_13/CP-1-tables.md
+new file mode 100644
+index 0000000..58b75cf
+--- /dev/null
++++ b/tests/fixtures/tdg_sol_high_2026_11_13/CP-1-tables.md
+@@ -0,0 +1,122 @@
++
++| Metric | FY2024 | FY2023 | Unit | Definition and limitation | Source |
++|---|---:|---:|---|---|---|
++| EBITDA | 3813 | 3148 | USD millions | Issuer-reported non-GAAP measure; reconciled from consolidated net income, not income attributable to common stockholders. C04. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 71 |
++| EBITDA As Defined | 4173 | 3395 | USD millions | Issuer-adjusted EBITDA; common denominator for primary leverage and cash-interest cover. C06. No house adjustments or acquisition annualization. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 71 |
++| Total debt principal | 25068 | 19913 | USD millions | Calculated; includes short-term receivables borrowing, government advances and finance leases; excludes operating leases. C07. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 144–145 |
++| Total debt carrying amount | 24880 | 19750 | USD millions | Calculated; includes current and noncurrent debt and receivables borrowing after issuance costs and discounts/premiums. C08. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 144–145 |
++| Undrawn committed revolving facilities at year-end | 843 | 755 | USD millions | Reported available borrowing, not total commitment; receivables availability excluded from this row. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 152 |
++| Revolving commitments at year-end | 910 | 810 | USD millions | Commitment, not cash availability. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 152 |
++| Free cash flow after capital expenditure | 1880 | 1236 | USD millions | Calculated CFO less capital expenditures; levered, after cash interest and taxes; excludes acquisitions, distributions and finance-lease principal. C16. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 123 |
++| Free cash flow after acquisitions | -467 | 474 | USD millions | C17; excludes other investing transactions. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 123 |
++| Free cash flow after acquisitions and paid distributions | -2505 | 436 | USD millions | C18; excludes other investing transactions, equity and financing flows; not the change in cash. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 123 |
++| EBITDA As Defined margin | 52.56 | 51.56 | % | C37; rounded display of issuer-adjusted EBITDA / net sales. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 71–71; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 121 |
++| CFO / EBITDA As Defined | 49.01 | 40.50 | % | C38; after working capital, interest and taxes. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 71 |
++| Free cash flow / EBITDA As Defined | 45.05 | 36.41 | % | C39; not a pre-interest conversion measure. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 71–71; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 123 |
++| Total debt / unadjusted EBITDA | 6.57 | 6.33 | x | C14; definition sensitivity, not a second primary denominator. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 71; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 144–145 |
++| Net debt / unadjusted EBITDA | 4.93 | 5.22 | x | C15; historical balance sheet only. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 71; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 144–145 |
++| Revenue growth | 20.58 | Not supplied: FY2022 not assembled for this comparison | % | C40; annual reported growth, not organic growth. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 121 |
++| EBITDA As Defined growth | 22.92 | Not supplied: FY2022 adjusted reconciliation not assembled | % | C41; annual reported perimeter, including acquisitions from their respective acquisition dates. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 71 |
++
++
++| Reported line | FY2024 | FY2023 | Unit | Presentation | Source |
++|---|---:|---:|---|---|---|
++| NET SALES | 7940 | 6585 | USD millions | Revenue | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 121 |
++| COST OF SALES | 3268 | 2743 | USD millions | Outflow magnitude; above gross profit | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 121 |
++| GROSS PROFIT | 4672 | 3842 | USD millions | Reported subtotal | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 121 |
++| SELLING AND ADMINISTRATIVE EXPENSES | 980 | 780 | USD millions | Outflow magnitude; below gross profit | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 121 |
++| AMORTIZATION OF INTANGIBLE ASSETS | 161 | 139 | USD millions | Outflow magnitude; below gross profit; not total D&A | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 121 |
++| INCOME FROM OPERATIONS | 3531 | 2923 | USD millions | Reported operating profit | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 121 |
++| INTEREST EXPENSE—NET | 1286 | 1164 | USD millions | Outflow magnitude; includes interest income netting and noncash financing amortization | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 121 |
++| REFINANCING COSTS | 58 | 56 | USD millions | Outflow magnitude; below operating profit | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 121 |
++| OTHER (INCOME) EXPENSE | -28 | -13 | USD millions | Reported expense-oriented sign; negative means income; C42 reverses this sign when building pretax income | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 121 |
++| INCOME FROM CONTINUING OPERATIONS BEFORE INCOME TAXES | 2215 | 1716 | USD millions | Reported subtotal | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 121 |
++| INCOME TAX PROVISION | 500 | 417 | USD millions | Outflow magnitude | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 121 |
++| INCOME FROM CONTINUING OPERATIONS | 1715 | 1299 | USD millions | Reported subtotal | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 121 |
++| INCOME FROM DISCONTINUED OPERATIONS, NET OF TAX | 0 | 0 | USD millions | Printed dash; no discontinued income in these years | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 121 |
++| NET INCOME | 1715 | 1299 | USD millions | Consolidated earnings used in EBITDA reconciliation | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 121 |
++| LESS: NET INCOME ATTRIBUTABLE TO NONCONTROLLING INTERESTS | -1 | -1 | USD millions | Signed deduction | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 121 |
++| NET INCOME ATTRIBUTABLE TO TD GROUP | 1714 | 1298 | USD millions | After noncontrolling interests | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 121 |
++| NET INCOME APPLICABLE TO TD GROUP COMMON STOCKHOLDERS | 1481 | 1260 | USD millions | After participating-security allocation; not the EBITDA starting point | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 121 |
++
++
++| Reported line | FY2024 | FY2023 | Unit | Presentation / funding review | Source |
++|---|---:|---:|---|---|---|
++| Cash and cash equivalents | 6261 | 3472 | USD millions | Signed asset; year-end instant | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 120 |
++| Trade accounts receivable—Net | 1381 | 1230 | USD millions | Signed asset; receivables collateral must not be treated as unencumbered | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 120 |
++| Inventories—Net | 1876 | 1616 | USD millions | Signed asset | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 120 |
++| Prepaid expenses and other | 511 | 420 | USD millions | Signed asset | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 120 |
++| Total current assets | 10029 | 6738 | USD millions | Reported subtotal | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 120 |
++| PROPERTY, PLANT AND EQUIPMENT—NET | 1488 | 1255 | USD millions | Signed asset | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 120 |
++| GOODWILL | 10419 | 8988 | USD millions | Signed asset; not a cash liquidity resource | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 120 |
++| OTHER INTANGIBLE ASSETS—NET | 3446 | 2747 | USD millions | Signed asset | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 120 |
++| OTHER NON-CURRENT ASSETS | 204 | 242 | USD millions | Signed asset | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 120 |
++| TOTAL ASSETS | 25586 | 19970 | USD millions | Reported total; C43 checked | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 120 |
++| Current portion of long-term debt | 98 | 71 | USD millions | Carrying amount, not principal | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 120 |
++| Short-term borrowings—trade receivable securitization facility | 486 | 349 | USD millions | Debt carrying amount; included in total debt, not operating working capital | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 120 |
++| Accounts payable | 323 | 305 | USD millions | Operating supplier funding, not added to financial debt | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 120 |
++| Dividends payable | 4216 | 0 | USD millions | Material non-debt cash commitment; prior-year printed dash; subsequent settlement separate | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 120 |
++| Accrued and other current liabilities | 1216 | 854 | USD millions | Reviewed through detail below; no blanket reclassification as debt | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 120 |
++| Total current liabilities | 6339 | 1579 | USD millions | Reported subtotal | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 120 |
++| LONG-TERM DEBT | 24296 | 19330 | USD millions | Noncurrent carrying amount | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 120 |
++| DEFERRED INCOME TAXES | 766 | 627 | USD millions | Non-debt liability; not assumed to require immediate cash settlement | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 120 |
++| OTHER NON-CURRENT LIABILITIES | 468 | 412 | USD millions | Includes longer-dated dividend equivalents, customer advances and operating leases; not all debt | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 120 |
++| Total liabilities | 31869 | 21948 | USD millions | Reported total | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 120 |
++| Common stock | 1 | 1 | USD millions | Monetary par-value balance; not a share count | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 120 |
++| Additional paid-in capital | 2819 | 2440 | USD millions | Equity | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 120 |
++| Accumulated deficit | -7362 | -2621 | USD millions | Signed equity deficit | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 120 |
++| Accumulated other comprehensive loss | -42 | -98 | USD millions | Signed equity component | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 120 |
++| Treasury stock, at cost | -1706 | -1706 | USD millions | Monetary balance; not a share count | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 120 |
++| Total TD Group stockholders’ deficit | -6290 | -1984 | USD millions | Equity, not a material non-debt funding item | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 120 |
++| NONCONTROLLING INTERESTS | 7 | 6 | USD millions | Equity | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 120 |
++| Total stockholders’ deficit | -6283 | -1978 | USD millions | Consolidated equity | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 120 |
++| TOTAL LIABILITIES AND STOCKHOLDERS’ DEFICIT | 25586 | 19970 | USD millions | C43 checked against total assets | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 120 |
++
++
++| Reported line | FY2024 | FY2023 | Unit | Presentation | Source |
++|---|---:|---:|---|---|---|
++| Net income | 1715 | 1299 | USD millions | Signed operating starting point | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 122 |
++| Income from discontinued operations, net of tax | 0 | 0 | USD millions | Printed dash | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 122 |
++| Depreciation | 149 | 129 | USD millions | Noncash reconciliation | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 122 |
++| Amortization of intangible assets and product certification costs | 163 | 139 | USD millions | Noncash reconciliation; broader than income-statement intangible amortization | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 122 |
++| Amortization of debt issuance costs, original issue discount and premium | 40 | 41 | USD millions | Financing amortization, not operating D&A | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 122 |
++| Amortization of inventory step-up | 21 | 2 | USD millions | Noncash reconciliation | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 122 |
++| Amortization of loss contract reserves | -35 | -34 | USD millions | Signed reconciliation | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 122 |
++| Refinancing costs | 58 | 56 | USD millions | Operating reconciliation, not all a cash payment in this period | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 122 |
++| Gain on sale of businesses, net | -11 | 0 | USD millions | Signed reconciliation; prior-year printed dash | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 122 |
++| Non-cash stock and deferred compensation expense | 217 | 157 | USD millions | Noncash reconciliation | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 122 |
++| Deferred income taxes | 10 | 3 | USD millions | Noncash reconciliation | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 122 |
++| Foreign currency exchange losses (gains) | 20 | 14 | USD millions | Signed reconciliation | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 123 |
++| (Gain) loss on settlement of the Esterline Retirement Plan (the “ERP”) | 0 | -9 | USD millions | Signed reconciliation | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 123 |
++| Cash refund (contribution) for the ERP settlement, net | 0 | 9 | USD millions | FY2023 signed cash inflow; not an outflow-magnitude cash expense | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 123 |
++| Trade accounts receivable | -84 | -212 | USD millions | Signed operating change, excluding acquisitions/disposals | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 123 |
++| Inventories | -104 | -261 | USD millions | Signed operating change | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 123 |
++| Income taxes (receivable) payable | -62 | 168 | USD millions | Signed operating change | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 123 |
++| Other assets | -60 | -44 | USD millions | Signed operating change | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 123 |
++| Accounts payable | -11 | 12 | USD millions | Signed operating change | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 123 |
++| Accrued interest | 60 | -45 | USD millions | Signed operating change | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 123 |
++| Accrued and other liabilities | -41 | -49 | USD millions | Signed operating change | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 123 |
++| Net cash provided by operating activities | 2045 | 1375 | USD millions | Reported CFO | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 123 |
++| Capital expenditures | -165 | -139 | USD millions | Signed investing outflow | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 123 |
++| Acquisition of businesses, net of cash acquired | -2347 | -762 | USD millions | Signed investing outflow | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 123 |
++| Other investing transactions | 71 | 1 | USD millions | Signed investing inflow; not all labelled disposal proceeds | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 123 |
++| Net cash used in investing activities | -2441 | -900 | USD millions | Reported investing cash flow | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 123 |
++| Proceeds from exercise of stock options | 245 | 215 | USD millions | Signed financing inflow | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 123 |
++| Dividends and dividend equivalent payments | -2038 | -38 | USD millions | Signed financing outflow; does not include subsequent October payment | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 123 |
++| Repurchases of common stock | 0 | 0 | USD millions | Printed dash | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 123 |
++| Proceeds from issuance of senior secured notes, net | 7373 | 3504 | USD millions | Signed financing inflow; net proceeds, not principal | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 123 |
++| Repayments of senior secured notes | -4400 | -1122 | USD millions | Signed financing outflow | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 123 |
++| Repayments of senior subordinated notes, net | -550 | -1459 | USD millions | Signed financing outflow | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 123 |
++| Repayment on revolving credit facility | 0 | 0 | USD millions | Printed dash | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 123 |
++| Proceeds from trade receivable securitization facility, net | 137 | 0 | USD millions | Signed financing inflow; rounded annual cash-flow presentation | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 123 |
++| Proceeds from term loans, net | 6815 | 6238 | USD millions | Signed financing inflow; net proceeds, not principal | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 123 |
++| Repayment on term loans | -4403 | -7334 | USD millions | Signed financing outflow | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 123 |
++| Financing costs and other, net | -8 | -20 | USD millions | Signed financing outflow | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 123 |
++| Net cash provided by (used in) financing activities | 3171 | -16 | USD millions | Reported financing cash flow | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 123 |
++| EFFECT OF EXCHANGE RATE CHANGES ON CASH AND CASH EQUIVALENTS | 14 | 12 | USD millions | Signed FX effect | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 123 |
++| NET INCREASE (DECREASE) IN CASH AND CASH EQUIVALENTS | 2789 | 471 | USD millions | Reported change | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 123 |
++| CASH AND CASH EQUIVALENTS, BEGINNING OF PERIOD | 3472 | 3001 | USD millions | Opening instant in cash-flow roll-forward | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 123 |
++| CASH AND CASH EQUIVALENTS, END OF PERIOD | 6261 | 3472 | USD millions | Closing instant in cash-flow roll-forward | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 123 |
++| Cash paid during the period for interest, net | 1158 | 1160 | USD millions | Supplemental outflow magnitude; primary cash-interest denominator | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 123 |
++| Cash paid during the period for income taxes, net of refunds | 539 | 260 | USD millions | Supplemental outflow magnitude | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 123 |
++
+diff --git a/tests/fixtures/tdg_sol_high_2026_11_13/CP-2A-T2DS.1-sol-001.md b/tests/fixtures/tdg_sol_high_2026_11_13/CP-2A-T2DS.1-sol-001.md
+new file mode 100644
+index 0000000..3265e7b
+--- /dev/null
++++ b/tests/fixtures/tdg_sol_high_2026_11_13/CP-2A-T2DS.1-sol-001.md
+@@ -0,0 +1,9 @@
++### T2DS.1 — Scenarios
++<!-- table-id: T2DS.1 -->
++
++| Scenario | EBITDA decline fraction s | Cash-interest increase fraction k | Classification / claim confidence | Anchor and rationale | Source |
++|---|---|---|---|---|---|
++| s00 — control | 0 | 0 | Unstressed control; source-based operands | Reconcile the selected FY2024 financial base before applying shocks. | Financial foundation (CP-1) |
++| s01 — operating warning | 0.20 | 0.025 (2.5% increase) | Analyst Interpretation; Medium | EBITDA shock is below half the calculated 45.05% FCF-zero decline, but above the 14.83% leverage-watch decline. Cash-interest increment USD 28.95 million approximates the issuer’s USD 30 million exposure illustration. | calculation C06; calculation C09; calculation C10; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 73 |
++| s02 — cash-conversion break | 0.45 | 0.05 | Analyst Interpretation; Medium | EBITDA shock is just below the unchanged-interest FCF breakpoint; USD 57.90 million interest increment tests a larger expense shock than the disclosed USD 30 million illustration. | calculation C06; calculation C09; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 73 |
++| s03 — debt-service tail | 0.75 | 0.10 | Analyst Interpretation; Low | EBITDA shock exceeds the calculated 72.25% EBITDA-equals-base-interest decline; USD 115.80 million interest increment tests materially greater expense pressure. Tail diagnostic, not a forecast or probability. | calculation C06; calculation C09; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 73 |
+diff --git a/tests/fixtures/tdg_sol_high_2026_11_13/CP-2A-T2DS.1.md b/tests/fixtures/tdg_sol_high_2026_11_13/CP-2A-T2DS.1.md
+new file mode 100644
+index 0000000..94e1a60
+--- /dev/null
++++ b/tests/fixtures/tdg_sol_high_2026_11_13/CP-2A-T2DS.1.md
+@@ -0,0 +1,7 @@
++
++<!-- table-id: T2DS.1 -->
++| Scenario | Name | EBITDA decline s | Cash-interest increase k | Anchor and exclusions | Category / confidence | Source |
++|---|---|---|---|---|---|---|
++| s00 | FY2024 unchanged control | 0.0000 fraction; 0% | 0.0000 fraction; 0% | Full annual baseline; no subsequent event or new normalisation | Analyst Interpretation; Medium for base selection | Financial foundation (CP-1) |
++| s01 | Moderate joint operating/interest stress | 0.2000 fraction; 20% | 0.3000 fraction; 30% | Earnings loss below 0.2547328061 leverage-watch decline; cash-rate shock anchored to 0.3160621762 scheduled-interest comparison. Leaves out revenue elasticity and instrument-level rates | Analyst Interpretation; Medium | calculation C08; calculation C10 |
++| s02 | Adverse joint operating/interest stress | 0.4000 fraction; 40% | 0.3000 fraction; 30% | Earnings loss below 0.4505152169 base FCF-zero decline but above 0.3672657561 joint FCF-zero decline. Same interest anchor; no probability, tax shield or cash-response actions | Analyst Interpretation; Medium | calculation C08; calculation C09; calculation C10 |
+diff --git a/tests/fixtures/tdg_sol_high_2026_11_13/CP-2G-forecast-block.md b/tests/fixtures/tdg_sol_high_2026_11_13/CP-2G-forecast-block.md
+new file mode 100644
+index 0000000..3f2822b
+--- /dev/null
++++ b/tests/fixtures/tdg_sol_high_2026_11_13/CP-2G-forecast-block.md
+@@ -0,0 +1,62 @@
++### Forecast inputs (machine-readable)
++
++```json
++{
++  "schema_version": "cpos-forecast-inputs/1",
++  "currency": "USD",
++  "scale": 1,
++  "base": {
++    "revenue": {"amount": "7940", "reason": null, "row": "NET SALES", "period": "FY2024"},
++    "ebitda": {"amount": "4173", "reason": null, "row": "EBITDA As Defined", "period": "FY2024"},
++    "interest": {"amount": "1158", "reason": null, "row": "Cash paid during the period for interest, net", "period": "FY2024"},
++    "taxes": {"amount": "539", "reason": null, "row": "Cash paid during the period for income taxes, net of refunds", "period": "FY2024"},
++    "wc": {"amount": null, "reason": "Financial foundation has individual signed operating-change rows, but no aggregate working-capital amount in a table cell under a reporting-period header. Its differently scoped changes-block calculation is not such a cell."},
++    "capex": {"amount": "165", "reason": null, "row": "Capital expenditures", "period": "FY2024"},
++    "fcf": {"amount": "1880", "reason": null, "row": "Free cash flow after capital expenditure", "period": "FY2024"},
++    "debt": {"amount": "24880", "reason": null, "row": "Total debt carrying amount", "period": "FY2024"},
++    "cash": {"amount": "6261", "reason": null, "row": "Cash and cash equivalents", "period": "FY2024"},
++    "undrawn": {"amount": "843", "reason": null, "row": "Undrawn committed revolving facilities at year-end", "period": "FY2024"}
++  },
++  "base_drivers": {
++    "revenue_growth": {"values": ["0.12", "0.12", "0.12"], "category": "Analyst Interpretation", "rationale": "Carry the annual report's FY2024 commercial-aftermarket organic growth of 12.0% across the consolidated company, below total organic growth of 16.2%.", "limitation": "This is a consolidated scenario anchor, not channel guidance, a volume-price bridge or acquisition annualisation."},
++    "ebitda_margin": {"values": ["0.5256", "0.5256", "0.5256"], "category": "Analyst Interpretation", "rationale": "Carry FY2024 EBITDA As Defined of 4173 divided by revenue of 7940, rounded to four decimal places.", "limitation": "Issuer adjustments remain embedded; no additional margin expansion, acquisition synergies or contractual EBITDA equivalence is assumed."},
++    "capex_pct_revenue": {"values": ["0.0208", "0.0208", "0.0208"], "category": "Analyst Interpretation", "rationale": "Carry FY2024 capital expenditure magnitude of 165 divided by revenue of 7940, rounded to four decimal places.", "limitation": "Maintenance and growth spending are not separately forecast; proportional spending may miss mandatory projects."},
++    "tax_wc_pct_revenue": {"values": ["0.1222", "0.1222", "0.1222"], "category": "Analyst Interpretation", "rationale": "Carry the historical composite cash leakage of EBITDA As Defined 4173 less net cash interest 1158 less CFO 2045, or 970, divided by revenue 7940, rounded to four decimal places.", "limitation": "Despite the field name, this includes taxes, working capital and adjusted-earnings-to-cash differences. It is not pure working capital and does not separately forecast cash taxes or a tax shield."},
++    "interest_rate": {"values": ["0.0613", "0.0613", "0.0613"], "category": "Analyst Interpretation", "rationale": "Disclosed less-than-one-year scheduled interest of 1524 divided by opening carrying debt of 24880, rounded to four decimal places; apply to opening annual debt.", "limitation": "Composite financing yield, not a coupon or SOFR curve. Later-year hedge changes, intrayear balances and incremental interest on the October draw are not independently modelled."},
++    "dividends": {"values": ["4348", "2038", "2038"], "category": "Analyst Interpretation", "rationale": "FY2025 uses the documented October payment of 4216 plus 132. Later years repeat FY2024 paid dividends and equivalents of 2038 as a financial-policy continuation case.", "limitation": "Only the first payment is documented as occurring. Repetition is not a declared future distribution and excludes an additional timing allocation for residual dividend-equivalent liabilities."},
++    "debt_repayment": {"values": ["580", "92", "92"], "category": "Documentary Fact", "rationale": "Financial foundation's annual maturity schedule: FY2025 93 plus year-end receivables principal 487, then 92 and 92; no receivables renewal presumed.", "limitation": "Excludes finance-lease principal allocations. FY2025 is net of the matched subsequent 162.5 draw and its additional 162.5 repayment, which cancel annually; debt issuance-cost amortisation is held constant."}
++  },
++  "downside_shock": {"ebitda_decline": "0.2", "rate_increase": "0.0184"},
++  "upside_drivers": {
++    "revenue_growth": {"values": ["0.162", "0.162", "0.162"], "category": "Analyst Interpretation", "rationale": "Carry the disclosed FY2024 total organic growth of 16.2% rather than the base 12.0% aftermarket anchor.", "limitation": "No claim that historical recovery growth persists or that future acquisitions are included."},
++    "dividends": {"values": ["4348", "38", "38"], "category": "Analyst Interpretation", "rationale": "Retain the documented October settlement, then use FY2023 paid distributions of 38 as an anchor for suspending future special dividends while retaining a smaller payment allowance.", "limitation": "Requires management action; 38 is not a contractual floor or a stated future payment."}
++  },
++  "downside_drivers": {
++    "revenue_growth": {"values": ["0", "0", "0"], "category": "Analyst Interpretation", "rationale": "Hold the sourced FY2024 revenue of 7940 flat, disconfirming continuation of 12.0% aftermarket and 16.2% total organic growth. Apply the separate moderate earnings and financing stress to that flat-sales case.", "limitation": "Flat sales are an explicit scenario, not a missing value replaced with zero; no measured price-volume or channel-demand elasticity is asserted."}
++  },
++  "facilities": null,
++  "years": [
++    {"year": 2025, "start": "2024-10-01", "end": "2025-09-30"},
++    {"year": 2026, "start": "2025-10-01", "end": "2026-09-30"},
++    {"year": 2027, "start": "2026-10-01", "end": "2027-09-30"}
++  ],
++  "scope_limits": [
++    "Consolidated industrial aerospace company; annual periods; USD millions. No separate matched-funding finance-company perimeter is identified.",
++    "Historical cash is before the committed October settlement. Financial foundation separately states distribution-only pro forma cash of 1913 and principal-based pro forma net debt of 23155 with net leverage of 5.55x. Including the separate draw, it states cash of 2075.5. These are adopted comparisons, not replacement opening balances.",
++    "Downside's selected moderate stress is a 20% earnings decline and 30% proportional increase in cash interest, not a 30-percentage-point rate shock. The proportional interest shock is translated into an additive model-yield change: 0.0613 times 0.30 equals 0.01839, rounded to 0.0184. This is an equivalent aggregate yield sensitivity, not a benchmark-rate prediction.",
++    "Apply the 20% earnings shock once to each year's margin level, not recursively to prior-year stressed earnings. The flat-sales override is an additional explicit operating assumption; the result is not identical to applying only the static stress to the growing base case.",
++    "The upside and downside inherit all base drivers not expressly changed. The downside shock is applied once; do not apply another interest or margin haircut.",
++    "Interest is net cash paid in the historical base, not interest expense. Forward interest uses opening carrying debt and a rounded composite financing yield.",
++    "No complete facility balance-and-rate table is printed by Financial foundation. Instrument cash-interest and hedge schedules therefore are not submitted; aggregate rates control the forecast.",
++    "CFO is a mechanical cash proxy: EBITDA less interest less composite cash leakage. FCF is that CFO less capex, before acquisitions, distributions and debt principal.",
++    "Future acquisitions, disposals, equity proceeds and other unmatched investing/financing flows are excluded as explicit stand-alone scenario boundaries, not claims that unspecified actual flows are zero.",
++    "FY2025 gross flows separately include the subsequent draw of 162.5 and repayment of 742.5; their net debt reduction is 580. Later annual scheduled repayments are 92 and 92. Missing finance-lease principal is not invented.",
++    "The principal-to-carrying difference of 188 is not amortised or silently released. Forecast debt is a carrying-balance proxy reduced by disclosed principal payments, with no additional issuance costs or noncash accretion modelled.",
++    "Undrawn 843 is reported historical revolving availability, not certified accessible liquidity and not an automatic deficit plug. Receivables capacity is not added after its assumed repayment.",
++    "Signed negative cash is a pre-financing funding requirement, not an executable closing cash balance. No automatic revolver drawing, new-money interest or negative-cash netting into leverage is assumed.",
++    "Minimum operating cash, contractual covenant EBITDA, fixed-charge definitions and complete lease-principal schedules are not established. No liquidity-exhaustion date, covenant headroom, rating or security recommendation is produced.",
++    "The three-year horizon ends before FY2028 and FY2029 maturity concentrations; refinancing terms and feasibility remain separate decisions. No case probabilities are assigned.",
++    "The aggregate historical working-capital operand and segment-slot allocation are not supplied in eligible Financial foundation table cells. The composite leakage driver permits a bounded aggregate cash forecast, but division-level workbook forecasts cannot be populated from an inferred segment order."
++  ]
++}
++```
+diff --git a/tests/fixtures/tdg_sol_high_2026_11_13/README.md b/tests/fixtures/tdg_sol_high_2026_11_13/README.md
+new file mode 100644
+index 0000000..96f3006
+--- /dev/null
++++ b/tests/fixtures/tdg_sol_high_2026_11_13/README.md
+@@ -0,0 +1,3 @@
++Also `CP-2A-T2DS.1-sol-001.md`: lines 83-91 of the real tdg-full-copilot-sol-001-resume CP-2A.md (the heading, the marker, the blank line after it, and the table), unedited.
++
++Cut verbatim from the real run `tdg-full-copilot-sol-high-001-resume` (TransDigm, as of 30 September 2024), delivery 20ea7117...: `CP-2G-forecast-block.md` is CP-2G.md lines 71-132 (the forecast inputs block, unedited, `rate_increase` 0.0184 as the module sent it); `CP-1-tables.md` is four whole CP-1.md tables (key metrics, income statement, balance sheet, cash flow), which the block's operands name; `CP-2A-T2DS.1.md` is CP-2A.md table T2DS.1 (lines 226-232).
+diff --git a/tests/test_cpos_facilities.py b/tests/test_cpos_facilities.py
+index 6f6077f..269fd1b 100644
+--- a/tests/test_cpos_facilities.py
++++ b/tests/test_cpos_facilities.py
+@@ -218,7 +218,10 @@ def test_debt_outside_the_facilities_bears_the_analyst_rate_in_every_case():
+         downside_drivers={"interest_rate": {**_driver("interest_rate"), "values": ["0.08"] * 3}},
+     )
+     assert _interest(exact, "REFERENCE") == [D("37.5"), D("34.8"), D("30.6")]
+-    assert _interest(exact, "DOWNSIDE") == [D("41.25"), D("38.28"), D("33.66")]
++    # Ruling 2026-11-13: the shock (k = 0.1) sits on the downside drivers, so the unallocated 50
++    # bears the downside's 0.08: (34.5 + 50 x 0.08) x 1.1 = 42.35, and the same on the later years.
++    # Before the ruling the shock sat on base drivers: [41.25, 38.28, 33.66].
++    assert _interest(exact, "DOWNSIDE") == [D("42.35"), D("39.38"), D("34.76")]
+     assert _interest(exact, "DOWNSIDE_DRIVERS") == [D("38.5"), D("35.8"), D("31.6")]
+ 
+ 
+diff --git a/tests/test_cpos_launch.py b/tests/test_cpos_launch.py
+index 701cf6a..d15a88d 100644
+--- a/tests/test_cpos_launch.py
++++ b/tests/test_cpos_launch.py
+@@ -4037,19 +4037,20 @@ def cased_block(**changes) -> str:
+ def test_cp2g_upside_and_downside_drivers_are_computed_as_their_own_cases(
+     tmp_path, provider, capsys
+ ):
+-    """Owner, 2026-11-10 ("Yes, compute them"): CP-2G's own upside and downside cases are
+-    computed from the drivers it changes, the rest inherited from base; CP-2A's shock stays a
+-    separate case on base drivers, never compounded with them."""
++    """CP-2G's own upside and downside cases are computed from the drivers it changes, the
++    rest inherited from base; by the owner ruling of 2026-11-13, which reverses 2026-11-10 on
++    this point, CP-2A's shock is applied to CP-2G's downside drivers."""
+     code, out, seen = forecast_run(tmp_path, provider, capsys, cased_block())
+     assert code == 0, seen.err
+     (folder,) = (out / "deliveries").iterdir()
+     exact = json.loads((folder / "forecast_exact.json").read_text())
+     assert sorted(exact["outputs"]) == ["DOWNSIDE", "DOWNSIDE_DRIVERS", "REFERENCE", "UPSIDE"]
++    assert exact["downside_basis"] == "downside_drivers"
+     for case, shock, paths in (
+         ("REFERENCE", None, PATHS),
+         ("UPSIDE", None, {**PATHS, **UPSIDE}),
+         ("DOWNSIDE_DRIVERS", None, {**PATHS, **DOWNSIDE}),
+-        ("DOWNSIDE", SHOCK, PATHS),
++        ("DOWNSIDE", SHOCK, {**PATHS, **DOWNSIDE}),
+     ):
+         for year, expected in zip(
+             exact["outputs"][case]["years"], key_case(shock, paths), strict=True
+diff --git a/tests/test_downside_follows_forward_model.py b/tests/test_downside_follows_forward_model.py
+new file mode 100644
+index 0000000..8ec6fb0
+--- /dev/null
++++ b/tests/test_downside_follows_forward_model.py
+@@ -0,0 +1,358 @@
++"""The Downside stress case follows the forward credit model (ruling 2026-11-13).
++
++The fixture is cut verbatim from the real run tdg-full-copilot-sol-high-001-resume; the answer
++keys below are hand-written from that run's own CP-2G figures (CP-2G.md C05) and CP-2A's s01.
++"""
++
++import hashlib
++import json
++import logging
++import re
++import sys
++import types
++from decimal import Decimal
++from pathlib import Path
++
++import pytest
++from hypothesis import given, settings
++from hypothesis import strategies as st
++
++from deploy_workflow.owners import cp2g, cpos_forecast, cpos_launch
++from deploy_workflow.owners.cpos_forecast import model_files
++
++sys.path.insert(0, str(Path(__file__).parents[1] / "apps" / "issuer-library"))
++from credit_os import store
++
++FIXTURE = Path(__file__).parent / "fixtures" / "tdg_sol_high_2026_11_13"
++CP1 = (FIXTURE / "CP-1-tables.md").read_bytes()
++BLOCK = (FIXTURE / "CP-2G-forecast-block.md").read_text(encoding="utf-8")
++T2DS = (FIXTURE / "CP-2A-T2DS.1.md").read_bytes()
++FENCED = re.compile(r"```json\n(.*?)\n```", re.DOTALL)
++
++
++def block_with(**changes) -> str:
++    """The real block with some keys replaced (nothing else edited)."""
++    match = FENCED.search(BLOCK)
++    document = json.loads(match.group(1))
++    document.update(changes)
++    return BLOCK[: match.start(1)] + json.dumps(document) + BLOCK[match.end(1) :]
++
++
++def shock(decline="0.2", increase="0.3"):
++    return {"ebitda_decline": decline, "rate_increase": increase}
++
++
++def exact_of(block: str) -> dict:
++    return json.loads(model_files(CP1, block.encode())["forecast_exact.json"])
++
++
++def sha(raw: bytes) -> str:
++    return hashlib.sha256(raw).hexdigest()
++
++
++# --- 1. the calculation ---------------------------------------------------------------------
++
++
++def test_the_stress_case_is_the_shock_on_the_downside_drivers_for_the_real_run():
++    exact = exact_of(block_with(downside_shock=shock()))
++    years = exact["outputs"]["DOWNSIDE"]["years"]
++    assert [y["revenue"]["amount"] for y in years] == ["7940", "7940", "7940"]  # flat, not +12%
++    first = years[0]
++    assert Decimal(first["ebitda"]["amount"]) == Decimal("3338.6112")  # 7940 x 0.5256 x 0.8
++    # The module printed 1982.936 (CP-2G.md C05) because it rounded its shocked yield to 0.0797.
++    # The proportional field gives the exact figure 24880 x 0.0613 x 1.3 = 1982.6872; the 0.2488
++    # difference is that rounding, and no tolerance is used to make them equal.
++    assert Decimal(first["interest"]["amount"]) == Decimal("1982.68720")
++    coverage = Decimal(first["ebitda"]["amount"]) / Decimal(first["interest"]["amount"])
++    assert coverage.quantize(Decimal("0.01")) == Decimal("1.68")  # the module's own figure
++    assert exact["downside_basis"] == "downside_drivers"
++
++
++def test_without_downside_drivers_the_shock_is_on_the_base_drivers_and_the_bytes_are_unchanged():
++    files = model_files(CP1, block_with(downside_drivers=None).encode())
++    exact = json.loads(files["forecast_exact.json"])
++    assert "downside_basis" not in exact
++    revenue = exact["outputs"]["DOWNSIDE"]["years"][0]["revenue"]["amount"]
++    assert Decimal(revenue) == Decimal("8892.8")  # 7940 x 1.12, base growth
++    # Pinned from origin/main's output for the same block before the change.
++    assert sha(files["forecast_exact.json"]) == (
++        "01595b50efc9e010dacc47aa01ea2b052c5a2b4f22a0d7215079b8530e7177d7"
++    )
++    assert sha(files["calculation.json"]) == (
++        "e2c2cd687f2b3c7a6f423beba59543b4dd0d16e1af5964ea3fa04312ce1d2682"
++    )
++
++
++def test_a_block_with_no_shock_publishes_the_bytes_it_always_did():
++    files = model_files(CP1, block_with(downside_shock=None).encode())
++    assert "downside_basis" not in json.loads(files["forecast_exact.json"])
++    assert sha(files["forecast_exact.json"]) == (
++        "80ca308273bf8baf666c63f0c82e2e74fee70a2a13befe627c64ca0a8394a5d1"
++    )
++    assert sha(files["calculation.json"]) == (
++        "177de2661617322811f741e16b764dc13e70a572374adcc05094f483dba904bc"
++    )
++
++
++decimals = st.integers(min_value=0, max_value=10_000).map(lambda n: str(Decimal(n) / 10_000))
++
++
++@settings(max_examples=25, deadline=None)
++@given(
++    decline=decimals,
++    increase=decimals,
++    growth=st.lists(decimals, min_size=3, max_size=3),
++    with_downside_drivers=st.booleans(),
++)
++def test_the_stress_case_equals_the_forecast_of_the_shock_over_the_cases_drivers(
++    decline, increase, growth, with_downside_drivers
++):
++    downside = None
++    if with_downside_drivers:
++        driver = {
++            "values": growth,
++            "category": "Analyst Interpretation",
++            "rationale": "r",
++            "limitation": None,
++        }
++        downside = {"revenue_growth": driver}
++    block = block_with(downside_shock=shock(decline, increase), downside_drivers=downside)
++    inputs = cpos_forecast.parse(block, CP1.decode("utf-8"))
++    base = inputs.base_drivers
++    drivers = base if inputs.downside_drivers is None else inputs.downside_drivers.over(base)
++    operands = cp2g.Operands(
++        **{
++            key: cp2g.Val(None if o.amount is None else Decimal(o.amount), o.reason)
++            for key, o in inputs.base.items()
++        }
++    )
++    expected = cp2g.forecast(
++        operands=operands,
++        drivers=cp2g.Drivers.from_submission(drivers),
++        shock=(Decimal(decline), Decimal(increase)),
++    )
++    exact = exact_of(block)
++    got = exact["outputs"]["DOWNSIDE"]["years"]
++    for year, want in zip(got, expected.years, strict=True):
++        for name in ("revenue", "ebitda", "interest", "closing_cash", "coverage"):
++            assert year[name]["amount"] == (
++                None
++                if getattr(want, name).amount is None
++                else format(getattr(want, name).amount, "f")
++            )
++    assert ("downside_basis" in exact) is with_downside_drivers
++
++
++# --- 2. the page's labels -------------------------------------------------------------------
++
++BASIS_LABEL = "Downside stress (shock on downside drivers)"
++BASIS_NOTE = (
++    "Downside case is the stress case: a shock applied to the model's own downside drivers."
++)
++OLD_LABEL = "Downside stress (shock on base drivers)"
++OLD_NOTE = "Downside case is the stress case: a shock applied to the base-case drivers."
++
++
++def test_the_page_names_the_basis_the_model_states():
++    exact = {
++        "outputs": {
++            k: {"years": [{"year": 2025, "planning_start": "a", "planning_end": "b"}]}
++            for k in ("REFERENCE", "DOWNSIDE_DRIVERS", "DOWNSIDE")
++        },
++        "scope_limits": [],
++        "downside_basis": "downside_drivers",
++    }
++    cases, _, keys = store.forecast_inputs(exact)
++    assert dict(zip(keys, (name for name, _ in cases), strict=True))["DOWNSIDE"] == BASIS_LABEL
++    assert store.main_cases(cases, keys)[2] == BASIS_NOTE
++    older = {k: v for k, v in exact.items() if k != "downside_basis"}
++    cases, _, keys = store.forecast_inputs(older)
++    assert dict(zip(keys, (name for name, _ in cases), strict=True))["DOWNSIDE"] == OLD_LABEL
++    assert store.main_cases(cases, keys)[2] == OLD_NOTE
++
++
++# --- 3. the instruction ---------------------------------------------------------------------
++
++
++def test_the_instruction_says_the_shock_is_one_cp2a_row_and_a_proportional_interest_increase():
++    text = cpos_launch.FORECAST_BLOCK
++    assert "applies it to the base drivers." not in text
++    assert "copied unchanged from one CP-2A scenario row" in text
++    assert "proportional cash-interest increase, never a yield change" in text
++    assert "to your downside drivers, or to the base drivers when you set none" in text
++
++
++# --- 4. the launcher's check ----------------------------------------------------------------
++
++# The real form: a blank line between the marker and the table.
++SOL_001_T2DS = (FIXTURE / "CP-2A-T2DS.1-sol-001.md").read_bytes()
++
++
++def task_with(cp2a: bytes | None):
++    handoffs = {"CP-1": CP1}
++    if cp2a is not None:
++        handoffs["CP-2A"] = cp2a
++    return types.SimpleNamespace(module_id="CP-2G", handoffs=handoffs)
++
++
++def issues(block, cp2a):
++    return cpos_launch._forecast_issues(task_with(cp2a), block)
++
++
++def test_the_module_as_sent_is_sent_back_because_a_yield_change_is_not_a_scenario():
++    (issue,) = issues(BLOCK, T2DS)  # 0.2 / 0.0184, as the module sent it
++    assert "copy one CP-2A scenario" in issue
++    assert "never a yield change" in issue
++    assert "0.2000 / 0.3000" in issue and "0.4000 / 0.3000" in issue
++
++
++def test_the_stated_scenario_is_accepted_whatever_its_trailing_zeros():
++    assert issues(block_with(downside_shock=shock("0.2", "0.3")), T2DS) == ()
++    assert issues(block_with(downside_shock=shock("0.4000", "0.30")), T2DS) == ()
++
++
++@pytest.mark.parametrize(
++    "cp2a",
++    [
++        None,
++        b"No tables here.\n",
++        b"<!-- table-id: T2DS.1 -->\n| Scenario | Name |\n|---|---|\n| s01 | x |\n",
++        (
++            b"<!-- table-id: T2DS.1 -->\n| Scenario | EBITDA decline | Cash-interest increase |\n"
++            b"|---|---|---|\n| s01 | n/a | n/a |\n"
++        ),
++    ],
++    ids=["no CP-2A", "no table", "no columns", "no row readable"],
++)
++def test_a_table_python_cannot_read_never_sends_the_block_back(cp2a):
++    assert issues(BLOCK, cp2a) == ()  # documented fail-open: a repair round costs money
++
++
++def test_no_shock_needs_no_scenario():
++    assert issues(block_with(downside_shock=None), T2DS) == ()
++
++
++def table(*rows: str, header="EBITDA decline s | Cash-interest increase k", blank="") -> bytes:
++    columns = header.count("|") + 2
++    text = f"<!-- table-id: T2DS.1 -->\n{blank}| Scenario | {header} |\n|{'---|' * columns}\n"
++    return (text + "".join(f"| {row} |\n" for row in rows)).encode()
++
++
++CORRECT = block_with(downside_shock=shock("0.2", "0.3"))
++
++READABLE_FORMS = {
++    "percent only": table("s00 | 0% | 0%", "s01 | 20% | 30%"),
++    "bare percent numbers": table(
++        "s00 | 0 | 0", "s01 | 20 | 30", header="EBITDA decline (%) | Cash-interest increase (%)"
++    ),
++    "percent then fraction": table("s00 | 0 | 0", "s01 | 20% (0.2000) | 30% (0.3000)"),
++    "five decimals": table("s00 | 0 | 0", "s01 | 0.2000 | 0.31606"),
++    "above one": table("s00 | 0 | 0", "s01 | 0.2000 | 1.5000 fraction; 150%"),
++    "anchor column first": table(
++        "s01 | 0.2000 | 0.3160621762 anchor | 0.3000",
++        header="EBITDA decline s | Interest increase anchor | Cash-interest increase k",
++    ),
++    "narrative header": table(
++        "s01 | two shocks | 0.2000 | 0.3000",
++        header="Why: EBITDA decline with interest increase | EBITDA decline s | Cash-interest "
++        "increase k",
++    ),
++    "bold": table("s00 | 0 | 0", "s01 | **0.20** | **0.30**"),
++    "signed": table("s00 | 0 | 0", "s01 | 0.20 | +0.30 (+30%)", "s02 | 0.40 | +0.30 (+30%)"),
++    "control only": table("s00 | 0 | 0", "s01 | 20% | 30%"),
++}
++
++
++@pytest.mark.parametrize("cp2a", READABLE_FORMS.values(), ids=READABLE_FORMS.keys())
++def test_a_table_that_is_not_wholly_read_never_sends_back_a_correct_block(cp2a):
++    assert issues(CORRECT, cp2a) == ()
++    assert issues(block_with(downside_shock=shock("0", "0")), cp2a) == ()
++
++
++def test_the_real_sol_001_table_with_its_blank_line_is_read():
++    assert issues(block_with(downside_shock=shock("0.20", "0.025")), SOL_001_T2DS) == ()
++    (issue,) = issues(block_with(downside_shock=shock("0.2", "0.0015")), SOL_001_T2DS)
++    assert "0.20 / 0.025" in issue
++    assert issues(block_with(downside_shock=shock("0.75", "0.10")), SOL_001_T2DS) == ()
++
++
++def test_the_real_sol_high_table_accepts_its_rows_and_rejects_the_yield_change():
++    assert len(issues(BLOCK, T2DS)) == 1  # 0.2 / 0.0184
++    assert issues(CORRECT, T2DS) == ()
++    assert issues(block_with(downside_shock=shock("0.4", "0.3")), T2DS) == ()
++
++
++def test_the_issue_names_the_null_way_out():
++    (issue,) = issues(BLOCK, T2DS)
++    assert "set `downside_shock` to null" in issue
++    assert "null when no shock was supplied" in cpos_launch.FORECAST_BLOCK
++
++
++def test_at_most_eight_pairs_are_listed():
++    rows = [f"s{n:02d} | 0.{n:02d} | 0.0{n % 10}" for n in range(1, 21)]
++    (issue,) = issues(BLOCK, table(*rows))
++    assert issue.count(" / 0.0") == 8 + 1  # eight listed pairs and the block's own
++    assert "and 12 more" in issue
++
++
++def test_a_skipped_check_is_logged_with_its_reason(caplog):
++    assert issues(CORRECT, READABLE_FORMS["percent only"]) == ()
++    (record,) = caplog.records
++    assert (record.levelno, "not checked against downside_shock" in record.msg) == (30, True)
++    assert "does not open with a Share" in record.getMessage()
++
++
++def sent_back_for(cp2a: str) -> tuple[str, ...]:
++    return issues(block_with(downside_shock=shock("0.4", "0.3")), cp2a.encode())
++
++
++@pytest.mark.parametrize(
++    "cell",
++    ["1) 0.20", "1 − 0.80 = 0.20", "0,20", "0 → 0.20", "0 (fixed-rate debt); 0.30 on floating"],
++)
++def test_a_cell_whose_text_after_its_share_adds_a_number_fails_open(cell):
++    text = T2DS_HEAD + DIV + S00 + f"| s01 | {cell} | 0.30 |\n" + S02
++    assert issues(CORRECT, text.encode()) == ()
++
++
++@pytest.mark.parametrize(
++    ("cell", "share"), [("0.2000 fraction; 20%", "0.2000"), ("0.025 (2.5% increase)", "0.025")]
++)
++def test_a_share_with_only_the_percent_that_restates_it_is_read(cell, share):
++    rows = f"| s00 | 0 | 0 |\n| s01 | {cell} | {cell} |\n"
++    assert cpos_launch._cp2a_scenarios(T2DS_HEAD + DIV + rows) == (("0", "0"), (share, share))
++
++
++T2DS_HEAD = "<!-- table-id: T2DS.1 -->\n| Scenario | EBITDA decline | Interest increase |\n"
++DIV = "|---|---|---|\n"
++S00, S01, S02 = "| s00 | 0 | 0 |\n", "| s01 | 0.20 | 0.30 |\n", "| s02 | 0.40 | 0.30 |\n"
++
++
++@pytest.mark.parametrize(
++    "text",
++    [
++        T2DS_HEAD + S02 + S01,
++        T2DS_HEAD + DIV + S00 + S01 + "s02 | 0.40 | 0.30 |\n",
++        T2DS_HEAD + DIV + S00 + S01 + "  " + S02,
++        T2DS_HEAD + DIV + S00 + S01 + "| s02 adverse \\| 1 notch | 0.40 | 0.30 |\n",
++        T2DS_HEAD + DIV + S00 + S01 + "\n" + S02,
++    ],
++    ids=["no divider", "no leading pipe", "indented", "escaped pipe", "blank"],
++)
++def test_a_table_that_may_not_end_where_python_stopped_fails_open(text):
++    assert sent_back_for(text) == ()
++
++
++def test_the_logged_row_is_cut_to_two_hundred_characters(caplog):
++    with caplog.at_level(logging.INFO, logger=cpos_launch.__name__):
++        sent_back_for(T2DS_HEAD + DIV + S00 + "| s01 | x" + "y" * 5000 + " | 0.30 |\n")
++    assert max(len(r.getMessage()) for r in caplog.records) < 400
++
++
++def test_a_table_of_control_rows_only_fails_open():
++    assert issues(CORRECT, table("s00 | 0 | 0", "s00b | 0.0000 | 0")) == ()
++
++
++def test_one_header_cell_naming_both_columns_fails_open():
++    text = table("s00 | 0", "s01 | 0.20", header="EBITDA decline and interest increase")
++    assert issues(CORRECT, text) == ()

@@ -4049,19 +4049,20 @@ def cased_block(**changes) -> str:
 def test_cp2g_upside_and_downside_drivers_are_computed_as_their_own_cases(
     tmp_path, provider, capsys
 ):
-    """Owner, 2026-11-10 ("Yes, compute them"): CP-2G's own upside and downside cases are
-    computed from the drivers it changes, the rest inherited from base; CP-2A's shock stays a
-    separate case on base drivers, never compounded with them."""
+    """CP-2G's own upside and downside cases are computed from the drivers it changes, the
+    rest inherited from base; by the owner ruling of 2026-11-13, which reverses 2026-11-10 on
+    this point, CP-2A's shock is applied to CP-2G's downside drivers."""
     code, out, seen = forecast_run(tmp_path, provider, capsys, cased_block())
     assert code == 0, seen.err
     (folder,) = (out / "deliveries").iterdir()
     exact = json.loads((folder / "forecast_exact.json").read_text())
     assert sorted(exact["outputs"]) == ["DOWNSIDE", "DOWNSIDE_DRIVERS", "REFERENCE", "UPSIDE"]
+    assert exact["downside_basis"] == "downside_drivers"
     for case, shock, paths in (
         ("REFERENCE", None, PATHS),
         ("UPSIDE", None, {**PATHS, **UPSIDE}),
         ("DOWNSIDE_DRIVERS", None, {**PATHS, **DOWNSIDE}),
-        ("DOWNSIDE", SHOCK, PATHS),
+        ("DOWNSIDE", SHOCK, {**PATHS, **DOWNSIDE}),
     ):
         for year, expected in zip(
             exact["outputs"][case]["years"], key_case(shock, paths), strict=True
