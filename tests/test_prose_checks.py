@@ -1,6 +1,7 @@
 """Answer keys here are written by hand: literal check numbers and line numbers, never computed."""
 
 import re
+import time
 
 import pytest
 
@@ -8,6 +9,7 @@ from deploy_workflow.prose_checks import (
     DATA_MODULES,
     READER_HEADINGS,
     figure_issues,
+    key_figures_issues,
     limitation_items,
     prose_issues,
     reader_passages,
@@ -788,3 +790,266 @@ def test_check_4_a_pair_over_80_characters_quotes_each_bracket_with_20_character
     long = "a" * 90
     issues = [i for i in prose_issues(bottom(f"The view [{long}] holds.")) if "check 4" in i]
     assert [i.split('"')[1] for i in issues] == [f"The view [{'a' * 20}", f"{'a' * 20}] holds."]
+
+
+@pytest.mark.parametrize(
+    ("passage", "detail"),
+    [
+        ("EBITDA was USD 4,173 million.", "| EBITDA | 4173 | USD million |"),
+        ("EBITDA was USD 4173 million.", "| EBITDA | 4,173 | USD million |"),
+        ("Debt was USD 1,291.27 million.", "| Debt | 1291.27 |"),
+        ("Debt was USD 1291.27 million.", "| Debt | 1,291.27 |"),
+        ("Debt was USD 1,234,567 million.", "| Debt | 1234567 |"),
+    ],
+)
+def test_a_thousands_separator_does_not_change_a_figure(passage: str, detail: str) -> None:
+    assert fidelity(passage, detail) == ()
+
+
+@pytest.mark.parametrize(
+    ("passage", "detail", "quoted"),
+    [
+        ("Debt was USD 4,173 million.", "| Debt | 4173 thousand |", "4,173 million"),
+        ("Debt was -4,173.", "| Debt | 4173 |", "-4,173"),
+        ("Debt was 5.89x.", "| Debt | 5.8905x |", "5.89x"),
+        ("Debt was USD 4,173 million.", "| Debt | 4,174 |", "4,173 million"),
+        ("Debt was 4,173.", "| Debt | 73 |", "4,173"),
+    ],
+)
+def test_a_figure_with_a_separator_is_still_refused_when_it_differs(
+    passage: str, detail: str, quoted: str
+) -> None:
+    (issue,) = fidelity(passage, detail)
+    assert f'"{quoted}"' in issue
+
+
+def test_a_comma_that_is_not_a_thousands_separator_still_splits_the_number() -> None:
+    assert [i.split('"')[1] for i in fidelity("Cover was 1,25.", "| Cover | 125 |")] == ["1", "25"]
+    held = "| Year | Stores |\n| --- | --- |\n| 2024 | 437 |"
+    assert fidelity("Cover was 437 in 2024, 437.", held) == ()
+
+
+def annotated(cell: str) -> str:
+    return f"| Measure | Value |\n| --- | --- |\n| Row | {cell} |"
+
+
+@pytest.mark.parametrize(
+    ("passage", "cell"),
+    [
+        ("Margin was 51.6%.", "3,395 (51.6%)"),
+        ("Leverage was 5.89x.", "5.8905x (5.89x)"),
+        ("Margin was 45.05%.", "0.45052 (45.05%)"),
+    ],
+)
+def test_a_bracketed_figure_after_a_figure_is_an_annotation_not_a_negative(
+    passage: str, cell: str
+) -> None:
+    assert fidelity(passage, annotated(cell)) == ()
+
+
+@pytest.mark.parametrize(
+    ("passage", "cell"),
+    [
+        ("Margin was (51.6%).", "3,395 (51.6%)"),
+        ("Margin was -51.6%.", "3,395 (51.6%)"),
+        ("Margin was 51.6%.", "3,395 | (51.6%)"),
+    ],
+)
+def test_an_annotation_is_a_positive_figure_and_only_one_after_a_figure(
+    passage: str, cell: str
+) -> None:
+    assert len(fidelity(passage, annotated(cell))) >= 1
+
+
+def test_an_annotation_that_is_itself_negative_keeps_its_minus() -> None:
+    assert fidelity("Margin was -5.2%.", annotated("100 (-5.2%)")) == ()
+    assert len(fidelity("Margin was 5.2%.", annotated("100 (-5.2%)"))) == 0
+
+
+@pytest.mark.parametrize(
+    ("passage", "cell"),
+    [
+        ("Margin was 12.3%.", "(12.3)%"),
+        ("Net debt change was 120.", "(120)"),
+        ("There was a loss of 45.", "a loss of (45)"),
+    ],
+)
+def test_a_bracketed_figure_standing_alone_or_after_words_stays_a_negative(
+    passage: str, cell: str
+) -> None:
+    (issue,) = fidelity(passage, annotated(cell))
+    assert "does not match the handoff" in issue
+
+
+CP1_CHART = "### Chart data\n\n| Period | Cash |\n| --- | --- |\n| 2024-09-30 | 6261 |\n"
+
+
+def key_figures(value: str, cp1: str = CP1_CHART) -> tuple[str, ...]:
+    table = (
+        "| Measure | Value | Period | Source |\n| --- | --- | --- | --- |\n"
+        f"| Cash | {value} | 2024 | CP-1 |"
+    )
+    return key_figures_issues(f"## Findings\n\n### Key figures\n\n{table}\n", cp1)
+
+
+def test_a_key_figure_with_a_thousands_separator_is_the_figure_cp1_states_plainly() -> None:
+    assert key_figures("USD 6,261 million") == ()
+    assert key_figures("6261", "| Cash | USD 6,261 million |") == ()
+    assert key_figures("USD 6,261 million", "| Cash | 6,261 |") == ()
+    assert len(key_figures("USD 6,262 million")) == 1
+    assert len(key_figures("USD 6,261 thousand", "| Cash | 6261 million |")) == 1
+
+
+NEGATIVE_AFTER_A_LABEL_OR_FIGURE = [
+    ("FY2024 (120)", "120"),
+    ("Q3 (45)", "45"),
+    ("C12 (30)", "30"),
+    ("Note 5 (120)", "120"),
+    ("10-K page 120 (45)", "45"),
+    ("2023-2024 (120)", "120"),
+    ("H1 2024 (45)", "45"),
+    ("31 Dec 2024 (45)", "45"),
+    ("2024-09-30 (45)", "45"),
+    ("D02 (22)/(48)", "22"),
+    ("Q1 calculated CFO less capex 41,374; Q2 (26,306); LTM 105,927", "26,306"),
+    ("FY2024 (165); FY2023 (139); FY2022 (119)", "139"),
+    ("Capital expenditures (42) (36)", "36"),
+    ("Dividends paid (30,199) (29,958)", "29,958"),
+    ("2,200 (20) 2,180", "20"),
+    ("2,248,030 (9,419) (21,140) 2,217,471", "21,140"),
+    ("100 (25)", "25"),
+    ("40% (364)", "364"),
+    ("row 7 (12)", "12"),
+    ("p. 9 (12)", "12"),
+    ("1291.272 (1,291.28)", "1,291.28"),
+    # A label spelling the date and period patterns do not cover (round 2).
+    ("LTM Jun-24 (3.2%)", "3.2%"),
+    ("Sep-24 (3.2%)", "3.2%"),
+    ("FY24/25 (1.5%)", "1.5%"),
+    ("2024/25 (2.2%)", "2.2%"),
+    ("24/25 (2.2%)", "2.2%"),
+    ("FY 24 (2.1%)", "2.1%"),
+    ("FY-24 (2.1%)", "2.1%"),
+    ("Q3'24 (4.5%)", "4.5%"),
+    ("Q3-24 (4.5%)", "4.5%"),
+    ("H1 24 (0.4x)", "0.4x"),
+    ("3Q 24 (4.5%)", "4.5%"),
+    ("2024-09 (3.2%)", "3.2%"),
+    ("Year 2 (1.5%)", "1.5%"),
+    ("A1 (5%)", "5%"),
+    ("v2.5 (1.2x)", "1.2x"),
+    # A unitless whole number below 100 is a label number, not an amount.
+    ("Tranche 2 (45%)", "45%"),
+    ("Level 3 (45%)", "45%"),
+    ("12 (5.2%)", "5.2%"),
+    # A long figure must not raise; the bracket is a negative.
+    ("123,456,789,012,345,678,901,234,567,890 (5)", "5"),
+    ("123456789012345.5 (1.123456789012345)", "1.123456789012345"),
+    ("999,999,999,999,999 (1.123456789012345)", "1.123456789012345"),
+]
+
+
+@pytest.mark.parametrize(("cell", "figure"), NEGATIVE_AFTER_A_LABEL_OR_FIGURE)
+def test_a_bracketed_figure_that_is_not_a_note_is_a_negative_on_the_held_side(
+    cell: str, figure: str
+) -> None:
+    assert len(fidelity(f"The line was {figure}.", annotated(cell))) == 1
+    assert fidelity(f"The line was ({figure}).", annotated(cell)) == ()
+
+
+@pytest.mark.parametrize(
+    ("passage", "figure"),
+    [
+        ("Net debt was 100 (25).", "25"),
+        ("Net debt was 100 (364).", "364"),
+        ("Net debt was 2,200 (20) 2,180.", "20"),
+    ],
+)
+def test_a_bracketed_figure_on_the_passage_side_keeps_its_sign(passage: str, figure: str) -> None:
+    (issue,) = fidelity(passage, annotated("100 | 25 | 364 | 2,200 | 20 | 2,180"))
+    assert f'"({figure})"' in issue
+
+
+# (passage with the figure positive, passage with the same figure in parentheses, held cell), all
+# hand-written: the bracket is a note, so the positive passage is held and the negative one is not.
+NOTES = [
+    ("Margin was 51.6%.", "Margin was (51.6%).", "3,395 (51.6%)"),
+    ("Leverage was 5.89x.", "Leverage was (5.89x).", "5.8905x (5.89x)"),
+    ("Margin was 45.05%.", "Margin was (45.05%).", "0.45052 (45.05%)"),
+    ("Debt was 1,291.27.", "Debt was (1,291.27).", "1291.272 (1,291.27)"),
+    ("Debt was 1291.27.", "Debt was (1291.27).", "1291.272 (1,291.27)"),
+    ("Debt was 9,432.7.", "Debt was (9,432.7).", "9432.72 (9,432.7)"),
+    ("Leverage was 4.72x.", "Leverage was (4.72x).", "USD 19,702 million (4.72x)"),
+    ("Margin was 16.2%.", "Margin was (16.2%).", "USD 1,067 million (16.2%)"),
+    ("Leverage was 5.89x.", "Leverage was (5.89x).", "5.885x (5.89x)"),
+    ("Leverage was 5.88x.", "Leverage was (5.88x).", "5.885x (5.88x)"),
+    ("Leverage was 5.90x.", "Leverage was (5.90x).", "5.8905x (5.90x)"),
+    # The same number written with thousands separators, to the same decimal places.
+    ("Debt was 9,432.72.", "Debt was (9,432.72).", "9432.72 (9,432.72)"),
+    ("Debt was 7,844.72.", "Debt was (7,844.72).", "7844.72 (7,844.72)"),
+    ("Debt was 2,180.", "Debt was (2,180).", "2180 (2,180)"),
+    # An amount, not a label number: a unit, a decimal part, a separator or 100 or more.
+    ("Margin was 5.2%.", "Margin was (5.2%).", "12.0 (5.2%)"),
+    ("Margin was 5.2%.", "Margin was (5.2%).", "120 (5.2%)"),
+    ("Leverage was 0.1x.", "Leverage was (0.1x).", "12% (0.1x)"),
+    ("Margin was 5.2%.", "Margin was (5.2%).", "USD 12 million (5.2%)"),
+    ("Margin was 5.2%.", "Margin was (5.2%).", "1,200 (5.2%)"),
+]
+
+
+@pytest.mark.parametrize(("passage", "negative", "cell"), NOTES)
+def test_a_ratio_or_a_rounding_after_a_figure_is_a_note_read_as_positive(
+    passage: str, negative: str, cell: str
+) -> None:
+    assert fidelity(passage, annotated(cell)) == ()
+    (issue,) = fidelity(negative, annotated(cell))
+    assert "does not match the handoff" in issue
+
+
+@pytest.mark.parametrize(
+    ("cell", "negative"),
+    [
+        ("100 (100)", "(100)"),
+        ("2,180 (2,180)", "(2,180)"),
+        ("45 (45)", "(45)"),
+        ("9,432.72 (9432.72)", "(9,432.72)"),
+    ],
+)
+def test_an_identically_written_bracket_is_a_negative_not_a_note(cell: str, negative: str) -> None:
+    assert fidelity(f"Cover was {negative}.", annotated(cell)) == ()
+
+
+def test_a_note_on_the_passage_side_is_read_as_written() -> None:
+    held = annotated("3,395 | 51.6%")
+    assert fidelity("Ebitda was 3,395 (51.6%).", held) == ()
+    assert len(fidelity("Ebitda was 3,395 (51.6%).", annotated("3,395 | (51.6%)"))) == 1
+
+
+@pytest.mark.parametrize(
+    ("cell", "positive", "negative"),
+    [
+        ("-1,291.272 (1,291.27)", "Debt was 1,291.27.", "Debt was (1,291.27)."),
+        ("−4.5 (4)", "Debt was 4.", "Debt was (4)."),
+    ],
+)
+def test_an_unsigned_bracket_after_a_negative_figure_is_a_negative_not_a_note(
+    cell: str, positive: str, negative: str
+) -> None:
+    assert len(fidelity(positive, annotated(cell))) == 1
+    assert fidelity(negative, annotated(cell)) == ()
+
+
+def test_a_minus_repeated_in_the_bracket_after_a_negative_figure_is_read_as_written() -> None:
+    cell = annotated("-11.5147826087 (-11.51)")
+    assert fidelity("Debt was -11.51.", cell) == ()
+    # A minus the handoff writes may be narrated as its magnitude, or in parentheses.
+    assert fidelity("Debt was 11.51.", cell) == ()
+    assert fidelity("Debt was (11.51).", cell) == ()
+    assert len(fidelity("Debt was 11.5.", cell)) == 1
+
+
+def test_a_long_line_of_notes_is_checked_in_linear_time() -> None:
+    line = "1,234.5 (1,234) " * 2500  # 40,000 characters; quadratic look-behind took about 5.5 s
+    started = time.monotonic()
+    figure_issues(f"## Findings\n\n### Bottom line\n\n{line}\n")
+    assert time.monotonic() - started < 2

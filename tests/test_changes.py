@@ -3731,3 +3731,129 @@ def test_no_module_level_name_in_the_checker_is_assigned_twice():
         if isinstance(target, ast.Name)
     ]
     assert sorted({name for name in names if names.count(name) > 1}) == []
+
+
+@pytest.mark.parametrize(
+    ("text", "counts", "expected"),
+    [
+        ("Drawn EUR437m.", True, ["437"]),
+        ("Cash fell by USD2010m.", True, ["2010"]),
+        ("Cash was USD2010.", True, ["2010"]),
+        ("Drawn USD437.", True, ["437"]),
+        ("Drawn USD5.", False, ["5"]),
+        ("Drawn (EUR437m) and GBP12m.", True, ["437", "12"]),
+        ("Drawn XEUR437.", True, []),
+        ("Ref ABC123 only.", True, []),
+        ("Ref foo.USD437 only.", True, []),
+        ("See Q3 and H1 and FY2024 and CP-2 results.", False, []),
+        ("A USD-denominated bond.", True, []),
+        ("A EUR-denominated bond of EUR437m.", True, ["437"]),
+    ],
+)
+def test_digits_glued_to_a_currency_code_are_a_figure(text, counts, expected):
+    from deploy_workflow.changes_check import _figures
+
+    assert [str(f.size) for f in _figures(text, counts=counts)] == expected
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "2010 C$m",
+        "C$2010m",
+        "2010 A$m",
+        "2010 R$m",
+        "2010 S$m",
+        "2010 HK$ million",
+        "2010 NZ$m",
+        "2010 SAR m",
+        "SAR 2010",
+        "2010 USD mln",
+        "2010 USD bln",
+        "2010 USD '000",
+        "2010 USD ’000",
+        "2010 mln",
+        "2010 bln",
+        "HK$1913 million",
+        "In 2024 SAR 2010 total",
+        "2010 PHP m",
+        "2010 AED m",
+    ],
+)
+def test_more_currency_and_scale_forms_make_a_year_shaped_number_a_figure(text):
+    from deploy_workflow.changes_check import _figures
+
+    sizes = [str(f.size) for f in _figures(text)]
+    assert any(t in sizes for t in _YEARISH.findall(text)), (text, sizes)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "In 2024 C$ strengthened",
+        "In 2024 mln-dollar deals",
+        "In 2024 bln-dollar deals",
+        "2024 AND 2023",
+        "In 2024 SAR strengthened",
+        "In 2024 mlnx rose",
+        "In 2024 USD '000s of customers",
+        "In 2024 HK$ fell",
+    ],
+)
+def test_a_year_beside_a_currency_or_scale_lookalike_stays_a_year(text):
+    from deploy_workflow.changes_check import _figures
+
+    sizes = [str(f.size) for f in _figures(text)]
+    assert not [t for t in _YEARISH.findall(text) if t in sizes], (text, sizes)
+
+
+def test_a_currency_after_a_year_belongs_to_the_next_number():
+    from deploy_workflow.changes_check import _figures
+
+    assert [str(f.size) for f in _figures("2024 SAR 5,000")] == ["5000"]
+
+
+def test_a_small_number_with_mln_or_bln_is_a_figure_not_a_count():
+    from deploy_workflow.changes_check import _figures
+
+    assert [str(f.size) for f in _figures("up 30 mln and 7 bln", counts=False)] == ["30", "7"]
+    assert _figures("30 mlnx", counts=False) == []
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("EUR 2029s, 480bp", ["480"]),
+        ("USD2029s and 7%", ["7"]),
+        ("the 2031s fell 5%", ["5"]),
+        ("the EUR 2031s", []),
+        ("EUR 2029s", []),
+        ("$2029s, 100bp", ["100"]),
+        ("EUR 2029 s", ["2029"]),
+        ("EUR 2029secured", ["2029"]),
+        ("EUR 2029", ["2029"]),
+        ("EUR 2029sx", ["2029"]),
+    ],
+)
+def test_a_year_number_followed_by_s_is_a_bond_name_also_after_a_currency(text, expected):
+    from deploy_workflow.changes_check import _figures
+
+    assert [str(f.size) for f in _figures(text)] == expected
+
+
+def test_a_bond_name_is_not_held_evidence():
+    from deploy_workflow.changes_check import _held_sizes
+
+    assert _held_sizes(["Notes: EUR 2029s, 480bp."]) == frozenset({Decimal(480)})
+
+
+def test_the_currency_code_list_holds_the_fixed_set():
+    from deploy_workflow.changes_check import _CODES
+
+    wanted = [
+        "USD", "EUR", "GBP", "JPY", "CHF", "CAD", "AUD", "NZD", "SEK", "NOK",
+        "DKK", "PLN", "CZK", "HUF", "TRY", "ZAR", "BRL", "MXN", "CNY", "CNH",
+        "HKD", "SGD", "INR", "KRW", "TWD", "THB", "IDR", "MYR", "PHP", "SAR",
+        "AED", "QAR", "KWD", "ILS", "EGP", "NGN", "CLP", "COP", "PEN", "ARS",
+    ]  # fmt: skip
+    assert sorted(_CODES.split("|")) == sorted(wanted)
