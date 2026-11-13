@@ -2,7 +2,7 @@
 // Card rendering of the Signal feed page, tested with a small DOM double (no browser).
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { card, relativeTime, safeLink, emptyState } = require('./render.js');
+const { card, relativeTime, safeLink, emptyState, initials } = require('./render.js');
 
 // A DOM double. textContent is plain text and never parsed as markup, like the real DOM.
 class Text {
@@ -95,8 +95,32 @@ test('a single other source uses the singular', () => {
 test('empty states say what to do, with the query as text', () => {
   assert.ok(emptyState(doc, 'foryou', '').textContent.includes('Follow a topic to fill this view'));
   assert.ok(emptyState(doc, 'saved', '').textContent.includes('Stories you save appear here'));
-  assert.ok(emptyState(doc, 'latest', '').textContent.includes('No approved sources yet'));
+  assert.ok(emptyState(doc, 'latest', '', {approved: 0}).textContent.includes('No approved sources yet'));
   const s = emptyState(doc, 'latest', '<b>x</b>');
   assert.ok(s.textContent.includes('No story matches <b>x</b>'));
   assert.equal(s.querySelectorAll('b').length, 0);
+});
+
+test('an unknown approved count does not claim there are no approved sources', () => {
+  const unknown = emptyState(doc, 'latest', '', {approved: undefined}).textContent;
+  assert.ok(unknown.includes('No stories yet'));
+  assert.ok(!unknown.includes('approved sources'));
+  assert.ok(emptyState(doc, 'latest', '', {approved: 0}).textContent.includes('No approved sources yet'));
+  assert.ok(emptyState(doc, 'latest', '', {approved: 3}).textContent.includes('No stories yet'));
+});
+test('a missing or unparseable time is empty and renders an empty hidden time element', () => {
+  const now = new Date('2026-11-13T12:00:00Z');
+  for (const bad of [null, undefined, '', 'not a time']) assert.equal(relativeTime(bad, now), '');
+  const el = card(doc, {id: 1, title: 'T', kind: 'news', published_at: null}, now);
+  const time = el.querySelector('time');
+  assert.equal(time.textContent, '');
+  assert.ok(time.hasAttribute('hidden'));
+  assert.ok(!time.hasAttribute('datetime'));
+});
+test('initials are letters or digits of the first two words', () => {
+  assert.equal(initials('A. Kovac'), 'AK');
+  assert.equal(initials('eve'), 'E');
+  assert.equal(initials('  '), '?');
+  assert.equal(initials('Ünal Çelik'), 'ÜÇ');
+  assert.equal(initials('<b>x</b> y'), 'Y');
 });

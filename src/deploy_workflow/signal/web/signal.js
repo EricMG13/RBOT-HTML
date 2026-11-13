@@ -26,7 +26,8 @@
     constructor(status, message) { super(message); this.status = status; }
   }
 
-  async function api(method, path, body) {
+  // meta, when given, receives the response's Date header (meta.date) so callers can use the server's clock.
+  async function api(method, path, body, meta) {
     const init = {method, headers: {}};
     if (method !== 'GET') {
       init.headers['Content-Type'] = 'application/json';
@@ -38,16 +39,19 @@
     } catch (err) {
       throw new ApiError(0, 'Signal could not be reached. Check your connection and try again.');
     }
+    if (meta) meta.date = res.headers.get('Date');
     let data = null;
+    let readable = true;
     try {
       data = await res.json();
     } catch (err) {
-      data = null; // a body that is not JSON is reported below by status
+      readable = false; // a body that is not JSON is reported below, by status or as unreadable
     }
     if (!res.ok) {
       const message = data && typeof data.error === 'string' ? data.error : 'Signal could not complete that request.';
       throw new ApiError(res.status, message);
     }
+    if (!readable) throw new ApiError(res.status, 'The service sent an unreadable answer.');
     return data;
   }
 
@@ -115,25 +119,28 @@
   async function load(reset) {
     const seq = ++state.seq;
     const started = new Date();
+    const meta = {};
     const before = reset ? null : state.next;
     clearError();
     setBusy(true);
     if (reset) { els.skeleton.hidden = false; els.cards.hidden = true; els.empty.hidden = true; els.more.hidden = true; }
     else els.more.disabled = true;
     try {
-      const data = await api('GET', '/api/feed?' + feedParams(before));
+      const data = await api('GET', '/api/feed?' + feedParams(before), undefined, meta);
       if (seq !== state.seq) return false;
       if (reset) { els.cards.textContent = ''; state.shown = 0; }
       const firstNew = els.cards.children.length;
       appendCards(data.cards);
       state.next = data.next_before;
-      if (reset) { state.lastLoad = started; hidePill(); }
+      if (reset) { state.lastLoad = serverTime(meta.date) || started; hidePill(); }
       renderEmpty();
       announce(state.shown === 0 ? 'No stories' : state.shown + (state.shown === 1 ? ' story' : ' stories') + ' shown');
       if (!reset && els.cards.children[firstNew]) els.cards.children[firstNew].focus();
       return true;
     } catch (err) {
       if (seq !== state.seq) return false;
+      // A failed reset leaves the old cards under the new title: they must not be extendable.
+      if (reset) state.next = null;
       if (err.status === 401) { askName(); return false; }
       showError(err.message, () => load(reset));
       return false;
@@ -146,6 +153,13 @@
         els.more.hidden = state.next === null;
       }
     }
+  }
+
+  // The server's clock from a Date header; null when missing or unparseable (the caller then uses the browser's).
+  function serverTime(header) {
+    if (!header) return null;
+    const t = new Date(header);
+    return Number.isNaN(t.getTime()) ? null : t;
   }
 
   function hidePill() { els.pill.hidden = true; }
@@ -174,6 +188,15 @@
   function setChannelsOpen(open) {
     els.channels.classList.toggle('open', open);
     els.channelsToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+
+  // Where focus goes after a follow change rebuilt the list the user was in: the same control for the
+  // topic if it still exists, else the other follow control for it, else the view's heading.
+  function restoreFollowFocus(id, container) {
+    const sel = '[data-follow="' + String(id).replace(/[^\w-]/g, '') + '"]';
+    const target = container.querySelector(sel) || els.channels.querySelector(sel) || els.empty.querySelector(sel);
+    if (target) target.focus();
+    else els.title.focus();
   }
 
   // ----- topics
@@ -228,14 +251,20 @@
   async function toggleFollow(id) {
     const topic = state.topics.find(t => String(t.id) === String(id));
     if (!topic) return;
+    const origin = document.activeElement;
     try {
       const data = await api(topic.following ? 'DELETE' : 'POST', '/api/topics/' + encodeURIComponent(id) + '/follow');
       topic.following = data.following;
-      renderTopics();
-      for (const b of els.empty.querySelectorAll('[data-follow]'))
+      // The pressed state changes in place, so the focused control survives.
+      for (const b of document.querySelectorAll('[data-follow]'))
         if (b.getAttribute('data-follow') === String(id)) b.setAttribute('aria-pressed', data.following ? 'true' : 'false');
       announce((data.following ? 'Following ' : 'Unfollowed ') + topic.name);
-      if (state.view === 'foryou') await load(true);
+      if (state.view === 'foryou') {
+        // For you is rebuilt from the new follow set; focus returns to the control the user was on.
+        const container = origin && els.empty.contains(origin) ? els.empty : els.channels;
+        await load(true);
+        restoreFollowFocus(id, container);
+      }
     } catch (err) {
       if (err.status === 401) askName(); else showError(err.message, () => toggleFollow(id));
     }
@@ -282,9 +311,11 @@
     if (document.visibilityState === 'hidden' || !state.me || !state.lastLoad || state.loading) return;
     loadStatus();
     try {
-      const params = new URLSearchParams({view: state.view, since: state.lastLoad.toISOString()});
+      const snap = {view: state.view, kind: state.kind, q: state.q, lastLoad: state.lastLoad};
+      const params = new URLSearchParams({view: snap.view, since: snap.lastLoad.toISOString()});
       const data = await api('GET', '/api/feed/new?' + params);
-      if (data.count > 0) {
+      const current = state.view === snap.view && state.kind === snap.kind && state.q === snap.q && state.lastLoad === snap.lastLoad;
+      if (current && data.count > 0) {
         els.pill.textContent = data.count + (data.count === 1 ? ' new story' : ' new stories');
         if (els.pill.hidden) announce(els.pill.textContent);
         els.pill.hidden = false;
@@ -298,7 +329,7 @@
   function renderMe() {
     const name = state.me ? state.me.name : null;
     els.meName.textContent = name || 'Set your name';
-    els.meInitials.textContent = name ? name.trim().slice(0, 2).toUpperCase() : '?';
+    els.meInitials.textContent = name ? R.initials(name) : '?';
     const role = state.me && state.me.role;
     els.meRole.textContent = role || '';
     els.meRole.hidden = !role;
@@ -320,7 +351,7 @@
   }
 
   async function start() {
-    loadStatus();
+    const statusDone = loadStatus();
     try {
       if (!(await refreshMe())) { askName(); return; }
     } catch (err) {
@@ -328,6 +359,7 @@
       return;
     }
     await loadTopics();
+    await statusDone; // the approved count is known (or known to be unavailable) before the first feed message
     await setView(state.view);
   }
 
@@ -370,6 +402,16 @@
   els.cancel.addEventListener('click', () => els.dialog.close());
   els.chip.addEventListener('click', askName);
   els.channelsToggle.addEventListener('click', () => setChannelsOpen(els.channelsToggle.getAttribute('aria-expanded') !== 'true'));
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape' || els.dialog.open || els.channelsToggle.getAttribute('aria-expanded') !== 'true') return;
+    setChannelsOpen(false);
+    els.channelsToggle.focus();
+  });
+  document.addEventListener('click', event => {
+    if (els.channelsToggle.getAttribute('aria-expanded') !== 'true') return;
+    if (els.channels.contains(event.target) || els.channelsToggle.contains(event.target)) return;
+    setChannelsOpen(false);
+  });
   els.retry.addEventListener('click', () => { if (state.retry) state.retry(); });
   els.more.addEventListener('click', () => load(false));
   els.pill.addEventListener('click', async () => {

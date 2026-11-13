@@ -31,6 +31,7 @@
   }
 
   function parseTime(iso) {
+    if (iso === null || iso === undefined || iso === '') return null;
     const t = new Date(iso);
     return Number.isNaN(t.getTime()) ? null : t;
   }
@@ -81,6 +82,13 @@
     return letters.toUpperCase();
   }
 
+  // Avatar letters: the first character of up to two words that start with a letter or digit.
+  function initials(name) {
+    const words = String(name || '').split(/\s+/).filter(w => /^[\p{L}\p{N}]/u.test(w));
+    if (words.length === 0) return '?';
+    return words.slice(0, 2).map(w => Array.from(w)[0]).join('').toUpperCase();
+  }
+
   function externalLink(doc, href, className, text, label) {
     const a = el(doc, 'a', className, text);
     a.setAttribute('href', href);
@@ -110,9 +118,14 @@
     mono.setAttribute('aria-hidden', 'true');
     meta.appendChild(mono);
     meta.appendChild(el(doc, 'span', 'src-name', story.source));
+    // The frozen card probe expects a time element even when the time is unknown; it is then empty and hidden.
     const when = el(doc, 'time', 'when', relativeTime(story.published_at, now));
-    when.setAttribute('datetime', String(story.published_at));
-    when.setAttribute('title', fullTime(story.published_at));
+    if (parseTime(story.published_at)) {
+      when.setAttribute('datetime', String(story.published_at));
+      when.setAttribute('title', fullTime(story.published_at));
+    } else {
+      when.setAttribute('hidden', '');
+    }
     meta.appendChild(when);
     article.appendChild(meta);
 
@@ -169,8 +182,8 @@
       title = 'Stories you save appear here';
       hint = 'Use Save on a story to keep it.';
     } else if (view === 'latest') {
-      title = o.approved === 0 || o.approved === undefined ? 'No approved sources yet' : 'No stories yet';
-      hint = o.approved === 0 || o.approved === undefined
+      title = o.approved === 0 ? 'No approved sources yet' : 'No stories yet';
+      hint = o.approved === 0
         ? 'Stories appear once a source is approved.' : 'New stories appear here as sources are checked.';
     } else {
       title = 'No stories in this topic yet';
@@ -185,5 +198,5 @@
     return box;
   }
 
-  return {card, emptyState, relativeTime, safeLink, icon, fullTime};
+  return {card, emptyState, relativeTime, safeLink, icon, fullTime, initials};
 });
