@@ -590,3 +590,18 @@ test('the two runs’ names: different periods read "Since" and the run’s own 
   assert.ok(html.includes('Earlier run · 30 September 2024 · &lt;img src=x&gt;') && html.includes('This run · 30 September 2024 · &lt;img src=x&gt;') && !html.includes('<img'));
   assert.equal(count(/<h2 class="changes-heading">.*?<\/h2>/s.exec(changesHtml(base()))[0], 'Earlier run'), 1);
 });
+
+test('A15: a module bottom line with no words (empty, blank, or only a Basis line) draws no paragraph; a stated one still does', () => {
+  const row = prior => analysisPart({modules: [{module: 'CP-1', title: 'Financial foundation', ran_prior: true, ran_current: true, prior_bottom_line: prior, current_bottom_line: 'Leverage is 6.6x.'}]}, {}, {verdicts: {modules: {}}});
+  for (const empty of ['', '   ', 'Basis: x.json']) {
+    const pair = row(empty).slice(row(empty).indexOf('<div class="change-pair">'));
+    assert.ok(!pair.includes('<p></p>') && !/<p>\s*<\/p>/.test(pair), JSON.stringify(empty));
+    assert.equal((pair.match(/<p>/g) || []).length, 1, 'only the current side has a paragraph');
+  }
+  assert.ok(row('Was 6.0x.').includes('<p>Was 6.0x.</p>'));
+});
+
+test('A16: the figures link is styled as the page\'s other Evidence link (the ledger link)', () => {
+  const css = require('node:fs').readFileSync(require('node:path').join(__dirname, 'screen.css'), 'utf8');
+  assert.ok(css.includes('.chg-ledger-link,.chg-figures-link{margin:12px 0 0}') && css.includes('.chg-ledger-link a,.chg-figures-link a{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}'));
+});

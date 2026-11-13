@@ -1632,8 +1632,8 @@ details[open]>summary .ms-ch,details[open]>summary .qa-ch,details[open]>summary 
 .chg-fold>:not(summary){margin:0 16px 16px}
 .chg-ledger{margin-top:20px;padding-top:16px;border-top:1px solid var(--rule)}
 .chg-ledger .ledger-bar{margin-top:0}
-.chg-ledger-link{margin:12px 0 0}
-.chg-ledger-link a{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
+.chg-ledger-link,.chg-figures-link{margin:12px 0 0}
+.chg-ledger-link a,.chg-figures-link a{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
 .chg-n{display:inline-block;min-width:22px;padding:0 8px;border-radius:999px;background:var(--blue-50);color:var(--blue-700);font:600 12px/20px 'Red Hat Text',sans-serif;text-align:center;white-space:nowrap}
 .chg-empty .empty-state{margin-top:0}
 .chg-empty-go{margin:0}

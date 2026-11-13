@@ -162,10 +162,11 @@ function analysisPart(pack, parts, changes, tiles = '', view = {}) {
   const rows = (pack.modules || []).map(m => {
     const row = Object.prototype.hasOwnProperty.call(modules, m.module) ? modules[m.module] : null;
     const state = !parts ? 'Explanation not produced' : row ? row.status || NOT_STATED : `${NOT_STATED} by Changes since the last run`;
+    const paragraph = html => (html.trim() === '' ? '' : `<p>${html}</p>`);  // a bottom line with no words (empty, or only its Basis line) draws no paragraph
     const side = (ran, text) => (text != null ? bottomLineHtml(text) : esc(ran ? NOT_STATED : 'Did not run'));
     const earlier = side(m.ran_prior, m.prior_bottom_line), current = side(m.ran_current, m.current_bottom_line), title = (view.name && view.name(m.module)) || m.title;
     const reason = row ? [row.cause, row.why].filter(Boolean) : [];
-    return `<details class="change-module"><summary><span class="change-name">${esc(title)}</span><span class="badge badge-gray change-status">${esc(state)}</span><span class="change-then"><small>Earlier</small>${earlier}</span><span class="change-now"><small>Current</small>${current}</span></summary><div class="change-pair"><section><h4>Earlier</h4><p>${earlier}</p></section><section><h4>Current</h4><p>${current}</p></section></div>${reason.length ? `<p class="change-why">${esc(reason.join(' · '))}</p>` : ''}</details>`;
+    return `<details class="change-module"><summary><span class="change-name">${esc(title)}</span><span class="badge badge-gray change-status">${esc(state)}</span><span class="change-then"><small>Earlier</small>${earlier}</span><span class="change-now"><small>Current</small>${current}</span></summary><div class="change-pair"><section><h4>Earlier</h4>${paragraph(earlier)}</section><section><h4>Current</h4>${paragraph(current)}</section></div>${reason.length ? `<p class="change-why">${esc(reason.join(' · '))}</p>` : ''}</details>`;
   }).join('');
   const missing = parts && !parts.legacy && !tiles ? '<p class="intro">The Changes handoff has no table of what changed in the analysis.</p>' : '';
   return `<section class="run-section" id="changes-analysis"><h2>The analysis</h2>${tiles}${missing}${tiles ? '<h3 class="chg-sec-h">Each module’s bottom line, earlier and current</h3>' : ''}<p class="intro">One row per module. A row opens the earlier and current bottom lines side by side.</p><div class="change-modules">${rows}</div></section>`;
