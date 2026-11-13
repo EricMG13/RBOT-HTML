@@ -80,6 +80,8 @@ from deploy_workflow.model.handoff import (
     WEB_SEARCH_CASE_KINDS,
     Check,
     _pages,
+    recorded_web_lookup,
+    settled_web_lookup,
     web_lookup_offered,
     web_search_offered,
 )
@@ -2894,16 +2896,23 @@ def _web_line(prepared: Prepared, config: str, ruling: Path | None) -> tuple[str
 
 
 def _lookup_lines(
-    prepared: Prepared, setting: str, hosts: Sequence[str], env: Mapping[str, str]
+    prepared: Prepared,
+    setting: str,
+    hosts: Sequence[str],
+    env: Mapping[str, str],
+    recorded: str | None = None,
 ) -> tuple[str, ...]:
     """Whether the research module may fetch public pages and SEC EDGAR data, when it runs: the
-    one rule (`web_lookup_offered`) and its reason. The contact string's value is never printed."""
+    one rule (`web_lookup_offered`) and its reason, or what the run folder recorded when it was
+    started (`recorded`). The contact string's value is never printed."""
     module = WEB_LOOKUP_MODULES[0]
     if module not in prepared.ordered:
         return ()
     kind = prepared.plan.run.case_kind
-    on = web_lookup_offered(setting, module, kind)
-    if setting == "default":
+    on = recorded == "on" if recorded is not None else web_lookup_offered(setting, module, kind)
+    if recorded is not None:
+        head = f"Lookup:   {recorded} (as recorded when this run folder was started)"
+    elif setting == "default":
         why = f"{kind} case default"
         head = (
             f"Lookup:   on: {module} may fetch allowlisted public pages and SEC EDGAR ({why})"
@@ -3070,7 +3079,13 @@ def _readiness(
             f"Changes:  {prepared.changes.removeprefix('changes: ') or 'not recorded'}",
             f"Manifest: {prepared.manifest}",
             *_web_line(prepared, config, ruling),
-            *_lookup_lines(prepared, web_lookup, web_hosts, os.environ),
+            *_lookup_lines(
+                prepared,
+                web_lookup,
+                web_hosts,
+                os.environ,
+                recorded_web_lookup(prepared.directory / "live" / "loop.json"),
+            ),
             *_first_prompt_lines(prepared, config),
         )
     )
@@ -3281,6 +3296,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             if args.high_modules
             else {}
         )
+        recorded = recorded_web_lookup(prepared.directory / "live" / "loop.json")
+        lookup = settled_web_lookup(
+            args.web_lookup, prepared.ordered, prepared.plan.run.case_kind, recorded
+        )
     except (ValueError, OSError, LivePauseInForce) as error:
         print(error, file=sys.stderr)
         return 2
@@ -3310,7 +3329,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             config=args.config,
             effort_by_module=efforts,
             on_notice=lambda line: print(line, flush=True),
-            web_lookup=args.web_lookup,
+            web_lookup=lookup,
             web_hosts=tuple(args.web_host),
             lookup_cutoff=effective_cutoff(prepared.plan.run.as_of, context.run.cutoff),
         )

@@ -830,7 +830,9 @@ def run_live_handoffs(  # noqa: PLR0913 -- the explicit paid entry point takes e
     ``web_lookup`` (``default``, ``on`` or ``off``), ``web_hosts`` (the case's own
     investor-relations hosts) and ``lookup_cutoff`` (the run's research cutoff; the as-of date
     when None) set the research module's page and SEC EDGAR lookups. ``default`` is settled
-    here, against the plan's case kind, so the executor and ``loop.json`` hold the answer.
+    here, against the plan's modules and case kind, so the executor and ``loop.json`` hold the
+    answer; a run folder started earlier keeps the setting its ``live/loop.json`` recorded, and a
+    contradicting setting is refused (``ValueError``).
 
     No provider execution occurs during build, import, replay or normal delivery.
     Credentials come from the launching environment, never a file in this API.
@@ -838,9 +840,9 @@ def run_live_handoffs(  # noqa: PLR0913 -- the explicit paid entry point takes e
     import os
 
     from deploy_workflow.model.handoff import (
-        WEB_LOOKUP_MODULES,
         HandoffExecutor,
-        web_lookup_offered,
+        recorded_web_lookup,
+        settled_web_lookup,
     )
     from deploy_workflow.model.redact import Redactor
     from deploy_workflow.model_testing.configs import CONFIGS
@@ -850,7 +852,12 @@ def run_live_handoffs(  # noqa: PLR0913 -- the explicit paid entry point takes e
     if request.execution != "live-provider":
         raise ValueError("cpos_live_mode: manifest must explicitly declare live-provider")
     environment = os.environ if environ is None else environ
-    lookup_on = web_lookup_offered(web_lookup, WEB_LOOKUP_MODULES[0], request.run.case_kind)
+    lookup = settled_web_lookup(
+        web_lookup,
+        list(request.instructions),
+        request.run.case_kind,
+        recorded_web_lookup(directory / "live" / "loop.json"),
+    )
     adapter = live_adapter_for(CONFIGS[config], ruling, environment, rulings_root)
     try:
         executor = HandoffExecutor(
@@ -865,7 +872,7 @@ def run_live_handoffs(  # noqa: PLR0913 -- the explicit paid entry point takes e
             web_search=web_search_run(config, ruling, rulings_root),
             effort_by_module=effort_by_module,
             notice=on_notice,
-            web_lookup="on" if lookup_on else "off",
+            web_lookup=lookup,
             web_hosts=web_hosts,
             lookup_cutoff=lookup_cutoff,
             lookup_runtime=Runtime(env=environment),

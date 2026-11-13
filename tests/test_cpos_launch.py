@@ -7226,6 +7226,40 @@ def test_the_lookup_line_is_printed_only_when_the_research_module_runs(tmp_path,
     assert "Lookup:" not in capsys.readouterr().out
 
 
+def test_a_default_relaunch_of_a_run_started_without_lookup_resumes(tmp_path, provider):
+    argv = launch(tmp_path, "--modules", "CP-4", "--live", "--ruling", str(RULING))
+    with_case_kind(tmp_path / "context.json", "public")
+    routes = prepare_routes(tmp_path, "sol-medium")
+    provider.answer = lambda context: answer(context, routes)
+    assert main([*argv, "--web-lookup", "off"]) == 0
+    sent = list(provider.calls)
+    assert main(argv) == 0  # the default: no research module here, so loop.json stays as it was
+    assert provider.calls == sent
+    assert "web_lookup" not in json.loads((tmp_path / "out/live/loop.json").read_text())
+    (tmp_path / "b").mkdir()
+    argv = launch(tmp_path / "b", "--modules", "CP-4", "--live", "--ruling", str(RULING))
+    with_case_kind(tmp_path / "b/context.json", "public")
+    assert main(argv) == 0  # a default first launch writes no web_lookup key either
+    assert "web_lookup" not in json.loads((tmp_path / "b/out/live/loop.json").read_text())
+
+
+def test_a_run_started_with_lookup_off_keeps_it_off_on_relaunch(tmp_path, provider, capsys):
+    argv = launch(tmp_path, "--modules", "CP-DR", "--live", "--ruling", str(RULING))
+    with_case_kind(tmp_path / "context.json", "public")
+    routes = prepare_routes(tmp_path, "sol-medium", modules=("CP-DR",))
+    provider.answer = lambda context: answer(context, routes)
+    assert main([*argv, "--web-lookup", "off"]) == 0
+    sent = list(provider.calls)
+    capsys.readouterr()
+    assert main(argv) == 0
+    assert provider.calls == sent
+    out = capsys.readouterr().out
+    assert "Lookup:   off (as recorded when this run folder was started)" in out
+    assert main([*argv, "--web-lookup", "on"]) == 2
+    assert "was off when this run folder was started" in capsys.readouterr().err
+    assert provider.calls == sent
+
+
 @pytest.mark.parametrize(
     "bad",
     [

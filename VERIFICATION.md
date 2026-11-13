@@ -12,20 +12,25 @@ clocks. SEC JSON field names are unverified against real responses. A real run n
 set `DEPLOY_WORKFLOW_SEC_USER_AGENT` and is a separate paid action.
 
 - Change: `fetch_page`, `sec_company_search`, `sec_filing_list` and `sec_concept_facts` for CP-DR;
-  an allowlist of 28 domains; pages retained under `<run>/web/` with a status against the research
+  an allowlist of 28 domains; pages retained under `<run>/live/web/` with a status against the research
   cutoff; fail-closed acceptance checks on CP-DR's handoff; `--web-lookup` and `--web-host`.
-- Commands, each run on the tree of the commit that carries this entry (the re-review fixes on 8c72bb9):
-  - `uv run pytest tests/test_weblookup.py tests/test_web_lookup_tools.py tests/test_web_search_scope.py tests/test_handoff_loop.py -q`: 521 passed, exit=0.
-  - `uv run pytest tests/test_cpos_launch.py -q`: 782 passed, 1 skipped (the paid test), exit=0.
+- Commands, each run on the tree of the commit that carries this entry (fix round 3 on 73e5490):
+  - `uv run pytest tests/test_weblookup.py tests/test_web_lookup_tools.py tests/test_web_search_scope.py tests/test_handoff_loop.py -q`: 527 passed, exit=0.
+  - `uv run pytest tests/test_cpos_launch.py -q`: 784 passed, 1 skipped (the paid test), exit=0.
   - `uv run python tools/quality_gate.py`: 0 findings in 24 changed files, exit=0.
+- Scope of the acceptance tests (fix round 3): 15 cases (five `test_rt_*` tests) run the launcher's real checker on a CP-DR handoff in the method's register layout (TDR.1 to
+  TDR.6, the house Basis-line citation form); the remaining acceptance tests call
+  `web_handoff_issues` directly or a stub checker (unit scope). Two launcher tests cover the
+  relaunch rule (a started folder keeps its recorded lookup setting).
 - Hostile cases covered by tests: redirect off the allowlist; oversized body (refused, not
   truncated); private and local addresses, also on a redirect hop; a post-cutoff page (later event,
   rejected in a TDR.6 row); a quote not in the cited page; the User-Agent variable missing (refused,
   names the variable) and never written anywhere; an injected instruction in page text; a forged
   `<<<END>>>` delimiter; a PDF answer (refused, nothing retained).
 - Reviews: per-task review and two security reviews with probes. Findings were fixed in follow-up
-  commits: 2b34e1a, 0315d23, 0c61069, then the re-review round's commit that carries this entry
-  (`git log --oneline 82b17f3..HEAD`: 82ef297, 2b34e1a, 669b002, 0315d23, 0c61069, 8c72bb9, and it).
+  commits: 2b34e1a, 0315d23, 0c61069, 73e5490, then the whole-branch review's fix round 3 (the
+  check's citation form, list-item units, TDR.6 one-hop evidence, hosted-search URLs and the
+  relaunch rule; see `git log --oneline 82b17f3..HEAD`).
 - No reader check applies: no presentation change.
 - Not verified: live network behaviour; real SEC responses and field names; real model use of the
   tools and its citations; the full suite; concurrent writers to one run's web folder.

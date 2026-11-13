@@ -203,10 +203,12 @@ def test_the_rules_begin_with_the_methods_key_and_say_what_the_brief_requires():
         "Later event",
         "Undated",
         "unvalidated",
-        "(web-xxxxxxxxxxxx)",
+        "Basis: web-xxxxxxxxxxxx, page 1",
         "read_pages",
         "search_source",
-        "never cite a URL that was not fetched",
+        "never in a sentence",
+        "whose first cell is the id",
+        "must be one these tools fetched",
         "Source type",
     ):
         assert phrase.lower() in WEB_LOOKUP_RULES.lower(), phrase
@@ -304,8 +306,8 @@ def test_the_result_has_the_exact_frame_for_each_status(tmp_path):
             "none",
             "undated",
             (
-                "No stated date could be determined: label it Undated in ## Sources and say so "
-                "under ## Gaps."
+                "No stated date could be determined: write Undated in its ## Sources row and add "
+                "a ## Gaps item saying so in words, ending with a Basis line that names this id."
             ),
         ),
     }
@@ -907,7 +909,7 @@ def test_r6_r7_a_later_event_figure_in_tdr6_is_found_however_it_is_cited(tmp_pat
     assert any("TDR.6" in i and wanted in i for i in issues), issues
 
 
-def test_r7_a_tdr6_section_ends_at_a_heading_of_the_same_or_higher_level(tmp_path):
+def test_r7_a_row_without_a_peer_operand_is_not_tdr6(tmp_path):
     found, sid, _ = one_page(tmp_path)
     later = next(s for s, (i, _t) in found.items() if i.url == LATER)
     row_text = f"| other.thing | 1 | x | {later} |\n"
@@ -1009,7 +1011,7 @@ def test_r8_apostrophes_short_spans_and_other_paragraphs_are_not_checked(tmp_pat
 
 
 def test_r8_the_rules_state_that_a_paragraph_naming_a_web_source_quotes_only_it():
-    assert "a paragraph that names a web source quotes only from that source" in WEB_LOOKUP_RULES
+    assert "quotes only from the web pages it names" in WEB_LOOKUP_RULES
 
 
 @pytest.mark.parametrize(
@@ -1248,34 +1250,34 @@ def test_s1_a_page_cited_by_url_needs_a_sources_row_and_its_labels(tmp_path):
         md = handoff_md(row(sid, PAGE), findings=f"Peers say little ({url}).")
         issues = weblookup.web_handoff_issues(md, found)
         assert any(wanted in i and "## Sources" in i for i in issues), issues
-    # a row that names the page by URL alone serves as its row, with the labels it needs
+    # a row that names the page by URL alone is still checked for its labels, and its first cell
+    # must be the page's id (A5)
     named = handoff_md(
         row(sid, PAGE) + f"\n| x | {UNDATED} | P | none | Issuer filing |",
         findings=f"Peers say little ({UNDATED}).",
     )
     issues = weblookup.web_handoff_issues(named, found)
     assert any("Undated" in i for i in issues) and any("## Gaps" in i for i in issues)
+    assert any('Sources row "x" names' in i and "first cell" in i for i in issues), issues
 
 
-def test_s2_a_sources_row_first_cell_names_its_pages(tmp_path):
+def test_s2_a_sources_row_names_its_page_by_its_id_as_first_cell(tmp_path):
     found, sid, _l, _u = three(tmp_path)
-    head = (
-        "| Source | id | URL | Publisher | Stated date | Source type |\n|---|---|---|---|---|---|\n"
+    titled = handoff_md(
+        f"| Acme results release | {sid} | {PAGE} | P | 2025-05-01 | Issuer filing |"
     )
-    tail = "## Calculations\nNone\n## Gaps\nNone.\n## Next module\nCP-1\n"
-
-    def md(first: str, findings: str) -> str:
-        sources = f"| {first} | {sid} | {PAGE} | Example Issuer | 2025-05-01 | Issuer filing |"
-        return f"## Request\nx\n## Sources\n{head}{sources}\n## Findings\n{findings}\n{tail}"
-
-    name = "Acme results release"
-    bad = md(name, f'Revenue: "{BAD_QUOTE}".\nBasis: {name}.')
-    assert any(BAD_QUOTE in i for i in weblookup.web_handoff_issues(bad, found))
-    assert weblookup.web_handoff_issues(md(name, f'"{QUOTE}".\nBasis: {name}.'), found) == []
-    short = md("Acme", f'Revenue: "{BAD_QUOTE}".\nBasis: Acme.')  # under 6 characters: no name
-    assert weblookup.web_handoff_issues(short, found) == []
-    row_form = md(name, f'| Revenue | "{BAD_QUOTE}" | {name} |')
-    assert any(BAD_QUOTE in i for i in weblookup.web_handoff_issues(row_form, found))
+    issues = weblookup.web_handoff_issues(titled, found)
+    assert sum("first cell" in i for i in issues) == 1, issues
+    assert not any("no ## Sources row starts with it" in i for i in issues)  # reported once
+    assert not any(
+        "first cell" in i for i in weblookup.web_handoff_issues(handoff_md(row(sid, PAGE)), found)
+    )
+    upper = handoff_md(row(f"`{sid.upper()}`", PAGE))
+    assert not any("first cell" in i for i in weblookup.web_handoff_issues(upper, found))
+    no_row = handoff_md(row(sid, PAGE), findings=f"Margins held ({_l}).")
+    assert any(
+        "no ## Sources row starts with it" in i for i in weblookup.web_handoff_issues(no_row, found)
+    )
 
 
 @pytest.mark.parametrize(
@@ -1295,46 +1297,6 @@ def test_s3_a_misquote_in_a_table_row_or_piped_line_is_rejected(tmp_path, findin
     assert any(BAD_QUOTE in i for i in weblookup.web_handoff_issues(md, found))
     good = handoff_md(row(sid, PAGE), findings=findings.format(q=QUOTE, sid=sid))
     assert weblookup.web_handoff_issues(good, found) == []
-
-
-@pytest.mark.parametrize("heading", ["### TDR 6 x", "### TDR6 x", "### tdr-6 x", "### TDR.6 x"])
-def test_s4_a_later_event_figure_under_tdr6_is_rejected_in_any_layout(tmp_path, heading):
-    found, sid, later, _u = three(tmp_path)
-    layouts = (
-        f'- acme.revenue: USD 5,100 million, "{LATER_QUOTE}" ({later})\n',
-        f'- acme.revenue: USD 5,100 million, "{LATER_QUOTE}" ({LATER})\n',
-        f"<table><tr><td>acme.revenue</td><td>5,100</td><td>{later}</td></tr></table>\n",
-        f"acme.revenue is 5,100 ({later})\n",
-    )
-    for layout in layouts:
-        md = handoff_md(labelled(sid, later), tdr6=f"{heading}\n{layout}")
-        issues = weblookup.web_handoff_issues(md, found)
-        assert any("TDR.6" in i and "after the cutoff" in i for i in issues), (heading, layout)
-    outside = handoff_md(labelled(sid, later), tdr6=f"### Peers\n{layouts[0]}")
-    assert weblookup.web_handoff_issues(outside, found) == []
-
-
-def test_s4_a_misquote_in_a_tdr6_bullet_is_rejected(tmp_path):
-    found, sid, _l, _u = three(tmp_path)
-    md = handoff_md(row(sid, PAGE), tdr6=f'### TDR.6 x\n- acme.revenue: "{BAD_QUOTE}" ({sid})\n')
-    assert any(BAD_QUOTE in i for i in weblookup.web_handoff_issues(md, found))
-
-
-@pytest.mark.parametrize(
-    "token",
-    [
-        "web-0123456789a",
-        "web-0123456789abc",
-        "web_0123456789ab",
-        "WEB_0123456789AB",
-        "web0123456789ab",
-    ],
-)
-def test_s5_a_malformed_web_id_is_an_unknown_id(tmp_path, token):
-    found, sid, _l, _u = three(tmp_path)
-    md = handoff_md(row(sid, PAGE), findings=f"Margins held ({token}).")
-    issues = weblookup.web_handoff_issues(md, found)
-    assert any(token.lower() in i and "not a page retained" in i for i in issues), issues
 
 
 def test_s5_words_that_only_look_like_ids_are_not_reported(tmp_path):
@@ -1439,16 +1401,23 @@ def test_s9_straight_and_curly_apostrophes_are_the_same_character(tmp_path, page
     assert weblookup.web_handoff_issues(md, tools._known_pages()) == []
 
 
-def test_s10_evidence_links_are_followed_to_the_end(tmp_path):
+def test_s10_a_tdr6_row_reaches_its_evidence_row_by_one_hop_only(tmp_path):
     found, sid, later, _u = three(tmp_path)
+    register = (
+        "### TDR.2 Evidence\n| evidence_id | claim | source |\n|---|---|---|\n"
+        f"| E1 | Peer revenue | {later} |\n\n"
+    )
+    md = handoff_md(labelled(sid, later), tdr6=register + tdr6_row("E1", "5,100", LATER_QUOTE))
+    issues = weblookup.web_handoff_issues(md, found)
+    assert any("TDR.6" in i and "after the cutoff" in i for i in issues), issues
     chain = (
         "### TDR.2 Claims\n| claim_id | claim | evidence_id |\n|---|---|---|\n"
         "| C1 | Peer revenue | E1 |\n\n### Register\n| evidence_id | source |\n|---|---|\n"
         f"| E1 | E2 |\n| E2 | {later} |\n\n"
     )
     md = handoff_md(labelled(sid, later), tdr6=chain + tdr6_row("C1", "5,100", LATER_QUOTE))
-    assert any("after the cutoff" in i for i in weblookup.web_handoff_issues(md, found))
-    loop = "| E1 | E2 |\n| E2 | E1 |\n"  # a cycle ends
+    assert not any("after the cutoff" in i for i in weblookup.web_handoff_issues(md, found))
+    loop = "| E1 | E2 |\n| E2 | E1 |\n"
     md = handoff_md(row(sid, PAGE), tdr6=f"### TDR.2\n| a | b |\n|---|---|\n{loop}")
     assert isinstance(weblookup.web_handoff_issues(md, found), list)
 
@@ -1535,3 +1504,296 @@ def test_s14_a_source_type_cell_is_one_type_then_labels(cell, ok_):
 
 def test_s14_the_rules_say_where_the_label_goes():
     assert "in the stated-date cell or after the Source type" in WEB_LOOKUP_RULES
+
+
+# fix round 3: the acceptance checks against the launcher's real checker and the method's layout --
+
+
+def realistic_cpdr(tmp_path, hosted=False):
+    """(tools, handoff, ids): a CP-DR handoff in the method's register layout (TDR.1 to TDR.6,
+    SKILL.md lines 89-118) over three fetched pages, checked by the launcher's real checker. ``ids``
+    maps ``P`` (dated, usable), ``L`` (later event) and ``U`` (undated) to their ids."""
+    import hashlib
+
+    from test_cpos_launch import answer, checker, good_task
+
+    prepared, base, context = good_task(tmp_path, "CP-DR")
+    annual = b"Interest cover was thin in the base year."
+    cpdr = replace(base, sources={"annual.txt": annual, "context": b"{}"})
+    context["sources"] = {"annual.txt": hashlib.sha256(annual).hexdigest()}
+    net = FakeNet(
+        {
+            (HOST, "/peer"): ok(
+                dated(
+                    "2025-03-15",
+                    "<p>Peer Co reported steady demand across its markets.</p>"
+                    "<p>Revenue for 2024 was USD 2,100 million.</p>",
+                )
+            ),
+            (HOST, "/later"): ok(
+                dated("2025-09-01", "<p>Net sales rose to USD 5,100 million.</p>")
+            ),
+            (HOST, "/undated"): ok(html("<p>Peer Co is a mid-sized producer.</p>")),
+        }
+    )
+    folder = tmp_path / "m"
+    folder.mkdir()
+    tools = ModuleTools(
+        cpdr,
+        folder,
+        checker(prepared.layout),
+        tmp_path / "ev",
+        strip_markers=hosted,
+        lookup=make(tmp_path, net, case_hosts=frozenset({HOST})),
+        lookup_dir=tmp_path / "run",
+    )
+    ids = {
+        key: source_id(tools.call("fetch_page", {"url": f"https://{HOST}/{path}"}))
+        for key, path in (("P", "peer"), ("L", "later"), ("U", "undated"))
+    }
+    text = answer(context, list(prepared.plan.layout.routes))
+    return tools, cpdr_handoff(text, ids), ids
+
+
+def table(header, *rows):
+    """A Markdown table from ``a | b`` lines (no outer bars)."""
+    count = header.count("|") + 1
+    return "\n".join(f"| {line} |" for line in (header, " | ".join(["---"] * count), *rows))
+
+
+def cpdr_handoff(text, ids):
+    p, later, u = ids["P"], ids["L"], ids["U"]
+    sources = (
+        "\n| Source | URL | Publisher | Stated date | Source type |\n|---|---|---|---|---|\n"
+        f"| {p} | https://{HOST}/peer | Peer Co | 2025-03-15 | Peer filing |\n"
+        f"| {later} | https://{HOST}/later | Example Issuer | 2025-09-01 | "
+        "Issuer filing; Later event |\n"
+        f"| {u} | https://{HOST}/undated | Peer Co | Undated | Peer filing |\n"
+    )
+    text = text.replace("\n## Findings", sources + "\n## Findings", 1)
+    cover = "The synthetic issuer's cover is thin at 3.1x.\nBasis: annual.txt, page 2"
+    contrary = "Nothing supplied contradicts the view; a USD 1,250 million refinancing would.\n"
+    registers = "\n\n".join(
+        [
+            "### TDR.1 Research questions",
+            table(
+                "question_id | question | decision_relevance | consumer_module_id | after_module_id"
+                " | evidence_needed | completion_test",
+                "Q1 | How does the issuer compare with peers on scale? | sizing | CP-1C | CP-1"
+                " | peer filings | one peer located",
+            ),
+            "### TDR.2 Evidence",
+            table(
+                "evidence_id | question_id | claim | claim_type | source | source_locator"
+                " | source_date | source_type | independence_family | entity_period_unit_perimeter",
+                'E1 | Q1 | The peer reports "Revenue for 2024 was USD 2,100 million" | fact'
+                f" | {p} | page 1 | 2025-03-15 | Peer filing | Peer Co"
+                " | Peer Co; FY2024; USD millions; group",
+                'E2 | Q1 | The issuer states "Interest cover was thin in the base year" | fact'
+                " | annual.txt | page 2 | 2025-03-31 | Issuer filing | Example Issuer"
+                " | Example Issuer; base year; ratio; group",
+                "E3 | Q1 | A later release reports higher sales, a later event with no figure taken"
+                f" | later event | {later} | page 1 | 2025-09-01 | Issuer filing | Example Issuer"
+                " | Example Issuer; later; none; group",
+            ),
+            "### TDR.3 Findings",
+            table(
+                "question_id | answer | evidence_ids | contrary_evidence | resolution_status"
+                " | uncertainty | proposed_consequence",
+                "Q1 | The peer is smaller than the issuer on reported revenue | E1 | E3 | ANSWERED"
+                " | one peer only | the peer analysis reads the peer pack",
+            ),
+            "### TDR.4 Candidate peers",
+            table(
+                "peer_id | name | basis_note | evidence_id | locator",
+                "peerco | Peer Co | Same end market | E1 | page 1",
+            ),
+            "### TDR.5 Alignment observations",
+            table(
+                "peer_id.dimension | observation | evidence_id | locator",
+                "peerco.period | Calendar year end against the issuer's March year end | E1"
+                " | page 1",
+            ),
+            "### TDR.6 Located peer figures",
+            table(
+                "peer_id.operand | amount | unit | currency | period_end | evidence_id | locator"
+                " | quote",
+                "peerco.revenue | 2,100 | millions | USD | 2024-12-31 | E1 | page 1"
+                " | Revenue for 2024 was USD 2,100 million",
+            ),
+            "## Calculations",
+        ]
+    )
+    items = (
+        '- The synthetic issuer\'s cover is thin: "interest cover was thin in the base year".\n'
+        "  Basis: annual.txt, page 2\n"
+        '- The peer\'s own release describes "steady demand across its markets".\n'
+        f"  Basis: {p}, page 1"
+    )
+    release = (
+        "\nA results release dated after the research cutoff reports higher sales; "
+        f"it is a later event and no figure is taken from it.\nBasis: {later}\n"
+    )
+    gap = (
+        "## Gaps\n\n- One peer profile page states no publication date, so it supports no "
+        f"figure.\n  Basis: {u}"
+    )
+    for old, new in (
+        (cover, items),
+        (contrary, contrary + release),
+        ("## Calculations", registers),
+        ("## Gaps\n\nNone.", gap),
+    ):
+        assert old in text, old
+        text = text.replace(old, new, 1)
+    return text
+
+
+def test_rt_realistic_lookup_handoff_is_accepted_by_the_real_checker(tmp_path):
+    from deploy_workflow.owners.cpos import _checked_handoff
+
+    tools, text, _ids = realistic_cpdr(tmp_path)
+    assert _checked_handoff(tools.task, text.encode(), tools.check) == ()
+    assert tools.write_handoff(text) == "ACCEPTED"
+
+
+def _swap(old, new):
+    def change(text, ids):
+        old_, new_ = (s.format(**ids) for s in (old, new))
+        assert old_ in text, old_
+        return text.replace(old_, new_, 1)
+
+    return change
+
+
+PRESS = "| Press release | https://press.example.org/release | Press | 2025-03-01 | Peer filing |\n"
+PEER_ROW = "| {P} | https://" + HOST + "/peer | Peer Co | 2025-03-15 | Peer filing |\n"
+
+
+@pytest.mark.parametrize(
+    ("change", "wanted"),
+    [
+        (_swap("\n## Findings", "\n" + PRESS + "## Findings"), "not fetched in this run"),
+        (_swap("across its markets", "across all its markets"), "not in that page's text"),
+        (
+            _swap(
+                "| E1 | page 1 | Revenue for 2024 was USD 2,100 million |",
+                "| E1 | page 1 | Revenue for 2024 was USD 9,999 million |",
+            ),
+            'TDR.6 row "peerco.revenue" quotes',
+        ),
+        (
+            _swap("| 2024-12-31 | E1 | page 1 |", "| 2024-12-31 | E3 | page 1 |"),
+            "dated after the cutoff",
+        ),
+        (_swap("Issuer filing; Later event", "Issuer filing"), "Later event"),
+        (_swap("| Undated |", "| n/a |"), '"Undated"'),
+        (
+            _swap(
+                "- One peer profile page states no publication date, so it supports no figure.\n"
+                "  Basis: {U}",
+                "None.",
+            ),
+            "## Gaps does not name",
+        ),
+        (
+            _swap("Basis: {L}\n", "Basis: {L}\nBasis: web-0123456789ab\n"),
+            "not a page retained",
+        ),
+        (
+            _swap(
+                "| {P} | https://" + HOST + "/peer", "| Peer Co release | https://" + HOST + "/peer"
+            ),
+            "first cell",
+        ),
+        (_swap(PEER_ROW, ""), "no ## Sources row starts with it"),
+        (
+            _swap(
+                '"steady demand across its markets"', '"interest cover was thin in the base year"'
+            ),
+            "not in that page's text",
+        ),
+    ],
+    ids=[
+        "unfetched-press-row",
+        "misquote",
+        "tdr6-quote-and-amount",
+        "tdr6-later-event",
+        "later-event-label",
+        "undated-label",
+        "gaps",
+        "unknown-id",
+        "first-cell",
+        "row-deleted",
+        "issuer-sentence-with-web-basis",
+    ],
+)
+def test_rt_each_violation_is_rejected(tmp_path, change, wanted):
+    tools, text, ids = realistic_cpdr(tmp_path)
+    result = tools.write_handoff(change(text, ids))
+    assert result.startswith("REJECTED"), result
+    assert wanted in result, result
+
+
+def test_rt_false_rejections_are_gone(tmp_path):
+    tools, text, _ids = realistic_cpdr(tmp_path)
+    assert tools.write_handoff(text) == "ACCEPTED"  # M1, the Gaps item and the later event
+    numbered = text.replace("- The synthetic", "1. The synthetic").replace(
+        "- The peer's own", "2. The peer's own"
+    )
+    assert numbered != text
+    assert tools.write_handoff(numbered) == "ACCEPTED"  # M2: a list item is its own unit
+    above = "### TDR.4 Candidate peers"
+    heading = "### Peer pack: TDR.4, TDR.5 and TDR.6\n\n" + above
+    assert tools.write_handoff(text.replace(above, heading, 1)) == "ACCEPTED"  # L2
+    facade = "| peerco.period | Calendar year end against the issuer's March year end |"
+    sentence = "The facade and decade figures held."
+    observation = facade.replace("Calendar", "The web-facade note: Calendar")
+    changed = text.replace(facade, observation, 1).replace(
+        "A results release", sentence + "\n\nA results release", 1
+    )
+    assert observation in changed and tools.write_handoff(changed) == "ACCEPTED"  # I1
+
+
+def test_rt_the_withdrawn_forms_fail_prose_check_5(tmp_path):
+    tools, text, ids = realistic_cpdr(tmp_path)
+    gap = "- One peer profile page states no publication date, so it supports no figure.\n"
+    in_gap = text.replace(gap, gap.replace("page states", f"page {ids['U']} states"), 1)
+    quote = f'The peer says "steady demand across its markets" ({ids["P"]}).\n'
+    in_sentence = text.replace("\nA results release", "\n" + quote + "\nA results release", 1)
+    for changed in (in_gap, in_sentence):
+        assert changed != text
+        result = tools.write_handoff(changed)
+        assert result.startswith("REJECTED") and "Prose check 5" in result, result
+
+
+def test_rt_hosted_search_url_is_citable_when_both_are_on(tmp_path):
+    for hosted, accepted in ((True, True), (False, False)):
+        (tmp_path / str(hosted)).mkdir()
+        tools, text, _ids = realistic_cpdr(tmp_path / str(hosted), hosted=hosted)
+        press = text.replace("\n## Findings", "\n" + PRESS + "## Findings", 1)
+        result = tools.write_handoff(press)
+        assert (result == "ACCEPTED") is accepted, result
+        if not accepted:
+            assert "not fetched" in result
+
+
+def test_settled_web_lookup_table(tmp_path):
+    settle = handoff.settled_web_lookup
+    assert settle("default", ["CP-DR"], "public", None) == "on"
+    assert settle("default", ["CP-4"], "public", None) == "off"
+    assert settle("on", ["CP-4"], "private", None) == "off"
+    assert settle("on", ["CP-DR"], "private", None) == "on"
+    assert settle("default", ["CP-DR"], "public", "off") == "off"
+    assert settle("off", ["CP-DR"], "public", "off") == "off"
+    for setting, recorded in (("on", "off"), ("off", "on")):
+        with pytest.raises(ValueError, match="when this run folder was started"):
+            settle(setting, ["CP-DR"], "public", recorded)
+    with pytest.raises(ValueError, match="web_lookup"):
+        settle("maybe", ["CP-DR"], "public", None)
+    loop = tmp_path / "loop.json"
+    assert handoff.recorded_web_lookup(loop) is None
+    loop.write_text('{"web_lookup": true}')
+    assert handoff.recorded_web_lookup(loop) == "on"
+    loop.write_text("{}")
+    assert handoff.recorded_web_lookup(loop) == "off"

@@ -22,8 +22,10 @@ explicit paid action. Everything built here was proven offline only.
 ## What was built
 
 Four tools for CP-DR only: `fetch_page`, `sec_company_search`, `sec_filing_list` and
-`sec_concept_facts`. Each retained page is stored under `<run>/web/` with its URL, fetch time,
-sha256, stated date and status (index: `web/index.jsonl`). The model reads a retained page through
+`sec_concept_facts`. Each retained page is stored under `<run>/live/web/` (the live run's folder, beside `loop.json`; the
+spec said `<run>/web/`, and this departs from it because the executor writes only inside its own
+folder) with its URL, fetch time,
+sha256, stated date and status (index: `web/index.jsonl` there). The model reads a retained page through
 the same paging tools it uses for issuer files (`read_pages`, `search_source`). A lookup result
 carries the page's identity and status, never its text. There is no search API in this version.
 Code: `src/deploy_workflow/research/weblookup.py` (core), `src/deploy_workflow/model/handoff.py`
@@ -123,7 +125,7 @@ earlier (`effective_cutoff`). Each retained page has one status.
 | :--- | :--- | :--- |
 | `usable` | stated date on or before the cutoff | may support a figure |
 | `later-event` | stated date after the cutoff | take no figure from it; cite it only as a labelled later event; its `## Sources` row carries the words "Later event" |
-| `undated` | no stated date found | its row says "Undated" and `## Gaps` names its id |
+| `undated` | no stated date found | its row says "Undated", and a `## Gaps` item says so in words with the id on its Basis line |
 
 A `Last-Modified` header is not a stated date: it does not make a page dated. The stated date comes
 from the page's own `Published:` line or metadata. SEC JSON is undated at page level; each filing
@@ -138,64 +140,90 @@ is also an open point below, because it limits what CP-1C can receive. A private
 or multiple found only on a later page stays unvalidated and is stated as a limitation under
 `## Gaps`.
 
+An undated page may supply figures. SEC JSON and any page without a recognised date are undated, so
+the later-event rule does not bind them mechanically; the per-fact filing dates bind by instruction.
+
 ## Acceptance checks on CP-DR's handoff
 
 When lookup is on, `web_handoff_issues` (`weblookup.py`) checks the handoff before it is accepted.
 It is mechanical, pure and deterministic, and each issue is one sentence naming the row or quote.
 It fails closed: it reads any table row (a line with `|`, with or without a leading pipe; `\|`
-stays inside its cell) and any case of a `web-` id or URL scheme.
+stays inside its cell) and any case of a `web-` id or URL scheme. It runs after the launcher's real
+checker, so the form it asks for is one that checker accepts (prose check 5 refuses a hash in a
+sentence, and the voice rules keep ids to Basis lines, tables and `## Sources`).
 
-Lines are read as delivery reads them: LF, CR LF and CR only (`handoff_delivery.physical_lines`).
-A handoff holding U+2028, U+2029, U+0085, vertical tab, form feed or U+001C to U+001E is rejected
-with one issue asking to remove them.
+### The citation form
 
-A page is cited by its id, by a retained URL, or by the first-cell name (6 or more characters) of
-the `## Sources` row that names it. The checks below treat the three alike.
+A page's id is `web-` and 12 lower-case hex digits (`web-` + the first 12 of its sha256), the name
+`list_sources` shows. It may appear only:
 
-1. Every token written like a web id (`web-`, `web_` or `web` and 6 or more hex digits) must be
-   exactly `web-` and 12 hex digits and a retained page, wherever it appears; any other is reported
-   as an unknown web source id.
-2. Every page cited anywhere, by id or URL, has a `## Sources` row that names it.
-3. Every URL in a `## Sources` row must have been fetched in this run (compared after normalising
-   scheme and host case, `:443`, fragment, an empty query and one trailing `/`; `http` is never
-   `https`). Both the URL and the final URL of every retained row count. A URL with a user name or
-   password is refused at fetch (`webfetch._problem`), so it is never retained.
-4. A `## Sources` row that names a web id or URL needs a Source type cell: one allowed type,
-   optionally followed by `;` and a Later event or Undated label (`Issuer filing; Later event`);
-   this check is `web_source_issues` in `handoff.py`.
-5. A row for a later-event page must carry the words Later event (or `later-event`) and a row for
-   an undated page the word Undated, in any case, in the stated-date cell or after the Source type;
-   `## Gaps` must name an undated page's id. Two URLs that serve the same bytes share one id; the
-   strictest status of its index rows applies (later-event over undated over usable).
-6. TDR.6 rows are the table rows under a heading naming TDR.6 (`TDR` then an optional space, dot or
-   hyphen, then 6; until a heading of the same or higher level) and any row whose first cell is
-   `<peer>.<operand>` (revenue, ebitda, debt, interest, ffo). Such a row must cite no later-event
-   page, by id, URL, `## Sources` title or through rows linked by a shared first cell, followed to
-   the end (an `evidence_id` pointing at a register row that points at the page). Any URL in it
-   must have been fetched. Inside a TDR.6 section every line counts, table or not: no line may
-   cite a later-event page.
-7. A TDR.6 row that cites a page must carry a quote (the cell under a `quote` header, or the longest
-   cell; a trailing page reference in brackets and the surrounding quote marks are dropped), the
-   quote must appear in the text of a page the row cites, and when the table has an `amount`
-   header, the amount cell's text must appear inside the quote.
-8. In a paragraph (consecutive non-blank lines that are not table rows or headings) and in a table
-   row that cites a page, every quoted span of 12 or more characters must appear in one of the pages
-   it cites. A span runs from any of `" “ ” „ « » ‹ ›` to the next of them (mixed pairs count; a
-   mark right after a digit is an inch mark and opens nothing) after HTML entities are unescaped,
-   or between single quotes where the opening follows a non-word character (not `'24`) and the
-   closing precedes one. Straight and curly apostrophes are one character on both sides.
+- as the first cell of the page's own `## Sources` row (one row per page), followed by URL,
+  publisher, stated date or `Undated`, a Source type cell, and `Later event` when needed;
+- on Basis lines, for example `Basis: web-0123456789ab, page 1`;
+- in a table cell: a `Source`, `source` or `locator` cell; TDR.2's `source` cell holds the id;
+- never in a sentence.
 
-Known limit of check 8, a consequence of the rule: a paragraph or row that cites a web page may
-quote only from the pages it cites. One that mixes a web source with a quoted issuer-file passage of
-12 or more characters is rejected and must be split. `WEB_LOOKUP_RULES` states this. An apostrophe
-pair that looks like a single-quoted span can be rejected; it is rephrased.
+A retained URL also names the page (fail-closed alias), so the method's "web page cited by its URL"
+clause neither evades the check nor is rejected. No method edit is needed.
 
-Inherent limits of a mechanical check. These are governed by instruction in `WEB_LOOKUP_RULES`, not
-caught mechanically: a page cited by a scheme-less address, a bare id without `web-`, or a
-description; quoted spans under 12 characters; a figure split across short quotes; Markdown
-blockquotes (`> passage`); paraphrase without quote marks; later-event figures in prose outside
-TDR.6; a TDR.6 row whose evidence is linked only through a non-first column, or a TDR.6 table under a
-sibling heading of the same level; SEC facts filed after the cutoff.
+### The rules
+
+"Hosted" means hosted `web_search` is also on for the module.
+
+- A1. A handoff holding U+2028, U+2029, U+0085, vertical tab, form feed or U+001C to U+001E gets
+  exactly one issue. Lines split at LF, CR LF and CR only (`handoff_delivery.physical_lines`).
+- A2. A page is named by its id (any case) or by a URL equal, after normalising scheme and host
+  case, `:443`, fragment, an empty query and one trailing `/` (`http` is never `https`), to the url
+  or final_url of any index row of that id. Nothing else names a page.
+- A3. A `web-` and 12-hex token that is not a retained id is an issue wherever it appears.
+- A4. When hosted is off, every http(s) URL in a `## Sources` row is a retained URL. When hosted is
+  on, this rule and A13(i) are skipped (a URL the hosted search found is a citation; owner to
+  confirm, open point 11). A URL with a user name or password is refused at fetch.
+- A5. A `## Sources` row that names a retained page has that page's id as its first cell (backticks
+  stripped, any case). Every other page the row names is one issue.
+- A6. Every retained page named anywhere has a `## Sources` row whose first cell is its id. Each
+  page is reported once, and not when A5 already reported it.
+- A7. A row naming a later-event page carries `Later event` (any case, space or hyphen) outside its
+  URLs; a row naming an undated page carries `Undated`. A page's status is the strictest across its
+  index rows (later-event over undated over usable). Source type is `web_source_issues` in
+  `handoff.py`: one allowed type, optionally followed by `;` and a label.
+- A8. The `## Gaps` section names the id of every undated page that a Sources row names.
+- A9. `web_source_issues` (Source type cell) is unchanged.
+- A10. In each paragraph or list item, every quoted span of 12 or more characters that is not only
+  a reference must appear in the text of one of the pages the unit names. A unit is a run of
+  non-blank lines; a blank line, a heading or a table row ends it, and a list-marker line
+  (`prose_checks.LIST_MARKER`) starts a new one. A span runs from any of `" “ ” „ « » ‹ ›` to the
+  next of them (mixed pairs count; a mark right after a digit is an inch mark and opens nothing)
+  after HTML entities are unescaped, or between single quotes where the opening follows a non-word
+  character (not `'24`) and the closing precedes one. Straight and curly apostrophes are one
+  character.
+- A11. In each table row, every such span must appear in one of the pages the row names directly.
+  There is no linking.
+- A12. A TDR.6 row is a table row whose first cell fully matches `<peer>.<operand>` (revenue,
+  ebitda, debt, interest, ffo). Its pages are those it names, plus those named by any table row
+  whose first cell equals a token of its `evidence_id` or `evidence_ids` cell (split at `;`, `,` or
+  whitespace). One hop, no chain: this is the method's TDR.2 `evidence_id` register.
+- A13. For a TDR.6 row: (i) when hosted is off, every URL in it is retained; (ii) none of its pages
+  is later-event; (iii) when it has pages, its quote (the cell under a `quote` header, else the
+  longest cell; a trailing page reference in brackets and the surrounding quote marks are dropped)
+  is non-empty and appears in one of them; (iv) when the table has an `amount` header, the amount
+  text appears inside the quote.
+
+Known limit of A10 and A11, a consequence of the rule: a unit or row that names a web page may quote
+only from the pages it names. One that mixes a web source with a quoted issuer-file passage of 12 or
+more characters is rejected and must be split. `WEB_LOOKUP_RULES` states this. An apostrophe pair
+that looks like a single-quoted span can be rejected; it is rephrased.
+
+Governed by instruction in `WEB_LOOKUP_RULES` only, not caught mechanically:
+
+- a TDR.6 figure not written as a `<peer>.<operand>` table row (bullets, HTML);
+- a malformed id (11 or 13 hex digits, `web_`) or a bare hex id;
+- evidence linked through two rows, or through a column other than `evidence_id`;
+- a page named by a scheme-less address or a description;
+- quoted spans under 12 characters, a figure split across short quotes, Markdown blockquotes, and
+  paraphrase without quote marks;
+- later-event figures in prose outside TDR.6;
+- SEC facts filed after the cutoff.
 
 ## Fetched text is data
 
@@ -214,11 +242,21 @@ event is recorded. Detection only.
 `--web-lookup default|on|off`. `default` is on for a `public` case and off for any other kind;
 `on` forces it for any case kind; `off` forces it off. Only CP-DR is offered the tools. The launcher
 prints a `Lookup:` line that states which applies and why. The executor itself accepts only `on` or
-`off`: the launcher resolves `default` first.
+`off`: the launcher resolves `default` first (`settled_web_lookup`), against the run's modules (no
+CP-DR in the run means off) and against the folder.
+
+A run folder keeps its identity: `live/loop.json` records whether lookup was on, and a relaunch
+cannot change those bytes. So a folder that already holds a `loop.json` keeps what it recorded: a
+relaunch with no flag (or with `default`) takes the recorded setting and the `Lookup:` line says
+"as recorded when this run folder was started"; a flag that contradicts it stops the launch with
+exit 2 and a message naming the recorded setting.
 
 This is separate from hosted `web_search` (ruling-gated, OpenAI only, offered to public and private
 cases; ruling 2026-11-11-run-start-submit.md), which is unchanged. Both may be on in one run, and
-the module is told which tools it has.
+the module is told which tools it has. Hosted search is unchanged: a URL that is not retained is a
+hosted citation when both are on, so the fetched-URL rule is skipped then (owner to confirm, open
+point 11). With lookup alone, a pack item's origin URL in `## Sources` is rejected, because it was
+not fetched.
 
 ## Cost
 
@@ -257,6 +295,12 @@ allowlist" returned nothing usable; that does not prove nothing exists. Decision
 7. CP-4's runbook describes an EDGAR acquisition lane. CP-4 was not given the tools.
 8. `handoff._pages` parses issuer PDFs with the same PDF library and no exception handling. This
    predates this work.
-9. The change is over the global 800-line guideline (about 4,950 changed lines since the first
-   commit; most of it tests).
+9. The change is over the global 800-line guideline (5,662 added, 80 removed, `git diff --numstat 82b17f3...HEAD`).
 10. Search API: the owner chose it as the next step; not built.
+11. Hosted search and lookup together: a `## Sources` URL that was not fetched is accepted when
+    hosted search is also on, since it may have found it. Confirm that is the intent.
+12. Where the pages are kept: `<run>/live/web/` (beside `loop.json`), not the spec's `<run>/web/`,
+    because the executor writes only inside its own folder. Say if you want them moved.
+13. Dropped checks, now instruction only: first-cell titles naming a page, a TDR.6 section found by
+    its heading, a malformed-id token, and evidence links followed through several rows. They
+    rejected the method's own layouts or the house citation form; see the limits list above.
