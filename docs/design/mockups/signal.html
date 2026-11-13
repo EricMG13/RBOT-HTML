@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Signal feed mockup</title>
+<style>
+:root{--navy:#000533;--blue:#001aff;--blue-50:#e5e8ff;--blue-100:#c2c9ff;--ground:#f4f4f5;--rule:#e8e9eb;--line:#d1d4d8;--muted:#474a4f;--quiet:#63676e;--card:#fff;--amber:#806300;--amber-bg:#fff4cc;--red:#8e413e;--red-bg:#fbeceb;--green:#0f8048;--green-bg:#e3f6ec;--violet:#514d80;--violet-bg:#eeedff;--shadow:0 1px 3px rgba(0,5,51,.1),0 1px 2px -1px rgba(0,5,51,.1)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--navy);font:13px/1.45 "Red Hat Text",system-ui,-apple-system,"Segoe UI",sans-serif}
+h1,h2,h3,p{margin:0}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+.sample{background:var(--amber-bg);color:var(--amber);font-size:12px;padding:6px 16px;text-align:center}
+.app{display:grid;grid-template-columns:56px 228px minmax(0,1fr) 360px;height:calc(100vh - 30px);min-height:640px}
+/* rail */
+.rail{background:var(--navy);display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 0}
+.rail .mark{width:26px;height:26px;border-radius:6px;background:#fff;margin-bottom:10px}
+.rail a{width:38px;height:38px;border-radius:8px;display:grid;place-items:center;color:#aab0d6}
+.rail a.on{background:var(--blue);color:#fff}
+.rail svg,.ico{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+/* channels */
+.side{background:#fff;border-right:1px solid var(--rule);padding:14px 10px;overflow:auto}
+.side h1{font:700 17px "Red Hat Display",system-ui,sans-serif;padding:0 8px 10px;display:flex;align-items:center;gap:8px}
+.side h2{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--quiet);padding:14px 8px 4px;display:flex;justify-content:space-between}
+.ch{display:flex;align-items:center;gap:8px;width:100%;padding:6px 8px;border-radius:8px;text-align:left}
+.ch:hover{background:var(--ground)}
+.ch.on{background:var(--blue-50);color:var(--blue);font-weight:600}
+.ch .n{margin-left:auto;font-size:12px;font-weight:600;background:var(--blue);color:#fff;border-radius:99px;padding:2px 8px}
+.ch .dot{width:7px;height:7px;border-radius:50%;background:var(--green);margin-left:auto}
+.hash{color:var(--quiet);width:14px;text-align:center}
+/* feed */
+.feed{overflow:auto;padding:16px 20px 40px}
+.bar{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.seg{display:inline-flex;background:#fff;border:1px solid var(--line);border-radius:8px;padding:2px}
+.seg button{padding:4px 12px;border-radius:6px;color:var(--muted)}
+.seg button.on{background:var(--navy);color:#fff}
+.chip{border:1px solid var(--line);background:#fff;border-radius:99px;padding:4px 12px;font-size:12px;color:var(--muted)}
+.chip.on{border-color:var(--blue);color:var(--blue);background:var(--blue-50)}
+.live{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--quiet)}
+.pulse{width:8px;height:8px;border-radius:50%;background:var(--green)}
+.card{background:var(--card);border:1px solid var(--rule);border-radius:12px;box-shadow:var(--shadow);padding:14px 16px;margin-bottom:12px;max-width:720px}
+.card.sel{border-color:var(--blue);box-shadow:0 0 0 3px rgba(0,26,255,.14)}
+.meta{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--quiet);margin-bottom:6px}
+.src{width:20px;height:20px;border-radius:5px;display:grid;place-items:center;font:700 12px "Red Hat Mono",ui-monospace,monospace;color:#fff;background:var(--navy)}
+.src.reg{background:var(--violet)}.src.rat{background:var(--amber)}.src.dig{background:var(--blue)}
+.kind{font-size:12px;font-weight:600;border-radius:4px;padding:3px 8px}
+.kind.reg{background:var(--violet-bg);color:var(--violet)}.kind.rat{background:var(--amber-bg);color:var(--amber)}.kind.news{background:var(--ground);color:var(--muted)}
+.sig{margin-left:auto;display:inline-flex;align-items:flex-end;gap:2px;height:14px}
+.sig i{width:3px;background:var(--line);border-radius:1px}
+.sig i:nth-child(1){height:5px}.sig i:nth-child(2){height:9px}.sig i:nth-child(3){height:14px}
+.sig.s1 i:nth-child(-n+1),.sig.s2 i:nth-child(-n+2),.sig.s3 i{background:var(--blue)}
+.card h3{font:600 18px/1.3 "Red Hat Display",system-ui,sans-serif;margin-bottom:6px}
+.why{display:flex;gap:8px;background:var(--blue-50);border-radius:8px;padding:8px 10px;margin:8px 0;color:#0012b2}
+.why b{font:600 12px "Red Hat Mono",ui-monospace,monospace;background:#fff;border-radius:4px;padding:3px 8px;height:fit-content}
+.tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.tag{font-size:12px;border:1px solid var(--rule);border-radius:4px;padding:3px 8px;color:var(--muted)}
+.acts{display:flex;gap:4px;border-top:1px solid var(--rule);margin:12px -16px -6px;padding:6px 10px 0}
+.acts button{display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:6px;color:var(--muted);font-size:12px}
+.acts button:hover{background:var(--ground)}
+.acts .open{margin-left:auto;color:var(--blue)}
+.shared{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin-bottom:10px;padding-bottom:10px;border-bottom:1px dashed var(--rule)}
+.av{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;color:#fff;background:var(--blue);flex:none}
+.av.b{background:var(--green)}.av.c{background:var(--violet)}.av.d{background:var(--amber)}
+/* case stepper */
+.steps{display:grid;grid-template-columns:repeat(4,1fr);margin:10px 0 4px}
+.st{position:relative;font-size:12px;color:var(--quiet);padding-top:16px}
+.st:before{content:"";position:absolute;top:4px;left:0;right:0;height:2px;background:var(--line)}
+.st:after{content:"";position:absolute;top:0;left:0;width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--line)}
+.st.done:before,.st.done:after{background:var(--violet);border-color:var(--violet)}
+.st.now:after{border-color:var(--violet);box-shadow:0 0 0 4px var(--violet-bg)}
+.st.now{color:var(--navy);font-weight:600}
+/* rating */
+.move{display:flex;align-items:center;gap:10px;margin:8px 0}
+.rt{font:600 16px "Red Hat Mono",ui-monospace,monospace;border:1px solid var(--line);border-radius:6px;padding:4px 10px}
+.rt.dn{background:var(--red-bg);border-color:var(--red);color:var(--red)}
+/* digest */
+.digest{background:var(--navy);color:#fff;border:0}
+.digest .meta{color:#aab0d6}.digest ol{margin:8px 0 0;padding-left:18px}.digest li{margin:3px 0}
+.digest .acts{border-color:rgba(255,255,255,.15)}.digest .acts button{color:#c2c9ff}.digest .acts button:hover{background:rgba(255,255,255,.08)}
+/* thread */
+.thread{background:#fff;border-left:1px solid var(--rule);display:flex;flex-direction:column;min-height:0}
+.thead{padding:12px 16px;border-bottom:1px solid var(--rule);display:flex;align-items:center;gap:8px}
+.thead b{font:600 14px "Red Hat Display",system-ui,sans-serif}
+.thead span{color:var(--quiet);font-size:12px}
+.tbody{flex:1;overflow:auto;padding:14px 16px}
+.quote{border:1px solid var(--rule);border-radius:8px;padding:8px 10px;margin-bottom:14px;font-size:12px}
+.quote b{display:block;font-size:13px;margin:2px 0}
+.msg{display:grid;grid-template-columns:24px 1fr;gap:8px;position:relative;padding-bottom:14px}
+.msg:not(.last):before{content:"";position:absolute;left:11.5px;top:28px;bottom:2px;width:1px;background:var(--rule)}
+.msg .who{font-weight:600}.msg .who span{font-weight:400;color:var(--quiet);font-size:12px;margin-left:6px}
+.msg.r{margin-left:32px}
+.react{display:inline-flex;gap:4px;margin-top:5px}
+.react span{font-size:12px;border:1px solid var(--rule);border-radius:99px;padding:2px 8px;color:var(--muted)}
+.role{font-size:12px;font-weight:600;border-radius:4px;padding:2px 8px;background:var(--ground);color:var(--muted);margin-left:6px}
+.day{display:flex;align-items:center;gap:8px;color:var(--quiet);font-size:12px;margin:2px 0 12px}
+.day:before,.day:after{content:"";flex:1;height:1px;background:var(--rule)}
+.comp{border-top:1px solid var(--rule);padding:10px 16px}
+.box{border:1px solid var(--line);border-radius:10px;padding:8px 10px;display:flex;align-items:center;gap:8px;color:var(--quiet)}
+.box .send{margin-left:auto;background:var(--blue);color:#fff;border-radius:6px;padding:4px 12px;font-weight:600}
+.note{font-size:12px;color:var(--quiet);margin-top:6px}
+@media (max-width:1100px){.app{grid-template-columns:56px 200px minmax(0,1fr)}.thread{display:none}}
+/* v2: post box, settings */
+.post{display:flex;align-items:center;gap:10px;max-width:720px;background:#fff;border:1px solid var(--rule);border-radius:12px;padding:10px 12px;margin-bottom:14px;box-shadow:var(--shadow)}
+.post .in{flex:1;border:1px solid var(--line);border-radius:99px;padding:7px 14px;color:var(--quiet)}
+.btn{border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-weight:600;background:#fff}
+.btn.pri{background:var(--blue);border-color:var(--blue);color:#fff}
+.side .foot{margin-top:18px;border-top:1px solid var(--rule);padding-top:8px}
+.settings{display:none;grid-column:3 / 5;overflow:auto;padding:20px 24px 60px}
+body.s .feed,body.s .thread{display:none}
+body.s .settings{display:block}
+.settings>header{display:flex;align-items:baseline;gap:12px;margin-bottom:4px}
+.settings>header h2{font:700 24px "Red Hat Display",system-ui,sans-serif}
+.settings>header p{color:var(--quiet)}
+.stabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:14px 0 18px;position:sticky;top:-20px;background:var(--ground);padding-top:6px;z-index:1}
+.stabs a{padding:8px 12px;color:var(--muted);border-bottom:2px solid transparent;text-decoration:none;font-weight:600}
+.stabs a.on{color:var(--blue);border-color:var(--blue)}
+.sec{display:grid;grid-template-columns:220px minmax(0,1fr);gap:24px;padding:20px 0;border-bottom:1px solid var(--rule);max-width:1040px}
+.sec>div:first-child h3{font:600 16px "Red Hat Display",system-ui,sans-serif;margin-bottom:4px}
+.sec>div:first-child p{color:var(--quiet);font-size:12px}
+.who{display:inline-block;margin-top:8px;font-size:12px;font-weight:600;border-radius:4px;padding:3px 8px;background:var(--blue-50);color:#0012b2}
+.who.own{background:var(--navy);color:#fff}.who.me{background:var(--green-bg);color:var(--green)}
+.panel{background:#fff;border:1px solid var(--rule);border-radius:12px;box-shadow:var(--shadow)}
+.panel+.panel{margin-top:12px}
+.row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-top:1px solid var(--rule)}
+.row:first-child{border-top:0}
+.row .grow{flex:1;min-width:0}
+.row small{display:block;color:var(--quiet);font-size:12px}
+.stack{display:flex}.stack .av{margin-left:-6px;border:2px solid #fff;width:26px;height:26px}
+.pill{font-size:12px;border-radius:99px;padding:3px 10px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.pill.ok{border-color:var(--green);color:var(--green);background:var(--green-bg)}
+.pill.wait{border-color:var(--amber);color:var(--amber);background:var(--amber-bg)}
+.pill.off{background:var(--ground)}
+.tog{width:34px;height:20px;border-radius:99px;background:var(--line);position:relative;flex:none}
+.tog:after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:var(--shadow)}
+.tog.on{background:var(--blue)}.tog.on:after{left:16px}
+.form{padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:4px}
+.form .f{border:1px solid var(--line);border-radius:8px;padding:7px 10px;min-height:34px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.form .f.ph{color:var(--quiet)}
+.form .wide{grid-column:1 / -1}
+.form .tpl{font:500 12px/1.6 "Red Hat Mono",ui-monospace,monospace;background:var(--quiet-bg,#fafafb);align-items:flex-start;display:block}
+.tpl mark{background:var(--blue-50);color:#0012b2;border-radius:4px;padding:0 4px}
+.ptitle{padding:10px 14px;font-weight:600;border-bottom:1px solid var(--rule);display:flex;align-items:center;gap:8px}
+.ptitle span{margin-left:auto;font-weight:400;color:var(--quiet);font-size:12px}
+.bars{display:inline-flex;align-items:flex-end;gap:2px;height:18px;width:54px}
+.bars i{flex:1;background:var(--blue-100);border-radius:1px}
+.meter{height:8px;border-radius:99px;background:var(--rule);overflow:hidden;margin:8px 0 4px}
+.meter i{display:block;height:100%;background:var(--blue);border-radius:99px}
+.grid3{display:grid;grid-template-columns:1fr 64px 64px;align-items:center}
+.grid3>*{padding:9px 14px;border-top:1px solid var(--rule)}
+.grid3>.h{border-top:0;font-size:12px;color:var(--quiet);font-weight:600}
+.grid3>.c{display:grid;place-items:center;padding:9px 0}
+.kw{display:flex;gap:6px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<div class="sample">Mockup with invented sample content. No story, case, rating or person shown here is real.</div>
+<div class="app">
+
+<aside class="rail" aria-label="Application">
+  <span class="mark"></span>
+  <a title="Start a run"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></a>
+  <a title="Issuer library"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></a>
+  <a title="Run activity"><svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></a>
+  <a class="on" title="Signal"><svg viewBox="0 0 24 24"><path d="M2 20h.01M7 20v-4M12 20v-8M17 20V8M22 4v16"/></svg></a>
+  <a title="Search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></a>
+</aside>
+
+<nav class="side" aria-label="Signal channels">
+  <h1><svg class="ico" viewBox="0 0 24 24"><path d="M2 20h.01M7 20v-4M12 20v-8M17 20V8M22 4v16"/></svg>Signal</h1>
+  <button class="ch on"><span class="hash">◎</span>For you<span class="n">12</span></button>
+  <button class="ch"><span class="hash">↓</span>Latest</button>
+  <button class="ch"><span class="hash">☆</span>Saved</button>
+
+  <h2>Topics</h2>
+  <button class="ch"><span class="hash">#</span>Regulation &amp; competition<span class="n">4</span></button>
+  <button class="ch"><span class="hash">#</span>Rating actions</button>
+  <button class="ch"><span class="hash">#</span>M&amp;A and disposals</button>
+  <button class="ch"><span class="hash">#</span>Primary market</button>
+  <button class="ch"><span class="hash">#</span>Central banks</button>
+
+  <h2>Groups <span>+</span></h2>
+  <button class="ch"><span class="av" style="width:16px;height:16px;font-size:9px">T</span>TMT analysts<span class="n">3</span></button>
+  <button class="ch"><span class="av b" style="width:16px;height:16px;font-size:9px">H</span>Healthcare</button>
+  <button class="ch"><span class="av c" style="width:16px;height:16px;font-size:9px">L</span>Leveraged finance</button>
+
+  <h2>My digests <span>+</span></h2>
+  <button class="ch"><span class="hash">▤</span>Monday TMT brief<span class="dot"></span></button>
+  <button class="ch"><span class="hash">▤</span>Daily regulators</button>
+  <button class="ch"><span class="hash">▤</span>Month-end review</button>
+  <div class="foot"><button class="ch" id="go-settings" onclick="document.body.classList.toggle('s');this.classList.toggle('on')"><span class="hash">⚙</span>Signal settings</button></div>
+</nav>
+
+<main class="feed">
+  <div class="post"><span class="av d">EG</span><span class="in">Share a link or a note with a group…</span><button class="btn">Attach story</button><button class="btn pri">New thread</button></div>
+  <div class="bar">
+    <div class="seg"><button class="on">Top</button><button>Latest</button></div>
+    <span class="chip on">All</span><span class="chip">Regulators</span><span class="chip">News</span><span class="chip">Ratings</span><span class="chip">Shared by colleagues</span>
+    <span class="live"><span class="pulse"></span>Sources checked 4 min ago</span>
+  </div>
+
+  <article class="card sel">
+    <div class="shared"><span class="av">AK</span><span><b>A. Kovac</b> shared to <b>TMT analysts</b> · “Remedy package looks heavier than we assumed.”</span></div>
+    <div class="meta"><span class="src reg">CA</span>Competition Authority · 38 min ago<span class="kind reg">Regulatory case</span><span class="sig s3" title="High signal"><i></i><i></i><i></i></span></div>
+    <h3>Authority opens in-depth review of Northwave’s network-sharing deal</h3>
+    <div class="steps"><div class="st done">Opened</div><div class="st done">Initial review</div><div class="st now">In-depth review</div><div class="st">Decision due Mar</div></div>
+    <div class="why"><b>AI</b><span>Why it matters: a wholesale-access remedy would cap pricing power for both parties; affects cable and mobile issuers with network-sharing plans.</span></div>
+    <div class="tags"><span class="tag">Telecoms</span><span class="tag">UK</span><span class="tag">Competition</span></div>
+    <div class="acts"><button>💬 5 comments</button><button>↗ Share to group</button><button>☆ Save</button><button class="open">Open source ›</button></div>
+  </article>
+
+  <article class="card">
+    <div class="meta"><span class="src rat">RA</span>Ratings agency · 1 h ago<span class="kind rat">Rating action</span><span class="sig s2" title="Medium signal"><i></i><i></i><i></i></span></div>
+    <h3>Helix Cable downgraded on slower deleveraging</h3>
+    <div class="move"><span class="rt">B+</span>→<span class="rt dn">B</span><span style="color:var(--quiet)">Outlook stable</span></div>
+    <div class="why"><b>AI</b><span>Why it matters: first downgrade in the peer set this year; cites capex that will not fall before 2028.</span></div>
+    <div class="acts"><button>💬 Comment</button><button>↗ Share to group</button><button>☆ Save</button><button class="open">Open source ›</button></div>
+  </article>
+
+  <article class="card digest">
+    <div class="meta"><span class="src dig">▤</span>Your digest · Monday TMT brief · 07:00</div>
+    <h3>Three things from last week</h3>
+    <ol><li>Network-sharing review moved to the in-depth stage.</li><li>Two cable issuers priced term loans inside guidance.</li><li>Spectrum auction rules published; reserve prices up.</li></ol>
+    <div class="acts"><button>Read full digest</button><button>Edit schedule</button><button class="open" style="color:#fff">14 stories behind this ›</button></div>
+  </article>
+
+  <article class="card">
+    <div class="meta"><span class="src">FW</span>Financial wire · 2 h ago<span class="kind news">News</span><span class="sig s1" title="Low signal"><i></i><i></i><i></i></span></div>
+    <h3>Tower operator weighs sale of minority stake in fibre unit</h3>
+    <div class="why"><b>AI</b><span>Why it matters: proceeds earmarked for debt reduction, per people familiar; no terms disclosed.</span></div>
+    <div class="tags"><span class="tag">Towers</span><span class="tag">M&amp;A</span><span class="tag">Also in 3 other sources</span></div>
+    <div class="acts"><button>💬 Comment</button><button>↗ Share to group</button><button>☆ Save</button><button class="open">Open source ›</button></div>
+  </article>
+</main>
+
+<aside class="thread" aria-label="Thread">
+  <div class="thead"><span class="av">T</span><div><b>TMT analysts</b><br><span>Thread · 5 comments · 4 members here</span></div></div>
+  <div class="tbody">
+    <div class="quote"><span style="color:var(--violet);font-weight:600">Regulatory case · Competition Authority</span><b>Authority opens in-depth review of Northwave’s network-sharing deal</b>In-depth review · decision due March</div>
+    <div class="msg"><span class="av">AK</span><div><div class="who">A. Kovac<span class="role">Writer</span><span>09:12</span></div>Remedy package looks heavier than we assumed. Wholesale access would hit the smaller party harder.<div class="react"><span>👍 2</span></div></div></div>
+    <div class="msg r"><span class="av b">ML</span><div><div class="who">M. Lindqvist<span class="role">Writer</span><span>09:20</span></div>Agree. Do we know if the access price is regulated or negotiated?</div></div>
+    <div class="msg r"><span class="av">AK</span><div><div class="who">A. Kovac<span>09:24</span></div>Negotiated, with a backstop. Page 14 of the notice.</div></div>
+    <div class="day">Today</div>
+    <div class="msg"><span class="av c">SO</span><div><div class="who">S. Okafor<span class="role">Writer</span><span>10:02</span></div>Adding the rating action on Helix here, same theme: capex not falling.<div class="quote" style="margin:6px 0 0"><b>Helix Cable downgraded on slower deleveraging</b>B+ → B · Ratings agency</div></div></div>
+    <div class="msg last"><span class="av d">JR</span><div><div class="who">J. Reyes<span class="role">Writer</span><span>10:15</span></div>Worth a fresh run on Northwave once the notice text is filed?<div class="react"><span>👀 1</span></div></div></div>
+  </div>
+  <div class="comp">
+    <div class="box">Reply to TMT analysts…<button class="send">Send</button></div>
+    <div class="note">Readers see this thread but not the reply box.</div>
+  </div>
+</aside>
+
+<main class="settings" aria-label="Signal settings">
+  <header><h2>Signal settings</h2><p>Each section says who may change it.</p></header>
+  <nav class="stabs"><a class="on" href="#s-groups">Groups &amp; threads</a><a href="#s-sources">Sources</a><a href="#s-topics">Topics</a><a href="#s-digests">Digests</a><a href="#s-notify">Notifications</a><a href="#s-ai">AI &amp; cost</a></nav>
+
+  <section class="sec" id="s-groups">
+    <div><h3>Groups</h3><p>A group is a shared space, such as TMT analysts. Stories and notes posted to it become threads.</p><span class="who">Writers</span></div>
+    <div>
+      <div class="panel">
+        <div class="row"><span class="av">T</span><div class="grow"><b>TMT analysts</b><small>42 threads · last post 10:15</small></div><div class="stack"><span class="av">AK</span><span class="av b">ML</span><span class="av c">SO</span><span class="av d">+6</span></div><span class="pill">Open</span><button class="btn">Manage</button></div>
+        <div class="row"><span class="av b">H</span><div class="grow"><b>Healthcare</b><small>17 threads · last post yesterday</small></div><div class="stack"><span class="av c">SO</span><span class="av d">+3</span></div><span class="pill">Open</span><button class="btn">Manage</button></div>
+        <div class="row"><span class="av c">L</span><div class="grow"><b>Leveraged finance</b><small>8 threads · last post 3 Nov</small></div><div class="stack"><span class="av">AK</span><span class="av d">JR</span></div><span class="pill wait">Invite only</span><button class="btn">Manage</button></div>
+      </div>
+      <div class="panel">
+        <div class="ptitle">New group</div>
+        <div class="form">
+          <div><label>Name</label><div class="f ph">e.g. Infrastructure</div></div>
+          <div><label>Who can see it</label><div class="seg"><button class="on">Everyone</button><button>Invited members</button></div></div>
+          <div class="wide"><label>Members</label><div class="f"><span class="chip on">A. Kovac ✕</span><span class="chip on">S. Okafor ✕</span><span class="ph" style="color:var(--quiet)">Add a person…</span></div></div>
+          <div class="wide"><label>Post stories from these topics automatically</label><div class="f"><span class="chip on">Regulation &amp; competition ✕</span><span style="color:var(--quiet)">Add a topic…</span></div></div>
+          <div class="wide" style="display:flex;justify-content:flex-end;gap:8px"><button class="btn">Cancel</button><button class="btn pri">Create group</button></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <div><h3>Thread rules</h3><p>How threads start and what happens to them. Set per group; these are the defaults.</p><span class="who">Writers</span></div>
+    <div class="panel">
+      <div class="row"><div class="grow"><b>Sharing a story starts a thread</b><small>The story card becomes the first post.</small></div><span class="tog on"></span></div>
+      <div class="row"><div class="grow"><b>Allow threads without a story</b><small>A note or a question on its own.</small></div><span class="tog on"></span></div>
+      <div class="row"><div class="grow"><b>One thread per story in a group</b><small>A second share joins the existing thread.</small></div><span class="tog on"></span></div>
+      <div class="row"><div class="grow"><b>Comments can be edited for 15 minutes</b><small>Edits are marked. Deleted comments leave a “removed” line.</small></div><span class="tog on"></span></div>
+      <div class="row"><div class="grow"><b>Archive threads quiet for 90 days</b><small>Archived threads stay searchable and read-only.</small></div><span class="tog"></span></div>
+    </div>
+  </section>
+
+  <section class="sec" id="s-sources">
+    <div><h3>Sources</h3><p>Only approved sources reach anyone’s feed. Writers propose; the owner approves.</p><span class="who own">Owner approves</span></div>
+    <div>
+      <div class="panel">
+        <div class="row"><span class="src reg">CA</span><div class="grow"><b>Competition Authority — cases</b><small>Regulator · feed · checked 4 min ago</small></div><span class="bars" title="Items per week"><i style="height:30%"></i><i style="height:55%"></i><i style="height:40%"></i><i style="height:90%"></i><i style="height:60%"></i><i style="height:75%"></i></span><span class="pill ok">Healthy</span><span class="tog on"></span></div>
+        <div class="row"><span class="src reg">TR</span><div class="grow"><b>Telecoms regulator — consultations</b><small>Regulator · feed · checked 4 min ago</small></div><span class="bars"><i style="height:20%"></i><i style="height:20%"></i><i style="height:45%"></i><i style="height:30%"></i><i style="height:25%"></i><i style="height:50%"></i></span><span class="pill ok">Healthy</span><span class="tog on"></span></div>
+        <div class="row"><span class="src rat">RA</span><div class="grow"><b>Ratings agency — press releases</b><small>Ratings · feed · last item 2 days ago</small></div><span class="bars"><i style="height:60%"></i><i style="height:40%"></i><i style="height:10%"></i><i style="height:5%"></i><i style="height:5%"></i><i style="height:5%"></i></span><span class="pill wait">Quiet</span><span class="tog on"></span></div>
+        <div class="row"><span class="src">FW</span><div class="grow"><b>Financial wire — credit</b><small>News · feed · proposed by M. Lindqvist</small></div><span class="pill wait">Awaiting approval</span><button class="btn pri">Approve</button></div>
+        <div class="row"><span class="src dig">✉</span><div class="grow"><b>Outlook mailbox</b><small>Email · available in the enterprise environment</small></div><span class="pill off">Not available here</span></div>
+      </div>
+      <div class="panel"><div class="row"><div class="grow"><div class="f ph" style="border:1px solid var(--line);border-radius:8px;padding:7px 10px;color:var(--quiet)">Paste a feed address to propose a source…</div></div><div class="seg"><button class="on">Regulator</button><button>News</button><button>Ratings</button><button>Research</button></div><button class="btn">Propose</button></div></div>
+    </div>
+  </section>
+
+  <section class="sec" id="s-topics">
+    <div><h3>Topics</h3><p>A topic is a saved rule that sorts stories into a channel.</p><span class="who">Writers</span></div>
+    <div class="panel">
+      <div class="row"><div class="grow"><b># Regulation &amp; competition</b><div class="kw" style="margin-top:6px"><span class="tag">merger review</span><span class="tag">remedies</span><span class="tag">wholesale access</span><span class="tag">source: any regulator</span></div></div><span class="pill">214 stories / month</span><button class="btn">Edit</button></div>
+      <div class="row"><div class="grow"><b># Rating actions</b><div class="kw" style="margin-top:6px"><span class="tag">kind: rating action</span><span class="tag">sector: any</span></div></div><span class="pill">61 stories / month</span><button class="btn">Edit</button></div>
+      <div class="row"><div class="grow"><div class="f ph" style="color:var(--quiet)">+ New topic</div></div></div>
+    </div>
+  </section>
+
+  <section class="sec" id="s-digests">
+    <div><h3>Digests</h3><p>A saved brief that runs on a schedule and lands in your Signal inbox. Everyone fills in the same form.</p><span class="who me">Personal · everyone</span>
+      <div class="meter" style="margin-top:14px"><i style="width:60%"></i></div><p>3 of 5 digests used</p></div>
+    <div class="panel">
+      <div class="ptitle">Monday TMT brief<span>Next run Mon 16 Nov, 07:00</span></div>
+      <div class="form">
+        <div><label>Covers</label><div class="f"><span class="chip on">TMT analysts ✕</span><span class="chip on"># Regulation &amp; competition ✕</span></div></div>
+        <div><label>Runs</label><div style="display:flex;gap:8px;align-items:center"><div class="seg"><button>Daily</button><button class="on">Weekly</button><button>Monthly</button></div><div class="f" style="min-width:60px">Mon</div><div class="f" style="min-width:60px">07:00</div></div></div>
+        <div class="wide"><label>Brief (standard template — edit the highlighted parts)</label>
+          <div class="f tpl">Summarise what changed for <mark>European telecoms and cable issuers</mark> over the <mark>last week</mark>.<br>Lead with the <mark>3</mark> most important developments, most important first.<br>For each: what happened, why it matters for credit, and the story it comes from.<br>Then list anything <mark>regulators</mark> are due to decide in the next <mark>30 days</mark>.<br>Say plainly if nothing material happened.</div></div>
+        <div><label>Length</label><div class="seg"><button class="on">Short</button><button>Standard</button></div></div>
+        <div><label>Deliver to</label><div class="f">Signal inbox <span class="pill off" style="margin-left:auto">Email later</span></div></div>
+        <div class="wide" style="display:flex;justify-content:flex-end;gap:8px"><button class="btn">Run once now</button><button class="btn pri">Save digest</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="s-notify">
+    <div><h3>Notifications</h3><p>What raises a count on the rail and what is pinned to the top of your feed.</p><span class="who me">Personal · everyone</span></div>
+    <div class="panel"><div class="grid3">
+      <span class="h">Event</span><span class="h c">Count</span><span class="h c">Pin</span>
+      <span>Replies to my comments</span><span class="c"><span class="tog on"></span></span><span class="c"><span class="tog on"></span></span>
+      <span>New threads in my groups</span><span class="c"><span class="tog on"></span></span><span class="c"><span class="tog"></span></span>
+      <span>High-signal stories in my topics</span><span class="c"><span class="tog"></span></span><span class="c"><span class="tog on"></span></span>
+      <span>A digest is ready</span><span class="c"><span class="tog on"></span></span><span class="c"><span class="tog on"></span></span>
+    </div></div>
+  </section>
+
+  <section class="sec" id="s-ai" style="border-bottom:0">
+    <div><h3>AI &amp; cost</h3><p>AI runs once when a story arrives and once per digest. Nothing runs when a page is opened.</p><span class="who own">Owner only</span></div>
+    <div>
+      <div class="panel">
+        <div class="row"><div class="grow"><b>“Why it matters” line</b><small>One sentence per story, marked AI.</small></div><span class="tog on"></span></div>
+        <div class="row"><div class="grow"><b>Signal strength</b><small>Low, medium or high, shown as bars.</small></div><span class="tog on"></span></div>
+        <div class="row"><div class="grow"><b>Fold duplicates</b><small>The same story from several sources shows once. No AI needed.</small></div><span class="tog on"></span></div>
+      </div>
+      <div class="panel"><div style="padding:14px"><b>Monthly spend cap</b><div class="meter"><i style="width:16%"></i></div><small style="color:var(--quiet)">Sample figures: 3.10 of 20.00 used. At the cap, new stories arrive without the AI line and digests pause.</small></div></div>
+    </div>
+  </section>
+</main>
+
+</div>
+</body>
+</html>
