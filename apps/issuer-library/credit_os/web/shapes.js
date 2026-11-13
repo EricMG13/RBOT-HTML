@@ -87,7 +87,8 @@ const Shapes = (() => {
   const tablesIn = sections => (sections ?? []).flatMap(section => (section.blocks ?? []).filter(block => block.type === 'table'));
   // The distinct cell values of every column of kind `id` in the sections' tables, in first-seen order, that a reader could meet inside a sentence as an
   // identifier: a value holds a digit (so Base and High are words, not tokens) and is not a period label (FY24, FY2024A, 2024, Q3 2024, H1 24) or a bare number.
-  const PERIOD_LABEL = /^(?:(?:fy|cy|ltm|pf|[hq][1-4])\s*)?\d{2,4}[ae]?$|^(?:fy|cy|ltm|pf|[hq][1-4])\s*(?:fy|cy)?\s*\d{2,4}[ae]?$/;
+  // A period label: a year (2024, FY2024-25, FY24E), optionally led by a trailing/half/quarter/nine-month tag (LTM, 1H24, H1 2024, 9M24, Q3 FY24); LTM alone too.
+  const PERIOD_LABEL = /^(?:(?:ltm|ttm|ytd|pf)\s*)?(?:(?:[hq][1-4]|[1-4][hq]|\d{1,2}m)\s*)?(?:(?:fy|cy)?\s*\d{2,4}(?:\s*[-/\u2013]\s*\d{2,4})?[ae]?)?$/;
   const isToken = value => /\d/.test(value) && !/^\d+$/.test(value) && !PERIOD_LABEL.test(norm(value));
   function idTokens(sections) {
     const found = new Set();
@@ -112,10 +113,12 @@ const Shapes = (() => {
     const cases = typed.filter(entry => entry.shape === 'cases');
     if (cases.length !== 1) return null;
     const names = cases[0].block.headers.filter(header => columnKind(header) === 'case').map(header => String(header).trim());
-    const paired = typed.find(entry => entry.shape === 'caseRows' && entry.block.rows.length === names.length && entry.block.headers.some(header => columnKind(header) === 'id'));
-    if (!names.length || !paired) return null;
-    const at = paired.block.headers.findIndex(header => columnKind(header) === 'id');
-    return {names, ids: paired.block.rows.map(row => String(row.cells[at] ?? '').trim()), table: paired.block, index: paired.index, idColumn: at};
+    // The source: exactly one caseRows table with one row per case column whose FIRST column is an id column, and whose ids are all different and non-empty.
+    const sources = typed.filter(entry => entry.shape === 'caseRows' && entry.block.rows.length === names.length && columnKind(entry.block.headers[0]) === 'id');
+    if (!names.length || sources.length !== 1) return null;
+    const ids = sources[0].block.rows.map(row => String(row.cells[0] ?? '').trim());
+    if (ids.some(id => id === '') || new Set(ids).size !== ids.length) return null;
+    return {names, ids, table: sources[0].block, index: sources[0].index, idColumn: 0};
   }
 
   // A prose paragraph of a finding section that holds an identifier of the module (an `id` column's value), or that names a calculation, is a method note: the

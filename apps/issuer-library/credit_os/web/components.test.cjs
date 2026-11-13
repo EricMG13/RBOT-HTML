@@ -997,3 +997,47 @@ test('fix 10: a cell beyond the header count is drawn unlabelled through finding
     assert.ok(!text.includes('Also EV-9 here') && html.includes('class="in-ev"'), `${shape}: an identifier in it is the link`);
   }
 });
+
+// ---- Fix round 2
+test('rankedLadder: levels at the top of the float range terminate and fall back to record cards', () => {
+  for (const level of ['175' + '0'.repeat(306), '17' + '0'.repeat(307)]) {
+    const run = inChild(`const b={headers:['Rank','Break','Level'],rows:[{line:1,cells:['1','A',${JSON.stringify(level)}]}]};const h=C.rankedLadder(b,{key:r=>'k'});process.stdout.write(h.includes('class="ladder')?'ladder':'cards');`);
+    assert.ok(run.returned, `did not return for ${level.slice(0, 6)}...: ${run.err.slice(0, 80)}`);
+    assert.equal(run.out, 'cards');
+  }
+  const mid = inChild(`const b={headers:['Rank','Break','Level'],rows:[{line:1,cells:['1','A','1'+'0'.repeat(300)]}]};process.stdout.write(C.rankedLadder(b,{key:r=>'k'}).includes('class="ladder')?'ladder':'cards');`);
+  assert.equal(mid.out, 'ladder', '1e300 is still a ladder');
+});
+
+test('casePairing: the source is the one caseRows table whose FIRST column is an id column, with unique ids', () => {
+  const evRows = tb(['Scenario', 'Narrative', 'Evidence ID'], [['Base', 'Steady', 'EV-01'], ['Moderate', 'Half', 'EV-02'], ['Severe', 'Full', 'EV-03']]);
+  assert.equal(Shapes.casePairing([casesT, evRows]), null, 'an id column that is not column 0 is not a pairing source');
+  assert.deepEqual(Shapes.casePairing([casesT, evRows, defsT]).ids, ['s00', 'SC1', 'SC2'], 'the real Scenario ID table still pairs, and EV ids do not');
+  const dup = tb(['Scenario ID', 'Decline', 'Anchor'], [['SC1', '0', 'a'], ['SC1', '0.15', 'b'], ['SC2', '0.31', 'c']]);
+  assert.equal(Shapes.casePairing([casesT, dup]), null, 'duplicate ids: no pairing');
+  const second = tb(['Scenario ID', 'Decline', 'Anchor'], [['a1', '0', 'a'], ['a2', '0.15', 'b'], ['a3', '0.31', 'c']]);
+  assert.equal(Shapes.casePairing([casesT, defsT, second]), null, 'two id-first tables with the right row count are ambiguous');
+  const ctx = plainCtx({ tokens: ['EV-01', 'EV-02', 'EV-03', 's00', 'SC1', 'SC2'], pairing: Shapes.casePairing([casesT, evRows, defsT]) });
+  const html = C.caseRowsBlock(tb(['Scenario', 'Note', 'Trigger'], [['EV-02', 'The dividend', 'x']]), ctx);
+  assert.ok(!html.includes('Moderate scenario'), 'an EV id names no case');
+});
+
+test('a column 0 cell wrapped in emphasis or code marks names its case by id', () => {
+  const pairing = Shapes.casePairing([casesT, defsT]);
+  const ctx = plainCtx({ tokens: ['s00', 'SC1', 'SC2'], pairing });
+  for (const cell of ['**SC1**', '`SC1`', ' SC1 ', '_SC1_']) {
+    const html = C.caseRowsBlock(tb(['Scenario', 'Narrative', 'Trigger'], [[cell, 'Half share lost', 'Slowdown']]), ctx);
+    assert.ok(html.includes('<h4 class="cr-title">Moderate scenario</h4>') && !html.includes('cr-badge'), cell);
+  }
+});
+
+test('period labels of every form are not id tokens; ratings and filing names in an id column still are', () => {
+  const vals = ['1H24', 'H1 2024', '9M24', 'LTM Q3 2024', 'LTM', 'FY2024-25', 'Q3 FY24', 'FY24E', 'H1 24', 'B2', 'Ba3', '10-K', 'SC1'];
+  assert.deepEqual(Shapes.idTokens([{ blocks: [{ type: 'table', ...tb(['Case ID', 'D'], vals.map(v => [v, 'x'])) }] }]), ['B2', 'Ba3', '10-K', 'SC1']);
+});
+
+test('a calculation reference-only cell uses the one shared pattern: "Calculation FY24" alone is drawn', () => {
+  assert.deepEqual(C.findingCell('Calculation FY24', {}), { html: 'Calculation FY24' });
+  assert.deepEqual(C.findingCell('Calculations C21, C22', {}), { omitted: true });
+  assert.deepEqual(C.findingCell('Calculation D17', {}), { omitted: true });
+});

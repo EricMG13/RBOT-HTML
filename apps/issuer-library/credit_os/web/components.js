@@ -200,7 +200,7 @@
   // The one cell rule. (a) only references (calculation IDs, file names, handoff names): omitted, reached by the row's trace control. (b) an identifier
   // of the module, or a calculation ID, inside other text: omitted, and the row links to Evidence. (c) anything else: drawn as rich text.
   const calculationId = () => shapes().CALCULATION_ID;  // the one pattern, owned by shapes.js
-  const STRONG_REFERENCE = [/^[Cc]alculations? [A-Z]{1,2}\d{2}$/, /^[^\s;,]+\.(?:jsonl|htm|html|pdf|xlsx?|csv|md|json|txt)$/i, /\(CP-[0-9A-Z]+\)$/, /^CP-[0-9A-Z]+$/];
+  const STRONG_REFERENCE = [{test: part => new RegExp(`^(?:${calculationId().source})$`).test(part)}, /^[^\s;,]+\.(?:jsonl|htm|html|pdf|xlsx?|csv|md|json|txt)$/i, /\(CP-[0-9A-Z]+\)$/, /^CP-[0-9A-Z]+$/];
   const WEAK_REFERENCE = [/^[A-Z]{1,2}\d{2}$/, /^pages?\s+\d+(?:\s*[-–]\s*\d+)?$/i];
   function referencesOnly(text) {
     const parts = text.split(/\s*[;,]\s*/).filter(part => part !== '');
@@ -346,7 +346,7 @@
   const chipList = (items, ctx) => `<ul class="cr-chips">${items.map((item, n) => `<li class="cr-chip">${fieldHtml(item, ctx)}${n < items.length - 1 ? '<span class="sr-only">, </span>' : ''}</li>`).join('')}</ul>`;
   // A case's name comes from its scenario id, never from its position: a row whose first cell is an id of the module's pairing (Shapes.casePairing) takes that id's case name.
   const pairedName = (cell, ctx) => {
-    const text = String(cell ?? '').trim(), at = ctx.pairing && text !== '' ? ctx.pairing.ids.indexOf(text) : -1;
+    const text = String(cell ?? '').replace(/^[*_`~\s]+|[*_`~\s]+$/g, ''), at = ctx.pairing && text !== '' ? ctx.pairing.ids.indexOf(text) : -1;
     return at >= 0 && ctx.pairing.names[at] ? ctx.pairing.names[at] : null;
   };
   // A case's title: its paired name; else a number, with its first cell as the title when that is text, or the link to Evidence when the cell held an identifier in a sentence.
@@ -398,10 +398,11 @@
   function ladderAxis(largest, unit) {
     if (!(largest > 0) || !Number.isFinite(largest)) { const max = unit === '%' ? 100 : 1; return {step: max, max}; }
     const target = largest * 1.05;
+    if (!Number.isFinite(target)) return null;  // levels at the top of the float range have no axis to draw
     for (let exponent = Math.floor(Math.log10(target / 8)) - 1; ; exponent += 1) {
       for (const m of [1, 2, 2.5, 5]) {
         const step = Number((m * 10 ** exponent).toPrecision(12));
-        if (Math.ceil(target / step) <= 8) return {step, max: Number((step * Math.ceil(target / step)).toPrecision(12))};
+        if (Math.ceil(target / step) <= 8) { const max = Number((step * Math.ceil(target / step)).toPrecision(12)); return Number.isFinite(max) ? {step, max} : null; }
       }
     }
   }
@@ -414,6 +415,7 @@
     const levels = levelCol ? block.rows.map(row => numberOf(cellText(row, levelCol.at))) : [];
     if (!rankCol || !labelCol || !levelCol || levels.some(n => !Number.isFinite(n) || n < 0) || new Set(block.rows.map(row => unitOf(cellText(row, levelCol.at)))).size !== 1) return recordCards(block, ctx);
     const unit = unitOf(cellText(block.rows[0], levelCol.at)), axis = ladderAxis(Math.max(...levels), unit);
+    if (!axis) return recordCards(block, ctx);
     const states = cols.filter(col => col !== rankCol && col !== labelCol && col !== levelCol);
     const x = value => `${percent(value / axis.max * 100)}%`;
     const ticks = Array.from({length: Math.round(axis.max / axis.step) + 1}, (_, n) => Number((n * axis.step).toPrecision(12)));
