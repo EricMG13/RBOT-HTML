@@ -14,10 +14,12 @@ set `DEPLOY_WORKFLOW_SEC_USER_AGENT` and is a separate paid action.
 - Change: `fetch_page`, `sec_company_search`, `sec_filing_list` and `sec_concept_facts` for CP-DR;
   an allowlist of 28 domains; pages retained under `<run>/live/web/` with a status against the research
   cutoff; fail-closed acceptance checks on CP-DR's handoff; `--web-lookup` and `--web-host`.
-- Commands, each run on the tree of the commit that carries this entry (fix round 3 on 73e5490):
-  - `uv run pytest tests/test_weblookup.py tests/test_web_lookup_tools.py tests/test_web_search_scope.py tests/test_handoff_loop.py -q`: 527 passed, exit=0.
-  - `uv run pytest tests/test_cpos_launch.py -q`: 784 passed, 1 skipped (the paid test), exit=0.
-  - `uv run python tools/quality_gate.py`: 0 findings in 24 changed files, exit=0.
+- Commands, each run on the tree of the commit that carries this entry (second pass, Task 5, on top
+  of the Task 4 commit 72c868b):
+  - `uv run pytest tests/test_weblookup.py tests/test_web_lookup_tools.py tests/test_web_search_scope.py tests/test_handoff_loop.py -q`: 569 passed, exit=0.
+  - `uv run pytest tests/test_run_start_submissions.py tests/test_run_start_page.py tests/test_run_start_service.py -q`: 375 passed, exit=0 (headless Chrome; two earlier runs under load lost one or two Chrome launches each, exit status 2, and those tests pass alone).
+  - `uv run pytest tests/test_cpos_launch.py -q`: 806 passed, 1 skipped (the paid test), exit=0.
+  - `uv run python tools/quality_gate.py`: 0 findings in 25 changed files, exit=0.
 - Scope of the acceptance tests (fix round 3): 15 cases (five `test_rt_*` tests) run the launcher's real checker on a CP-DR handoff in the method's register layout (TDR.1 to
   TDR.6, the house Basis-line citation form); the remaining acceptance tests call
   `web_handoff_issues` directly or a stub checker (unit scope). Two launcher tests cover the
@@ -31,6 +33,17 @@ set `DEPLOY_WORKFLOW_SEC_USER_AGENT` and is a separate paid action.
   commits: 2b34e1a, 0315d23, 0c61069, 73e5490, then the whole-branch review's fix round 3 (the
   check's citation form, list-item units, TDR.6 one-hop evidence, hosted-search URLs and the
   relaunch rule; see `git log --oneline 82b17f3..HEAD`).
+- Second-pass review (outside review of the branch): W1 an SEC filing document is dated by its
+  filing date from a filing list retained in the run, W2 a page is dated by the later of its
+  published and modified dates, N1 a cached row gets the index shape check, N2 an unreadable page
+  file gives a plain message (all in 72c868b); W5 a resumed run applies the web checks to a retained
+  CP-DR handoff (`HandoffExecutor.web_issues` through `cpos._with_web_checks`, tested with the
+  launcher's real `checker` in `test_w5_*` of `tests/test_cpos_launch.py`); W4 the run-start
+  summary carries the launcher's own `Lookup:` and `SEC:` lines, drawn on the research module's row
+  (`tests/test_run_start_submissions.py`, `test_run_start_page.py`). W3 (URLs that carry run material
+  are flagged, not refused) was answered, not changed: the ruling gives the reason. Commits on this
+  branch for the pass: 72c868b and the Task 5 code and docs commits (`git log --oneline
+  e76625c..HEAD` also lists the merged-in main commits).
 - Relaunch rule: a relaunch compares the recorded lookup setting with what the flag settles to for
   the run's modules and case kind (a run without CP-DR started with `--web-lookup on` records `off`
   and relaunches with the same flag).
@@ -38,9 +51,11 @@ set `DEPLOY_WORKFLOW_SEC_USER_AGENT` and is a separate paid action.
   accepted (owner point open); the dropped checks are governed by instruction only.
 - Merge with `claude/quality-defects-appendix-cpdr` (67 commits): both records kept; on the merged tree
   the web lookup, launcher and handoff-loop tests, `test_cpos_launch.py` and the quality gate exit 0.
-- No reader check applies: no presentation change.
-- Not verified: live network behaviour; real SEC responses and field names; real model use of the
-  tools and its citations; the full suite; concurrent writers to one run's web folder.
+- Reader check: not done. The run-start review gained one note per lookup line on the research
+  module's row (a presentation change); it was checked in headless Chrome on a synthetic case only,
+  not read against a real run and the September VMO2 reference.
+- Not verified: live network behaviour; real SEC responses, headers, encodings and content types; real model use of the
+  tools and its citations; a reader check of the run-start review against a real run; the full suite; concurrent writers to one run's web folder.
 
 ## 2026-11-13 — Quality-defects appendix: Published rule, context-summary charges, dropped values on repair (branch `claude/quality-defects-appendix-cpdr`, whole-branch review and fix wave, origin/main merged at `0b46fa5`)
 Scope: OFFLINE only. Tests, reviewer probes (`.superpowers/sdd/quality-defects/probes/`) and a replay of the retained raw bodies of four Copilot runs and one opus run; no provider or model call, no live Copilot run. No instruction or checker changed here has been sent to a live model. T1: the Published rule is stated once and checked once, the unit and second-table messages are specific, and the library accepts a Published equal to the event date and a stated gap; no page layout changed, so no reader check is claimed (if the owner reads the Calendar change as presentational, T1 is built, not accepted). T2: a repair's dropped sourced values are listed; replay of 34 rejected-then-rewritten pairs reports only CP-6 USD 247 million and USD 755 million. T3: three completed context summaries (USD 0.353237 in all) sit inside their calls' settlements; four starts with no completion are disclosed, not charged; a late charge is disclosed beside `Charged:`, not settled or capped. Fix wave after the whole-branch review: the launcher prints a `Review:` line for an accepted repair that dropped values and for a failed check (M1); an unquoted, line-less issue no longer excuses a value through a number already on its line (L1); the unit advice recognises any ISO 4217 code (`prose_checks.ISO_4217`) or currency symbol as another currency, so LTM, PIK, RCF and TTM do not (L2, widened from a 24-code list after the PR review); id-less failed summaries no longer hide an unended start (L3).
@@ -956,46 +971,3 @@ against the run's record below. The run folder was not read.
   `tests/test_library_page_browser.py` and `tests/test_context_form.py`: 45 passed. Quality gate: 0
   findings.
 - Not verified: no live run of the changed forecast; one issuer, one date.
-
-## 2026-11-10 — Sweep: end-to-end wiring (branch `claude/sweep-wiring`, base `53a5632`)
-
-Owner: "Move to latest main - run /sweep refactoring and optimisation sweep make sure front to back
-and end to end wiring." Contract and report: `docs/sweeps/2026-11-10-wiring/`. Range `c721a0f..53a5632`
-(PRs 19–27). Offline, canned provider answers, no spend.
-
-- Journeys proved at base:
-  - The live TDG context round-trips through the context form, with only the intended changes. The
-    launcher reads the form's output.
-  - Every pathway: launcher → CP-OS → delivery → real library → five screens and `report.html`,
-    with no console message and no unfilled value.
-  - An inbox drop is run by the real launcher, filed byte for byte and listed. Before this, the
-    watcher tests used stand-in launchers.
-- No product defect was reproduced. Landed, tests and CI only:
-  - `test_each_pathways_run_reaches_the_library_screens` (browser, 6 pathways).
-  - `test_a_drop_is_run_by_the_real_launcher_filed_and_listed` with
-    `tests/fixtures/canned_provider_launcher.py`. Dividing the watcher's `--cap` by 100 fails it
-    and passes the stand-in test.
-  - `test_the_library_screens_value_lists_are_the_codes`: run statuses, classification and rating
-    scope in `views.js` against the Python literals; fails when a status is dropped.
-  - `checks.yml` now runs `test_handoff_loop.py` and `test_context_form.py` on every PR.
-- Performance, median of 5 after one warm-up, noise = max − min. `prepare()` over all 20 modules:
-  23.8 ms (noise 18.0). Library rebuild of 10 run folders: 372.9 ms (noise 37.0), with no single
-  hot spot. Nothing above the floor; page render unmeasured.
-- `prepare(retained=)` and its resume helpers had no production caller. Owner: "Remove it". 127
-  lines are gone from `cpos_launch.py`. The prepared run folder (manifest and instructions) hashes
-  the same before and after for all six pathways. CP-OS's replay of pinned answers stays, and its
-  test now pins them in the manifest directly. Reverting the producers pin check still fails it.
-- Gates on the final tree, all exit 0:
-  - quality gate: 0 findings.
-  - `node --test` static and calendar.
-  - CI pytest list plus the two added files: 1529 passed, 13 deselected (7 known failures, 6
-    browser), after the removal took out two tests.
-  - Browser (`test_library_page_browser.py`, `test_cpos_launch.py`): 29 passed. After the
-    removal, `test_cpos_launch.py`'s 7 browser tests passed again.
-  - Base logs: the same commands at `53a5632`, all exit 0.
-- Not verified:
-  - a live run of the journeys;
-  - page render timing;
-  - `TERM_LABELS` against the builder of `run.facilities` (not traced);
-  - the form's download click (its `build()` output was used);
-  - Windows paths.

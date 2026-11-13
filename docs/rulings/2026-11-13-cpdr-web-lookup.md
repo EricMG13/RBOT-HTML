@@ -115,6 +115,13 @@ All from the code.
   text was cut.
 - An EDGAR summary line or field is at most 200 characters, a summary at most 10,000, at most 20
   matches or listed items per result. A tool `ERROR:` result is one line, at most 300 characters.
+- Text hidden by a stylesheet (for example `display:none`) is extracted like visible text and can
+  be quoted: the extractor reads the markup, not the rendered page.
+- Any subdomain of a listed domain is trusted: a host that ends with `.` + a listed domain passes,
+  whoever runs it.
+- Nothing has been fetched from a live host. Headers, encodings and content types from real hosts
+  are unproven; every page in the tests is hand-written.
+- The 5,000,000-byte page cap may refuse large filings. Not measured.
 
 ## The cutoff rule
 
@@ -127,10 +134,23 @@ earlier (`effective_cutoff`). Each retained page has one status.
 | `later-event` | stated date after the cutoff | take no figure from it; cite it only as a labelled later event; its `## Sources` row carries the words "Later event" |
 | `undated` | no stated date found | its row says "Undated", and a `## Gaps` item says so in words with the id on its Basis line |
 
-A `Last-Modified` header is not a stated date: it does not make a page dated. The stated date comes
-from the page's own `Published:` line or metadata. SEC JSON is undated at page level; each filing
-and fact carries its own filing date, and the cutoff applies to each one (a later one is marked
-"[after the cutoff: a later event, not a source of figures]" in the tool result).
+A page is dated by the later of its published and its modified date. The sources read, from
+`weblookup._html_date` and `_stated_date`: in an HTML page, `<meta>` tags named
+`article:published_time`, `datePublished`, `date`, `DC.date`, `DCTERMS.date` or `pubdate`
+(published) and `article:modified_time`, `og:updated_time`, `dateModified`, `DCTERMS.modified` or
+`last-modified` (modified); JSON-LD `datePublished` and `dateModified`, used for a side the meta
+tags leave empty; and a `<time>` element, only when neither gave a date. When the HTML gives no
+date, a `Published: YYYY-MM-DD` line in the body of an HTML or text page is read. The status
+follows the later date; on a tie the published source is named. An SEC filing document (final URL
+on `sec.gov` or `www.sec.gov`) is dated by its filing date when a filing list retained in this run
+(`sec_filing_list`) names its accession, whatever its body states; otherwise it is dated as any
+page. SEC JSON stays undated at page level; each filing and fact carries its own filing date, and
+the cutoff applies to each one (a later one is marked "[after the cutoff: a later event, not a
+source of figures]" in the tool result). A `Last-Modified` header is not a stated date: it is
+recorded as a source and never dates a page.
+
+Consequence of the modified date, stated plainly: a site that bumps its modified date after the
+cutoff makes the page a later event, even when its text was published before the cutoff.
 
 Consequence, stated plainly. A peer's filing for a period that ends on the as-of date is normally
 filed after it. Under option 1 that filing is a later event and cannot supply figures. When the
@@ -151,6 +171,16 @@ It fails closed: it reads any table row (a line with `|`, with or without a lead
 stays inside its cell) and any case of a `web-` id or URL scheme. It runs after the launcher's real
 checker, so the form it asks for is one that checker accepts (prose check 5 refuses a hash in a
 sentence, and the voice rules keep ids to Basis lines, tables and `## Sources`).
+
+### A resumed run
+
+CP-OS runs the same checks when it rechecks a retained CP-DR response on resume
+(`HandoffExecutor.web_issues`, added to the launcher's checker by `cpos._with_web_checks`), in a run
+whose settled lookup is on, from the run's retained index `live/web/index.jsonl` and the same
+hosted-search value the live write used. A retained handoff that cites a page absent from the index
+is refused with the sentence a live write gets. An index that cannot be read gives one plain issue
+("The run's retained web pages could not be read ...", no path). A run that retained no page has no
+index, which is not damage. With lookup off, and for every other module, the check is unchanged.
 
 ### The citation form
 
@@ -178,7 +208,7 @@ clause neither evades the check nor is rejected. No method edit is needed.
 - A3. A `web-` and 12-hex token that is not a retained id is an issue wherever it appears.
 - A4. When hosted is off, every http(s) URL in a `## Sources` row is a retained URL. When hosted is
   on, this rule and A13(i) are skipped (a URL the hosted search found is a citation; owner to
-  confirm, open point 11). A URL with a user name or password is refused at fetch.
+  confirm, open point 9). A URL with a user name or password is refused at fetch.
 - A5. A `## Sources` row that names a retained page has that page's id as its first cell (backticks
   stripped, any case). Every other page the row names is one issue.
 - A6. Every retained page named anywhere has a `## Sources` row whose first cell is its id. Each
@@ -251,6 +281,12 @@ relaunch with no flag (or with `default`) takes the recorded setting and the `Lo
 "as recorded when this run folder was started"; a flag that contradicts it stops the launch with
 exit 2 and a message naming the recorded setting.
 
+The run-start page's summary carries the launcher's own `Lookup:` line and, when present, its
+`SEC:` line (`_lookup_lines`, called with the default setting and no case hosts, which is what the
+command a Submit runs passes), drawn as text, one note per line, on the research module's row of
+the review's readiness list (not in the facts card, which is already as tall as the layout allows). The `SEC:` line names the
+variable and never its value. The approval digest does not cover it.
+
 This is separate from hosted `web_search` (ruling-gated, OpenAI only, offered to public and private
 cases; ruling 2026-11-11-run-start-submit.md), which is unchanged. Both may be on in one run, and
 the module is told which tools it has. Hosted search is unchanged: a URL that is not retained is a
@@ -288,19 +324,19 @@ allowlist" returned nothing usable; that does not prove nothing exists. Decision
    is a separate paid action.
 3. The cutoff consequence above: under option 1, peer figures for the as-of year will mostly be
    refused, which limits what CP-1C receives.
-4. The run-start page's approved summary does not show the Lookup line, although lookup is on by
-   default for public cases started there.
-5. A resumed run rechecks retained responses without the web checks.
-6. URLs that carry run material are flagged by event, not refused.
-7. CP-4's runbook describes an EDGAR acquisition lane. CP-4 was not given the tools.
-8. `handoff._pages` parses issuer PDFs with the same PDF library and no exception handling. This
+4. URLs that carry run material are flagged by event, not refused. Not changed because the flag
+   rule matches a supplied file's stem as a whole word and any figure of four or more digits
+   shared with the sources, so refusing would also refuse legitimate pages: a file named after
+   the issuer flags the issuer's own investor-relations host. Refusing is the owner's choice.
+5. CP-4's runbook describes an EDGAR acquisition lane. CP-4 was not given the tools.
+6. `handoff._pages` parses issuer PDFs with the same PDF library and no exception handling. This
    predates this work.
-9. The change is over the global 800-line guideline (5,662 added, 80 removed, `git diff --numstat 82b17f3...HEAD`).
-10. Search API: the owner chose it as the next step; not built.
-11. Hosted search and lookup together: a `## Sources` URL that was not fetched is accepted when
+7. The change is over the global 800-line guideline (5,662 added, 80 removed, `git diff --numstat 82b17f3...HEAD`).
+8. Search API: the owner chose it as the next step; not built.
+9. Hosted search and lookup together: a `## Sources` URL that was not fetched is accepted when
     hosted search is also on, since it may have found it. Confirm that is the intent.
-12. Where the pages are kept: `<run>/live/web/` (beside `loop.json`), not the spec's `<run>/web/`,
+10. Where the pages are kept: `<run>/live/web/` (beside `loop.json`), not the spec's `<run>/web/`,
     because the executor writes only inside its own folder. Say if you want them moved.
-13. Dropped checks, now instruction only: first-cell titles naming a page, a TDR.6 section found by
+11. Dropped checks, now instruction only: first-cell titles naming a page, a TDR.6 section found by
     its heading, a malformed-id token, and evidence links followed through several rows. They
     rejected the method's own layouts or the house citation form; see the limits list above.
