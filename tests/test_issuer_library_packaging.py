@@ -295,3 +295,26 @@ def test_a_missing_runtime_folder_is_created_empty_and_the_manifest_removed(
     runtime.clear_runtime(target, target / "engine/runtime", manifest)
     assert (target / "engine/runtime").is_dir() and not list((target / "engine/runtime").iterdir())
     assert not manifest.exists()
+
+
+def test_a_real_bundle_gives_the_signal_service_its_brand_files_and_no_node_test(
+    tmp_path: Path,
+) -> None:
+    """The repository's own sources, bundled for a Mac (no runtime, so no download)."""
+    from deploy_workflow.signal import service
+
+    target = tmp_path / "bundle"
+    target.mkdir()
+    runtime.bundle(target, None)
+    engine = target / "engine"
+    brand = service.find_brand(engine)
+    assert brand == engine / "credit_os" / "web"
+    for name, (path, _type) in service.STATIC.items():
+        if name.startswith(("brand", "fonts/")):
+            relative = path.relative_to(service._BRAND)
+            assert (brand / relative).is_file(), name
+    assert (brand / "brand.css").is_file() and (brand / "brand/symbol.svg").is_file()
+    web = engine / "src/deploy_workflow/signal/web"
+    for name in ("index.html", "signal.css", "signal.js", "render.js"):
+        assert (web / name).is_file(), name
+    assert not (web / "render.test.cjs").exists()

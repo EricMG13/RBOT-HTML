@@ -146,6 +146,13 @@ def run_node(chrome_path: str, job: Path, on_stop: Callable[[], None] | None) ->
         code = proc.wait()
     finally:
         watchdog.cancel()
+        if proc.poll() is None:  # the watchdog fired or on_stop raised: let the driver clean up
+            proc.terminate()  # its SIGTERM handler removes Chrome and the profile folder
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
     assert code == 0 and raw is not None, err
     return raw
 

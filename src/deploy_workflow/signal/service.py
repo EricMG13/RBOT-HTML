@@ -389,16 +389,19 @@ class Handler(BaseHTTPRequestHandler):
         super().setup()
         # The absolute limit on this connection: the socket timeout is per read and a trickling
         # client never reaches it, so a timer shuts the socket down 2 * SOCKET_TIMEOUT after accept.
-        self._deadline = threading.Timer(2 * SOCKET_TIMEOUT, self._expire, args=(self.connection,))
+        self._deadline = threading.Timer(
+            2 * SOCKET_TIMEOUT, self._expire, args=(self.connection, self.client_address[0])
+        )
         self._deadline.daemon = True
         self._deadline.start()
 
     @staticmethod
-    def _expire(connection: socket.socket) -> None:
+    def _expire(connection: socket.socket, client: str) -> None:
         try:
             connection.shutdown(socket.SHUT_RDWR)
         except OSError:  # already closed by the handler or the peer: nothing left to cut
-            pass
+            return
+        log.info("%s connection deadline reached", client)
 
     def finish(self) -> None:
         if self._deadline is not None:

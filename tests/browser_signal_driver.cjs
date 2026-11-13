@@ -13,25 +13,13 @@
 // Prints one line "@@RESULT <json>": {values, console, requests, documentHeaders}. console holds the page's console errors
 // and warnings, exceptions, and browser log entries of level error or warning, each {source, level, text}.
 // Exits 1, reason on stderr, when Chrome cannot be driven or a wait times out.
-const { spawn } = require('child_process');
 const fs = require('fs');
-const os = require('os');
-const path = require('path');
 const readline = require('readline');
+const { startChrome, connect } = require('./browser_cdp_common.cjs');
 
 const [chromePath, jobFile] = process.argv.slice(2);
 const job = JSON.parse(fs.readFileSync(jobFile, 'utf8'));
-const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'signal-driver-'));
-const chrome = spawn(chromePath, ['--headless=new', '--disable-gpu', '--remote-debugging-port=0', '--user-data-dir=' + profile, '--hide-scrollbars', 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
-let stderr = '';
-const endpoint = new Promise((resolve, reject) => {
-  chrome.stderr.on('data', d => {
-    stderr += d;
-    const m = stderr.match(/DevTools listening on (ws:\/\/\S+)/);
-    if (m) resolve(m[1]);
-  });
-  setTimeout(() => reject(new Error('Chrome did not start: ' + stderr.slice(0, 400))), 20000);
-});
+const { chrome, profile, endpoint } = startChrome(chromePath, 'signal-driver-');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const stdinLines = readline.createInterface({ input: process.stdin })[Symbol.asyncIterator]();
 
@@ -43,24 +31,8 @@ const KEYS = {
 };
 
 async function main() {
-  const ws = new WebSocket(await endpoint);
-  await new Promise((resolve, reject) => { ws.onopen = resolve; ws.onerror = reject; });
-  let id = 0;
-  const pending = new Map();
   const events = [];
-  ws.onmessage = e => {
-    const m = JSON.parse(e.data);
-    if (m.id && pending.has(m.id)) {
-      const [resolve, reject] = pending.get(m.id);
-      pending.delete(m.id);
-      if (m.error) reject(new Error(JSON.stringify(m.error))); else resolve(m.result);
-    } else if (m.method) events.push(m);
-  };
-  const send = (method, params = {}, sessionId) => new Promise((resolve, reject) => {
-    const n = ++id;
-    pending.set(n, [resolve, reject]);
-    ws.send(JSON.stringify({ id: n, method, params, sessionId }));
-  });
+  const { ws, send } = await connect(endpoint, m => events.push(m));
   const { targetId } = await send('Target.createTarget', { url: 'about:blank' });
   const { sessionId } = await send('Target.attachToTarget', { targetId, flatten: true });
   const S = (method, params) => send(method, params, sessionId);
@@ -137,4 +109,5 @@ async function main() {
 }
 
 const finish = code => { chrome.kill(); setTimeout(() => { fs.rmSync(profile, { recursive: true, force: true }); process.exit(code); }, 300); };
+process.on('SIGTERM', () => finish(1));
 main().then(() => finish(0), e => { console.error(String((e && e.stack) || e)); finish(1); });

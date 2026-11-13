@@ -985,12 +985,42 @@ def test_a_signal_url_adds_one_rail_link_after_the_activity_link(root, fake_env,
         "http://é:1/",
         "HTTP://a:1/",
         "http://[::1]:1/",
+        "http://[vF.example]:8766/",
         "",
     ],
 )
 def test_a_signal_url_that_is_not_a_plain_http_host_and_port_is_refused(root, capsys, url):
     assert service.main(["--root", str(root), "--port", "0", "--signal-url", url]) == 2
     assert "--signal-url" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("raw", ["javascript:alert(1)", "data:text/html,x", "http://[::1]:1/"])
+def test_make_server_refuses_a_signal_url_before_binding(raw, monkeypatch):
+    opened: list[object] = []
+    monkeypatch.setattr(service, "_Server", lambda *args: opened.append(args))
+    with pytest.raises(ValueError, match="--signal-url"):
+        service.make_server(None, "127.0.0.1", 0, signal_url=raw)  # type: ignore[arg-type]
+    assert opened == []  # no socket was asked for
+
+
+def test_an_accepted_signal_url_reaches_the_server_normalised_through_main(
+    root, fake_env, monkeypatch
+):
+    fake_env({"sleep": 30})
+    real, seen = service.make_server, []
+
+    def capture(scheduler: Any, host: str, port: int, signal_url: str = "") -> Any:
+        seen.append(signal_url)
+        return real(scheduler, host, port, signal_url)
+
+    def interrupt(_scheduler: Any) -> None:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(service, "make_server", capture)
+    monkeypatch.setattr(service, "_loop", interrupt)
+    argv = ["--root", str(root), "--port", "0", "--signal-url", "http://A:1"]
+    assert service.main(argv) == 0
+    assert seen == ["http://a:1/"]
 
 
 @pytest.mark.parametrize(

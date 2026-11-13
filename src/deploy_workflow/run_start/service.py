@@ -569,7 +569,7 @@ def _hosts(host: str, port: int) -> frozenset[str]:
 
 def signal_link(url: str) -> str:
     """The normalised ``http://<host>:<port>/`` of a Signal address; ValueError otherwise."""
-    if not url.isascii() or not url.isprintable() or any(c in " \"'<>" for c in url):
+    if not url.isascii() or not url.isprintable() or any(c in " \"'<>[]" for c in url):
         raise ValueError("--signal-url: printable ASCII without spaces or quotes")
     parts = urllib.parse.urlsplit(url)
     host = parts.hostname or ""
@@ -607,9 +607,10 @@ def make_server(
 ) -> ThreadingHTTPServer:
     """A server bound to ``host:port`` (port 0 picks one); not yet serving.
 
-    ``signal_url`` is already validated by ``signal_link``; it adds the rail link to Signal."""
+    ``signal_url`` is validated here by ``signal_link`` (ValueError); it adds the rail link."""
+    link = signal_link(signal_url) if signal_url else ""  # a bad value raises before any socket
     server = _Server((host, port), Handler)
-    server.rail_signal = _rail_anchor(signal_url) if signal_url else ""
+    server.rail_signal = _rail_anchor(link) if link else ""
     port = server.server_address[1]
     server.scheduler, server.allowed_hosts = scheduler, _hosts(host, port)
     server.advertised_port = port

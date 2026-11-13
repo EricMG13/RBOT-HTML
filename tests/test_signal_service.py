@@ -463,7 +463,8 @@ def _closed_within(sock: socket.socket, seconds: float) -> bool:
     return True
 
 
-def test_a_trickling_connection_is_closed_at_the_deadline(svc, monkeypatch):
+def test_a_trickling_connection_is_closed_at_the_deadline(svc, monkeypatch, caplog):
+    caplog.set_level(logging.INFO, logger=service.log.name)
     monkeypatch.setattr(service, "SOCKET_TIMEOUT", 0.5)
     monkeypatch.setattr(service.Handler, "timeout", 5)  # per-read timeout longer than the deadline
     host = f"127.0.0.1:{svc.port}"
@@ -487,6 +488,10 @@ def test_a_trickling_connection_is_closed_at_the_deadline(svc, monkeypatch):
         thread.join(timeout=5)
         sock.close()
     assert svc.call("GET", "/api/status")[0] == 200
+    cut = [r for r in caplog.records if "connection deadline reached" in r.getMessage()]
+    assert len(cut) == 1
+    assert cut[0].levelno == logging.INFO and cut[0].getMessage().startswith("127.0.0.1 ")
+    assert cut[0].exc_info is None
 
 
 def test_one_address_has_a_share_of_the_connection_ceiling(svc, monkeypatch):
