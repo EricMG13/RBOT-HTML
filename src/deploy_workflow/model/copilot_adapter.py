@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import dataclasses
+import logging
 import os
 import re
 import shutil
@@ -35,6 +36,7 @@ from deploy_workflow.model.copilot import (
     USAGE,
     _billed_usd,
     _usage,
+    compactions,
     event_record,
 )
 from deploy_workflow.model.providers import (
@@ -61,6 +63,7 @@ from deploy_workflow.model.reply_classes import (
 )
 from deploy_workflow.model.transport import OVERALL_S
 from deploy_workflow.model.turn import (
+    Compaction,
     Message,
     ModelSpec,
     Turn,
@@ -133,6 +136,7 @@ _ENV_ALLOWED = frozenset(
         "NO_PROXY",
     }
 )
+log = logging.getLogger(__name__)
 _INVOKED = object()  # queue marker: a tool handler was called
 
 
@@ -616,6 +620,38 @@ class CopilotAdapter:
             message=text,
         )  # fmt: skip
 
+    def drain_compactions(self, invocation_digest: str) -> tuple[Compaction, ...]:
+        """The compaction events still queued for a kept exchange, taken off its queue: what the
+        runtime reported after the last call's boundary, when the module no longer needs the
+        session. Best effort: an exchange already released, an adapter closed or a loop that does
+        not answer within the bound gives nothing (documented fail-open: a compaction that began
+        and never reported its end is disclosed by the loop as uncharged)."""
+        loop = self._loop
+        if loop is None or self._closed:
+            return ()
+        future = asyncio.run_coroutine_threadsafe(self._drain(invocation_digest), loop)
+        try:
+            return future.result(timeout=_OUTER_SLACK_S)
+        except concurrent.futures.TimeoutError:
+            future.cancel()
+            log.warning(
+                "the compaction drain for an exchange did not answer within %.0f s; what it "
+                "held is not read (a start without an end is disclosed as uncharged)",
+                _OUTER_SLACK_S,
+            )
+            return ()
+
+    async def _drain(self, digest: str) -> tuple[Compaction, ...]:
+        state = self._states.get(digest)
+        if state is None or state.releasing is not None:
+            return ()
+        records: list[dict[str, Any]] = []
+        while not state.queue.empty():
+            item = state.queue.get_nowait()
+            if item is not _INVOKED:
+                records.append(event_record(item))
+        return compactions(dump_json(records))
+
     def close(self) -> None:
         """Release every exchange (concurrently, within one exchange's teardown budget), force-stop
         what is left, stop the loop and join its thread. Idempotent once released; a call after
@@ -755,6 +791,10 @@ class CopilotAdapter:
                 _check_model(await client.list_models(), self._model.model, call.effort)
                 tools = [self._tool_def(spec, state) for spec in call.request.tools]
                 state.tool_names = frozenset(t.name for t in tools)
+                # No ``infinite_sessions`` option: the SDK default stays, so the runtime summarises
+                # ("compacts") the context at 80% of the model's limit. That is recorded and charged
+                # by the loop (``Compaction``), not disabled: a module whose first prompt already
+                # exceeds the limit would fail outright, and the readiness check only warns.
                 state.session = await client.create_session(
                     model=self._model.model,
                     reasoning_effort=call.effort,
@@ -798,7 +838,10 @@ class CopilotAdapter:
             state.calls.clear()
             await self._deliver(state, answers, nudge, call.deadline)
             records, timeout = await self._collect(state, call.deadline)
-            return await self._settle(call, state, records, timeout, redactor)
+            reply = await self._settle(call, state, records, timeout, redactor)
+            # read back as the parser reads a body: the runtime's charge is a JSON float on the wire
+            reported = compactions(dump_json(records))
+            return dataclasses.replace(reply, compactions=reported) if reported else reply
         except _Refuse as refusal:  # nothing was sent; a live exchange is left as it is
             return self._not_sent(refusal.error_class, refusal.message, call.started)
         except _ToolCallLost:

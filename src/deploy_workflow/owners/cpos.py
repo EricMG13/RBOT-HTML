@@ -80,6 +80,7 @@ from deploy_workflow.workflow import _put
 if TYPE_CHECKING:
     from deploy_workflow.model.adapter import LiveAdapter
     from deploy_workflow.model.copilot_adapter import CopilotAdapter
+    from deploy_workflow.model.handoff import HandoffExecutor
     from deploy_workflow.model_testing.configs import ModelConfig
 
 
@@ -288,6 +289,8 @@ def _handoff(  # noqa: PLR0913 - existing signature
             response = retained if retained is not None else execute(current)
             if not isinstance(response, bytes):
                 raise ValueError("cpos_response: executor must return bytes")
+            # first: the retained response is what a resume trusts, so the note is already there
+            _retain_compaction(execute, retained, folder / f"{attempt}{COMPACTION_NOTE}")
             _put(response_path, response)
         if retained is not None and response != retained:
             raise ValueError(f"cpos_response_changed: {task.module_id}")
@@ -303,6 +306,68 @@ def _handoff(  # noqa: PLR0913 - existing signature
         if retained is not None:
             raise ValueError(f"cpos_retained_rejected: {task.module_id}: {'; '.join(feedback)}")
     raise ValueError(f"cpos_module_failed: {task.module_id}: {'; '.join(feedback)}")
+
+
+COMPACTION_NOTE = ".compaction.json"  # beside ``<attempt>.response.md``: the context was summarised
+
+
+def _retain_compaction(
+    execute: Callable[[HandoffTask], bytes], retained: bytes | None, note: Path
+) -> None:
+    """Keep, beside a response just produced, that the GitHub Copilot runtime summarised the
+    session's context before the module wrote it (``HandoffExecutor.written_after_compaction``).
+    A resume reads the note, not the executor, so the flag survives and nothing is called twice."""
+    from deploy_workflow.model.handoff import HandoffExecutor
+
+    if retained is not None or not isinstance(execute, HandoffExecutor):
+        return
+    found = execute.written_after_compaction
+    if found is None:
+        return
+    body = {
+        "attempt_id": found.attempt_id,
+        "tokens_before": found.tokens_before,
+        "tokens_after": found.tokens_after,
+        "token_limit": found.token_limit,
+    }
+    _put(note, json.dumps(body, sort_keys=True).encode())
+
+
+def _compaction_flag(response: Path) -> dict[str, str | int | bool]:
+    """The ``module_accepted`` event fields for a module whose retained response has a compaction
+    note: ``written_after_compaction`` and the tokens before it where the runtime gave them. A note
+    that cannot be read still flags the module: the flag is never dropped."""
+    note = response.with_name(response.name.removesuffix(".response.md") + COMPACTION_NOTE)
+    if not note.is_file():
+        return {}
+    try:
+        before = json.loads(note.read_bytes()).get("tokens_before")
+    except (OSError, ValueError, AttributeError) as error:
+        log.warning(
+            "compaction note %s is unreadable (%s); the module is still flagged", note, error
+        )
+        return {"written_after_compaction": True}
+    if isinstance(before, int) and not isinstance(before, bool):
+        return {"written_after_compaction": True, "compaction_tokens_before": before}
+    return {"written_after_compaction": True}
+
+
+def review_line(module: str, tokens_before: int | None) -> str:
+    """The plain line for a module written after GitHub Copilot summarised its context."""
+    counted = "" if tokens_before is None else f" ({tokens_before:,} tokens before)"
+    return (
+        f"Review: {module} was written after GitHub Copilot summarised its context{counted}; "
+        "check its figures against the earlier modules."
+    )
+
+
+def report_compaction(directory: Path, response_path: str, module: str) -> None:
+    """Print the review line for ``module`` to stderr when its retained response has a
+    compaction note (the route that has no run events, the CP-8 comparison, uses this)."""
+    flag = _compaction_flag(directory / response_path)
+    if flag:
+        before = flag.get("compaction_tokens_before")
+        print(review_line(module, before if isinstance(before, int) else None), file=sys.stderr)
 
 
 def _refuse_decided_stale(
@@ -533,7 +598,12 @@ def run_handoffs(  # noqa: C901, PLR0912, PLR0913, PLR0915 -- legacy orchestrato
             handoffs[module_id] = raw
             selected[module_id] = path
             if events is not None:
-                append_event(events, "module_accepted", module=module_id)
+                append_event(
+                    events,
+                    "module_accepted",
+                    module=module_id,
+                    **_compaction_flag(directory / path),
+                )
             if on_handoff is not None:
                 on_handoff(task, raw)
         layout = request.layout
@@ -701,12 +771,20 @@ def with_notes(error: BaseException) -> str:
     return f"{text}; {notes}" if notes else text
 
 
-def _release(adapter: "LiveAdapter | CopilotAdapter") -> None:
-    """Close the Copilot adapter (it holds a runtime process); HTTP adapters hold nothing."""
+def _release(
+    adapter: "LiveAdapter | CopilotAdapter", executor: "HandoffExecutor | None" = None
+) -> None:
+    """Close the Copilot adapter (it holds a runtime process); HTTP adapters hold nothing. Before
+    it closes, the executor drains each module's session once more for a context summary still
+    running when its module ended (the launcher totals the run's events after the close)."""
     from deploy_workflow.model.copilot_adapter import CopilotAdapter
 
     if isinstance(adapter, CopilotAdapter):
-        adapter.close()
+        try:
+            if executor is not None:
+                executor.drain_late()
+        finally:
+            adapter.close()
 
 
 # The token a ruling's ``configs:`` line carries to let the research module search the web (owner,
@@ -750,6 +828,7 @@ def run_live_handoffs(  # noqa: PLR0913 -- the explicit paid entry point takes e
     config: str = "sol-medium",
     rulings_root: Path | None = None,
     effort_by_module: Mapping[str, str] | None = None,
+    on_notice: Callable[[str], None] | None = None,
 ) -> Path:
     """Explicit paid entry point; callers supply an evidence/instruction checker.
 
@@ -767,6 +846,7 @@ def run_live_handoffs(  # noqa: PLR0913 -- the explicit paid entry point takes e
         raise ValueError("cpos_live_mode: manifest must explicitly declare live-provider")
     environment = os.environ if environ is None else environ
     adapter = live_adapter_for(CONFIGS[config], ruling, environment, rulings_root)
+    executor: HandoffExecutor | None = None
     try:
         executor = HandoffExecutor(
             directory / "live",
@@ -779,6 +859,7 @@ def run_live_handoffs(  # noqa: PLR0913 -- the explicit paid entry point takes e
             events=directory,
             web_search=web_search_run(config, ruling, rulings_root),
             effort_by_module=effort_by_module,
+            notice=on_notice,
         )
         result = run_handoffs(
             manifest,
@@ -795,7 +876,7 @@ def run_live_handoffs(  # noqa: PLR0913 -- the explicit paid entry point takes e
             # A refused second invocation never held the folder; the running run owns its log.
             append_event(directory, "stopped", reason=stop_reason(stop))
         try:
-            _release(adapter)
+            _release(adapter, executor)
         except Exception as failure:  # noqa: BLE001 -- noted on the propagating stop
             note = f"adapter release also failed: {failure}"
             stop.add_note(note)
@@ -807,7 +888,7 @@ def run_live_handoffs(  # noqa: PLR0913 -- the explicit paid entry point takes e
                 stop.args = (f"{stop.args[0]}; {note}",)  # callers that print str(stop) show it
         raise
     try:
-        _release(adapter)
+        _release(adapter, executor)
     except Exception as failure:  # noqa: BLE001 -- the finished run's result outranks the release
         warnings.warn(f"adapter release failed: {failure}", RuntimeWarning, stacklevel=2)
     return result
@@ -994,6 +1075,7 @@ def run_comparison(
         response, response_path = _handoff(
             task, directory, execute, checked_response, request.max_attempts
         )
+        report_compaction(directory, response_path, "CP-8")
         files = comparison_files(request.run, response, source_hashes)
         delivery_id = _sha(
             json.dumps({name: _sha(raw) for name, raw in files.items()}, sort_keys=True).encode()

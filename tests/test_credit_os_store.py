@@ -879,6 +879,21 @@ def test_an_event_table_out_of_shape_is_named_not_drawn(row):
     )
 
 
+def test_a_published_gap_with_a_reason_is_drawn_and_a_bare_not_stated_is_not():
+    # The launcher accepts `Not supplied: <reason>` in Published (the cited document states no
+    # date), so the Calendar must draw that row rather than drop the whole lane.
+    row = "| 2033-06-15 | day | {} | Notes mature | Scheduled \u2014 due | Filing p.2 | Wall |"
+    (lane,) = lane_fields(row.format("Not supplied: the memo states no date"))["events"]
+    assert lane["gap"] is None
+    assert lane_fields(row.format("Not stated"))["events"] == []
+
+
+def test_a_published_date_equal_to_the_event_date_is_drawn():
+    # A document published on its event date (an 8-K) is legitimate: owner ruling, T1 follow-up.
+    row = "| 2025-03-31 | day | 2025-03-31 | E | Scheduled \u2014 due | 8-K p.1 | R |"
+    assert len(lane_fields(row)["events"]) == 1
+
+
 def test_an_event_table_with_a_changed_header_is_named_not_drawn():
     header = EVENT_HEADER.replace("Event date", "Date")
     fields = synthetic_charts(chart_section("Events: Legal", header, EVENT_ROWS[0]))
@@ -890,10 +905,9 @@ def test_an_event_table_with_a_changed_header_is_named_not_drawn():
     [
         "| 2025-03-31 | day | — | E | Scheduled | Src | R |",
         "| 2025-03-31 | day | — | E | Expected — due | Src | R |",
-        "| 2025-03-31 | day | 2025-03-31 | E | Scheduled — due | Src | R |",
     ],
 )
-def test_an_event_without_a_status_kind_or_with_a_redundant_published_date_is_not_drawn(row):
+def test_an_event_without_a_status_kind_is_not_drawn(row):
     assert lane_fields(EVENT_ROWS[0], row)["events"] == []
 
 
