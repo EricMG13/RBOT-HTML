@@ -253,11 +253,15 @@ _SELECTED: dict[str, tuple[str, ...]] = {
     ),
     # Owner, 2026-11-11: what has changed since the last run (replaces the deliverable comparison).
     "CP-8": (_VII + "cp8.md",),
+    # Owner-directed, 2026-11-13 (Deploy V methods plan, Task 4): one CP-DR text, the cp-os
+    # version 2.0 skill (sha256 0cc76aea, cp-os 5a78f93) with two named edits (open-web limit
+    # conditional on the web-search rules; gap row typed `gap`, missing evidence never Blocked).
+    # `cpdr.md` stays on disk for another runtime; it is no longer sent: it told the model
+    # "Python composes the tables".
     "CP-DR": (
         _SKILLS + "cp-dr-deep-research/SKILL.md",
         _SKILLS + "cp-dr-deep-research/references/REF_CP-DR_STEPS.md",
         _SKILLS + "cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md",
-        _VII + "cpdr.md",
     ),
 }
 _CANON = "docs/reuse/selected-methods/CANON_SHARED.md"
@@ -1772,8 +1776,8 @@ PEER_PACK_BLOCK = (
     "Use every source this run holds "
     "that is not the issuer's own document, and any research or web tool this environment gives "
     "you. Name no peer and type no figure from memory. Where no peer evidence can be reached, "
-    "still write the three tables, each with one row saying what was searched and that nothing "
-    "was found.\n\n"
+    "still write the three tables, each holding one row whose `peer_id` is `none` (row header "
+    "`none.none`) and whose text cells say what was searched and that nothing was found.\n\n"
 )
 PEER_READER_BLOCK = (
     "Peer source: the context sets `valuation.peer_source` to `cp_dr_public`, so take the peer set "

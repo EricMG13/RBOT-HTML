@@ -544,6 +544,7 @@ def provider(monkeypatch):
         calls.append((context["module_id"], self.config_id, request.effort))
         if any(hosted_kind(t) for t in request.tools):
             provider.searched.append(context["module_id"])
+        provider.systems.setdefault(context["module_id"], request.messages[0].text)
         # The real provider body builder must accept what the handoff loop sends this model.
         provider.models.add(json.loads(build(self._model, request, "not-a-real-key").body)["model"])
         turn = Turn(
@@ -570,6 +571,7 @@ def provider(monkeypatch):
     monkeypatch.setattr(LiveAdapter, "complete", complete)
     provider.calls = calls
     provider.searched = []
+    provider.systems = {}
     provider.models = set()
     provider.reported = "fake"
     provider.answer = lambda context: pytest.fail("no answer set")
@@ -1879,6 +1881,86 @@ def test_cp0_runs_the_deploy_v_skill_not_the_json_stand_in(tmp_path):
     assert "`### Confidence inputs`" in head
 
 
+CPDR_QUESTIONS = (
+    "`competition`",
+    "`metric-definitions`",
+    "`valuation-context`",
+    "`market-demand`",
+    "`industry-structure`",
+    "`regulation`",
+)
+OPEN_WEB_SENTENCE = "There is no open-web discovery in this host. Never substitute"
+
+
+def test_cpdr_runs_one_method_text_the_cp_os_version_2_skill():
+    """The versions report (CP-DR, conflicts 1-7): the v1 skill plus `cpdr.md` disagreed on who
+    writes the tables, the tool names and the answer states. One text now: cp-os version 2.0."""
+    text = cpos_launch.method_text("CP-DR")
+    assert "src/deploy_vii/methods/cpdr.md" not in text
+    assert "Version: 2.0 | Date: 2026-11-04 | Method cp-dr/2026-10-31" in text
+    at = [text.index(question) for question in CPDR_QUESTIONS]
+    assert at == sorted(at)
+    assert "Never type an amount that is not inside the quote" in text
+    for phrase in ("Python composes the tables", "search_pack", "answered/partly/not_found"):
+        assert phrase not in text, phrase
+    # Named edit 2b (caos-databricks vendor/deploy-v): a gap row is typed `gap`, and missing
+    # evidence is Complete with Gaps, never Blocked; the step bundle says the same.
+    assert "whose `claim_type` is `gap`" in text
+    assert "whose `claim_type` is `source_characterisation`" not in text
+    assert "Missing evidence makes a question UNRESOLVED and the run Complete with Gaps" in text
+    assert "Missing evidence alone is never `Blocked`." in text
+    assert "a gap row, which records a search that found nothing, takes `gap`" in text
+
+
+def test_cpdr_open_web_limit_is_conditional_on_the_web_search_rules(tmp_path, provider):
+    """Named edit 2a. The skill said there is no open-web discovery in this host while the project
+    offers `web_search` with WEB_SEARCH_RULES appended to the system text. The condition is named as
+    the model receives it: the paragraph that begins "web_search reaches public web pages"."""
+    from deploy_workflow.model.handoff import WEB_SEARCH_RULES
+
+    assert WEB_SEARCH_RULES.lstrip().startswith("web_search reaches public web pages")
+    assert OPEN_WEB_SENTENCE not in cpos_launch.method_text("CP-DR")
+    root = tmp_path / "rulings"
+    root.mkdir()
+    for name, configs in (("on.md", "sol-medium, web-search"), ("off.md", "sol-medium")):
+        lines = (
+            "lifts: live-provider-pause",
+            "by: user",
+            "date: 2026-11-10",
+            f"configs: {configs}",
+        )
+        (root / name).write_text("\n".join(lines) + "\n")
+    assert main(launch(tmp_path, "--ruling", str(RULING), pathway="relative_value")) == 0
+    routes = prepare_routes(tmp_path, "sol-medium", modules=None)
+    provider.answer = lambda context: answer(context, routes)
+    manifest = tmp_path / "out/workflow.json"
+    layout = HandoffPlan.model_validate_json(manifest.read_bytes()).layout
+    systems = {}
+    for name in ("on.md", "off.md"):
+        provider.systems.clear()
+        cpos_launch.run_live_handoffs(
+            manifest,
+            tmp_path / name,
+            ruling=root / name,
+            check=checker(layout),
+            max_turns=4,
+            max_output_tokens=cpos_launch.MAX_OUTPUT_TOKENS,
+            rulings_root=root,
+        )
+        systems[name] = provider.systems["CP-DR"]
+    for name, granted in (("on.md", True), ("off.md", False)):
+        system = systems[name]
+        assert (WEB_SEARCH_RULES in system) is granted
+        assert OPEN_WEB_SENTENCE not in system
+        condition = "unless this run's instruction carries the paragraph that begins \"web_search"
+        assert condition in system
+        for question in CPDR_QUESTIONS:
+            assert question in system
+        assert "Never type an amount that is not inside the quote" in system
+        assert "Python composes the tables" not in system
+        assert "search_pack" not in system
+
+
 def test_cp1b_runs_the_deploy_v_method_not_the_structured_runtime_step():
     """Live runs 2026-11-09 and 2026-11-10: CP-1B blocked both times for want of a `read_inputs`
     view with `pairs`, which only the older structured runtime gives."""
@@ -1967,6 +2049,9 @@ def test_every_module_is_told_what_stands_for_acceptance_scripts_and_questions(t
 # runs made before it are correctly marked "Earlier methods" for CP-3C.
 # CP-0 changed on 2026-11-13 (Deploy V methods plan, Task 3): it now sends Deploy V's skill, so
 # runs made before it are correctly marked "Earlier methods" for CP-0.
+# CP-DR changed on 2026-11-13 (Deploy V methods plan, Task 4): it now sends the cp-os version 2.0
+# skill with two named edits and no longer sends cpdr.md, so runs made before it are correctly
+# marked "Earlier methods" for CP-DR.
 # CP-1A and CP-2 changed on 2026-11-13 (owner: "Build rec. 1, then run"): they now send Deploy V's
 # skills, so runs made before it are correctly marked "Earlier methods" for these two modules.
 METHOD_TEXT_SHA256_AT_1B41E65 = {
@@ -1990,7 +2075,7 @@ METHOD_TEXT_SHA256_AT_1B41E65 = {
     "CP-5": "a0b02519822dbd84ba928f026b0e3aa8a7a82ba71604059e9f7ceec9f395bb90",
     "CP-6": "32fdd06787a47c6351924f1371b90a8b6937c11fbfcb04404eb6590de0ec3b0b",
     "CP-8": "560e6026abc340b8240a2fb4397f43a52ccb9386c5810ae1cc3b74e063e45075",
-    "CP-DR": "54a57f559181087df17e476d271b71c67b00f38e87288f95c7831cbd3e3a056e",
+    "CP-DR": "54230660f9b5da28a185f3ffed40236ceb4c65240123e072a0137839e413da4f",
     "CP-L10": "527d90f10ce7c541cc15f2e702f73502199f6628335c95e66b64920e7cfba18d",
 }
 
