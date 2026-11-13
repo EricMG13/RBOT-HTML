@@ -1,0 +1,125 @@
+{
+  "version": 1,
+  "domains": [
+    {
+      "domain": "sec.gov",
+      "category": "Regulator or official"
+    },
+    {
+      "domain": "fca.org.uk",
+      "category": "Regulator or official"
+    },
+    {
+      "domain": "find-and-update.company-information.service.gov.uk",
+      "category": "Regulator or official"
+    },
+    {
+      "domain": "esma.europa.eu",
+      "category": "Regulator or official"
+    },
+    {
+      "domain": "sedarplus.ca",
+      "category": "Regulator or official"
+    },
+    {
+      "domain": "federalreserve.gov",
+      "category": "Regulator or official"
+    },
+    {
+      "domain": "treasury.gov",
+      "category": "Regulator or official"
+    },
+    {
+      "domain": "ecb.europa.eu",
+      "category": "Regulator or official"
+    },
+    {
+      "domain": "bankofengland.co.uk",
+      "category": "Regulator or official"
+    },
+    {
+      "domain": "bis.org",
+      "category": "Regulator or official"
+    },
+    {
+      "domain": "imf.org",
+      "category": "Regulator or official"
+    },
+    {
+      "domain": "bls.gov",
+      "category": "Regulator or official"
+    },
+    {
+      "domain": "bea.gov",
+      "category": "Regulator or official"
+    },
+    {
+      "domain": "census.gov",
+      "category": "Regulator or official"
+    },
+    {
+      "domain": "fred.stlouisfed.org",
+      "category": "Regulator or official"
+    },
+    {
+      "domain": "ons.gov.uk",
+      "category": "Regulator or official"
+    },
+    {
+      "domain": "ec.europa.eu",
+      "category": "Regulator or official"
+    },
+    {
+      "domain": "oecd.org",
+      "category": "Regulator or official"
+    },
+    {
+      "domain": "worldbank.org",
+      "category": "Regulator or official"
+    },
+    {
+      "domain": "londonstockexchange.com",
+      "category": "Exchange"
+    },
+    {
+      "domain": "nyse.com",
+      "category": "Exchange"
+    },
+    {
+      "domain": "nasdaq.com",
+      "category": "Exchange"
+    },
+    {
+      "domain": "euronext.com",
+      "category": "Exchange"
+    },
+    {
+      "domain": "luxse.com",
+      "category": "Exchange"
+    },
+    {
+      "domain": "ise.ie",
+      "category": "Exchange"
+    },
+    {
+      "domain": "moodys.com",
+      "category": "Rating agency"
+    },
+    {
+      "domain": "spglobal.com",
+      "category": "Rating agency"
+    },
+    {
+      "domain": "fitchratings.com",
+      "category": "Rating agency"
+    },
+    {
+      "domain": "dbrs.morningstar.com",
+      "category": "Rating agency"
+    },
+    {
+      "domain": "kbra.com",
+      "category": "Rating agency"
+    }
+  ]
+}
