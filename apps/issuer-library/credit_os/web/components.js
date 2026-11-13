@@ -344,18 +344,22 @@
     return items.length >= 2 && text.length <= 220 && items.every(item => item.length <= 48 && !/[.;:]\s/.test(item)) ? items : null;
   }
   const chipList = (items, ctx) => `<ul class="cr-chips">${items.map((item, n) => `<li class="cr-chip">${fieldHtml(item, ctx)}${n < items.length - 1 ? '<span class="sr-only">, </span>' : ''}</li>`).join('')}</ul>`;
-  // Names apply to the one table the pairing is bound to (Shapes.casePairing: the caseRows table with the id column, one row per case column).
-  const isPaired = (block, ctx) => Boolean(ctx.pairing) && ctx.pairing.table === block && ctx.pairing.names.length === block.rows.length;
-  // A case's title: its paired name; else its first cell when that is text; else a number, with the link to Evidence when the cell held an identifier in a sentence.
+  // A case's name comes from its scenario id, never from its position: a row whose first cell is an id of the module's pairing (Shapes.casePairing) takes that id's case name.
+  const pairedName = (cell, ctx) => {
+    const text = String(cell ?? '').trim(), at = ctx.pairing && text !== '' ? ctx.pairing.ids.indexOf(text) : -1;
+    return at >= 0 && ctx.pairing.names[at] ? ctx.pairing.names[at] : null;
+  };
+  // A case's title: its paired name; else a number, with its first cell as the title when that is text, or the link to Evidence when the cell held an identifier in a sentence.
   function caseTitle(row, n, block, ctx) {
-    if (isPaired(block, ctx)) return {html: escapeHtml(ctx.pairing.names[n]), name: ctx.pairing.names[n], link: ''};
-    const numbered = link => ({html: '', name: '', badge: n + 1, link});
-    if (shapes().hiddenColumns(block.headers, 'caseRows').includes(0)) return numbered('');
-    const own = cellText(row, 0), cell = findingCell(own, ctx);
-    return cell.html !== undefined ? {html: cell.html, name: own, link: ''} : numbered(cell.inEvidence ? evidenceLink(ctx) : '');
+    const own = cellText(row, 0), name = pairedName(own, ctx);
+    if (name) return {html: escapeHtml(name), name, link: ''};
+    const numbered = (html, link) => ({html, name: html ? own : '', badge: n + 1, link});
+    if (shapes().hiddenColumns(block.headers, 'caseRows').includes(0)) return numbered('', '');
+    const cell = findingCell(own, ctx);
+    return cell.html !== undefined ? numbered(cell.html, '') : numbered('', cell.inEvidence ? evidenceLink(ctx) : '');
   }
   function caseRowsBlock(block, ctx) {
-    const cols = visibleColumns(block, 'caseRows', ctx).filter(col => col.at !== 0 || isPaired(block, ctx));
+    const cols = visibleColumns(block, 'caseRows', ctx).filter(col => col.at !== 0);  // column 0 is each row's title
     if (!cols.length || !block.rows.length) return recordCards(block, ctx);
     const numericCols = cols.filter(col => numericLike(block, col.at));
     if (numericCols.length * 2 > cols.length) return caseRowsPanel(block, cols, ctx);
@@ -372,7 +376,7 @@
         const items = cell.html !== undefined ? chipItems(text) : null, body = items ? chipList(items, ctx) : fieldHtml(text, ctx);
         return body === '' ? '' : `<div><dt>${escapeHtml(col.label)}</dt><dd>${body}</dd></div>`;
       }).join('');
-      const head = `${title.badge ? `<span class="cr-badge">${title.badge}</span>${title.link}` : `<h4 class="cr-title">${title.html}</h4>`}${traceFor(ctx, row, `${title.name || `Case ${n + 1}`}: where it comes from`)}`;
+      const head = `${title.badge ? `<span class="cr-badge">${title.badge}</span>${title.link}` : ''}${title.html ? `<h4 class="cr-title">${title.html}</h4>` : ''}${traceFor(ctx, row, `${title.name || `Case ${n + 1}`}: where it comes from`)}`;
       return `<article class="cr-card"><div class="cr-head">${head}</div>${pill ? `<div class="cr-pill">${pill}</div>` : ''}${figures ? `<div class="cr-figs">${figures}</div>` : ''}${fields ? `<dl class="rec-fields">${fields}</dl>` : ''}${extrasOf(block, row, ctx).map(html => `<p class="cr-extra">${html}</p>`).join('')}${foot ? `<div class="cr-foot">${foot}</div>` : ''}</article>`;
     });
     return `<div class="cr-cards"${ctx.caption ? ` role="group" aria-label="${escapeHtml(ctx.caption)}"` : ''}>${cards.join('')}</div>`;
@@ -382,7 +386,7 @@
     const head = `<th scope="col">${block.headers[0] !== undefined && visibleColumns(block, 'caseRows', ctx).some(col => col.at === 0) ? escapeHtml(block.headers[0]) : ''}</th>${cols.map(col => `<th scope="col"${numericLike(block, col.at) ? ' class="num"' : ''}>${escapeHtml(col.label)}</th>`).join('')}${'<th scope="col"></th>'.repeat(extraWidth(block))}`;
     const rows = block.rows.map((row, n) => {
       const title = caseTitle(row, n, block, ctx);
-      const name = (title.badge ? `<span class="cr-badge">${title.badge}</span>` : title.html) + title.link;
+      const name = (title.badge ? `<span class="cr-badge">${title.badge}</span>` : '') + title.html + title.link;
       return `<tr><th scope="row">${name}${traceFor(ctx, row, `${title.name || `Case ${n + 1}`}: where it comes from`)}</th>${cols.map(col => `<td${numericLike(block, col.at) ? ' class="num"' : ''} data-label="${escapeHtml(col.label)}">${fieldHtml(cellText(row, col.at), ctx)}</td>`).join('')}${Array.from({length: extraWidth(block)}, (_, k) => `<td>${fieldHtml(cellText(row, block.headers.length + k), ctx)}</td>`).join('')}</tr>`;
     }).join('');
     return `<div class="dtbl-wrap" role="region" tabindex="0"${ctx.caption ? ` aria-label="${escapeHtml(ctx.caption)}"` : ''}><table class="dtbl cr-panel"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;

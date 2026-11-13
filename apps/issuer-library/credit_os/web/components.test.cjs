@@ -220,9 +220,7 @@ test('sectionRail: a labelled nav of links with optional counts; the current ite
 // ---- Numeric shape components (library redesign, task 5): the answer key's real tables are the inputs.
 const Shapes = require('./shapes.js');
 const KEY = require(path.join(__dirname, '..', '..', 'fixtures', 'shape-key.json'));
-const keyBlocks = new Map();
-// One block object per key table: the pairing names a table by identity, so the page and the test must hand the component the same object.
-const keyBlock = t => { if (!keyBlocks.has(t)) keyBlocks.set(t, { headers: t.headers, rows: t.rows.map((cells, i) => ({ line: i + 1, cells })) }); return keyBlocks.get(t); };
+const keyBlock = t => ({ headers: t.headers, rows: t.rows.map((cells, i) => ({ line: i + 1, cells })) });
 const keyTables = (module, shape) => KEY.tables.filter(t => t.module === module && (!shape || t.shape === shape));
 // What the module page gives a component: the module's id tokens and case pairing, one trace control per call, the Evidence link.
 function pageCtx(module, over = {}) {
@@ -388,12 +386,12 @@ test('caseRows without a pairing: a numbered badge, no invented word; an id colu
   assert.ok(!/\bSC[12]\b|\bs00\b/.test(textOf(html)));
 });
 
-test('caseRows with numeric columns: a case-by-measure panel, numbers right-aligned, the cell text verbatim, numbered when its table is not the paired one', () => {
+test('caseRows with numeric columns: a case-by-measure panel, numbers right-aligned, the cell text verbatim, titled by case name through its scenario ids', () => {
   const t = keyTables('CP-2A', 'caseRows')[1], ctx = pageCtx('CP-2A'), html = C.caseRowsBlock(keyBlock(t), ctx);
   assert.ok(html.includes('class="dtbl cr-panel"') && !html.includes('cr-card'));
-  // Its first column ("Scenario") is not an id column, so this table is not the paired one: numbered badges, no names.
-  assert.deepEqual([...html.matchAll(/<th scope="row"><span class="cr-badge">(\d)<\/span>/g)].map(m => m[1]), ['1', '2', '3']);
-  assert.ok(!/Base FY2024|Moderate scenario|Severe scenario/.test(html));
+  // Its first column ("Scenario") is not an id column but its cells are the pairing ids: each row is titled by the case that id names.
+  for (const name of ['Base FY2024 (control)', 'Moderate scenario', 'Severe scenario']) assert.ok(html.includes(`<th scope="row">${name}`), name);
+  assert.ok(!/cr-badge/.test(html) && !/\bs00\b|\bSC[12]\b/.test(textOf(html)));
   assert.ok(html.includes('<td class="num" data-label="Total debt / EBITDA">7.0672812619 (7.07x)</td>'), html);
   assert.ok(html.includes('<th scope="col" class="num">Stressed EBITDA (USD m)</th>'));
   assert.ok(!/\bSC[12]\b|\bs00\b/.test(textOf(html)));
@@ -819,25 +817,30 @@ const casesT = tb(['Measure', 'Base case', 'Moderate scenario', 'Severe scenario
 const defsT = tb(['Scenario ID', 'Decline', 'Anchor'], [['s00', '0', 'Control'], ['SC1', '0.15', 'Half share'], ['SC2', '0.31', 'Full share']]);
 const otherT = tb(['Scenario', 'Narrative', 'Trigger'], [['Severe: aftermarket collapse', 'Full share lost', 'Recession'], ['Base: steady state', 'Nothing changes', 'None'], ['Moderate: partial loss', 'Half share lost', 'Slowdown']]);
 
-test('casePairing names the one table it paired; names apply to that table only; a column 0 that is not the id column is drawn', () => {
+test('case names apply by scenario id, never by position', () => {
   const tables = [casesT, defsT, otherT];
   const pairing = Shapes.casePairing(tables);
   assert.deepEqual({ names: pairing.names, ids: pairing.ids }, { names: ['Base case', 'Moderate scenario', 'Severe scenario'], ids: ['s00', 'SC1', 'SC2'] });
-  assert.equal(pairing.table, defsT);
-  assert.equal(pairing.index, 1);
   const ctx = plainCtx({ tokens: Shapes.idTokens([{ blocks: tables.map(b => ({ type: 'table', ...b })) }]), pairing });
-  const paired = C.caseRowsBlock(defsT, ctx);
-  assert.deepEqual([...paired.matchAll(/<h4 class="cr-title">([^<]*)<\/h4>/g)].map(m => m[1]), ['Base case', 'Moderate scenario', 'Severe scenario']);
+  const titles = html => [...html.matchAll(/<h4 class="cr-title">([^<]*)<\/h4>/g)].map(m => m[1]);
+  assert.deepEqual(titles(C.caseRowsBlock(defsT, ctx)), ['Base case', 'Moderate scenario', 'Severe scenario']);
+  // the reviewer's second table: no row's first cell is an id: numbered badges and the first cell drawn as its title
   const unpaired = C.caseRowsBlock(otherT, ctx);
-  assert.deepEqual([...unpaired.matchAll(/<h4 class="cr-title">([^<]*)<\/h4>/g)].map(m => m[1]), ['Severe: aftermarket collapse', 'Base: steady state', 'Moderate: partial loss']);
+  assert.deepEqual(titles(unpaired), ['Severe: aftermarket collapse', 'Base: steady state', 'Moderate: partial loss']);
+  assert.deepEqual([...unpaired.matchAll(/<span class="cr-badge">(\d)<\/span>/g)].map(m => m[1]), ['1', '2', '3']);
   assert.ok(!/Base case|Moderate scenario|Severe scenario/.test(unpaired));
   for (const cell of ['Full share lost', 'Recession', 'Nothing changes', 'Slowdown']) assert.ok(textOf(unpaired).includes(cell), cell);
-  // a caseRows table with no id-kind column is never paired
+  // the ids in another order: each row takes the name of its own id
+  const reordered = tb(['Scenario', 'Narrative', 'Trigger'], [['SC2', 'Full share lost', 'Recession'], ['s00', 'Nothing changes', 'None'], ['SC1', 'Half share lost', 'Slowdown']]);
+  assert.deepEqual(titles(C.caseRowsBlock(reordered, ctx)), ['Severe scenario', 'Base case', 'Moderate scenario']);
+  // a column with two ids and one other text: two rows are named, the third is numbered and its first cell is drawn
+  const mixed = tb(['Scenario', 'Narrative', 'Trigger'], [['SC1', 'Half share lost', 'Slowdown'], ['Reverse stress', 'Total loss', 'Default'], ['SC2', 'Full share lost', 'Recession']]);
+  const mixedHtml = C.caseRowsBlock(mixed, ctx);
+  assert.deepEqual(titles(mixedHtml), ['Moderate scenario', 'Reverse stress', 'Severe scenario']);
+  assert.deepEqual([...mixedHtml.matchAll(/<span class="cr-badge">(\d)<\/span>/g)].map(m => m[1]), ['2']);
+  // no pairing, no names
   assert.equal(Shapes.casePairing([casesT, otherT]), null);
-  // paired by position, but its first column is not the id column: it is drawn
-  const mixed = tb(['Scenario', 'Scenario ID', 'Decline'], [['Control run', 's00', '0'], ['Half loss', 'SC1', '0.15'], ['Full loss', 'SC2', '0.31']]);
-  const mixedHtml = C.caseRowsBlock(mixed, plainCtx({ tokens: ['s00', 'SC1', 'SC2'], pairing: Shapes.casePairing([casesT, mixed]) }));
-  assert.ok(textOf(mixedHtml).includes('Control run') && mixedHtml.includes('<h4 class="cr-title">Moderate scenario</h4>'), 'paired by its id column; a column 0 that is not that column is drawn');
+  assert.deepEqual(titles(C.caseRowsBlock(reordered, plainCtx({ tokens: ['s00', 'SC1', 'SC2'] }))), []);
 });
 
 test('idTokens: a token holds a digit and is not a period label; word-only ids and periods are ordinary text', () => {
@@ -868,7 +871,7 @@ test('an omitted cell that holds an identifier in a sentence leaves the Evidence
   assert.ok(!textOf(tiles).includes('House definition'));
   const rows = tb(['Scenario', 'Decline', 'Note', 'Basis'], [['As SC1; also more', '0.1', 'first note', 'text one'], ['SC2', '0.2', 'second note', 'text two'], ['Plain name', '0.3', 'third note', 'text three']]);
   const html = C.caseRowsBlock(rows, plainCtx({ tokens: ['SC1', 'SC2'] }));
-  assert.deepEqual([...html.matchAll(/<span class="cr-badge">(\d)<\/span>/g)].map(m => m[1]), ['1', '2']);
+  assert.deepEqual([...html.matchAll(/<span class="cr-badge">(\d)<\/span>/g)].map(m => m[1]), ['1', '2', '3']);
   assert.equal((html.match(/class="in-ev"/g) || []).length, 1, 'a sentence with an identifier links once; a bare id does not');
   assert.ok(html.includes('<h4 class="cr-title">Plain name</h4>'));
 });
