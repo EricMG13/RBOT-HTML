@@ -164,6 +164,8 @@ test('Trace lists statements that carry a Basis line, 40 at a time, with the Bas
   assert.equal((big.match(/class="ev-trow"/g) || []).length, 45);
   assert.equal((big.match(/class="ev-trow" hidden/g) || []).length, 5, 'the first 40 are shown');
   assert.ok(big.includes('data-more') && big.includes('Show more'));
+  assert.ok(big.includes('Show more (5 remaining)'));
+  assert.equal(Evidence.searchPlan({tables: [], items: Array(45).fill('x')}, '', 40).remaining, 5);
 });
 
 test('Trace opens a row to the excerpts the build holds for it, by the paragraph key', () => {
@@ -318,14 +320,57 @@ test('search plan: a module name or caption in a table head shows the whole tabl
 test('search plan: items beyond the limit are held back and counted as remaining', () => {
   const plan = Evidence.searchPlan({tables: [], items: ['alpha one', 'beta', 'alpha two', 'alpha three']}, 'ALPHA', 2);
   assert.deepEqual(plan.items, [true, false, true, false]);
-  assert.equal(plan.matches, 3);
+  assert.equal(plan.matches, 2, 'the count is the visible matched items');
   assert.equal(plan.remaining, 1);
+});
+
+test('search plan: an empty or blank query filters nothing but keeps the trace limit', () => {
+  for (const q of ['', '   ']) {
+    const plan = Evidence.searchPlan({tables: [], items: ['a', 'b', 'c']}, q, 2);
+    assert.deepEqual(plan.items, [true, true, false]);
+    assert.equal(plan.remaining, 1);
+    assert.equal(plan.matches, 0);
+    assert.equal(plan.empty, true);
+  }
+});
+
+test('search plan: paging 100 trace rows with no query: 40/60, then 80/20, then 100/0', () => {
+  const items = Array.from({length: 100}, (_, i) => `statement ${i}${i < 50 ? ' alpha' : ''}`);
+  for (const [limit, visible, remaining] of [[40, 40, 60], [80, 80, 20], [120, 100, 0]]) {
+    const plan = Evidence.searchPlan({tables: [], items}, '', limit);
+    assert.equal(plan.items.filter(Boolean).length, visible);
+    assert.equal(plan.remaining, remaining);
+    assert.ok(plan.items.slice(0, visible).every(Boolean));
+  }
+});
+
+test('search plan: with a query, the limit applies to matched items; count = visible matched, remaining = matched held back', () => {
+  const items = Array.from({length: 100}, (_, i) => `statement ${i}${i < 50 ? ' alpha' : ''}`);
+  let plan = Evidence.searchPlan({tables: [], items}, 'ALPHA', 40);
+  assert.equal(plan.items.filter(Boolean).length, 40);
+  assert.equal(plan.matches, 40);
+  assert.equal(plan.remaining, 10);
+  plan = Evidence.searchPlan({tables: [], items}, 'ALPHA', 80);
+  assert.equal(plan.matches, 50);
+  assert.equal(plan.remaining, 0);
+  plan = Evidence.searchPlan({tables: [], items: ['alpha one', 'beta', 'alpha two', 'alpha three']}, 'ALPHA', 2);
+  assert.deepEqual(plan.items, [true, false, true, false]);
+  assert.equal(plan.matches, 2);
+  assert.equal(plan.remaining, 1);
+});
+
+test('search plan: an empty query with a limit shows every table and row; the limit pages items only', () => {
+  const plan = Evidence.searchPlan(PLAN, '', 1);
+  assert.deepEqual(plan.tables, [{show: true, rows: [true, true]}, {show: true, rows: [true]}]);
+  assert.deepEqual(plan.items, [true, false]);
+  assert.equal(plan.remaining, 1);
+  assert.equal(plan.matches, 0);
 });
 
 test('tables carry their head text; the registers table is counted by data-hay with the head as its text', () => {
   const html = view('registers', 'CP-2A');
-  const wrapper = /<div class="ev-tbl"[^>]*>/.exec(html)[0];
-  assert.ok(/data-head="[^"]*leverage bridge[^"]*"/.test(wrapper) || /data-head="/.test(wrapper), wrapper);
+  const wrapper = /<div class="ev-tbl"[^>]*aria-label="Downside: Leverage bridge"[^>]*>/.exec(html)[0];
+  assert.ok(wrapper.includes('data-head="downside downside: leverage bridge line fy2024 source"'), wrapper);
   assert.ok(wrapper.includes('data-hay="'));
   assert.ok(!/data-hay="[^"]*9,100/.test(wrapper), 'the wrapper holds its head, not its cells');
 });

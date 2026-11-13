@@ -306,20 +306,19 @@
   // rows matches (only those rows) or when its head (caption, module name, headers) matches (every row, counted once). A match never spans two rows.
   // `desc` = {tables: [{head, rows: [text]}], items: [text]}. Items beyond `limit` are held back (trace rows) and counted in `remaining`.
   function searchPlan(desc, query, limit = Infinity) {
-    const q = squash(query);
-    if (!q) return {empty: true, matches: 0, remaining: 0, items: desc.items.map(() => true), tables: desc.tables.map(t => ({show: true, rows: t.rows.map(() => true)}))};
+    const q = squash(query), hit = text => !q || squash(text).includes(q); // an empty query matches every item: no filtering, paging still applies
     let found = 0;
-    const items = desc.items.map(text => { if (!squash(text).includes(q)) return false; found += 1; return found <= limit; });
+    const items = desc.items.map(text => { if (!hit(text)) return false; found += 1; return found <= limit; });
     const remaining = Math.max(0, found - limit);
-    let matches = found;
+    let matches = Math.min(found, limit);
     const tables = desc.tables.map(table => {
-      if (squash(table.head).includes(q)) { matches += 1; return {show: true, rows: table.rows.map(() => true)}; }
-      const rows = table.rows.map(row => squash(row).includes(q));
+      if (hit(table.head)) { matches += 1; return {show: true, rows: table.rows.map(() => true)}; }
+      const rows = table.rows.map(hit);
       const n = rows.filter(Boolean).length;
       matches += n;
       return {show: n > 0, rows};
     });
-    return {empty: false, matches, remaining, items, tables};
+    return {empty: !q, matches: q ? matches : 0, remaining, items, tables};
   }
   function applyFilter(root) {
     const panel = root.querySelector('.ev-panel'), input = root.querySelector('#ev-q'), query = input ? input.value : '';
