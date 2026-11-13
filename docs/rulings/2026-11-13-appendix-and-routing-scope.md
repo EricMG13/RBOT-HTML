@@ -41,6 +41,18 @@ modules measured".
   control` into a table of that name. CP-5's T5B.3 and CP-6's T6A.7 are left out too: the library's
   `catalog.json` sets them as the modules' `firstHeading` (store.py:1154, web/views.js:91). TDR.2 is kept (the peer pack block requires its gap row);
   TDR.4 to TDR.6 are never cut. T2DS.2 and T2B.1 stay (`cp1_references` has later consumers).
+- ESG tables kept. Owner, 2026-11-13, asked "Keep the ESG tables out of T4's cut list?": "Yes, keep
+  ESG tables". CP-2E's T2G.1 to T2G.8 are not in its scope section: PR 100 (open) builds a named ESG
+  part of the CP-2E module page from those tables and the run-start form says the module covers ESG;
+  the cut list was measured before those tables had a reader. They are required and checked. Both
+  retained Sol runs wrote all eight.
+- Routing registers are named per module. Each scope section ends with a sentence naming the routing
+  registers of that module (CP-0 T7 and T8; CP-1A T2D.10 and downstream_readiness; CP-2A T2B.8 and
+  T5.6; the others say none of their required registers is one), and `ROUTING_REGISTERS` in the
+  launcher is keyed by module with the same ids, so the instruction and the presence check agree. A
+  test fails if they diverge. The two `cp_model` tables are not required ids and stay with
+  `ROUTING_RULES`. A heading counts only if it starts with the id (in bold or backticks, or after a
+  number such as `1.`).
 - The methods' own validators (`required_register_ids`, `appendix_contract`, the lossless profile,
   `completeness_check.py`) are never run here, but `TRANSPORT_RULES` has a module do their checks
   itself. So `ROUTING_RULES` and each scope section end with one sentence: a register excluded there
@@ -82,8 +94,9 @@ tokens a run, about USD 1.10 and 1.33 a run at list prices. These are the contro
 attributed to the review, not trialled.
 
 For the list this change cuts (the intersection of both runs, with no routing registers), the
-characters in the inventory are 166,882 (medium run) and 189,139 (high run), ownership_register
-excluded. The list is the intersection of both runs, so by construction the per-run no-consumer
+characters in the inventory are 150,578 (medium run) and 171,507 (high run), ownership_register,
+T5B.3, T6A.7 and the ESG tables excluded (CP-2E alone is 17,069 and 18,182; it was 29,514 and 31,117
+with T2G.1 to T2G.8; the first list, before any of those three exclusions, was 166,882 and 189,139). The list is the intersection of both runs, so by construction the per-run no-consumer
 token figures above are upper bounds for it; characters and tokens are not converted here.
 
 ## Library check

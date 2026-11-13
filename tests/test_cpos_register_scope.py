@@ -36,7 +36,6 @@ CUT = {
     ],
     "CP-2E": [
         *("T2F.2", "T2F.4", "T2F.5", "T2F.8", "T2F.9"),
-        *("T2G.1", "T2G.2", "T2G.3", "T2G.4", "T2G.5", "T2G.6", "T2G.7", "T2G.8"),
     ],
     "CP-2G": ["T2H.1", "T2H.2", "T2H.9"],
     "CP-3": [
@@ -358,7 +357,10 @@ REQUIRED = {
     "CP-DR": ["TDR.2", "TDR.4", "TDR.5", "TDR.6"],
     "CP-2": ["T2.1", "T2.10", "T2.12"],
     "CP-2A": ["T2B.1", "T2B.2", "T2B.6", "T2B.7", "T2B.9", "T5.5", "T5.7"],
-    "CP-2E": ["T2F.1", "T2F.3", "T2F.6", "T2F.7"],
+    "CP-2E": [
+        *("T2F.1", "T2F.3", "T2F.6", "T2F.7"),
+        *("T2G.1", "T2G.2", "T2G.3", "T2G.4", "T2G.5", "T2G.6", "T2G.7", "T2G.8"),
+    ],
     "CP-2G": ["T2H.3", "T2H.4", "T2H.5", "T2H.6", "T2H.7", "T2H.8"],
     "CP-3": ["T3.3", "T3.6", "T3B.1", "T3C.4"],
     "CP-5": ["T5B.1", "T5B.2", "T5B.3", "T5.3"],
@@ -533,3 +535,68 @@ def test_a_prose_word_before_an_id_does_not_make_the_heading_that_register(headi
 )
 def test_an_id_list_lead_still_counts_for_each_id(heading, ident):
     assert cpos_launch._has_register(heading + "\n", ident)
+
+
+# Owner, 2026-11-13: "Yes, keep ESG tables". The routing registers each scope section names.
+ROUTING_BY_MODULE = {
+    "CP-0": ["T7", "T8"],
+    "CP-1A": ["T2D.10", "downstream_readiness"],
+    "CP-2A": ["T2B.8", "T5.6"],
+}
+
+
+def scope_routing(module: str) -> list[str]:
+    """The routing ids the module's scope section names (empty if it says there are none)."""
+    body = dict(cpos_launch.method_sections(module))[f"{SCOPE_FILE} § {module}"]
+    found = re.search(
+        r"routing rule's registers for this module are (.*?): do not write them", body
+    )
+    if found is None:
+        assert "None of this module's required registers is a routing register" in body, module
+        return []
+    return re.split(r", | and ", found[1])
+
+
+def test_the_esg_tables_are_kept_for_cp_2e():
+    assert not [i for i in CUT["CP-2E"] if i.startswith("T2G")]
+    assert not [i for i, _ in scope_items("CP-2E") if i.startswith("T2G")]
+    assert [i for i in REQUIRED["CP-2E"] if i.startswith("T2G")] == [
+        f"T2G.{n}" for n in range(1, 9)
+    ]
+
+
+@pytest.mark.parametrize("module", list(REQUIRED))
+def test_the_scope_sections_routing_ids_are_the_checks_exemption_for_that_module(module):
+    exempt = dict(cpos_launch.ROUTING_REGISTERS).get(module, ())
+    assert scope_routing(module) == ROUTING_BY_MODULE.get(module, [])
+    assert list(exempt) == ROUTING_BY_MODULE.get(module, [])
+
+
+@pytest.mark.parametrize("module", list(REQUIRED))
+def test_required_is_the_method_ids_less_the_scope_cut_and_that_modules_routing_ids(module):
+    texts = [t for n, t in cpos_launch.method_sections(module) if not n.startswith(SCOPE_FILE)]
+    listed = [i for t in texts for i in cpos_launch._listed_ids(t.split("\n"))]
+    launcher = {"P1", "P2", "P4", "P5", "P6", "P7", "P8"} if module == "CP-0" else set()
+    gone = set(CUT[module]) | set(ROUTING_BY_MODULE.get(module, [])) | launcher
+    assert list(dict.fromkeys(i for i in listed if i not in gone)) == REQUIRED[module]
+
+
+@pytest.mark.parametrize(
+    ("heading", "counts"),
+    [
+        ("### **T2.1** — Title", True),
+        ("### `T2.1` — Title", True),
+        ("### **T2.1**, `T2.2` and T2.3 - Joint", True),
+        ("### 1. T2.1 — Title", True),
+        ("### Table T2.1: Title", False),
+        ("### The **T2.1** table", False),
+        ("### 1. Coverage of T2.1", False),
+    ],
+)
+def test_a_heading_must_start_with_the_id_bold_or_backticks_and_a_number_allowed(heading, counts):
+    assert cpos_launch._has_register(heading + "\n", "T2.1") is counts
+
+
+def test_the_refusal_and_the_routing_rule_say_the_heading_starts_with_the_id():
+    assert "starts with its id" in cpos_launch.ROUTING_RULES
+    assert "starts with its id" in refusal("CP-6", "x")[0]

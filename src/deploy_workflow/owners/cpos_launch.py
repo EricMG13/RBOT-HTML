@@ -1851,9 +1851,10 @@ ROUTING_RULES = (
     "appendix rule, in this transport: when you run those checks or apply that rule yourself, "
     "do not restore it and do not block for want of it. Every register the method requires "
     "that is not excluded here or in a `Register scope` section must be present under a heading "
-    "or `<!-- table-id: -->` tag that carries its id; one with nothing to report is written "
-    "with one row `Not supplied: <reason>`, never left out; a module that stops at its gate "
-    "states `module_status: Blocked` in the front matter and writes the gate register only.\n\n"
+    "that starts with its id or a `<!-- table-id: -->` tag that carries it; one with nothing to "
+    "report is written with one row `Not supplied: <reason>`, never left out; a module that stops "
+    "at its gate states `module_status: Blocked` in the front matter and writes the gate "
+    "register only.\n\n"
 )
 # CP-5 only: it audits the other modules' handoffs. The first line is the marker the tests look for;
 # `{lines}` is one `- <module>: <registers>` line per upstream module that has a scope section.
@@ -2291,22 +2292,21 @@ def register_scope(module: str) -> str:
     return section.partition("do not write ")[2].partition(". Any figure")[0]
 
 
-# Registers ROUTING_RULES tells every module not to write; the presence check never requires them.
+# The routing registers each module's scope section names (ROUTING_RULES tells it not to write
+# them); the presence check never requires them. Per module: ids collide across modules.
 ROUTING_REGISTERS = (
-    "T7",
-    "T8",
-    "T2D.10",
-    "downstream_readiness",
-    "T2B.8",
-    "T5.6",
+    ("CP-0", ("T7", "T8")),
+    ("CP-1A", ("T2D.10", "downstream_readiness")),
+    ("CP-2A", ("T2B.8", "T5.6")),
 )
 _REQUIRED_KEY = re.compile(r"^(\s*)- \*\*required_register_ids\*\*:(.*)$")
 _REGISTER_ID = re.compile(r"[A-Za-z]\w*(?:\.\w+)*")
 _BLOCKED = re.compile(r"""^module_status:\s*["']?blocked["']?\s*$""", re.IGNORECASE)
 _MISSING_REGISTERS = (
     "Missing registers: {ids}. The method requires each of them and CP-OS does not cut them. "
-    "Write each as its own register: a `###` heading that carries its id (`### {first} - <title>`) "
-    "or a `<!-- table-id: ... {first} -->` tag above its table. A register with nothing to "
+    "Write each as its own register: a `###` heading that starts with its id (`### {first} - "
+    "<title>`, the id may be in bold or backticks) or a `<!-- table-id: ... {first} -->` tag above "
+    "its table. A register with nothing to "
     "report is still written, with one row `Not supplied: <reason>` (or the method's own "
     "placeholder row), never left out. A module that stops at its gate says so with "
     "`module_status: Blocked` in the front matter and writes the gate register only; it is not "
@@ -2350,7 +2350,8 @@ def required_registers(module: str) -> tuple[str, ...]:
         if launcher is None:
             raise ValueError("CP0_BLOCK no longer says which registers the launcher made")
         out |= set(re.findall(r"\bP\d+\b", launcher[1]))
-    return tuple(dict.fromkeys(i for i in listed if i not in out and i not in ROUTING_REGISTERS))
+    out |= set(dict(ROUTING_REGISTERS).get(module, ()))
+    return tuple(dict.fromkeys(i for i in listed if i not in out))
 
 
 def _blocked_at_gate(text: str) -> bool:
@@ -2365,19 +2366,19 @@ def _blocked_at_gate(text: str) -> bool:
 
 
 def _has_register(text: str, ident: str) -> bool:
-    """A `###` heading that opens with the id (or with a list of ids that includes it), or a
-    `<!-- table-id: ... -->` tag whose last part is the id. Each id in the list is id-shaped (a
-    dotted id, a bare `T1`/`P3`, a snake_case slug): a prose word before it makes the heading
-    another register's. An id in a table cell or mid-heading is a citation, not the register."""
+    """A `###` heading that starts with the id (optionally after a number such as `1.`, and the id
+    in bold or backticks), or with a list of ids that includes it, or a `<!-- table-id: ... -->` tag
+    whose last part is the id. Each id in the list is id-shaped (a dotted id, a bare `T1`/`P3`, a
+    snake_case slug): a prose word before it makes the heading another register's (`Table T2.1:`
+    stays refused). An id in a table cell or mid-heading is a citation, not the register."""
+    wrap = r"(?:\*\*|`)?"
     token = (
         r"(?:[A-Z]+\d\w*(?:\.\w+)*|[A-Z][A-Za-z]*(?:\.\w+)+|[a-z]+(?:_[a-z]+)+)"  # id-shaped only
     )
-    lead = rf"{token}(?:\s*[,&/]\s*|\s+and\s+)"
-    patterns = (
-        re.compile(rf"^<!-- table-id: (?:\S*\.)?{re.escape(ident)} -->\s*$", re.MULTILINE),
-        re.compile(rf"^#{{2,6}} (?:{lead})*{re.escape(ident)}(?!\w|\.\d)", re.MULTILINE),
-    )
-    return any(p.search(text) for p in patterns)
+    lead = rf"{wrap}{token}{wrap}(?:\s*[,&/]\s*|\s+and\s+)"
+    heading = rf"^#{{2,6}} (?:\d+[.)] )?(?:{lead})*{wrap}{re.escape(ident)}(?!\w|\.\d)"
+    tag = rf"^<!-- table-id: (?:\S*\.)?{re.escape(ident)} -->\s*$"
+    return any(re.search(p, text, re.MULTILINE) for p in (tag, heading))
 
 
 def register_issues(module: str, text: str) -> tuple[str, ...]:
