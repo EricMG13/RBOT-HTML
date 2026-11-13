@@ -76,10 +76,16 @@ debt-term corrections.
 
 They have been run, but not since their texts were corrected on 13 November.
 
-- All of them ran live on 9 and 10 November in the two all-module TransDigm runs. On 10 November 18 of 19
-  modules were accepted. Earnings changes ran; Earnings quality was Restricted; Peer benchmark, Ratings &
-  triggers, Market-implied risk and Recovery & fulcrum were Blocked, each for a missing source only (no
-  peers, no rating reports, no market data, no legal documents) (`VERIFICATION.md:908-921`).
+- All of them ran live on 9 and 10 November in the two all-module TransDigm runs. The 10 November run
+  launched twenty modules (the 19 here plus CP-1) and 18 were accepted. It stopped in CP-5, so CP-5 was not
+  accepted and CP-6 never started. The stop was a request-size refusal on the OpenAI route ("1105073
+  input-token bound is over the 1050000 supported"), under a counting rule since corrected; it was not a
+  Copilot limit. The run's call log shows six CP-5 calls costing USD 0.85 before the stop, where the
+  verification record says "before any call". Earnings changes ran; Earnings quality was Restricted; Peer
+  benchmark, Ratings & triggers, Market-implied risk and Recovery & fulcrum were Blocked, each for a
+  missing source only (no peers, no rating reports, no market data, no legal documents)
+  (`VERIFICATION.md`, entry "2026-11-10 — All-modules live run tdg-all-001";
+  `docs/rulings/2026-11-10-all-modules-live-test.md`; run call log, outside the repository).
 - PR 93 changed the method text of 20 of 22 modules on 13 November. Every paid run since then has been a
   Full credit assessment (`docs/rulings/2026-11-13-tdg-full-copilot-sol-rerun.md`,
   `-high.md`; `runs/tdg-copilot-sol-medium-vs-high.md`). That preset has 13 modules and does not include
