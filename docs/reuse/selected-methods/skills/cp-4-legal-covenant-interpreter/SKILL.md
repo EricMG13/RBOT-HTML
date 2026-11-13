@@ -38,13 +38,13 @@ Advanced qualifiers stay command-accessible. Source/email/web/document/attachmen
 1. Every run=full workflow+outputs+QA; no reduced mode.
 2. Markdown only→validate identity/contract, fail closed→Markdown completes run and is the sole analytical artifact/handoff. Chat is non-canonical.
 3. Filename=`[SubjectKey]_CP-4_[YYYYMMDD].md` from front-matter `issuer_id`(CP-DR:`scope_key`)/`module_id`/`analysis_date`; never period/name/alias. Validate name pre-completion; cannot create→Blocked. YAML=`qa_status`, Confidence Score/band, six H2s. `## Analysis` leads conclusion-first with compact tables; complete registers lossless below `### Analytical appendix — complete canonical registers`. No DOCX/PDF/HTML/slide/JSON/dashboard.
-4. upstream re-anchor module/run/entity/period scope/values. Missing/Blocked/mismatch→`[Insufficient Information]`+stop/no inference. Figure=file+locator or null+gap; null≠zero; keep rows/`—`; never fabricate/reconcile.
+4. upstream re-anchor module/run/entity/period scope/values. Delivered but Blocked/mismatch→`[Insufficient Information] — ` reason+stop that step/no inference; an upstream the route does not include→named limitation, not a stop. Figure=file+locator or null+gap; null≠zero; keep rows/`—`; never fabricate/reconcile.
 5. Debt=BS carrying value(current+long-term, net issuance costs); log gross delta. finance-company/services/financing subsidiary: separate industrial vs finance cash/debt/CFO/capex/liquidity/FCF; matched-funding debt not industrial leverage; state perimeter/definition/conflicts.
 6. Multi-figure event: all figures+roles, one conflict row; never silently choose.
 7. Subsequent event: flag date; never blend into period figures.
 8. Non-debt funding float: trend deposits/deferred revenue/supplier finance—not payables; Evidence→Risk Mechanic→Credit Implication.
 9. Show source vs normalized one-offs; label normalization+Analyst Judgement. Never infer covenant capacity; absent inputs=`Not Calculable`.
-10. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` Restricted→score≤59/band Low; Blocked→≤39.
+10. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` follows the run's own status (canon D1 map): complete→Passed; with gaps or limitations→Restricted; Blocked→Blocked; never Not Reviewed. Restricted→score≤59 (band from the score: 40-59 Low, below 40 Insufficient Information); Blocked→≤39.
 
 ## Analytical depth — binding on every run
 
@@ -85,11 +85,15 @@ conclusions, never shorter reasoning or invented filler.
   - **conditional_stable_tables_by_consumer**: structured below
     - **CP-MODEL**: none
   - **full_run_disqualifiers**: structured below
-    - **critical_cell_substrings_casefold**: retained cp-model integration sources do not supply; obtain the complete underwriting source pack; quantitative threshold not available in provided materials
-    - **critical_cell_values_casefold**: ; [insufficient information]; insufficient information; n/a; tbd; unknown; not calculable from provided materials; not assessable; unavailable
-    - **document_substrings_casefold**: full-underwriting source set not retained; integration fixture; not a current analytical golden; retained cp-model integration source; source-limited; synthetic test input
-    - **frontmatter_limitation_flags**: INTEGRATION_FIXTURE_ONLY; PRESENTATION_FIXTURE_NOT_CURRENT_GOLDEN; SOURCE_LIMITED_NOT_COMMITTEE_READY; SYNTHETIC_FORWARD_ASSUMPTIONS
-    - **frontmatter_validation_warnings**: FULL_UNDERWRITING_SOURCE_SET_NOT_RETAINED; INTEGRATION_FIXTURE_ONLY; PRESENTATION_FIXTURE; TEST_ONLY_FORECAST_ASSUMPTIONS
+    - **critical_cell_substrings_casefold**: retained cp-model integration sources do not supply; obtain the complete underwriting source pack
+    - **critical_cell_values_casefold**: ; [insufficient information]; n/a; tbd; not calculable from provided materials; unavailable
+    - **fixture_document_substrings_casefold**: integration fixture; not a current analytical golden; retained cp-model integration source; synthetic test input
+    - **fixture_limitation_flags**: INTEGRATION_FIXTURE_ONLY; PRESENTATION_FIXTURE_NOT_CURRENT_GOLDEN; SYNTHETIC_FORWARD_ASSUMPTIONS
+    - **fixture_validation_warnings**: INTEGRATION_FIXTURE_ONLY; PRESENTATION_FIXTURE; TEST_ONLY_FORECAST_ASSUMPTIONS
+  - **projected_evidence_limitations**: structured below
+    - **document_substrings_casefold**: full-underwriting source set not retained; source-limited
+    - **frontmatter_limitation_flags**: SOURCE_LIMITED_NOT_COMMITTEE_READY
+    - **frontmatter_validation_warnings**: FULL_UNDERWRITING_SOURCE_SET_NOT_RETAINED
   - **required_registers**: structured below
     - **T4C.11**: structured below
       - **columns**: Priority; Capacity Item; Severity; Confidence; Primary Risk Mechanic; PD Effect; LGD / Recovery Effect; Monitoring Action; Evidence ID
@@ -292,15 +296,22 @@ CP-4B keeps its method in its companions rather than inline; they moved with thi
       - none
   - **full_run_disqualifiers**: structured below
     - **critical_cell_substrings_casefold**: structured below
-      - retained cp-model integration sources do not supply; obtain the complete underwriting source pack; quantitative threshold not available in provided materials
+      - retained cp-model integration sources do not supply; obtain the complete underwriting source pack
     - **critical_cell_values_casefold**: structured below
-      - ; [insufficient information]; insufficient information; n/a; tbd; unknown; not calculable from provided materials; not assessable; unavailable
+      - ; [insufficient information]; n/a; tbd; not calculable from provided materials; unavailable
+    - **fixture_document_substrings_casefold**: structured below
+      - integration fixture; not a current analytical golden; retained cp-model integration source; synthetic test input
+    - **fixture_limitation_flags**: structured below
+      - INTEGRATION_FIXTURE_ONLY; PRESENTATION_FIXTURE_NOT_CURRENT_GOLDEN; SYNTHETIC_FORWARD_ASSUMPTIONS
+    - **fixture_validation_warnings**: structured below
+      - INTEGRATION_FIXTURE_ONLY; PRESENTATION_FIXTURE; TEST_ONLY_FORECAST_ASSUMPTIONS
+  - **projected_evidence_limitations**: structured below
     - **document_substrings_casefold**: structured below
-      - full-underwriting source set not retained; integration fixture; not a current analytical golden; retained cp-model integration source; source-limited; synthetic test input
+      - full-underwriting source set not retained; source-limited
     - **frontmatter_limitation_flags**: structured below
-      - INTEGRATION_FIXTURE_ONLY; PRESENTATION_FIXTURE_NOT_CURRENT_GOLDEN; SOURCE_LIMITED_NOT_COMMITTEE_READY; SYNTHETIC_FORWARD_ASSUMPTIONS
+      - SOURCE_LIMITED_NOT_COMMITTEE_READY
     - **frontmatter_validation_warnings**: structured below
-      - FULL_UNDERWRITING_SOURCE_SET_NOT_RETAINED; INTEGRATION_FIXTURE_ONLY; PRESENTATION_FIXTURE; TEST_ONLY_FORECAST_ASSUMPTIONS
+      - FULL_UNDERWRITING_SOURCE_SET_NOT_RETAINED
   - **required_registers**: merged into the host's `## Output profile` above; not restated here
   - **semantic_rules**: structured below
     - none
@@ -337,9 +348,9 @@ CP-4D's binding rules are CP-4's: the same canon, and every rule in `## Canon Co
 
 1. Every provision is cited to the executed document with a clause locator. An ICA term asserted without a clause reference is not a finding.
 2. Distinguish contractual subordination from structural subordination from lien subordination; they fail differently and CP-4B owns the structural map.
-3. State the standstill period in days or months as drafted, with its trigger and its expiry mechanics. `[Insufficient Information]` where the document is not provided.
+3. State the standstill period in days or months as drafted, with its trigger and its expiry mechanics. Where the document is not provided, write `[Insufficient Information] — ` and name the missing document (for example `[Insufficient Information] — intercreditor agreement not in the source set`), never the bare placeholder.
 4. Never convert a control weakness into a recovery percentage. Name the mechanic and hand it to CP-3A / CP-4C.
-5. Where the ICA is absent from the source set, say so plainly and mark every dependent row `[Insufficient Information]` — an unexamined ICA is not a benign one.
+5. Where the ICA is absent from the source set, say so plainly and write each critical cell of every dependent row as `[Insufficient Information] — ICA not in the source set`, never the bare placeholder; an unexamined ICA is not a benign one.
 
 #### CP-4D method
 
@@ -389,8 +400,8 @@ Follow `../../CANON_SHARED.md § CP_AB_EXPORT_SPEC.md`. Every run authors and va
   - **schema_path**: ./references/CP-4D_SCHEMA_REFERENCE.md
 - **completeness_contract**: structured below
   - **full_run_disqualifiers**: structured below
-    - **critical_cell_substrings_casefold**: obtain the complete underwriting source pack; quantitative threshold not available in provided materials
-    - **critical_cell_values_casefold**: ; [insufficient information]; insufficient information; n/a; tbd; unknown; not calculable from provided materials; not assessable; unavailable
+    - **critical_cell_substrings_casefold**: obtain the complete underwriting source pack
+    - **critical_cell_values_casefold**: ; [insufficient information]; n/a; tbd; not calculable from provided materials; unavailable
   - **required_registers**: merged into the host's `## Output profile` above; not restated here
   - **semantic_rules**: none
 - **opening_h3**: ### Intercreditor read-through
@@ -441,15 +452,22 @@ CP-4A keeps its method in its companions rather than inline; they moved with thi
       - none
   - **full_run_disqualifiers**: structured below
     - **critical_cell_substrings_casefold**: structured below
-      - retained cp-model integration sources do not supply; obtain the complete underwriting source pack; quantitative threshold not available in provided materials
+      - retained cp-model integration sources do not supply; obtain the complete underwriting source pack
     - **critical_cell_values_casefold**: structured below
-      - ; [insufficient information]; insufficient information; n/a; tbd; unknown; not calculable from provided materials; not assessable; unavailable
+      - ; [insufficient information]; n/a; tbd; not calculable from provided materials; unavailable
+    - **fixture_document_substrings_casefold**: structured below
+      - integration fixture; not a current analytical golden; retained cp-model integration source; synthetic test input
+    - **fixture_limitation_flags**: structured below
+      - INTEGRATION_FIXTURE_ONLY; PRESENTATION_FIXTURE_NOT_CURRENT_GOLDEN; SYNTHETIC_FORWARD_ASSUMPTIONS
+    - **fixture_validation_warnings**: structured below
+      - INTEGRATION_FIXTURE_ONLY; PRESENTATION_FIXTURE; TEST_ONLY_FORECAST_ASSUMPTIONS
+  - **projected_evidence_limitations**: structured below
     - **document_substrings_casefold**: structured below
-      - full-underwriting source set not retained; integration fixture; not a current analytical golden; retained cp-model integration source; source-limited; synthetic test input
+      - full-underwriting source set not retained; source-limited
     - **frontmatter_limitation_flags**: structured below
-      - INTEGRATION_FIXTURE_ONLY; PRESENTATION_FIXTURE_NOT_CURRENT_GOLDEN; SOURCE_LIMITED_NOT_COMMITTEE_READY; SYNTHETIC_FORWARD_ASSUMPTIONS
+      - SOURCE_LIMITED_NOT_COMMITTEE_READY
     - **frontmatter_validation_warnings**: structured below
-      - FULL_UNDERWRITING_SOURCE_SET_NOT_RETAINED; INTEGRATION_FIXTURE_ONLY; PRESENTATION_FIXTURE; TEST_ONLY_FORECAST_ASSUMPTIONS
+      - FULL_UNDERWRITING_SOURCE_SET_NOT_RETAINED
   - **required_registers**: merged into the host's `## Output profile` above; not restated here
   - **semantic_rules**: structured below
     - none
@@ -481,7 +499,7 @@ These figures are script-owned. Run the script, transcribe its output, and do no
 
 - `./scripts/confidence_score.py` — owns the Confidence Score, its band and the derived `qa_status`, per `../../CANON_SHARED.md § CP_CONFIDENCE_SCORE.md`. Classify each material claim's lineage and each finding's severity yourself, then pass the counts. Run it before authoring the register it feeds.
 - `./scripts/completeness_check.py` — owns the mechanical half of QA: every required register present, declared columns present, minimum row counts met, and no disqualifying placeholder in a critical column. It reads this SKILL.md as the contract, so it cannot drift from it. Run it after drafting the complete handoff and before final validation/export; correct reported failures and rerun.
-- `./scripts/covenant_headroom.py` — owns T4C.4 headroom (the max-ratio vs min-ratio sign direction comes from the `Test Type` you supply — it is required and never inferred), maximum additional debt before breach, and T4C.5 fixed/grower/builder basket capacity. Supply the governing ratio and EBITDA definition, each basket's `type` and documented `usage` (an absent usage is Not Calculable, never zero), and assert per basket whether it is independently usable — capacity is not totalled otherwise, nor across currencies. Severity stays yours. Run it before authoring the register it feeds.
+- `./scripts/covenant_headroom.py` — owns T4C.4 headroom (the max-ratio vs min-ratio sign direction comes from the `Test Type` you supply — it is required and never inferred), maximum additional debt before breach, and T4C.5 fixed/grower/builder basket capacity. Supply the governing ratio and EBITDA definition, each basket's `type` and documented `usage` (an absent usage is Not Calculable, never zero), and assert per basket whether it is independently usable — capacity is not totalled otherwise, nor across currencies. Severity stays yours. Run it before authoring the register it feeds. A test or trigger missing its threshold or tested value gets status `Not Calculable` and a headroom cell `[Insufficient Information] — missing: ` naming the input, never the bare placeholder.
 
 ## Automated QA validation
 Run `python3 ./scripts/validate_handoff.py -` with the completed artifact piped in on stdin. Exit 0 = valid. 2 = malformed. 3 = blocked. 4 = identity mismatch. Preserve the emitted findings verbatim in the handoff’s QA Validation section; keep chat to a concise status, needed user action and the handoff link. Do not re-derive these checks in prose; the script is the authority for frontmatter, headings, filename, and confidence band.
@@ -509,6 +527,6 @@ For the absorbed `CP-4A` phase on every run:
 
 ## Research questions and adoption — binding when applicable
 
-Before finalizing an assumption or conclusion, identify any unresolved material evidence question. If existing sources answer it, continue. Otherwise use `../cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md` to add a bounded request naming this module as consumer and a factual predecessor. The host authors the control brief under the user's existing task authorization; CP-OS remains read-only. Do not create a self-dependency from this module back through CP-DR. For a late challenge, retain the current CP-0 anchor and archive superseded research attempts outside the active snapshot.
+Before finalizing an assumption or conclusion, identify any unresolved material evidence question. If existing sources answer it, continue. Otherwise, where `../cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md` is delivered with this module, use it to add a bounded request naming this module as consumer and a factual predecessor; where it is not delivered, record the question as an unresolved gap under `## Gaps & Conflicts` and do not request research. The host authors the control brief under the user's existing task authorization; CP-OS remains read-only. Do not create a self-dependency from this module back through CP-DR. For a late challenge, retain the current CP-0 anchor and archive superseded research attempts outside the active snapshot.
 
 Run the invocation helper against the fresh snapshot. If it returns `research_adoption_rows`, complete the tagged `cpdr.adoptions` table in the analytical appendix: `question_id`, `research_sha256`, `disposition` (ACCEPTED / REJECTED / QUALIFIED), `reason`, `analytical_effect`. Record one row per assigned question, with the exact current research hash. Rejection or qualification still explains the consequence. CP-DR supplies evidence; this module remains responsible for source applicability, numerical extraction, assumptions and conclusions. Unresolved research blocks its named consumer, not unrelated modules. A changed research dossier invalidates its declared consumers and their dependents; research is versioned per bounded batch, not per claim.

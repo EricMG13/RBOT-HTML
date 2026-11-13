@@ -19,13 +19,13 @@ Use current command qualifiers, current conversation scope, then validated match
 1. Every run=full workflow+outputs+QA; no reduced mode.
 2. Markdown only→validate identity/contract, fail closed→Markdown completes run and is the sole analytical artifact/handoff. Chat is non-canonical.
 3. Filename=`[SubjectKey]_CP-2D_[YYYYMMDD].md` from front-matter `issuer_id`(CP-DR:`scope_key`)/`module_id`/`analysis_date`; never period/name/alias. Validate name pre-completion; cannot create→Blocked. YAML=`qa_status`, Confidence Score/band, six H2s. `## Analysis` leads conclusion-first with compact tables; complete registers lossless below `### Analytical appendix — complete canonical registers`. No DOCX/PDF/HTML/slide/JSON/dashboard.
-4. upstream re-anchor module/run/entity/period scope/values. Missing/Blocked/mismatch→`[Insufficient Information]`+stop/no inference. Figure=file+locator or null+gap; null≠zero; keep rows/`—`; never fabricate/reconcile.
+4. upstream re-anchor module/run/entity/period scope/values. Delivered but Blocked/mismatch→`[Insufficient Information] — ` reason+stop that step/no inference; an upstream the route does not include→named limitation, not a stop. Figure=file+locator or null+gap; null≠zero; keep rows/`—`; never fabricate/reconcile.
 5. Debt=BS carrying value(current+long-term, net issuance costs); log gross delta. finance-company/services/financing subsidiary: separate industrial vs finance cash/debt/CFO/capex/liquidity/FCF; matched-funding debt not industrial leverage; state perimeter/definition/conflicts.
 6. Multi-figure event: all figures+roles, one conflict row; never silently choose.
 7. Subsequent event: flag date; never blend into period figures.
 8. Non-debt funding float: trend deposits/deferred revenue/supplier finance—not payables; Evidence→Risk Mechanic→Credit Implication.
 9. Show source vs normalized one-offs; label normalization+Analyst Judgement. Never infer covenant capacity; absent inputs=`Not Calculable`.
-10. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` Restricted→score≤59/band Low; Blocked→≤39.
+10. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` follows the run's own status (canon D1 map): complete→Passed; with gaps or limitations→Restricted; Blocked→Blocked; never Not Reviewed. Restricted→score≤59 (band from the score: 40-59 Low, below 40 Insufficient Information); Blocked→≤39.
 
 ## Analytical depth — binding on every run
 
@@ -70,15 +70,22 @@ conclusions, never shorter reasoning or invented filler.
       - none
   - **full_run_disqualifiers**: structured below
     - **critical_cell_substrings_casefold**: structured below
-      - retained cp-model integration sources do not supply; obtain the complete underwriting source pack; quantitative threshold not available in provided materials
+      - retained cp-model integration sources do not supply; obtain the complete underwriting source pack
     - **critical_cell_values_casefold**: structured below
-      - ; [insufficient information]; insufficient information; n/a; tbd; unknown; not calculable from provided materials; not assessable; unavailable
+      - ; [insufficient information]; n/a; tbd; not calculable from provided materials; unavailable
+    - **fixture_document_substrings_casefold**: structured below
+      - integration fixture; not a current analytical golden; retained cp-model integration source; synthetic test input
+    - **fixture_limitation_flags**: structured below
+      - INTEGRATION_FIXTURE_ONLY; PRESENTATION_FIXTURE_NOT_CURRENT_GOLDEN; SYNTHETIC_FORWARD_ASSUMPTIONS
+    - **fixture_validation_warnings**: structured below
+      - INTEGRATION_FIXTURE_ONLY; PRESENTATION_FIXTURE; TEST_ONLY_FORECAST_ASSUMPTIONS
+  - **projected_evidence_limitations**: structured below
     - **document_substrings_casefold**: structured below
-      - full-underwriting source set not retained; integration fixture; not a current analytical golden; retained cp-model integration source; source-limited; synthetic test input
+      - full-underwriting source set not retained; source-limited
     - **frontmatter_limitation_flags**: structured below
-      - INTEGRATION_FIXTURE_ONLY; PRESENTATION_FIXTURE_NOT_CURRENT_GOLDEN; SOURCE_LIMITED_NOT_COMMITTEE_READY; SYNTHETIC_FORWARD_ASSUMPTIONS
+      - SOURCE_LIMITED_NOT_COMMITTEE_READY
     - **frontmatter_validation_warnings**: structured below
-      - FULL_UNDERWRITING_SOURCE_SET_NOT_RETAINED; INTEGRATION_FIXTURE_ONLY; PRESENTATION_FIXTURE; TEST_ONLY_FORECAST_ASSUMPTIONS
+      - FULL_UNDERWRITING_SOURCE_SET_NOT_RETAINED
   - **required_registers**: structured below
     - **T2E.1**: structured below
       - **columns**: source_document_id; source_document_name; source_quality; period; entity_covered; data_supplied; limitation; downstream_use
@@ -101,12 +108,12 @@ conclusions, never shorter reasoning or invented filler.
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T2E.5**: structured below
-      - **columns**: Bridge Item; Amount; Source / Calculation; Status; Credit Comment; Source Trace
+      - **columns**: Bridge Item; Amount; Currency and Scale; Source / Calculation; Status; Credit Comment; Source Trace
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T2E.6**: structured below
-      - **columns**: none
+      - **columns**: Calculation; Result; Formula / Inputs; Cash-Burn Basis; Status; Source Trace
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
@@ -243,6 +250,6 @@ Run `./scripts/confidence_score.py` for the confidence score and band. After dra
 
 ## Research questions and adoption — binding when applicable
 
-Before finalizing an assumption or conclusion, identify any unresolved material evidence question. If existing sources answer it, continue. Otherwise use `../cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md` to add a bounded request naming this module as consumer and a factual predecessor. The host authors the control brief under the user's existing task authorization; CP-OS remains read-only. Do not create a self-dependency from this module back through CP-DR. For a late challenge, retain the current CP-0 anchor and archive superseded research attempts outside the active snapshot.
+Before finalizing an assumption or conclusion, identify any unresolved material evidence question. If existing sources answer it, continue. Otherwise, where `../cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md` is delivered with this module, use it to add a bounded request naming this module as consumer and a factual predecessor; where it is not delivered, record the question as an unresolved gap under `## Gaps & Conflicts` and do not request research. The host authors the control brief under the user's existing task authorization; CP-OS remains read-only. Do not create a self-dependency from this module back through CP-DR. For a late challenge, retain the current CP-0 anchor and archive superseded research attempts outside the active snapshot.
 
 Run the invocation helper against the fresh snapshot. If it returns `research_adoption_rows`, complete the tagged `cpdr.adoptions` table in the analytical appendix: `question_id`, `research_sha256`, `disposition` (ACCEPTED / REJECTED / QUALIFIED), `reason`, `analytical_effect`. Record one row per assigned question, with the exact current research hash. Rejection or qualification still explains the consequence. CP-DR supplies evidence; this module remains responsible for source applicability, numerical extraction, assumptions and conclusions. Unresolved research blocks its named consumer, not unrelated modules. A changed research dossier invalidates its declared consumers and their dependents; research is versioned per bounded batch, not per claim.
