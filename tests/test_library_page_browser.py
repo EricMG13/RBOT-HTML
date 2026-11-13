@@ -2818,7 +2818,7 @@ EVIDENCE_HIT_PROBE = """
     await sleep(900);
     const row = /[?&]r=(\\d+)/.exec(href)[1];
     seen.push({href, marked: document.querySelectorAll('#ev-panel .is-hit').length,
-      onCard: document.querySelectorAll(`#ev-panel [data-line="${row}"].is-hit`).length});
+      onCard: document.querySelectorAll(`#ev-panel [data-lines$=":${row}"].is-hit`).length});
   }
   const out = document.createElement('pre');
   out.id = 'probe';

@@ -538,11 +538,11 @@ function scrollToPart(part) {
   if(target)openFolds(target);
   content.scrollTop=target?Math.max(0,content.scrollTop+target.getBoundingClientRect().top-content.getBoundingClientRect().top-10):0;
 }
-// A search hit's row on an Evidence tab: the first row of the panel with that handoff line is marked and brought into view.
-function showEvidenceRow(line) {
-  const row=$('ev-panel')?.querySelector(`[data-line="${line}"],[data-lines~="${line}"]`);
+// A search hit's row on an Evidence tab: the one row or card of the panel that carries the hit's module and handoff line together (each handoff counts its own lines) is marked and brought into view; no match marks nothing.
+function showEvidenceRow(line,module) {
+  const pair=`${module}:${line}`,row=[...($('ev-panel')?.querySelectorAll('[data-lines]')||[])].find(element=>element.dataset.lines.split(' ').includes(pair));
+  $('ev-panel')?.querySelectorAll('.is-hit').forEach(other=>other.classList.remove('is-hit'));
   if(!row)return;
-  $('ev-panel').querySelectorAll('.is-hit').forEach(other=>other.classList.remove('is-hit'));
   row.classList.add('is-hit');
   const content=$('content');
   content.scrollTop=Math.max(0,content.scrollTop+row.getBoundingClientRect().top-content.getBoundingClientRect().top-80);
@@ -643,7 +643,7 @@ function drawRoute() {
     $('content').scrollTop=readingPositions.get(positionKey(next))||0;
     if(reportPage(next)&&next.section!=='head')scrollToPart(next.section);
     if(next.part)scrollToPart(next.part);
-    if(next.row)showEvidenceRow(next.row);
+    if(next.row)showEvidenceRow(next.row,next.evidenceModule);
     showNavigator(false);
     // Search hits drive moves between analytical modules, so the query is kept there and dropped elsewhere.
     if(previous&&previous.module!==next.module&&!isAnalytical(next.module))$('module-search').value='';
@@ -659,7 +659,7 @@ function drawRoute() {
     }
   } else {
     if(next.part&&next.part!==previous?.part)scrollToPart(next.part); // opening or closing a trace on the Forecast charts leaves the page where it is
-    if(next.row)showEvidenceRow(next.row);
+    if(next.row)showEvidenceRow(next.row,next.evidenceModule);
   }
   if(partMove) {
     scrollToPart(next.section);

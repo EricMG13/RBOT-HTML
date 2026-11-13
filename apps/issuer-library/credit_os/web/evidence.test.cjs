@@ -179,7 +179,7 @@ test('Trace opens a row to the excerpts the build holds for it, by the paragraph
 test('Gaps: a table with a Severity column is cards with the three-segment meter; the cells keep their words', () => {
   const html = view('gaps', 'CP-2A');
   assert.equal((html.match(/class="ev-gap"/g) || []).length, 2);
-  assert.equal((html.match(/class="ev-gap" data-line="\d+"/g) || []).length, 2, 'each gap card carries its handoff line, as a row does, so a search hit lands on it');
+  assert.equal((html.match(/class="ev-gap" data-line="\d+" data-lines="CP-2A:\d+"/g) || []).length, 2, 'each gap card carries its module and handoff line, as a row does, so a search hit lands on it');
   assert.ok(html.includes('Missing lease schedule') && html.includes('Required source') && html.includes('Lease note'));
   const high = html.slice(html.indexOf('Missing lease schedule'), html.indexOf('No peer set'));
   assert.equal((high.match(/<i class="f">/g) || []).length, 3, 'High fills three');
@@ -510,7 +510,7 @@ test('the comparison\'s own figures, built from the two runs\' packs, are listed
 });
 
 test('ledger: its rows are searchable like the rest of the tab (each row has its own search text, the head matches the whole table)', () => {
-  const html = cp8View('gaps'), row = /<tr data-hay="([^"]*)"(?: data-line="\d+")?><td[^>]*>E2</.exec(html);
+  const html = cp8View('gaps'), row = /<tr data-hay="([^"]*)"(?: data-line="\d+" data-lines="[^"]*")?><td[^>]*>E2</.exec(html);
   assert.ok(row && row[1].includes('carried over') && row[1].includes('remaining'));
   assert.ok(/data-head="[^"]*earlier ref[^"]*"/.test(html));
 });
@@ -616,4 +616,16 @@ test('L1: a Gaps section that holds text and no table is "Listed as text", not 0
   assert.ok(Evidence.gapCount(run([sec('Findings', 2, 1)]), 'CP-6') === 0 && !noSection.includes('None stated') && !noSection.includes('Listed as text'), 'a module with no Gaps section keeps the plain zero of the bar');
   assert.ok(Evidence.view(run([sec('Findings', 2, 1)]), {tab: 'summary', module: null}).includes('Committee decision: 0 gaps'));
   assert.ok(Evidence.view(run(mixed), {tab: 'gaps', module: 'CP-6'}).includes('<span data-count>2</span> gaps'));
+});
+
+test('a Sources card names its handoff lines as module:line pairs; two modules naming two files at swapped lines never share a marker', () => {
+  const FILE_A = 'A_report.pdf', FILE_B = 'B_report.pdf';
+  const sources = (firstFile, secondFile) => [sec('Sources', 2, 1, [table(8, ['Source', 'Use'], [[firstFile, 'x'], [secondFile, 'y']])])];
+  // CP-2A names A at line 10 and B at line 11; CP-6 names B at line 10 and A at line 11: the bare numbers 10 and 11 recur.
+  const files = [FILE_A, FILE_B].map(name => ({name, sha256: 'a'.repeat(64), type: 'pdf', documentDate: null, readBy: ['CP-2A', 'CP-6']}));
+  const swapped = {run: {...input().run, evidence: {...EV, sources: files, unused: []}}, modules: [{id: 'CP-2A', outputs: [out('o1', sources(FILE_A, FILE_B))]}, {id: 'CP-6', outputs: [out('o2', sources(FILE_B, FILE_A))]}]};
+  const html = view('sources', null, swapped);
+  const cards = [...html.matchAll(/<article class="ev-card ev-src" data-line="\d+" data-lines="([^"]*)"[^>]*>.*?<div class="ev-src-n">([^<]*)</gs)].map(m => [m[2], m[1].split(' ')]);
+  assert.deepEqual(cards, [[FILE_A, ['CP-2A:10', 'CP-6:11']], [FILE_B, ['CP-2A:11', 'CP-6:10']]]);
+  for (const pair of ['CP-2A:10', 'CP-2A:11', 'CP-6:10', 'CP-6:11']) assert.equal(cards.filter(([, pairs]) => pairs.includes(pair)).length, 1, pair);
 });

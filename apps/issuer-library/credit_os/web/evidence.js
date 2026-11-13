@@ -149,11 +149,11 @@
   const NUMBER = /^[-−+]?(?:USD )?[\d,]*\.?\d+(?: ?(?:million|billion|x|%|pp))?(?: \(.*\))?$/;
   const numericColumn = cells => { const filled = cells.filter(c => c !== ''); return filled.length > 0 && filled.filter(c => NUMBER.test(c)).length / filled.length >= 0.7; };
   // `counted` is what the tab's badge counts: 'rows' (each row), 'table' (the whole table) or nothing. Counted elements carry data-hay; every other searchable one data-find.
-  function tableMarkup(view, caption, name, counted = '') {
+  function tableMarkup(view, caption, name, counted = '', code = '') {
     const numeric = view.headers.map((header, at) => numericColumn(view.rows.map(r => r.cells[at])));
     const mono = shapes.columnKinds(view).map(kind => ['source', 'id'].includes(kind));
     const head = view.headers.map((header, at) => `<th scope="col" class="${numeric[at] ? 'num' : ''}${mono[at] ? ' mono' : ''}">${esc(header)}</th>`).join('');
-    const body = view.rows.map(row => `<tr ${counted === 'rows' ? 'data-hay' : 'data-find'}="${hay(name, row.cells.join(' '))}" data-line="${esc(row.line)}">${row.cells.map((cell, at) => `<td class="${numeric[at] ? 'num ' : ''}${mono[at] ? 'mono ' : ''}${cell.length > 60 ? 'wide' : ''}">${rich(cell)}</td>`).join('')}</tr>`).join('');
+    const body = view.rows.map(row => `<tr ${counted === 'rows' ? 'data-hay' : 'data-find'}="${hay(name, row.cells.join(' '))}"${code && row.line !== undefined ? ` data-line="${esc(row.line)}" data-lines="${esc(`${code}:${row.line}`)}"` : ''}>${row.cells.map((cell, at) => `<td class="${numeric[at] ? 'num ' : ''}${mono[at] ? 'mono ' : ''}${cell.length > 60 ? 'wide' : ''}">${rich(cell)}</td>`).join('')}</tr>`).join('');
     const tableHead = hay(name, caption, view.headers.join(' '));
     return `<div class="ev-tbl" role="region" aria-label="${esc(caption)}" tabindex="0" data-group data-head="${tableHead}"${counted === 'table' ? ` data-hay="${tableHead}"` : ''}><table><caption class="sr-only">${esc(caption)}</caption><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
   }
@@ -199,21 +199,21 @@
 
   const avatar = (code, deps) => `<span class="ev-av" role="img" tabindex="0" ${components().tipAttributes(deps.moduleTitle(code))}>${esc(code.replace(/^CP-/, ''))}</span>`;
   const copyButton = (text, label) => `<button class="ev-cpy" type="button" data-copy="${esc(text)}" data-tip="Copy" aria-label="Copy ${esc(label)}">${icon('copy')}</button>`;
-  // The handoff lines of the Sources-section rows and paragraphs that name each supplied file, so a search hit on one lands on and marks the file's card (a card carries the first line as `data-line`, all of them as `data-lines`).
+  // The handoff lines of the Sources-section rows and paragraphs that name each supplied file, so a search hit on one lands on and marks the file's card (a card carries `module:line` pairs in `data-lines`, the one marker a hit is matched on: each handoff counts its own lines, so a line number means nothing without its module; `data-line` is the bare first line, for reading only).
   function sourceLines(input) {
     const names = knownFiles(input.run.evidence), found = new Map();
     for (const mod of input.modules) for (const output of mod.outputs) for (const {section, role} of classify(output.sections, output.placement)) {
       if (role !== 'sources') continue;
       for (const block of section.blocks) {
         const items = block.type === 'table' ? block.rows.map(row => [row.line, row.cells.join(' ')]) : [[block.line, block.text]];
-        for (const [line, text] of items) for (const name of names) if (text.includes(name)) found.set(name, [...new Set([...(found.get(name) || []), line])]);
+        for (const [line, text] of items) for (const name of names) if (text.includes(name)) found.set(name, [...new Set([...(found.get(name) || []), `${mod.id}:${line}`])]);
       }
     }
     return found;
   }
   function fileCard(file, deps, counted = false, lines = []) {
     const readers = file.readBy.length ? `<div><div class="ev-k">Read by</div><div class="ev-stack">${file.readBy.map(code => avatar(code, deps)).join('')}</div></div>` : '';
-    const marker = lines.length ? ` data-line="${esc(lines[0])}" data-lines="${esc(lines.join(' '))}"` : '';
+    const marker = lines.length ? ` data-line="${esc(lines[0].slice(lines[0].lastIndexOf(':') + 1))}" data-lines="${esc(lines.join(' '))}"` : '';
     return `<article class="ev-card ev-src"${marker} ${counted ? 'data-hay' : 'data-find'}="${hay(file.name, file.type, file.readBy.map(deps.moduleTitle).join(' '))}"><div class="ev-src-top"><span class="ev-src-ic">${icon(file.type === 'pdf' ? 'files' : 'file-text')}</span><div><div class="ev-src-n">${esc(file.name)}</div><span class="ev-src-t">${esc(shownOrNot(file.type))}</span></div></div>` +
       `<div><div class="ev-k">Document date</div><div>${esc(shownOrNot(file.documentDate))}</div></div>${readers}` +
       `<div><div class="ev-k">sha256</div><div class="ev-hash"><code title="${esc(file.sha256)}">${esc(shownOrNot(file.sha256))}</code>${file.sha256 ? copyButton(file.sha256, `hash of ${file.name}`) : ''}</div></div></article>`;
@@ -232,12 +232,12 @@
     return `${usedHtml}${unusedHtml}${unrecordedHtml}`;
   }
   // The comparison's figures: their own group head, counting comparison rows, as the Gaps tab counts ledger rows.
-  const comparisonGroup = c => (c.comparison.length ? `<section class="ev-grp" data-group>${moduleHead(c, rowTotal(c.comparison), 'comparison row', 'comparison rows')}${c.comparison.map(e => `${subHead(e.label)}${e.notes.map(n => noteMarkup(n, c.name)).join('')}${e.tables.map(t => tableMarkup(t, `${c.name}: ${e.heading}`, c.name, 'rows')).join('')}`).join('')}</section>` : '');
+  const comparisonGroup = c => (c.comparison.length ? `<section class="ev-grp" data-group>${moduleHead(c, rowTotal(c.comparison), 'comparison row', 'comparison rows')}${c.comparison.map(e => `${subHead(e.label)}${e.notes.map(n => noteMarkup(n, c.name)).join('')}${e.tables.map(t => tableMarkup(t, `${c.name}: ${e.heading}`, c.name, 'rows', c.id)).join('')}`).join('')}</section>` : '');
   function calculationsPanel(all, orphan = null) {
     const groups = [...all, ...(orphan ? [orphan] : [])].filter(c => c.calcs.length || c.calcNotes.length || c.comparison.length);
     if (!groups.length) return empty('Calculations', 'No calculation table is listed for this selection.');
     const notes = c => (c.calcNotes.length ? `<h4 class="ev-sub">Method notes <span class="ev-cnt"><span data-count>${c.calcNotes.length}</span></span></h4>${c.calcNotes.map(n => `${subHead(n.heading)}${noteMarkup(n.text, c.name, true)}`).join('')}` : '');
-    const calcs = c => (c.calcs.length || c.calcNotes.length ? `<section class="ev-grp" data-group>${rowTotal(c.calcs) ? moduleHead(c, rowTotal(c.calcs), 'calculation', 'calculations') : moduleHead(c, c.calcNotes.length, 'method note', 'method notes')}${c.calcs.map(e => `${subHead(e.label)}${e.notes.map(n => noteMarkup(n, c.name)).join('')}${e.tables.map(t => tableMarkup(t, `${c.name}: ${e.heading}`, c.name, 'rows')).join('')}`).join('')}${notes(c)}</section>` : '');
+    const calcs = c => (c.calcs.length || c.calcNotes.length ? `<section class="ev-grp" data-group>${rowTotal(c.calcs) ? moduleHead(c, rowTotal(c.calcs), 'calculation', 'calculations') : moduleHead(c, c.calcNotes.length, 'method note', 'method notes')}${c.calcs.map(e => `${subHead(e.label)}${e.notes.map(n => noteMarkup(n, c.name)).join('')}${e.tables.map(t => tableMarkup(t, `${c.name}: ${e.heading}`, c.name, 'rows', c.id)).join('')}`).join('')}${notes(c)}</section>` : '');
     return groups.map(c => calcs(c) + comparisonGroup(c)).join('');
   }
   const SEVERITY = {high: 3, medium: 2, low: 1};
@@ -248,7 +248,7 @@
       const word = severity < 0 ? '' : row.cells[severity].trim().toLowerCase(), level = Object.hasOwn(SEVERITY, word) ? SEVERITY[word] : 0;
       const meter = level ? `<span class="ev-meter" aria-hidden="true">${[1, 2, 3].map(n => `<i${n <= level ? ' class="f"' : ''}></i>`).join('')}</span>` : '';
       const fields = view.headers.map((header, at) => (at === title || row.cells[at] === '' ? '' : `<div><div class="ev-l">${esc(header)}</div><div class="ev-v">${at === severity ? meter : ''}${rich(row.cells[at])}</div></div>`)).join('');
-      return `<div class="ev-gap" data-line="${esc(row.line)}" data-hay="${hay(c.name, row.cells.join(' '))}"><div class="ev-gap-t">${icon('triangle-alert')}<span>${rich(row.cells[title])}</span></div><div class="ev-gap-f">${fields}</div></div>`;
+      return `<div class="ev-gap" data-line="${esc(row.line)}" data-lines="${esc(`${c.id}:${row.line}`)}" data-hay="${hay(c.name, row.cells.join(' '))}"><div class="ev-gap-t">${icon('triangle-alert')}<span>${rich(row.cells[title])}</span></div><div class="ev-gap-f">${fields}</div></div>`;
     }).join('')}</div>`;
   }
   // The model's scope limits as the calculation record states them, one counted line each, under a head that counts them.
@@ -262,7 +262,7 @@
     if (!groups.length && !models.length) return empty('Gaps', 'No gap is listed for this selection.');
     // Each module's gaps are cards under a head that counts gaps; its comparison ledger is a table as written (counted by row) under its own head that counts ledger rows.
     const gaps = c => (c.gaps.length ? `<section class="ev-grp" data-group>${moduleHead(c, gapWords(c) ?? gapsIn(c), 'gap', 'gaps')}${c.gaps.map(e => `${subHead(e.label)}${e.notes.map(n => noteMarkup(n, c.name)).join('')}${e.tables.map(t => gapCards(t, c)).join('')}`).join('')}</section>` : '');
-    const ledger = c => (c.ledger.length ? `<section class="ev-grp" data-group>${moduleHead(c, rowTotal(c.ledger), 'ledger row', 'ledger rows')}${c.ledger.map(e => `${subHead(e.label)}${e.tables.map(t => tableMarkup(t, `${c.name}: ${e.heading}`, c.name, 'rows')).join('')}`).join('')}</section>` : '');
+    const ledger = c => (c.ledger.length ? `<section class="ev-grp" data-group>${moduleHead(c, rowTotal(c.ledger), 'ledger row', 'ledger rows')}${c.ledger.map(e => `${subHead(e.label)}${e.tables.map(t => tableMarkup(t, `${c.name}: ${e.heading}`, c.name, 'rows', c.id)).join('')}`).join('')}</section>` : '');
     return groups.map(c => gaps(c) + ledger(c)).join('') + models.map(m => limitsGroup(m, input)).join('');
   }
   function registerGroup(title, n, inner) {
@@ -275,8 +275,8 @@
     }
     const c = all[0];
     if (!c || (!c.regs.length && !c.written.length && !c.notes.length && !c.regNotes.length)) return empty('Registers', 'This module has no register, table or method note to list.');
-    const out = c.regs.map(e => registerGroup(e.heading, e.tables.reduce((n, t) => n + t.rows.length, 0), `${e.notes.map(n => noteMarkup(n, c.name)).join('')}${e.tables.map(t => tableMarkup(t, `${c.name}: ${e.heading}`, c.name, 'table')).join('')}`));
-    if (c.written.length) out.push(registerGroup('Tables as written', c.written.length, c.written.map(w => `${subHead(w.heading)}${tableMarkup(w.table, `${c.name}: ${w.heading}`, c.name, 'table')}`).join('')));
+    const out = c.regs.map(e => registerGroup(e.heading, e.tables.reduce((n, t) => n + t.rows.length, 0), `${e.notes.map(n => noteMarkup(n, c.name)).join('')}${e.tables.map(t => tableMarkup(t, `${c.name}: ${e.heading}`, c.name, 'table', c.id)).join('')}`));
+    if (c.written.length) out.push(registerGroup('Tables as written', c.written.length, c.written.map(w => `${subHead(w.heading)}${tableMarkup(w.table, `${c.name}: ${w.heading}`, c.name, 'table', c.id)}`).join('')));
     if (c.notes.length || c.regNotes.length) out.push(registerGroup('Method notes', c.notes.length + c.regNotes.length, `${c.notes.map(n => `${subHead(n.heading)}${noteMarkup(n.text, c.name)}`).join('')}${c.regNotes.map(n => `${subHead(n.heading)}${noteMarkup(n.text, c.name, true)}`).join('')}`));
     return out.join('');
   }
