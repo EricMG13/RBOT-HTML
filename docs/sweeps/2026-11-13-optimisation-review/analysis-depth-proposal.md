@@ -2,8 +2,8 @@
 
 Proposal only. No code, test, run folder or method text was changed, and no model was called.
 Revision 3: adds the owner's two ideas (routing presets on the Advanced level; depth by limiting
-steps in every module except the critical ones) and is re-checked against `main` at `43b3513`, which
-holds PRs 103, 107, 108 and 113. PRs 110 and 111 are open; I read them at `e76625c` and `c532bb3`.
+steps in every module except the critical ones) and is re-checked against `main` at `4d52f32`, which
+holds PRs 103, 107, 108, 113 and 114. PRs 110 and 111 are open; I read them at `e76625c` and `c532bb3`.
 
 Three separate controls: **tier** (Lite, Full, Deep: which modules run), **routing** (which model
 and reasoning effort each module gets) and **depth** (how far a module that runs takes its analysis).
@@ -31,7 +31,7 @@ and reasoning effort each module gets) and **depth** (how far a module that runs
   USD 0.3 to 0.5 of 8.62; Extended adds 6 to 16 minutes and USD 0.5 to 1.5; Mixed costs about USD 11
   to 13 a run. The tier remains the large lever.
 - Brief is a small prize (5% to 13% of a run, inside unknown run-to-run variation) for a scope file,
-  three check changes, page statements and paid proof. Extended and the Balanced change are cheap.
+  three check changes, page statements and most of an estimated USD 85 to 100 of paid proof. Extended and the Balanced change are cheap.
   Decide whether Brief is worth building at all (question 15).
 - Build order: the critical list and the record; the Balanced change; Extended; Brief for two
   modules if wanted; Mixed last, after one paid Mixed against Balanced comparison.
@@ -91,6 +91,8 @@ report selector, chart and owner table, the ESG tables
 - Extended uses the methods' own trigger words, as `DEEP_DEBATE_BLOCK` does for CP-6. CP-2's Deep
   Synthesis has no switch today; Extended adds one.
 - An Extended block must fit the same ceilings: CP-2's Deep Synthesis block is checked per pathway.
+  `earnings_update` has under 700 characters left once PR 111 lands (coordinator's measurement), so
+  neither block may add net text there.
 - Standard sends no block, so today's instruction files and their test pins do not change.
 - Never a turn limit, write limit or output limit: each cuts a module off instead of shortening it.
 
@@ -124,6 +126,8 @@ USD 0.2. The shares are assumptions, and the register cut has since changed the 
 - CP-OS states the depth to the reader from the run record: one sentence on Overview, and per module
   on the Modules page what was not run. Modules do not state it: CP-OS refuses a limitation an earlier
   handoff already states. A module adds a limitation only where a skipped step changes its conclusion.
+- A forecast figure blanked for a negative-cash year (PR 114) is missing by rule, not by depth, and
+  Changes must not assign it the depth cause.
 - Changes (CP-8) still compares runs of different depth; a Brief refresh after a Standard run is the
   main use. The pack gains both depth maps. An item one run left out by depth is listed once as "not
   produced at this depth", under a seventh cause `Depth setting`, never as a change at the issuer.
