@@ -5,10 +5,12 @@ at `d941eef`. Predecessor folders were read, not changed. `~/Documents/OP Router
 
 ## Bottom line
 
-One module that every run depends on, Financial foundation (CP-1), still runs on a short project-written
-instruction instead of the older full method. Three older modules were never brought into this project
-at all: sector review, issuer monitoring and email intake. Five were retired or replaced on purpose and
-are not missing. The other 19 analytical modules are installed and are sent their full method.
+One module that every run depends on, Financial foundation (CP-1), still runs on a stand-in instead of
+the older full method. Three older modules were never brought into this project at all: sector review,
+issuer monitoring and email intake. Eight were retired or replaced on purpose and are not missing. The
+other 19 analytical modules are installed and are sent their full method. Seven modules that the June
+Credit Operating System ran on their own run here only as a part of another module, with no launch and
+no page of their own (see the crosswalk below).
 
 "Installed" here means two things the code shows: CP-OS can order and launch the module (it has an entry
 in the routing table `_SELECTED`, `src/deploy_workflow/owners/cpos_launch.py:154-273`, and sits in at
@@ -20,7 +22,7 @@ older method, not a short stand-in.
 | (a) Installed on the full method | 19 | CP-0, CP-1A, CP-1B, CP-1C, CP-1D, CP-2, CP-2A, CP-2D, CP-2E, CP-2G, CP-2H, CP-3, CP-3C, CP-3D, CP-4, CP-4C, CP-5, CP-6, CP-DR |
 | (b) Launchable, but on a short stand-in | 1 | CP-1 |
 | (c) In an older package, not listed or launchable here | 3 | Sector review (CP-SR), Issuer monitoring (CP-MON), Email intake (CP-EMAIL) |
-| (d) Retired or replaced on purpose | 5 | CP-MEMO, the old CP-8 post-mortem, the CP-MODEL workbook, the Lite screens (CP-L10 to CP-L40), CP-PARSE |
+| (d) Retired or replaced on purpose | 8 | CP-MEMO, the old CP-8 post-mortem, the CP-MODEL workbook, the Lite screens (CP-L10 to CP-L40), CP-PARSE, and the Credit Operating System's report renderer (CP-RENDER), appendix parser (CP-EXTRACT) and data store (CP-DB) |
 
 PR 93 (the Deploy V method corrections) is merged, and it carried PR 83's change with it (PR 83 itself
 was closed, not merged). So nothing in this file is waiting on an open pull request. The only open one,
@@ -33,7 +35,7 @@ parts of the workflow read its output and must be re-proved.
 
 | Code | Plain name | Status | What it is for | Who would use the result | Where its method is | What installing it needs | Size |
 |---|---|---|---|---|---|---|---|
-| CP-1 | Financial foundation | (b) stand-in | Answers "what are the issuer's reported numbers, on a consistent basis?" The full method adds what the short text lacks: a fixed set of credit metrics, a register of every normalisation, a register of conflicting definitions (for example two versions of EBITDA), debt on balance-sheet carrying value, the reporting perimeter, lease and interest classification, debt rate terms, and a trend table across periods | Every later module; the Forecast page, the charts, the Overview figures and the Changes page read its tables | `caos-databricks/vendor/deploy-v/skills/cp-1-canonical-data-foundation` at `dfff264` (the corrected "r14" text; skill 23 KB, steps 43 KB). Deploy V `c4d2e35` holds the earlier version (20 KB and 36 KB). Today's text is `prompts/CP-1.md`, 2.5 KB | Method text; keep this project's period, chart and post-balance-sheet tables; adapt the net debt check; an owner decision on debt basis (the method says carrying value governs, this project's net debt table asks for gross principal); its own paid test run | Large |
+| CP-1 | Financial foundation | (b) stand-in | Answers "what are the issuer's reported numbers, on a consistent basis?" The full method adds what the short text lacks: a fixed set of credit metrics, a register of every normalisation, a register of conflicting definitions (for example two versions of EBITDA), debt on balance-sheet carrying value, the reporting perimeter, lease and interest classification, debt rate terms, and a trend table across periods | Every later module; the Forecast page, the charts, the Overview figures and the Changes page read its tables | `caos-databricks/vendor/deploy-v/skills/cp-1-canonical-data-foundation` at `dfff264` (the corrected "r14" text; skill 23 KB, steps 43 KB). Deploy V `c4d2e35` holds the earlier version (20 KB and 36 KB). Today's text is 26 KB: `prompts/CP-1.md` (2.5 KB) plus five step texts (24 KB) written for the earlier runtime that returned JSON (`cpos_launch.py:163`, `:291`, `:2128-2129`) | Method text; keep this project's period, chart and post-balance-sheet tables; adapt the net debt check; an owner decision on debt basis (the method says carrying value governs, this project's net debt table asks for gross principal); its own paid test run | Large |
 | CP-SR | Sector review | (c) not listed | Answers "what is happening in this sector, and what does it mean for credits in it?": sector drivers, a comparison table across issuers, early-warning thresholds. Not about one issuer | Would give Fundamental credit, Peer benchmark and Downside their sector context; no library page shows a sector today | `~/Documents/Modular OS/CP-SR/` (June 2026, version 1.0). Deploy V folded it into Research questions: its skill says it "Replaces CP-SR" and keeps a standalone sector study (`Deploy V/skills/cp-dr-deep-research/SKILL.md:128-131`) | A way to start a run with no issuer (today Research questions requires Source readiness and Financial foundation first, `src/deploy_vii/methodology.json:107-112`); a sector entry in the library; web search, which is granted only on some model routes | Medium |
 | CP-MON | Issuer monitoring ("CreditPulse") | (c) not listed | Answers "what has happened to this issuer since we last looked?": collects news, rating actions, filings and market moves, scores each for importance, and routes alerts to the module it affects | Would feed Earnings changes, Downside, Security selection, Legal & covenants and the Committee; the nearest thing here is the Changes page, which compares two runs and does not watch for news | `~/Documents/Modular OS/CP-MON/` (June 2026, version 1.0). Not in Deploy V or any later package | Method text; a routing entry and a library page; a live news and market-data feed and a schedule, neither of which this workflow has | Large |
 | CP-EMAIL | Email intake | (c) not listed | Rules for using emails (broker notes, management updates, agent notices) as evidence: which module may use which kind of email, how much weight it carries, and when it goes stale | Would let Source readiness accept emails as sources for every module | `~/Documents/Modular OS/CP-MON/REF_CP-EMAIL_SourceRoutingMatrix.md` (June 2026, version 2.0); a July test is in `~/Documents/Co-Pilot Agents/assessment_cpemail_20260722/`. Not in Deploy V | A way to supply emails as run files; the rules added to Source readiness. It is a set of source rules, not a module with its own output | Medium |
@@ -41,11 +43,105 @@ parts of the workflow read its output and must be re-proved.
 | CP-8 (old) | Decision ledger and post-mortem | (d) replaced | Recorded each investment decision and later compared it with what happened, to calibrate the process. Needed three past decisions | Replaced by "Changes since the last run", which is installed (`cpos_launch.py:261-262`) and fills the Changes page | Deploy V `skills/cp-8-decision-ledger-post-mortem` (called CP-7 in June) | Nothing. Owner ruling: `AGENTS.md`; `METHODOLOGY-REVIEW.md:771-789` | — |
 | CP-MODEL (workbook) | Excel model export | (d) retired | Built an Excel workbook of the credit model | Replaced by the HTML Model, charts and calculation file, which are built by code, not by a model call (`cpos_launch.py:119`) | Deploy V `skills/cp-model` | Nothing. Owner ruling: Excel is an input format only (`AGENTS.md`; `METHODOLOGY-REVIEW.md:532-536`) | — |
 | CP-L10, L20, L23, L30, L40 | Lite screens | (d) replaced | Five quick screens: financial change, fundamental credit, liquidity sensitivity, market and recovery opportunity, legal capacity | Replaced by the Lite credit assessment pathway (Source readiness, Financial foundation, Business & governance, Fundamental credit, Downside; `contracts.py:78`). The one-page short snapshot (CP-L10's current text) stays wired but switched off (`contracts.py:74`, `:84`) | Deploy V `skills/cp-l10-financial-change-screen`; a copy is archived in `docs/reuse/selected-methods/skills/cp-l10-financial-change-screen/` and is not sent | Nothing, unless a quick liquidity, market or legal screen is wanted: the Lite pathway does not cover those three topics. Owner rulings: `METHODOLOGY-REVIEW.md:791-811` | — |
+| CP-RENDER | Report renderer | (d) replaced | Produced three committee documents: full committee report, IC summary, portfolio summary | Replaced by the issuer library pages. The library has no separate IC summary or portfolio summary | `Credit Operating System/Modular OS/README/MODULES_REFERENCE_v2.md:70` | Nothing by ruling (`AGENTS.md`: the separately delivered report is retired) | — |
+| CP-EXTRACT, CP-DB | Appendix parser and data store | (d) replaced | Read each module's Word output into a database | Replaced by Markdown handoffs and the run folder | `MODULES_REFERENCE_v2.md:69`, `:71` | Nothing | — |
 | CP-PARSE | Document preparation | (d) replaced | Sorted a document pack by evidence value, handled scans and awkward tables, and packaged the result before analysis | Replaced by the launcher, which lists, converts and pins the files itself; Source readiness is told this has been done (`cpos_launch.py:1793-1806`) | Deploy V `skills/cp-0-source-readiness/references/REF_CP-PARSE_STEPS.md`; archived here, not sent (`cpos_launch.py:155-158`) | Nothing by ruling. One thing lost: no scoring of which documents matter most, and no step for scanned pages. Not verified how the launcher treats a scanned PDF | — |
 
 Not counted above because no method was ever written for them, only a name and one paragraph
 (`~/Documents/Co-Pilot Agents/_PROPOSED/PROPOSED_MODULES.md:38-41`): portfolio risk aggregation
 (book-level concentration and limits) and an implied rating and default-probability scorecard.
+
+## Is the full Financial foundation method more robust than the current one?
+
+Yes as an analytical method; no as a checked output; the strongest version is the full method with this
+project's checks kept. Not proven by any run.
+
+| | Current (26 KB) | Full method (caos-databricks `dfff264`, 67 KB) |
+|---|---|---|
+| Written for | Mostly the earlier JSON runtime: "Every `amount` is a JSON number", "the schema or the validator enforces each one" (`src/deploy_vii/live/prompts.py:766` onward). This transport is Markdown, so the model must work out which rules still apply. This is the same fault PR 93 removed from Source readiness and Refinancing & LME | Markdown handoffs, 13 ordered steps |
+| Metrics | Whatever the run's tables ask for; no fixed list | A fixed set (leverage, coverage, cash flow, liquidity, margin, growth), each with formula, both operands and their sources, period, and one of eight calculation statuses (`REF_CP-1_STEPS.md:170-195`) |
+| Definitions | No register | A definition-conflict register that must either log each conflict (EBITDA, debt, free cash flow, capex, net debt) or state that there is none (`:198-222`) |
+| Adjustments | Reported versus calculated kept apart; an expense reconciliation | A normalisation register, a constructed-period register (for example last twelve months) and a pro forma adjustment register |
+| Debt | Gross principal in the net debt table (`cpos_launch.py:674-693`) | Balance-sheet carrying value governs; leases kept apart from financial debt; rate and amortisation terms per facility |
+| Reasoning | Prose may not contain a figure (a rule of the JSON runtime) | Every conclusion as evidence, then mechanism, then creditor consequence; the strongest contrary evidence; disagreements reconciled or kept as gaps |
+| Checked by code | Yes: net debt must equal gross debt less cash to the unit, cash must match the liquidity table, periods must be in one form, chart tables, post-balance-sheet adjustments (`cpos_launch.py:674-725`) | No: it relies on helper scripts (credit metrics, completeness check) that this project does not run, and its last step feeds the retired Excel workbook |
+
+So the full method asks the right questions and the current one has the better guard rails. Installing
+it means: send the full text, drop its workbook step, keep this project's tables and checks, and settle
+the debt basis. The June Credit Operating System version of this module (13 step files) is the ancestor
+of the same text; Deploy V added the workbook step and caos-databricks the lease, interest and
+debt-term corrections.
+
+## Why eight installed modules have no run on their current texts
+
+They have been run, but not since their texts were corrected on 13 November.
+
+- All of them ran live on 9 and 10 November in the two all-module TransDigm runs. On 10 November 18 of 19
+  modules were accepted. Earnings changes ran; Earnings quality was Restricted; Peer benchmark, Ratings &
+  triggers, Market-implied risk and Recovery & fulcrum were Blocked, each for a missing source only (no
+  peers, no rating reports, no market data, no legal documents) (`VERIFICATION.md:908-921`).
+- PR 93 changed the method text of 20 of 22 modules on 13 November. Every paid run since then has been a
+  Full credit assessment (`docs/rulings/2026-11-13-tdg-full-copilot-sol-rerun.md`,
+  `-high.md`; `runs/tdg-copilot-sol-medium-vs-high.md`). That preset has 13 modules and does not include
+  these eight (`src/deploy_vii/contracts.py:53-56`). They sit in the Earnings update, Relative value,
+  Covenant & refinancing and Distressed presets (`:57-69`), none of which has been run since.
+- The test pack is the second reason. The TransDigm runs use five filings, so four of the eight would
+  again return "no source" whatever the method says. The 99-document TransDigm pack from 4 November
+  (`~/Documents/cp-os/runs/TDG-20261104-full5/`) has the credit agreement, peers and bond prices they need.
+
+One all-module run on the 99-document pack would exercise all eight on their current texts. It is a paid
+run and needs your instruction and a cap; the 10 November run cost USD 10.32 on five filings.
+
+## Crosswalk to the Credit Operating System (June 2026)
+
+`~/Documents/Credit Operating System/` holds `Modular OS/` (24 modules, 3 infrastructure parts and one
+cross-module reference; `README/MODULES_REFERENCE_v2.md`) and `caos/` (an application that runs the same
+24 as agents; `caos/backend/agents/`, `caos/backend/governance/module_registry.json`). Its codes are not
+this project's codes: seven letters moved when Deploy V regrouped the modules. Matched by the step-file
+names, which carry over one for one.
+
+| Credit Operating System | What it is for | Here | Status here |
+|---|---|---|---|
+| CP-0 Source readiness | Are the documents good enough to start? | CP-0 | (a) |
+| CP-X Planner and router | Which modules run, in what order | CP-OS | Installed as the orchestrator |
+| CP-1 Canonical data foundation | Reported numbers on one basis | CP-1 | (b) stand-in |
+| CP-1A Business and transaction fact pack | What the company does and what the deal is | CP-1A | (a) |
+| CP-1B Earnings delta | What moved since last period | CP-1B | (a) |
+| CP-1C Peer benchmark | How it compares with peers | CP-1C | (a) |
+| CP-2 Fundamental credit synthesizer | The credit view | CP-2 | (a) |
+| CP-2B Downside pathway | What breaks first and how far it falls | CP-2A | (a) |
+| CP-2C Event and catalyst register | Dated events that could move the credit | Part of CP-2A (`cpos_launch.py:193`) | Inside a parent |
+| CP-2D Governance and sponsor score | Will owners and management act for or against creditors? | Part of CP-1A (`:169`) | Inside a parent |
+| CP-2E Liquidity and cash-flow bridge | Is there enough cash, and for how long? | CP-2D | (a) |
+| CP-2F Macro, FX and hedging | Exposure to rates, currencies and input costs | CP-2E | (a) |
+| CP-3 Relative value and security selection | Is the instrument cheap or dear? | CP-3 | (a) |
+| CP-3B Recovery and instrument preference | Recovery by instrument; which one to own | Part of CP-3 (`:219-220`) | Inside a parent |
+| CP-3C Portfolio fit and position sizing | How much to hold, within limits | Part of CP-3 (`:221-222`) | Inside a parent; no portfolio input supplied |
+| CP-3D Refinancing and LME risk | Can it refinance; is a liability exercise likely? | CP-3C | (a) |
+| CP-4 Legal and covenant interpreter | What the documents permit | CP-4 | (a) |
+| CP-4C Covenant capacity calculator | Headroom under each test and basket | Part of CP-4 (`:241-242`) | Inside a parent |
+| CP-5B Evidence trace validator | Does every claim trace to a source? | CP-5 | (a) |
+| CP-5 Research integrity QA | Audit of the whole run across eight lanes | Part of CP-5 (`:254`) | Inside a parent |
+| CP-6A IC debate | Bull and bear case, action bias | CP-6 | (a) |
+| CP-6E Portfolio debate | Final portfolio posture and sizing | Part of CP-6 (`:259`) | Inside a parent; no portfolio input supplied |
+| CP-SR Sector review | Sector-level credit review | None | (c) |
+| CP-MON CreditPulse | Continuous issuer monitoring and alerts | None | (c) |
+| REF_CP-EMAIL | Rules for using emails as evidence | None | (c) |
+| CP-RENDER | Committee report, IC summary, portfolio summary | Issuer library | (d) |
+| CP-EXTRACT, CP-DB | Parse module output into a database | Markdown handoffs, run folder | (d) |
+
+"Inside a parent" follows Deploy V's own catalogue, which says of each: "Alternate command for the
+complete owner workflow; no separate artifact"
+(`Deploy V/skills/cp-os-credit-os/references/CREDIT_OS_V_MODULE_CATALOG_v2.json`, `superseded_module_ids`).
+The step text is sent in full, but the part cannot be launched alone, has no pathway entry and no page
+of its own, and its output is whatever the parent chooses to write in one handoff. If you want any of the
+seven back as its own module, each is small: a routing entry, a library name and a preset line, since
+the method text is already here. The library already names three sub-parts of Legal & covenants this way
+(`src/deploy_workflow/credit_os_chips.py:73-75`) without their being launchable.
+
+Modules this project has that the Credit Operating System did not: Earnings quality (CP-1D), Forward
+credit model (CP-2G), Ratings & triggers (CP-2H), Market-implied risk (CP-3D), Recovery & fulcrum (CP-4C),
+Research questions (CP-DR), Changes since the last run (CP-8).
 
 ## Installed, but one part cannot work yet
 
@@ -92,9 +188,13 @@ email intake (needs a way to supply emails; small once that exists).
 
 - No model was run. "Installed on the full method" means the instruction that would be sent contains the
   full text; it says nothing about output quality.
-- Since PR 93, only the 13 modules of the Full credit assessment have been run on the corrected texts
-  (`runs/tdg-copilot-sol-medium-vs-high.md`). Earnings changes, Peer benchmark, Earnings quality,
-  Liquidity, Ratings & triggers, Refinancing & LME, Market-implied risk and Recovery & fulcrum have not.
+- The crosswalk was matched on step-file names and counts, not by comparing the step texts line by line;
+  whether a part inside a parent is as deep as its June standalone version was not checked.
+- In `Credit Operating System/caos/` I read the agent folder names, the module registry and the headings
+  of `docs/CAOS_Master_Blueprint.md`, not the agent code. The repository has no commit, so no revision
+  can be cited for it.
+- The comparison of the two Financial foundation methods is of instruction texts only; no output of the
+  full method in this project exists.
 - The older packages were read by folder listing and by the opening of each module's main file, not
   line by line: `~/Documents/Modular OS`, `Agent Files`, `prompts`, `Co-Pilot Agents`. A module that
   exists only inside another file there could have been missed.
