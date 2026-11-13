@@ -215,3 +215,29 @@ def test_story_duplicates_link_key_has_an_index(tmp_path: Path) -> None:
         "EXPLAIN QUERY PLAN SELECT story_id FROM story_duplicates WHERE link_key = ?", ("k",)
     ).fetchall()
     assert any("idx_story_duplicates_link_key" in row["detail"] for row in plan)
+
+
+def test_a_storys_own_source_is_never_recorded_as_its_duplicate(tmp_path: Path) -> None:
+    from datetime import timedelta
+
+    from deploy_workflow.signal.feeds import Entry
+    from deploy_workflow.signal.store import add_story
+
+    db = open_db(tmp_path)
+    for n in (1, 2):
+        sid = propose_source(db, f"S{n}", "news", f"https://s{n}.example/feed", "tester")
+        set_source_state(db, sid, "approved")
+    t = datetime(2026, 11, 13, 9, tzinfo=UTC)
+    later = t + timedelta(hours=2)
+    title = "Authority opens in depth review of Northwave"
+    assert add_story(db, 1, Entry(title, "https://e.org/l1", t, ""), t) == "new"
+    assert add_story(db, 2, Entry(title, "https://e.org/l2", later, ""), later) == "duplicate"
+    again = Entry("Completely different words appear now", "https://e.org/l2", later, "")
+    assert add_story(db, 1, again, later) == "new"
+    assert db.execute("SELECT count(*) FROM stories").fetchone()[0] == 2
+    assert db.execute("SELECT count(*) FROM story_duplicates").fetchone()[0] == 1
+    own = db.execute(
+        "SELECT count(*) FROM story_duplicates d JOIN stories s ON s.id = d.story_id"
+        " WHERE d.duplicate_source_id = s.source_id"
+    ).fetchone()[0]
+    assert own == 0

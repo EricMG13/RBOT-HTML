@@ -288,8 +288,8 @@ def _earliest_match(
         " WHERE link_key = ? OR (title_key = ? AND source_id != ?)"
         " UNION ALL"
         " SELECT s.id, s.published_at, 1 AS same_link FROM story_duplicates d"
-        " JOIN stories s ON s.id = d.story_id WHERE d.link_key = ?",
-        (lkey, lkey, tkey, source_id, lkey),
+        " JOIN stories s ON s.id = d.story_id WHERE d.link_key = ? AND s.source_id != ?",
+        (lkey, lkey, tkey, source_id, lkey, source_id),
     ).fetchall()
     long_title = len(tkey.split()) >= MIN_TITLE_WORDS
     found: list[tuple[datetime, int]] = []
