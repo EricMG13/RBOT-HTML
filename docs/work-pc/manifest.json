@@ -10,7 +10,7 @@
   "AGENTS.md": "b2914a4d4c33579aab6e165d80541c18a97863e2",
   "METHODOLOGY-REVIEW.md": "8679a6e28193e09d2dab45e21ec4a9d46ce164a3",
   "README.md": "1fd3352f4b147b38f0a7f73a1bf2be3bb67c7f95",
-  "VERIFICATION.md": "dc31985cc6eb3b15a1cfa6c7158a861c2e87a13f",
+  "VERIFICATION.md": "ba4d6ede379957f40e2baa7743e80ead04665c75",
   "apps/issuer-library/README.md": "f776e07a39ac8965f66d2256054d61bfa2214f09",
   "apps/issuer-library/credit_os/SOURCE.md": "a88ec9a069c4e0b38946ab497a97873ca1a81e88",
   "apps/issuer-library/credit_os/catalog.json": "f8b0cedb8da041c14694bc7b971d71ea48c99697",
@@ -71,7 +71,7 @@
   "apps/issuer-library/credit_os/web/index.html": "9cf9acfa44f93ca1250b287784e932442b45517d",
   "apps/issuer-library/credit_os/web/reader.js": "78e91ab1f54c03cec45f7ceda9214b60b26bbe12",
   "apps/issuer-library/credit_os/web/reader.test.cjs": "4f85839390418bb0e5d84e9b7463673fe75765f8",
-  "apps/issuer-library/credit_os/web/screen.css": "38270ad5f79766dd4743ffd8057ce9222c23f188",
+  "apps/issuer-library/credit_os/web/screen.css": "b12401671ad53fe35a08d23db4f904f8a6bb29d6",
   "apps/issuer-library/credit_os/web/screen.js": "3537f960adf46cd7c6dcdd6fe85f4d7415ed55b0",
   "apps/issuer-library/credit_os/web/screening.js": "3ca6f2139b4618da199e4c37ac2d378bcce07a6f",
   "apps/issuer-library/credit_os/web/shapes.js": "cfdae2e4ac0b9acd57969df5efc8625f924ffa85",
@@ -846,7 +846,7 @@
   "tests/test_issuer_library_packaging.py": "d0ad558c241f431dd0530b5130eaf4e0c7b129d6",
   "tests/test_library_changes_browser.py": "9a4a85a112df9e9fd84491bbcaf3eaa0877b7bae",
   "tests/test_library_index.py": "082f2adb4780d202d84212913cb80b9c6b831f9a",
-  "tests/test_library_page_browser.py": "151b40f9545111d8a3479490e2e24fddf9c371f9",
+  "tests/test_library_page_browser.py": "624d82053be2483fefbcb1deccdfb350e58b09d5",
   "tests/test_library_reader_refs.py": "f64cac9908bf195cf1b41a85e08690bb1ef349a8",
   "tests/test_model_shell_browser.py": "0275f001bcb7360726dc07bb234991236c25a1cc",
   "tests/test_prose_checks.py": "a12fd0f0fe27b0f8ece678c842d4d92c1036cdfa",
@@ -876,6 +876,6 @@
   "tools/work_pc_delta.py": "fa5e9e81c534657f593cb8752a94de10cba0eead",
   "uv.lock": "7a4f05aeff999e9284ec29f34acacdd2619d64b1"
  },
- "head": "0d863b7a0253e35d2e220809c348b4b063747778",
- "head_date": "2026-11-13T21:26:25Z"
+ "head": "b96e61f440cc8a280a69999399017ac85340f270",
+ "head_date": "2026-11-13T21:31:14Z"
 }
