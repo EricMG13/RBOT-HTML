@@ -4,6 +4,17 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-13 — The ESG analysis is one named part of the Rates, FX & hedging page and is named in the run-start catalogue (branch `claude/wonderful-booth-d512b9`, base `8e3954a`)
+Scope: presentation only, offline; no provider or model call; no change to method texts, module instructions or anything a model is sent. New-format handoffs only; an earlier-format page is unchanged.
+- Change: on a new-format module page, every section whose heading leads with `T2G.<n>` (any heading level) is drawn in one part, "Environmental, social and sustainability (ESG)", where the first such section stood, with one rail entry. Finding sections are drawn as before; a registers section (heading holds "register" or "ledger") draws its heading and tables there and stays in Evidence as written. The label is the only new text. The run-start module list describes the module as also covering ESG.
+- Not changed, by ruling: the module name `Rates, FX & hedging` (sent to every module, written in Basis lines, checked by `changes_check.py`); the CP-2E `purpose` in `src/deploy_vii/methodology.json` (it reaches a model request through `src/deploy_vii/live/prompts.py`), so that catalogue entry still describes macro, FX and hedging only. Owner's call.
+- Tests (written first, red then green; expected values by hand): `isEsgHeading` key; both real-handoff fixtures (`tests/fixtures/esg/`, `###` and `####` headings) give one rail entry, eight sections in handoff order, no `T2G.` text, rates sections untouched, a registers table drawn and still in Evidence; a handoff with no ESG heading has no part. Gates, each exit 0: node tests 795 passed; `test_context_form.py`, `test_credit_os_store.py`, `test_credit_os_catalogue.py`, `test_issuer_library_packaging.py` 330 passed; quality gate 0 findings. `tests/test_library_page_browser.py` 431 passed, 1 skipped, run by the implementer before its last two edits (a form string and a docstring), not re-run after.
+- Review: one task review (mx-precise), pass, no High or Medium; its probe showed pages with no ESG heading byte-identical to the base and every non-ESG part of the two fixtures identical. One Low (a weak rail assertion) fixed in the same batch. No separate whole-branch review, confidence-review or rewrite-tournament run for this 26-line page change.
+- Fidelity check, scope: TWO real runs (`tdg-full-copilot-sol-001-resume`, `###` headings; `tdg-full-copilot-sol-high-001-resume`, `####` headings; TransDigm, as of 30 September 2024, new format), copied from another session's scratch workspace, library built with `update_library.py`, read in Chrome at 1440 px. Every cell of the eight ESG tables in a reader-visible column is on the page as the store parsed it (120 and 117 cells; Source and Evidence ID columns hidden, as on every findings page), except two gap titles in the first run ("G8 — …", "G9 — …") that the existing identifier rule replaces with an "In Evidence" link. The comparison used the store's parsed cells, not an independent read of the Markdown; the independent read is the node test's one row per fixture.
+- Reader check, scope: the same two runs, the ESG part only, read by the controller against one September VMO2 screenshot (analytical appendix register table). Verdict: pass with issues. Holds: the analysis is found by name from the page rail and `#CP-2E/esg`; sections keep the module's own titles; no source, id or step code on the page. Issues, both older than this change: the first ESG table (a status list) draws its row label in a zero-width column, one letter per line; section titles are in the case the module wrote (lower case in the second run). Search for "ESG" does not find the part label (search reads section headings, not the rail).
+- Not verified: an earlier-format run (the only run under `runs/` is one); the Overview, Changes, Forecast and Evidence pages by eye; a T2G section with child sections; a T2G section under `## Calculations` or `## Gaps`; issuers other than TransDigm; browsers other than Chrome; the full Python suite.
+
+
 ## 2026-11-13 — Issuer library screens redrawn from a screen-to-component map; source references and audit material moved to Evidence (branch `claude/report-redesign-evidence`)
 Scope: presentation only, offline, base `517b9fb`, head `d47e3ba` before this entry; no provider or model call, no change to analysis, module instructions or the Python that builds `data.js` (no Python outside `tests/` changed; under `apps/` only the README and `fixtures/shape-key.json` beside the web files changed; under `tests/` 19 files changed, among them `test_library_reader_refs.py`, `test_cpos_launch.py`, `test_run_start_page.py`, `test_library_page_browser.py`, `test_library_changes_browser.py` and the `browser_probe_*.js` helpers, edited to match the new pages). Design: `docs/visualisations/2026-11-13-screen-component-map.md`, plan `docs/superpowers/plans/2026-11-13-library-redesign.md`. Rules applied: findings pages show findings and one trace control per paragraph, row or figure; source references, file names, hashes, ids, calculation ids, registers, gap ledgers and run codes are drawn only on the Evidence page and its drawer; text written for another module is drawn nowhere, search and drawer included; a run is named by period and pathway; nothing is computed or reworded (allowed: counts of listed items, the elapsed clock on Run activity, date display); motion only for live run state.
 Reviews: tasks 0 to 13 each had a task review and fix rounds (T1 1, T2 1, T3 3, T4 1, T5 2, T6 2, T7 1, T8 1, T9 2, T10 3, T11 1, T12 2, T13 1; the third rounds from a root-cause plan); two end batches closed 30 deferred Low items. Whole-branch review at `ac1164f`: changes needed, 2 High (trace controls dead on Forecast and Changes; search and the drawer reached text written for another module), 6 Medium, 8 Low. A simplification review recommended four rewrites and deletions and compacting the classifier answer key (same parsed JSON). Fix wave `7881b72..47b8f28`, round 2 `53f4070`, round 3 `d47e3ba` (an Evidence search hit is matched by module and line together); each round was re-reviewed, and the re-review of `d47e3ba` approved with no High or Medium finding open.
@@ -954,36 +965,3 @@ Owner: "Yes, run it", then "Merge now apply corrections on next PR". Ruling
   cost saving and the reads CP-3 and CP-5 now get are estimates from retained requests; the
   relaunch refusal for old folders was checked by instruction text (old `CP-0.md` lacks the new
   sentence), not by a launch.
-
-## 2026-11-10 — Names, not codes, on every library screen (branch `claude/names-not-codes`)
-
-Owner: "Remove all cp-IDs and methodology step IDs from user facing screens. Replace with module
-name or other." Display only (`apps/issuer-library/credit_os/web/`); routes, hrefs, download names,
-`data.js` and the retained handoffs are unchanged. Record: `docs/design/2026-11-10-screens-pass.md`,
-"Codes off the screen".
-
-- Change: module codes read as module names everywhere, including Evidence & audit, the Evidence
-  tab, the inspector, chips, the coverage strip, the reports' "Built from" table and each delivered
-  report with its own inspector. `CP-x.md` reads "<name> handoff" and `CP-x_RUNBOOK.md` "<name>
-  runbook". A method step id (`T4.10`, `T1D.1`, `T4.D1`, `T2G.*`, `T2E.3.r01`) becomes the step's
-  title from the same output, or "a method step" / "method steps" when there is none. A column of
-  bare step ids is dropped. Kept as written: register references (`C9`, `G1`, `GAP-001`), a bare
-  `T<n>` ("T2 Biosystems", "Tier 2 (T2)"), and the quoted issuer source excerpt.
-- Answer key (scratch crawler, not shipped): every in-app route plus the delivered reports. Text,
-  option text, title, aria-label, alt and placeholder; one inspector per page. Before: 22,649
-  module-code and 1,914 step-id hits over 349 routes of the four retained TDG runs. After
-  (`54d7763`): `counted 0`. After merging main (`715f6f5`): `counted 0` over 186 routes and three
-  runs. Main's methodology change now excludes `cpos-tdg-sol-medium-all-001` from the library ("not
-  on the current methodology").
-- Tests written first and seen failing (15 static, 3 browser). On the merged tree: `node --test`
-  static + calendar 125 pass; `tests/test_library_page_browser.py` 21 passed; CI fast pytest list
-  1471 passed, 7 deselected; quality gate 0 findings. All exit 0.
-- Review: task review and fix round (mx-precise), whole-branch review (mx-architect), one fix
-  wave and its re-review; implementation by mx-feature. Parked as latent, no retained instance:
-  - step titles taken from any short second cell;
-  - a step id cited beside another module's code takes this output's title;
-  - the `;` joiner merging two untitled clauses;
-  - `CP-0-A.md`-style names in the app.
-- Not verified: Windows and Edge, phone widths, a screen reader; live Run activity data; a Forecast
-  model with step ids; runbook names on a rendered page (string-level test only); any issuer other
-  than TDG.

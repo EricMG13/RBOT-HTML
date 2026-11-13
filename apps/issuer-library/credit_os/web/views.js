@@ -494,8 +494,8 @@ const drawn=(id,where)=>data[id].sections.filter((section,i)=>data[id].placement
 const DRAWN_PLACEMENTS=['view','reference','calculations','limits'];
 // The routable section anchors of an output: the sections a part draws (audit and consumed sections open from the audit list instead).
 const drawnAnchors=id=>{
-  const {rest,drawings,registers}=isNewFormat(data[id].sections)?newFormatSplit(id):{rest:DRAWN_PLACEMENTS.flatMap(where=>drawn(id,where)),drawings:[],registers:[]};
-  return new Set([...rest,...drawings,...registers].map(section=>`s-${section.line}`));
+  const {rest,drawings,registers,esg}=isNewFormat(data[id].sections)?newFormatSplit(id):{rest:DRAWN_PLACEMENTS.flatMap(where=>drawn(id,where)),drawings:[],registers:[],esg:[]};
+  return new Set([...rest,...drawings,...registers,...esg.map(entry=>entry.section)].map(section=>`s-${section.line}`));
 };
 // What a chip draws, from the chip dict as the library build emits it. An upstream chip with no module names register codes of the row's own module.
 // Only an issuer-page chip has an avatar (its source key); a module is named in the label, never coded.
@@ -674,15 +674,18 @@ const passageSections=id=>Object.values(readerPassages(data[id].sections)).filte
 const drawsSomething=section=>section.blocks.some(block=>block.type==='table'?block.rows.length>0&&window.Shapes.hiddenColumns(block.headers,'records',block.rows).length<block.headers.length:window.Shapes.blockRole(block.text)!=='note');
 // Ruling 2026-11-13: a table of a registers section whose shape is promoted (Shapes.promoted) is drawn on the page, in its shape's component; the table as written stays in Evidence.
 // A registers table of any other shape is Evidence only.
+const drawableTable=block=>block.type==='table'&&block.rows.length>0&&window.Shapes.hiddenColumns(block.headers,'records',block.rows).length<block.headers.length;
 const promotedTables=section=>section.blocks.filter(block=>block.type==='table'&&block.rows.length>0&&window.Shapes.promoted(window.Shapes.tableShape(block))&&window.Shapes.hiddenColumns(block.headers,'records',block.rows).length<block.headers.length);
 // Ruling 2026-11-12, decisions 1 and 2. A chart, map or timeline is drawn once, in its panel: the `Chart data:`, `Map:` or `Events:` section the store drew is `drawings`
 // (its numbers are the drawing's Table form, its prose the caption). A drawing section the store could not draw has no drawing, so it stays in the body with the
 // findings. A section that is not a passage, finding or drawing (its role says Evidence or nowhere) is in neither list.
 function newFormatSplit(id) {
   const held=new Set(passageSections(id)),drawnTables=new Set([...(data[id].charts||[]),...(data[id].chartGaps||[]),...(data[id].maps||[]),...(data[id].events||[])].map(drawing=>drawing.table));
-  const split={rest:[],drawings:[],registers:[]};
+  const split={rest:[],drawings:[],registers:[],esg:[]};
   for(const {section,role} of window.Evidence.classify(data[id].sections,data[id].placement)) {
     if(held.has(section)||!section.blocks.length)continue;
+    // The ESG analysis (T2G sections) is one named part of the page (newFormatParts): its finding sections and every drawable table of its registers sections. It is also listed in rest or registers as before, so the Overview is unchanged.
+    if(window.Shapes.isEsgHeading(plain(section.heading))&&(role==='registers'?section.blocks.some(drawableTable):['finding','drawing','passage'].includes(role)&&drawsSomething(section)))split.esg.push({section,role});
     if(role==='drawing'&&section.blocks.some(block=>block.type==='table'&&drawnTables.has(block.line)))split.drawings.push(section);
     else if(['finding','drawing','passage'].includes(role)&&drawsSomething(section))split.rest.push(section);
     else if(role==='registers'&&promotedTables(section).length)split.registers.push(section);
@@ -779,9 +782,9 @@ const findingSection=(id,section)=>{
   return `<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,newFormatTag(section))}${body}${link}</div>`;
 };
 // A registers section on the module page: its heading and the tables its shape promotes, each as its component. Its prose and its other tables are Evidence's.
-const registerSection=(id,section)=>{
+const registerSection=(id,section,tables=promotedTables(section))=>{
   const table=tableRenderer(id);
-  return `<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,newFormatTag(section))}${promotedTables(section).map(block=>table(block,section)).join('')}</div>`;
+  return `<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,newFormatTag(section))}${tables.map(block=>table(block,section)).join('')}</div>`;
 };
 const passageTexts=section=>(section?section.blocks.filter(block=>block.type==='text').map(block=>({text:block.text,line:block.line})):[]);
 // The rail's count is of the items the section draws, read from its own markup: a feed item, a limitation, and one per table row that has its trace control (a row held back or not drawn has none).
@@ -789,6 +792,7 @@ const drawnRows=html=>new Set([...html.matchAll(/data-evidence="([^"]*)"/g)].map
 const drawnOf=(html,rx)=>(html.match(rx)||[]).length;
 // The line of the first section that holds one of a drawing's tables: where in the handoff the drawing stood.
 const drawingLine=(id,drawings)=>Math.min(...(drawings||[]).map(drawing=>drawingSection(id,drawing.table)?.line??Infinity));
+const ESG_LABEL='Environmental, social and sustainability (ESG)';
 // A part is [anchor, label, html, count?]; `count` is the number of listed items the rail shows beside the label.
 function newFormatParts(id) {
   const out=data[id],passages=readerPassages(out.sections),texts=Object.fromEntries(Object.entries(passages).map(([key,section])=>[key,passageTexts(section)]));
@@ -809,13 +813,21 @@ function newFormatParts(id) {
   if(charts)body.push([drawingLine(id,[...(out.charts||[]),...(out.chartGaps||[])]),['charts','Charts',`<section class="part" id="charts"><h3>Charts</h3>${charts}</section>`]]);
   if(timeline)body.push([drawingLine(id,out.events),['timeline','Timeline',timeline]]);
   if(maps)body.push([drawingLine(id,out.maps),['maps','Maps',maps]]);
-  for(const section of newFormatSplit(id).rest) {
+  const split=newFormatSplit(id),inEsg=new Set(split.esg.map(entry=>entry.section));
+  for(const section of split.rest) {
+    if(inEsg.has(section))continue;
     const html=findingSection(id,section),rows=drawnRows(html);
     body.push([section.line,[`s-${section.line}`,plain(section.heading.replace(METHOD_CODE,'')),`<section class="part">${html}</section>`,...(rows?[rows]:[])]]);
   }
+  // The ESG analysis stands where its first section stood: one named part, each section under its own heading, in handoff order. A registers section draws its heading and every drawable table (its prose stays in Evidence).
+  if(split.esg.length) {
+    const html=split.esg.map(({section,role})=>role==='registers'?registerSection(id,section,section.blocks.filter(drawableTable)):findingSection(id,section)).join(''),rows=drawnRows(html);
+    body.push([split.esg[0].section.line,['esg',ESG_LABEL,`<section class="part" id="esg"><h3>${ESG_LABEL}</h3>${html}</section>`,...(rows?[rows]:[])]]);
+  }
   parts.push(...body.sort((a,b)=>(a[0]<b[0]?-1:a[0]>b[0]?1:0)).map(([,part])=>part));
   // The promoted registers follow the finding sections as one group, each under its section's own heading, in handoff order.
-  for(const section of newFormatSplit(id).registers) {
+  for(const section of split.registers) {
+    if(inEsg.has(section))continue;
     const html=registerSection(id,section),rows=drawnRows(html);
     parts.push([`s-${section.line}`,plain(section.heading.replace(METHOD_CODE,'')),`<section class="part part-register">${html}</section>`,...(rows?[rows]:[])]);
   }
