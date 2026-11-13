@@ -19,7 +19,7 @@ const Shapes = (() => {
     const own = chain[chain.length - 1] ?? '';
     if (chain.some(h => HIDDEN_HEADING.test(h))) return 'hidden';
     if (TOP_ROLE[chain[0]]) return TOP_ROLE[chain[0]];
-    if (chain[0] !== 'Findings') return 'hidden';
+    if (chain[0] !== 'Findings') return 'registers';                          // an unknown level-2 heading stays visible, in Evidence
     if (chain.length === 2 && PASSAGES.includes(own)) return 'passage';
     if (DRAWING_HEADING.test(own)) return 'drawing';
     if (chain.some(h => /^Analytical appendix/.test(h)) || REGISTER_HEADING.test(own.replace(METHOD_CODE, ''))) return 'registers';
@@ -29,12 +29,12 @@ const Shapes = (() => {
   // ---- columns ----
   const norm = header => String(header ?? '').trim().toLowerCase().replace(/_/g, ' ').replace(/\s+/g, ' ');
   const KIND_RULES = [
-    ['source', /^(source|evidence|source trace|source id|source locator|sha256)$/],
-    ['id', /^(scenario id|event id|trigger id|gap id|pathway row id|linked pathway row|id|calc id)$/],
+    ['id', /^id$|\bid$|^linked pathway row$/],                                  // before source: "Evidence ID" is an id
+    ['source', /^(sources?|evidence|sha256)\b/],
     ['intermodule', /^(supplied handoff|use in this module|effect on this module|downstream use|consumer|downstream module|receiving module|responsible module|command|required consumer action|consumer module id|escalation consequence|module)$|^consequence for cp-/],
     ['limitation', /limitation/],
     ['consequence', /creditor consequence|effect on the credit view/],
-    ['period', /^(?:(?:fy|cy|ltm|pf|[hq][1-4])\s*)?\d{4}\b/],
+    ['period', /^(?:(?:fy|cy|ltm|pf|[hq][1-4])\s*)?\d{4}[ae]?\b|^(?:fy|cy)\s*\d{2}[ae]?\b/],
     ['case', /\b(scenario|case|downside|upside|base|severe|moderate|stress)\b/],
     ['label', /^(line|metric|item|driver|exposure|from|to|question|gate item|decision driver|security group|rank|break)\b|\bmeasure$/],
   ];
@@ -75,7 +75,7 @@ const Shapes = (() => {
   }
 
   // ---- paragraphs ----
-  const NOTE = /^(Module status|Confidence is|Two method texts)\b|qa_status|committee_status|helper scripts?\b|\bSKILL\b/i;
+  const NOTE = /^(?:Module status|Two method texts)\b|^Confidence is \d|qa_status|committee_status|\bSKILL\b/;
   const blockRole = text => (NOTE.test(String(text ?? '').trim()) ? 'note' : 'prose');
 
   const promoted = shape => ['matrix', 'watch', 'dated'].includes(shape);

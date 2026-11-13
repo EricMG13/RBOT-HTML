@@ -73,3 +73,36 @@ test('columnKind and promoted', () => {
   for (const s of ['matrix', 'watch', 'dated']) assert.equal(Shapes.promoted(s), true);
   assert.equal(Shapes.promoted('statement'), false);
 });
+
+test('audit columns are hidden by pattern, not by exact name', () => {
+  const cp4 = ['Test', 'Test Type', 'Threshold', 'Current Basis', 'Formula', 'Headroom', 'Status', 'Limitation', 'Risk Mechanic', 'Credit Implication', 'Evidence ID'];
+  assert.deepEqual(Shapes.hiddenColumns(cp4, Shapes.tableShape(block(cp4, [cp4]))), [10]);
+  assert.equal(Shapes.columnKind('Evidence ID'), 'id');
+  assert.equal(Shapes.columnKind('Topic ID'), 'id');
+  assert.equal(Shapes.columnKind('Sources'), 'source');
+  assert.equal(Shapes.columnKind('Source / Clause'), 'source');
+  assert.equal(Shapes.columnKind('Evidence'), 'source');
+  assert.equal(Shapes.columnKind('Resource'), 'text');
+});
+
+test('an unknown level-2 heading and its children are registers; only the explicit list is hidden', () => {
+  assert.equal(Shapes.sectionRole(['Appendix'], 'audit'), 'registers');
+  assert.equal(Shapes.sectionRole(['Method notes', 'Sub'], 'audit'), 'registers');
+  assert.equal(Shapes.sectionRole(['Request'], 'audit'), 'hidden');
+  assert.equal(Shapes.sectionRole(['Appendix', 'Cross-Module Handoff Register'], 'audit'), 'hidden');
+});
+
+test('period labels with actual/estimate suffixes or two-digit years are periods', () => {
+  for (const h of ['FY2024A', 'FY2025E', 'FY24', 'FY23', 'FY2024']) assert.equal(Shapes.columnKind(h), 'period', h);
+  assert.equal(Shapes.tableShape(block(['Line', 'FY2024A', 'FY2025E', 'Source'], [['a', '1', '2', 's']])), 'statement');
+  assert.equal(Shapes.tableShape(block(['Line', 'FY24', 'FY23', 'Source'], [['a', '1', '2', 's']])), 'statement');
+  assert.equal(Shapes.tableShape(block(['Metric', 'FY24', 'FY23', 'Definition', 'Source'], [['a', '1', '2', 'd', 's']])), 'metric');
+});
+
+test('notes: SKILL is case-sensitive, helper scripts alone is prose, "Confidence is" needs a number', () => {
+  assert.equal(Shapes.blockRole('Management has shown skill in pricing aftermarket parts, which supports margin.'), 'prose');
+  assert.equal(Shapes.blockRole('Helper scripts were not run.'), 'prose');
+  assert.equal(Shapes.blockRole('Confidence is low that the 2026 maturities refinance at current spreads.'), 'prose');
+  assert.equal(Shapes.blockRole('Confidence is 61 out of 100, Medium.'), 'note');
+  assert.equal(Shapes.blockRole('The SKILL output profile defines the table.'), 'note');
+});
