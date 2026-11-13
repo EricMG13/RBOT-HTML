@@ -2537,12 +2537,12 @@ INTER_MODULE_TABLE = """
 
 | Exposure | Effect | Consequence for CP-1 |
 | --- | --- | --- |
-| Revolver step-down | Cushion narrows over time. | Passed to the cash model as a stated constraint. |
+| Revolver step-down | Cushion narrows over time. | Passed on as a stated constraint. |
 """
 
 
 def with_inter_module_table(text: str) -> str:
-    """The synthetic CP-2 handoff with a findings table that holds a column written for another module."""
+    """The synthetic CP-2 handoff with a findings table holding an inter-module column."""
     marker = "\n## Calculations"
     assert marker in text
     return text.replace(marker, INTER_MODULE_TABLE + marker, 1)
@@ -2703,3 +2703,53 @@ def test_a_search_hit_in_an_audit_section_is_named_by_its_module_and_evidence_ta
     assert all(re.search(r"^#W-Evidence/sources\?", hit["href"]) for hit in sources), sources
     assert any("Fundamental credit Sources" in hit["label"] for hit in sources), sources
     assert any(re.search(r"[?&]r=\d+", hit["href"]) for hit in sources), sources
+
+
+DRAWER_DIALOG_PROBE = """
+(async () => {
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const drawer = document.getElementById('inspector');
+  const outside = () => [...document.querySelectorAll(
+    'a[href],button,input,select,textarea,[tabindex]:not([tabindex="-1"])'
+  )].filter(el => !el.closest('[inert]') && !drawer.contains(el)
+    && !el.closest('#drawer-backdrop'));
+  const ready = () => document.querySelector('#content [data-paragraph]');
+  for (let i = 0; i < 200 && !ready(); i++) await sleep(50);
+  const trigger = document.querySelector('#content [data-paragraph]');
+  const seen = {before: {inert: document.querySelectorAll('[inert]').length}};
+  trigger.focus();
+  trigger.click();
+  await sleep(600);
+  seen.open = !drawer.hidden;
+  seen.role = drawer.getAttribute('role');
+  seen.modal = drawer.getAttribute('aria-modal');
+  seen.name = drawer.getAttribute('aria-label');
+  seen.focusIn = drawer.contains(document.activeElement);
+  seen.canvasInert = document.getElementById('canvas').inert;
+  seen.railInert = document.querySelector('.rail').inert;
+  seen.outside = outside().length;
+  document.activeElement.dispatchEvent(
+    new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}));
+  await sleep(600);
+  seen.closed = drawer.hidden;
+  seen.after = {inert: document.querySelectorAll('[inert]').length};
+  seen.focusBack = document.activeElement === trigger;
+  const out = document.createElement('pre');
+  out.id = 'probe';
+  out.textContent = JSON.stringify(seen);
+  document.body.appendChild(out);
+})();
+"""
+
+
+def test_the_trace_drawer_is_a_modal_dialog_that_makes_the_page_behind_it_inert(tmp_path):
+    """Review L6: role=dialog, aria-modal, an accessible name; nothing behind it can be tabbed to
+    while it is open; focus moves in on open and returns to the control on Escape."""
+    page = synthetic_workspace(tmp_path, with_chart_and_event)
+    route = f"#CP-2/head?c={NEW_FORMAT_RUN}"
+    seen = read_probe(page, route, 1280, DRAWER_DIALOG_PROBE)
+    assert seen["before"]["inert"] == 0, seen
+    assert seen["open"] and seen["role"] == "dialog" and seen["modal"] == "true", seen
+    assert seen["name"] == "Evidence inspector" and seen["focusIn"], seen
+    assert seen["canvasInert"] and seen["railInert"] and seen["outside"] == 0, seen
+    assert seen["closed"] and seen["after"]["inert"] == 0 and seen["focusBack"], seen

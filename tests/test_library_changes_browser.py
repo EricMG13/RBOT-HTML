@@ -356,3 +356,18 @@ def test_a_trace_control_opens_the_drawer_on_every_findings_route(tmp_path):
     assert "Total debt / EBITDA" in seen["changes"]["title"], seen["changes"]
     assert seen["forecast"]["hash"].startswith("#W-Forecast/run-charts?"), seen["forecast"]
     assert "e=" in seen["forecast"]["hash"], seen["forecast"]
+
+
+def test_report_history_links_what_changed_only_for_a_run_with_a_comparison_record(tmp_path):
+    """Review L7: an earlier listed run of the same pathway is not a comparison; the link is drawn
+    only where the run's own record holds one."""
+    two_runs(tmp_path)
+    run_of(
+        tmp_path, "latest", as_of="2025-06-30", modules=("CP-0", "CP-1", "CP-2"), cp1_extra=CHARTS
+    )
+    dom, console = visit(build(tmp_path), "#W-Report/history?c=later")
+    assert console == []
+    asked = re.findall(r'aria-label="(What changed in the run of [^"]+)"', dom)
+    assert len(asked) == 1 and asked[0].startswith("What changed in the run of 31 March 2025"), (
+        asked
+    )

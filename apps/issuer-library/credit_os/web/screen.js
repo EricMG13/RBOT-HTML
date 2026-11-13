@@ -383,6 +383,12 @@ function paragraphBasisHtml(key,item,output,mode,chips) {
   const rest=chips.filter(c=>!used.has(c));
   return `${items}${rest.length?`<h3 class="citations-heading">${items?'Other citations':'Citations'}</h3>${rest.map(c=>chipSection(c,output)).join('')}`:''}`;
 }
+// The trace drawer is a modal dialog (review L6): while it is open everything else on the page is inert (not tabbable, not read); the drawer and its backdrop are not.
+const BEHIND_DRAWER='.skip,.rail,.app>:not(.workbench),.workbench>:not(#inspector):not(#drawer-backdrop)';
+function setDrawer(open) {
+  $('inspector').hidden=!open;
+  for(const element of document.querySelectorAll(BEHIND_DRAWER))element.inert=open;
+}
 function showInspector(key,chipIndex=null) {
   const item=evidence.get(key), output=data[item.output], keyChips=window.CREDIT_OS_DATA?.chips?.[key]||[];
   const paragraph=typeof chipIndex==='string'&&chipIndex!=='gaps';
@@ -390,7 +396,7 @@ function showInspector(key,chipIndex=null) {
   // A paragraph shows its wording without its Basis line or citations; they are listed below it.
   const figure=paragraph?inspectorFigure(item,output,chipIndex):'';
   const fields=paragraph&&item.text!==undefined?[['Paragraph',paragraphBody(item.text,!isNewFormat(output.sections)).body]]:item.fields;
-  $('inspector').hidden=false;
+  setDrawer(true);
   $('inspector').innerHTML=`<div class="inspector-bar"><p class="drawer-title">Trace</p><span>Esc</span><button type="button" id="back-analysis" class="drawer-close" aria-label="Close the trace and go back to the analysis">${window.Components.icon('x')}</button></div><div class="inspector-body"><h2${figure?' class="sr-only"':' class="kicker"'}>Evidence inspector</h2>${figure}<h3>${esc(item.title)}</h3><div class="evidence-context">${esc(moduleTitle(item.module))}${output.label===item.module?'':` · ${esc(output.label)}`} · Line ${item.line}</div><span class="badge badge-gray classification">${esc(classification(item))}</span><div class="evidence-fields">${fields.map(([label,value])=>`<div><h4>${esc(label)}</h4><div>${rich(value)}</div></div>`).join('')}</div>${item.basis?`<div class="evidence-basis"><h3>Basis & context</h3><p class="inspector-card">${rich(item.basis)}</p></div>`:''}${chipHtml}<div class="source-location"><h3>Source location</h3><div class="inspector-card"><p>${esc(item.section)}</p><a href="${esc(output.href)}" download>${icon('file-text')}Download retained handoff</a><p class="small">${esc(handoffLabel(output.file))}<br>${esc(output.case)} · saved output</p></div></div><div class="inspector-note"><strong>Reading boundary</strong><p>Retained fields from this historical run, with module codes and method step ids shown as names. Source and PDF locators remain attributed to the original handoff. The library does not authenticate the underlying PDFs.</p></div></div>${drawerFoot(item.module)}`;
   nameCodes($('inspector'),item.output,false); // the inspector keeps register references as they are
   document.querySelectorAll('[data-evidence]').forEach(el=>el.classList.toggle('source-selected',el.dataset.evidence===key));
@@ -579,7 +585,7 @@ function renderRoute() {
     current={module,output:null,file:null,section:'',label:moduleNames[module],context,evidence:null,chip:null,part:null,tab:null,row:null,evidenceModule:null};
     $('module-head').innerHTML=moduleHead(current);
     updateWorkspaceChrome(module);
-    $('inspector').hidden=true;
+    setDrawer(false);
     $('content').innerHTML=couldNotPresent('page');
   }
 }
@@ -665,7 +671,7 @@ function drawRoute() {
     showInspector(next.evidence,next.chip);
   }
   else {
-    $('inspector').hidden=true;
+    setDrawer(false);
     document.querySelectorAll('.source-selected').forEach(el=>el.classList.remove('source-selected'));
     document.querySelectorAll('.chip[aria-pressed],.trace-row[aria-pressed],[data-paragraph][aria-pressed]').forEach(el=>el.removeAttribute('aria-pressed'));
     if(previous?.evidence&&!changed) {

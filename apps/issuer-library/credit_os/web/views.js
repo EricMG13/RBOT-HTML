@@ -1037,12 +1037,9 @@ function runLabel(module,context) {
 // ---- Report history (decision 4; library redesign Task 11): the issuer's runs as a vertical timeline (C15), latest as-of date first, one entry per run. An entry is the date as written and the pathway, then the
 // declared state of the lead module, the Completed status with the number of modules not assessable, the module dot strip (C21) and the links. "What changed" opens that run's Changes page; the first run of a
 // pathway has no earlier run of it to be compared with and carries no such link (CP-8 compares a run with the earlier run of the same issuer and pathway). Two runs with one name are told apart by Latest and Earlier.
-// Whether a run has an earlier run to be compared with, by the Changes page's own reading of the run's record: a recorded first run has none; a comparison, a note that none was produced or an unreadable pack say one was meant;
-// a run that records nothing is not a first run (absence is never read as one), so it is compared when an earlier listed run shares its pathway.
-function comparedWithEarlier(run,earlier) {
-  const state=ChangesView.changesState(run.changes);
-  return state==='first'?false:state==='unrecorded'?earlier.some(other=>other.pathway===run.pathway):true;
-}
+// Whether a run holds a comparison, by the Changes page's own reading of the run's record: one that was produced, one stated as not produced and one that could not be read each give the page something to say;
+// a recorded first run and a run that records nothing have no comparison, so the page would only say "No comparison recorded" (review L7).
+const comparedWithEarlier=run=>['produced','not_produced','unreadable'].includes(ChangesView.changesState(run.changes));
 function historyView(context) {
   const ctx=contexts[context],keyOf=new Map(Object.entries(contexts).map(([key,run])=>[run,key])),runs=issuerRuns(context);
   const words=sameNameWords(runs.map(run=>({id:run.folder,group:'',name:runName(run),date:run.asOf||'',started:run.record?.steps?.[0]?.started??null})));
@@ -1050,7 +1047,7 @@ function historyView(context) {
     const run=runs[n],key=keyOf.get(run),lead=libraryLead(key),codes=runModuleCodes(run),label=`${runDate(run)}, ${runPathway(run)}`;
     const notAssessable=codes.filter(code=>{const id=run.modules[code].default;return id&&blocked(data[id].sections,data[id].state);}).length;
     const marks=[lead?.state?window.Components.stateBadge(lead.state,{}):'',`<span class="hist-status">Completed${notAssessable?` · ${notAssessable} not assessable`:''}</span>`,earlierFormat(run)?EARLIER_FORMAT_BADGE:'',earlierMethods(run)?EARLIER_METHODS_BADGE:'',words[n]?`<span class="badge badge-gray">${words[n]}</span>`:'',key===context?'<span class="badge badge-gray">Showing</span>':''].filter(Boolean).join(' ');
-    const modules=libraryModules(key),changed=comparedWithEarlier(run,runs.slice(n+1));
+    const modules=libraryModules(key),changed=comparedWithEarlier(run);
     return `<div class="hist-marks">${marks}</div><div class="hist-dots">${modules.length?window.Components.moduleDots(modules):`<p class="lc-none">No module output is retained for this run.</p>`}</div><div class="hist-links"><a class="text-action" href="${esc(routeHref('W-Overview','overview',null,key))}" aria-label="${esc(`Open run: ${label}`)}">Open overview${icon('arrow-right')}</a>${changed?`<a class="text-action" href="${esc(routeHref('W-Changes','changes',null,key))}" aria-label="${esc(`What changed in the run of ${label}`)}">What changed${icon('git-compare')}</a>`:''}</div>`;
   };
   const block={headers:['Date','Event'],rows:runs.map(run=>({cells:[runDate(run),runPathway(run)]}))};

@@ -2697,9 +2697,9 @@ test('names, not codes: the band link, the evidence inspector and the library so
   const element = { hidden: true, classList: { add() {}, remove() {}, toggle() {} }, innerHTML: '' }, named = [];
   const r = report(), item = { module: 'CP-1', output: OUT, line: 54, title: 'Net sales', fields: [['Finding', 'Debt of CP-1A']], section: 'Financial summary' };
   const stored = { label: 'CP-1', file: 'run-a--deliveries--d1--CP-1.md', href: '../runs/run-a/deliveries/d1/CP-1.md', case: 'Zed & Sons · RUN-A' };
-  const inspector = new Function('$', 'document', 'window', 'evidence', 'data', 'classification', 'esc', 'rich', 'icon', 'chipSection', 'unresolvedGap', 'nameCodes', 'moduleTitle', 'handoffLabel', 'returnTrigger', 'drawerFoot',
+  const inspector = new Function('$', 'document', 'window', 'evidence', 'data', 'classification', 'esc', 'rich', 'icon', 'chipSection', 'unresolvedGap', 'nameCodes', 'moduleTitle', 'handoffLabel', 'returnTrigger', 'drawerFoot', 'setDrawer',
     `${src.slice(start, end)}; return showInspector;`)(() => element, { querySelectorAll: () => [] }, { Components: require('./components.js'), CREDIT_OS_DATA: { chips: {} } }, new Map([['k', item]]), { [OUT]: stored }, () => 'Not classified', v => String(v), v => String(v),
-    n => `<i>${n}</i>`, () => '', () => false, (root, output, marks) => named.push([root, output, marks]), r.moduleTitle, r.handoffLabel, null, module => `<footer>${module}</footer>`);
+    n => `<i>${n}</i>`, () => '', () => false, (root, output, marks) => named.push([root, output, marks]), r.moduleTitle, r.handoffLabel, null, module => `<footer>${module}</footer>`, open => { element.hidden = !open; });
   inspector('k');
   assert.ok(element.innerHTML.includes('>Financial foundation · Line 54<') && !element.innerHTML.includes('(CP-1)'));
   assert.ok(element.innerHTML.includes('Financial foundation handoff<br>Zed & Sons · RUN-A · saved output') && !element.innerHTML.includes('--CP-1.md'));
@@ -3245,11 +3245,14 @@ test('Report history: two runs with one name are told apart by Latest and Earlie
   assert.ok(!/Run [A-D]/.test(a.html + b.html + d.html + c.html), 'no run code to tell them apart');
 });
 
-test('Report history: What changed opens the run\'s Changes page, and is absent for the first run of a pathway', () => {
-  const [a, b, d, c] = histRows(histPage().historyView(RUN));
+test('Report history: What changed opens the run\'s Changes page, and is absent for a run whose record holds no comparison', () => {
+  // Runs A and B record a comparison (a pack); D and C record none.
+  const recorded = { first_run: false, pack: { prior: { run: 'x', as_of: '2024-01-01', pathway: 'credit_snapshot' }, measures: [] } };
+  const page = runPage(d => d, [], m => m, { ...HIST, runFields: { ...HIST.runFields, changes: recorded }, contexts: { ...HIST.contexts, 'run-b': { ...HIST.contexts['run-b'], changes: recorded } } });
+  const [a, b, d, c] = histRows(page.historyView(RUN));
   assert.ok(a.links.includes('<a class="text-action" href="#W-Changes/changes?c=run-a" aria-label="What changed in the run of 31 December 2025, Credit snapshot">What changed'));
   assert.ok(b.links.includes('href="#W-Changes/changes?c=run-b"'), 'run-d is the earlier run of the same pathway');
-  assert.ok(!d.links.includes('What changed') && !c.links.includes('What changed'), 'the oldest dated run and a run of no pathway have nothing to be compared with');
+  assert.ok(!d.links.includes('What changed') && !c.links.includes('What changed'), 'a run whose record holds no comparison, and a run of no pathway, have nothing for the Changes page to show');
   const one = runPage(d => d, [], m => m, { catalogue: [zedRun()], runFields: { ...synthetic, asOf: '2025-01-01' } }).historyView(RUN);
   assert.equal(histRows(one).length, 1, 'an issuer with one run draws one entry, not an empty state');
   assert.ok(!one.includes('What changed') && !one.includes('empty-state'));
@@ -4012,7 +4015,7 @@ test('the drawer footer links to the Evidence trace of the traced module and the
 
 test('the drawer is the inspector, restyled: close button, Escape and focus return keep their code path, the backdrop closes it', () => {
   const screen = read('screen.js'), html = read('index.html');
-  assert.ok(html.includes('<aside class="inspector" id="inspector" aria-label="Evidence inspector" hidden></aside><div class="drawer-backdrop" id="drawer-backdrop"'));
+  assert.ok(html.includes('<aside class="inspector" id="inspector" role="dialog" aria-modal="true" aria-label="Evidence inspector" hidden></aside><div class="drawer-backdrop" id="drawer-backdrop"'), 'the drawer is a named modal dialog (review L6)');
   assert.ok(screen.includes("event.target.closest('#back-analysis,#drawer-backdrop')"), 'the close button and the backdrop leave the trace');
   assert.ok(screen.includes("if(current.evidence){event.preventDefault();go(current.module,here());return;}"), 'Escape closes the open trace, on the route it was opened on');
   assert.ok(screen.includes("returnTrigger.focus({preventScroll:true})"), 'focus returns to the control that opened it');
@@ -4831,7 +4834,10 @@ test('report history: no run code, folder, delivery id, calculation ID or module
   const [latest, earlier] = histRows(page.historyView('run-b'));
   assert.deepEqual([strip(latest.date), strip(earlier.date)], ['30 June 2025', '30 June 2024']);
   assert.ok(!/Latest|Earlier(?! format| methods)/.test(strip(latest.marks) + strip(earlier.marks)), 'two different names need no word');
-  assert.ok(latest.links.includes('What changed') && !earlier.links.includes('What changed'), 'the first run has no What changed link');
+  const recorded = { first_run: false, pack: { prior: { run: 'x', as_of: '2024-01-01', pathway: 'credit_snapshot' }, measures: [] } };
+  const [withRecord, withoutRecord] = histRows(libPage({ contexts: { ...libBase().contexts, 'run-b': { ...libBase().contexts['run-b'], changes: recorded } } }).historyView('run-b'));
+  assert.ok(withRecord.links.includes('What changed') && !withoutRecord.links.includes('What changed'), 'only the run whose record holds a comparison has a What changed link');
+  assert.ok(!latest.links.includes('What changed') && !earlier.links.includes('What changed'), 'a run that records no comparison has none, though an earlier run of its pathway is listed');
 });
 
 // ---- Task 10 fix round 2.
@@ -4957,19 +4963,19 @@ test('R3-5: the library limitation options read against the run when its context
 const startedRecord = at => ({ steps: [{ module: 'CP-0', started: at, accepted: null }], edges: [], timed: true });
 const compared = (asOf = '2024-01-01') => ({ lead: 'CP-2', first_run: false, pack: { prior: { run: 'x', as_of: asOf, pathway: 'credit_snapshot' }, measures: [] } });
 
-test('M1 history: What changed is drawn when the run\'s own record says a comparison exists (the Changes page\'s condition), not only when another listed run shares the pathway; a recorded first run has none', () => {
+test('M1 history: What changed is drawn when the run\'s own record holds a comparison (the Changes page\'s condition) and only then; a recorded first run, and a run that records nothing, have none whatever else is listed', () => {
   const base = libBase();
   const page = changes => libPage({ contexts: { ...base.contexts, ...Object.fromEntries(Object.entries(changes).map(([k, c]) => [k, { ...base.contexts[k], changes: c }])) } });
   const links = (p, ctx) => histRows(p.historyView(ctx)).map(r => r.links.includes('What changed'));
   // run-b0 is the oldest run of BET and the only one of its pathway before run-b; its own record says it was compared with a run the library does not list.
-  assert.deepEqual(links(page({ 'run-b0': compared() }), 'run-b'), [true, true]);
+  assert.deepEqual(links(page({ 'run-b0': compared() }), 'run-b'), [false, true]); // each run by its own record: run-b records nothing
   // A run whose record says it is a first run has no link, even with an earlier listed run of its pathway.
   assert.deepEqual(links(page({ 'run-b': { first_run: true } }), 'run-b'), [false, false]);
-  // A run that records nothing is not a first run: absence is not read as one. With an earlier listed run of its pathway it keeps the link; the oldest has none.
-  assert.deepEqual(links(page({}), 'run-b'), [true, false]);
+  // A run that records nothing is not a first run (absence is not read as one), but the Changes page would only say "No comparison recorded": no link, with or without an earlier listed run of its pathway (review L7).
+  assert.deepEqual(links(page({}), 'run-b'), [false, false]);
   // A pack that could not be read, or a note that none was produced, still say a comparison was meant: the Changes page explains it.
-  assert.deepEqual(links(page({ 'run-b0': { first_run: false, note: 'changes: not produced — no prior' } }), 'run-b'), [true, true]);
-  assert.deepEqual(links(page({ 'run-b0': { problem: 'unreadable' } }), 'run-b'), [true, true]);
+  assert.deepEqual(links(page({ 'run-b0': { first_run: false, note: 'changes: not produced — no prior' } }), 'run-b'), [false, true]);
+  assert.deepEqual(links(page({ 'run-b0': { problem: 'unreadable' } }), 'run-b'), [false, true]);
 });
 
 test('M2 list: Latest/Earlier is decided by as-of date, then run start, never by row order, and agrees with the history', () => {
