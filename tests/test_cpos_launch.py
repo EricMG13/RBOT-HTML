@@ -7,6 +7,7 @@ import os
 import re
 import types
 import typing
+from collections import Counter
 from decimal import Decimal
 from fractions import Fraction
 from pathlib import Path
@@ -2238,6 +2239,8 @@ def test_every_module_is_told_what_stands_for_acceptance_scripts_and_questions(t
 # CP-1C, CP-PARSE) are unchanged.
 # CP-6 changed again on 2026-11-13 (Task 5B fix round 1): its four stale `Downstream (QA)` header
 # lines now say CP-5 is its upstream QA gate (caos wording).
+# CP-2A changed again on 2026-11-13 (Deploy V methods plan, Task 6): it now sends the CP-OS-only
+# copy of the short stress text (tables T2DS.n, two stale statements removed) instead of cp2a.md.
 METHOD_TEXT_SHA256_AT_1B41E65 = {
     "CP-0": "e8d3e77bc48bc98e2fd8595e7b46ee7fc786e859591cf244325f3508b7d5dac9",
     "CP-1": "02477a91d582f6301b2dbfadd96572ea75f9845493de337d7160a55111b62170",
@@ -2246,7 +2249,7 @@ METHOD_TEXT_SHA256_AT_1B41E65 = {
     "CP-1C": "9353afdbce820f59c2dcabc951fc1ff3813174b3c84e79b47bc22bea97f3bbe8",
     "CP-1D": "d4d1ee4507d743cdb9d98bffd865ca3d012a4b4fb79a92a275cfc6a796bff453",
     "CP-2": "f925b66f13cff7bd7801d1c3cf7120eb1317126c8605bf1ff1875ce62ed3c162",
-    "CP-2A": "c40d2c2f56ec819edd1582e148c9170cc8d06ae95a1c65d1e17236289fb7d9a1",
+    "CP-2A": "c5f2a4ba7a747d10fa96e2a39a3d8054c14537cf9b58be99e6ac64358747b9b0",
     "CP-2D": "fe39c49f842c99f6ffd390bd409cbb44adbbe397720d0a0d4d935b52a34a8fda",
     "CP-2E": "ab111a4fb0bd201b84dbec916ccdba6e5df92f60671b2d419949ca34d6118e34",
     "CP-2G": "268a85d82da39c9b7b66474b4052eb23b310f7fc5ce0c9d7efa25766a5699cf2",
@@ -2357,7 +2360,8 @@ def test_cp2a_is_told_which_method_governs_the_stress_sizes(tmp_path):
     tdg-forecast-005: CP-2A gave no shock, so no stress case was computed."""
     _, texts = all_instructions(tmp_path, modules=("CP-0", "CP-1", "CP-2A", "CP-2G"))
     head = texts["CP-2A"].partition(cpos_launch.METHOD_MARK)[0]
-    assert "`src/deploy_vii/methods/cp2a.md` governs" in head
+    assert "`CP-2A_STRESS_DESIGN_CPOS.md` governs" in head
+    assert "cp2a.md" not in head
     assert "labelled analyst assumptions" in head and "anchored to a stated figure" in head
     assert "an EBITDA decline and a cash-interest rate increase" in head
     assert "at most four decimal places" in head
@@ -6247,3 +6251,54 @@ def test_prose_modules_are_sent_the_canon_analytical_appendix_rule_data_modules_
         assert (APPENDIX_RULE in method) == (module not in DATA_MODULE_IDS), module
         if module not in DATA_MODULE_IDS:
             assert "#### Analytical appendix\n" in method, module
+
+
+APPENDIX_HEADING_NOTE = (
+    "Where the canon's Analytical appendix section says `## Analysis`, this handoff's section is "
+    "`## Findings`: write the appendix heading as a `###` heading there, after `### Limitations`; "
+    "the other required `###` headings stay `###` and are not nested under it.\n\n"
+)
+
+
+def test_the_appendix_heading_note_goes_with_the_appendix_section_only(tmp_path):
+    for module, text in all_texts(tmp_path).items():
+        head = text.partition(cpos_launch.METHOD_MARK)[0]
+        sent = CANON_APPENDIX_SECTION in METHODS[module]
+        assert (APPENDIX_HEADING_NOTE in head) == sent == (module not in DATA_MODULE_IDS), module
+        assert APPENDIX_HEADING_NOTE not in text.partition(cpos_launch.METHOD_MARK)[2], module
+
+
+TABLE_ID = r"T2[A-Z]*\.[0-9]+"
+OLD_CP2A_STALE = ("no r14 CP-2A text exists in the repo", "computed in Python")
+
+
+def cp2a_table_definitions(tmp_path) -> list[str]:
+    """Each table ID the sent CP-2A texts define: a bold `**ID Name:**` heading (the step files)
+    or an `ID name` item of a `## Tables` list line (the short stress text)."""
+    # "/cp2a.md" is the structured runtime's copy, whose T2B.n collide with the step file's: it
+    # must not come back.
+    sections = {
+        name: text
+        for name, text in cpos_launch.method_sections("CP-2A")
+        if name.endswith(".md") and ("downside-pathway" in name or name.endswith("/cp2a.md"))
+    }
+    defined = []
+    for text in sections.values():
+        defined += re.findall(rf"^\*\*({TABLE_ID}) ", text, re.MULTILINE)
+        for line in re.findall(r"^## Tables\n(.*)$", text, re.MULTILINE):
+            defined += re.findall(rf"(?:^|, )({TABLE_ID}) [a-z]", line)
+    return defined
+
+
+def test_the_cp2a_instruction_defines_each_table_id_once(tmp_path):
+    defined = cp2a_table_definitions(tmp_path)
+    assert [i for i, n in Counter(defined).items() if n > 1] == []
+    assert {f"T2B.{n}" for n in range(1, 10)} <= set(defined)  # the step file's nine
+    assert {f"T2DS.{n}" for n in range(1, 10)} <= set(defined)  # the short text's nine
+
+
+def test_the_cp2a_instruction_no_longer_carries_the_short_texts_stale_statements():
+    assert "cp2a.md" not in [n.rsplit("/", 1)[-1] for n, _ in cpos_launch.method_sections("CP-2A")]
+    text = cpos_launch.method_text("CP-2A")
+    for stale in OLD_CP2A_STALE:
+        assert stale not in text

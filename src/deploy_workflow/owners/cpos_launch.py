@@ -188,7 +188,10 @@ _SELECTED: dict[str, tuple[str, ...]] = {
         _SKILLS + "cp-2a-downside-pathway/SKILL.md",
         _SKILLS + "cp-2a-downside-pathway/references/REF_CP-2A_STEPS.md",
         _SKILLS + "cp-2a-downside-pathway/references/REF_CP-2B_STEPS.md",
-        _VII + "cp2a.md",
+        # Owner, 2026-11-13 (Deploy V methods plan, Task 6): a CP-OS-only copy of cp2a.md whose
+        # tables are T2DS.n, since cp2a.md's T2B.n collide with the step file's. cp2a.md stays on
+        # disk, unchanged, for the structured runtime.
+        _SKILLS + "cp-2a-downside-pathway/references/CP-2A_STRESS_DESIGN_CPOS.md",
     ),
     "CP-2D": (
         _SKILLS + "cp-2d-liquidity-cash-flow-bridge/SKILL.md",
@@ -267,12 +270,13 @@ _SELECTED: dict[str, tuple[str, ...]] = {
 }
 _CANON = "docs/reuse/selected-methods/CANON_SHARED.md"
 # The reader-facing layer every prose module is sent (not the data modules).
+_APPENDIX = f"{_CANON} § Analytical appendix"
 READER_LAYER = (
     f"{_CANON} § Reader-facing research layer",
     f"{_CANON} § Credit-research reading order",
     # PROSE_PASSAGES says the canon's "table and appendix rules still apply"; the first section
     # ends at the next `####` heading, so the appendix rule needs its own entry.
-    f"{_CANON} § Analytical appendix",
+    _APPENDIX,
 )
 METHODS: dict[str, tuple[str, ...]] = {
     module: (
@@ -353,6 +357,14 @@ PROSE_PASSAGES = (
     "govern; its table and appendix rules still apply after `### Limitations`, except that the "
     "report selectors' exact headings and table headers govern over the reader layer's table "
     "rules (6 columns and 8 body rows).\n\n"
+)
+# Sent to every module that is sent the canon's Analytical appendix section: that section says
+# `## Analysis` and an appendix heading, while a handoff has the fixed H2s and CP-OS refuses an
+# added `## Analysis` or `###` headings nested under the appendix heading (cpos.py).
+APPENDIX_HEADING_NOTE = (
+    "Where the canon's Analytical appendix section says `## Analysis`, this handoff's section is "
+    "`## Findings`: write the appendix heading as a `###` heading there, after `### Limitations`; "
+    "the other required `###` headings stay `###` and are not nested under it.\n\n"
 )
 DATA_PASSAGE = (
     "Reader passage. The reader is a portfolio manager or credit committee member who has not "
@@ -1739,12 +1751,12 @@ TRANSPORT_RULES = (
     "it blocks.\n\n"
 )
 # CP-2A only. Its two methods disagree on who sets the stress sizes; run tdg-forecast-005 followed
-# the SKILL, gave no shock, and CP-2G had no stress case to compute. cp2a.md is the later
-# correction (LEAD adaptation, ruling Q2), and the owner allowed labelled judgment for CP-2G's
-# drivers on 2026-11-10 ("Yes, allow judgment").
+# the SKILL, gave no shock, and CP-2G had no stress case to compute. The stress design text is
+# the later correction (LEAD adaptation, ruling Q2), and the owner allowed labelled judgment for
+# CP-2G's drivers on 2026-11-10 ("Yes, allow judgment").
 STRESS_BLOCK = (
     "Stress design: where the method sections below differ on stress magnitudes, "
-    "`src/deploy_vii/methods/cp2a.md` governs. You choose the base period, the scenarios, the "
+    "`CP-2A_STRESS_DESIGN_CPOS.md` governs. You choose the base period, the scenarios, the "
     "shock sizes and the watch levels as labelled analyst assumptions (`Analyst Interpretation`, "
     "confidence never High), each anchored to a stated figure (a decline the sources report, a "
     "calculated break point, a disclosed rate exposure): name the anchor and what the assumption "
@@ -2194,6 +2206,7 @@ def _instructions(
         + SOURCES_RULES
         + READER_PERSONA
         + (DATA_PASSAGE if module in DATA_MODULES else PROSE_PASSAGES)
+        + (APPENDIX_HEADING_NOTE if _APPENDIX in METHODS[module] else "")
         + VOICE_RULES
         + (CHART_NOTE_RULE if "### Chart data:" in selectors else "")
         + (MAP_TEXT_RULE if "### Map:" in selectors else "")

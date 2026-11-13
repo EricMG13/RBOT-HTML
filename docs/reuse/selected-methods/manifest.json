@@ -1067,8 +1067,10 @@
       "consumed_path": "docs/reuse/selected-methods/skills/cp-2a-downside-pathway/references/CP-2A_STRESS_DESIGN_CPOS.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-2a-downside-pathway/references/CP-2A_STRESS_DESIGN_CPOS.md",
       "exact_copy_found_at": "src/deploy_vii/methods/cp2a.md (this repo, HEAD 7c12a1c; last changed 5c6e61b)",
-      "sha256": "28be81bfb97a83e739e4a514612a2db3bf12b72480128f54c66c33fc2ab06236",
-      "use": "CP-OS-only copy of the CP-2A short stress-design text; src/deploy_vii/methods/cp2a.md stays on disk unchanged for the structured runtime"
+      "sha256": "b15a9a0041d081c85e5a7a8bdf9b9664c4eea88147794d167ab8306bf9504fae",
+      "use": "CP-OS-only copy of the CP-2A short stress-design text; src/deploy_vii/methods/cp2a.md stays on disk unchanged for the structured runtime",
+      "source_sha256": "28be81bfb97a83e739e4a514612a2db3bf12b72480128f54c66c33fc2ab06236",
+      "edit": "named edits to the copy only: (1) every table ID T2B.n renamed T2DS.n (nine IDs, six prose mentions; T2B collides with REF_CP-2A_STEPS.md); (2) HTML-comment clause \"; no r14 CP-2A text exists in the repo\" removed; (3) \", computed in Python\" removed from the Purpose sentence (\"base period, computed in Python from settled CP-1 facts\" -> \"base period from settled CP-1 facts\"). sha256 is this edited file, source_sha256 the byte-for-byte copy of src/deploy_vii/methods/cp2a.md in this repo at 7c12a1c"
     }
   ],
   "companions_note": "2026-11-10 (owner: keep a copy of the methodology in the repo): companion references, CANON_SHARED.md, the CP-DR research brief and the cp-1b-earnings-delta skill copied read-only from cp-os at commit b57a344. Four SKILL.md files archived earlier (cp-2h, cp-3, cp-6, cp-dr) differ from cp-os at that commit and are kept as archived. Not copied: scripts (not run in this transport) and the three .xlsx deployment placeholders (CP-3 Sector RV, CP-3B portfolio constraints, CP-6A debate inputs)."
