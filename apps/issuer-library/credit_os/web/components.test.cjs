@@ -1204,3 +1204,19 @@ test('metricStrip: a latest cell longer than a figure is text, set at body size 
   const html = C.metricStrip(block, { key: r => `k:${r.line}` }, 'Revolver test and cover.', stripLink);
   assert.ok(html.includes('<p class="strip-v wide">7.50x net') && html.includes('<p class="strip-v">2.1x</p>'), html);
 });
+
+test('findingCell strict (the Forecast page): a file name, hash or scenario id inside text is held back, a module code is not; the default reading is unchanged', () => {
+  const text = 'Annual; K_10.htm.jsonl, pages 71';
+  assert.ok(C.findingCell(text, {}).html !== undefined, 'the module page reading is unchanged');
+  assert.deepEqual(C.findingCell(text, { strict: true }), { omitted: true, inEvidence: true });
+  assert.deepEqual(C.findingCell('Downside is SC1: a rate rise', { strict: true }), { omitted: true, inEvidence: true });
+  assert.ok(C.findingCell('CP-1 prints no line', { strict: true }).html !== undefined, 'the page names a module code');
+  assert.equal(C.findingCell('Cash rose 5.55x on 2.09 turns', { strict: true }).html, 'Cash rose 5.55x on 2.09 turns');
+});
+
+test('gapState: the stated reason of the build stands in only when the table states none', () => {
+  const block = { headers: ['Period', 'Limit'], rows: [{ line: 1, cells: ['FY24', 'Not supplied: nothing read'] }] };
+  assert.ok(C.gapState(block, {}, 'The build says').includes('Not supplied: nothing read') && !C.gapState(block, {}, 'The build says').includes('The build says'));
+  const none = { headers: ['Period', 'Limit'], rows: [{ line: 1, cells: ['FY24', '1.2'] }] };
+  assert.ok(C.gapState(none, {}, 'The build says').includes('The build says'));
+});

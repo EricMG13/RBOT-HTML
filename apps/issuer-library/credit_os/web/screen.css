@@ -1658,3 +1658,51 @@ details[open]>summary .ms-ch,details[open]>summary .qa-ch,details[open]>summary 
 }
 @media(forced-colors:active){.chg-top,.chg-fold{border:1px solid CanvasText}.chg-n{border:1px solid CanvasText}}
 @media print{.chg-fold::details-content,.change-module::details-content{content-visibility:visible}.chg-fold-ch{display:none}.chg-top,.chg-fold,.change-module{break-inside:avoid}}
+/* Forecast: the run's charts as small multiples (cards in the 24-column grid), each with a Chart or Table toggle. */
+.fc-count{margin:0 0 14px;color:var(--muted);font-size:var(--fs-compact)}
+.fc-grid{grid-auto-flow:dense;align-items:start}
+.fc-grid>div{display:flex;min-width:0}
+.fc-grid>div>.fc-card{flex:1 1 auto}
+@media(min-width:768px) and (max-width:1199px){.g24.fc-grid>.c8{grid-column:span 12}}
+.fc-card{display:flex;min-width:0;flex-direction:column;gap:12px;min-width:0;padding:16px;border:1px solid var(--rule);border-radius:var(--radius-card);background:#fff}
+.fc-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px 12px;min-width:0}
+.fc-title{min-width:0;display:grid;gap:2px}
+.fc-title h3{margin:0;font:700 var(--fs-control)/1.3 'Red Hat Display',sans-serif;letter-spacing:-.02em;color:var(--navy);overflow-wrap:anywhere}
+.fc-unit{color:var(--text-quaternary);font-size:var(--fs-label)}
+.fc-tools{display:flex;align-items:center;gap:6px;flex:none}
+.fc-fig{min-width:0;overflow-x:auto;border-radius:var(--radius-inline)}
+.fc-fig:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.fc-fig .section-heading{display:none}
+.fc-card .column-chart{margin:0}
+.fc-card .chart-reading{margin:0 0 8px}
+.fc-card .vector-chart{max-width:none}
+.fc-card .dtbl-wrap{margin:0}
+.fc-card .stack-key{margin:0;padding:0;list-style:none}
+.fc-pair{display:grid;gap:6px;padding:8px 4px}
+.fc-measure{margin:0;color:var(--text-secondary);font-size:var(--fs-compact)}
+.fc-now,.fc-then{display:flex;align-items:baseline;gap:10px;margin:0;min-width:0;overflow-wrap:anywhere}
+.fc-k{flex:none;color:var(--text-quaternary);font-size:var(--fs-label)}
+.fc-now strong{font:700 34px/1.1 'Red Hat Display',sans-serif;letter-spacing:-.03em;color:var(--navy)}
+.fc-then{padding-top:6px;border-top:1px solid var(--rule);color:var(--text-secondary);font:500 var(--fs-body)/1.4 'Red Hat Mono',monospace}
+.fc-note{margin:0;padding-top:10px;border-top:1px solid var(--rule);color:var(--text-tertiary);font-size:var(--fs-label);line-height:1.5}
+.fc-note-k{margin:0 0 4px;font-weight:600;color:var(--text-secondary)}
+.fc-note ul{margin:0;padding-left:16px;display:grid;gap:3px}
+.fc-foot{display:flex;justify-content:flex-end;margin-top:auto}
+.fc-card .empty-state{margin-top:0}
+.fc-card .empty-state .es-trace{display:flex;justify-content:center}
+.forecast-register{margin:10px 0}
+.forecast-register>summary{cursor:pointer;font-weight:600;color:var(--blue-700)}
+.forecast-register>summary:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.forecast-register .dtbl-wrap{margin-top:10px}
+.fc-built{margin:0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:8px 18px}
+.fc-built li{display:inline-flex;align-items:center;gap:8px}
+.frame-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;padding:10px 14px;border:1px solid var(--rule);border-bottom:0;border-radius:var(--radius-card) var(--radius-card) 0 0;background:var(--quiet)}
+.frame-head h3{margin:0;font:700 var(--fs-control)/1.3 'Red Hat Display',sans-serif;color:var(--navy)}
+.frame-head span{color:var(--muted);font-size:var(--fs-compact)}
+@media(prefers-reduced-motion:no-preference){.fc-card{transition:box-shadow .2s}.fc-card:hover{box-shadow:var(--shadow-sm)}}
+@media(forced-colors:active){.fc-card,.frame-head{border:1px solid CanvasText}}
+@media print{.fc-card{break-inside:avoid}.fc-card .seg{display:none}.fc-card [data-pane][hidden]{display:block!important}.fc-note{display:none}.fc-fig{overflow:visible}}
+.fc-card .col.missing{flex:1 1 90px;max-width:none;align-self:flex-end;height:auto}
+.fc-card .col.missing strong{position:static;transform:none;display:block;white-space:normal;padding:0;font:400 var(--fs-label)/1.35 'Red Hat Text',sans-serif;text-align:center;color:var(--text-tertiary);overflow-wrap:anywhere}
+@media(max-width:560px){.fc-tools{flex-wrap:wrap;justify-content:flex-end}}
+.fc-card .seg button{min-width:56px;padding:0 10px}

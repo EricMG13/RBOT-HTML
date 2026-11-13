@@ -194,6 +194,8 @@ function fixtureTable(module,line) {
 // `v.plain` is set by readerChart for a new-format page.
 const chartTrace=(id,v)=>{const row=v.plain&&v.table!==undefined?fixtureTable(id,v.table).rows[0]:null;return row?window.Components.traceRow(`${id}:${row.line}`,`${plain(v.title)}: where it comes from`):'';};
 function chartIntro(id,v) {
+  // A Forecast card draws its own title, unit and trace control; only the module's reading of the chart (if it wrote one) is left to draw here.
+  if(v.headless)return v.quote?`<p class="chart-reading">${rich(v.quote.text.replace(/\n/g,' '))}</p>`:'';
   const label=[v.unit,data[id].period].filter(Boolean).join(' · ');
   return `<div class="section-heading"><h2>${esc(v.title)}</h2>${label?`<span>${esc(label)}</span>`:''}${chartTrace(id,v)}</div>${v.quote?`<p class="chart-reading">${rich(v.quote.text.replace(/\n/g,' '))}</p>${sourceFooter(`${id}:${v.quote.line}`)}`:''}`;
 }
@@ -434,9 +436,9 @@ const READER_FIGURES={recovery:recoveryChart,waterfall:bridgeChart,stack:stackCh
 // one column per series from a zero baseline (owner, 2026-11-10). Each period is one button (its handoff row) with its chips under it.
 // A step table (store.py: kind "waterfall") is a bridge: opening, stated changes and closing, drawn by bridgeChart; the row tables (kinds stack, bullet, limits) are below.
 // `onPlainPage` is a new-format page's chart: the cells as the handoff wrote them, one trace control, no source chips and no Table form (the table as written is Evidence's).
-function readerChart(id,chart,chips=false,note=true,onPlainPage=false) {
+function readerChart(id,chart,chips=false,note=true,onPlainPage=false,card=false) {
   const form=onPlainPage?'':chartTableForm(id,chart);
-  if(onPlainPage){chart={...chart,plain:true};chips=false;}
+  if(onPlainPage){chart={...chart,plain:true,...(card?{headless:true}:{})};chips=false;}
   if(READER_FIGURES[chart.kind])return `${READER_FIGURES[chart.kind](id,chart,chips,note)}${form}`;
   const table=fixtureTable(id,chart.table),series=chart.columns||[chart.column],rows=(chart.rows||table.rows.map((_,i)=>i)).map(i=>table.rows[i]);
   const numbers=rows.flatMap(row=>series.map(c=>chartNumber(row.cells[c])??0));
@@ -448,6 +450,8 @@ function readerChart(id,chart,chips=false,note=true,onPlainPage=false) {
     const said=series.map(c=>`${table.headers[c]} ${chartNumber(row.cells[c])===null?'n.a.':plain(row.cells[c])}`).join(', ');
     const inner=`<span class="plot"><span class="zero-rule" style="bottom:${zero}%"></span>${cols}</span><span class="chart-label">${esc(period)}${chart.sub?`<small>${chart.sub.map(c=>shown(id,chart,row.cells[c])).join(' → ')}</small>`:''}</span>`;
     const label=`aria-label="${esc(`${period}: ${said}. View source`)}"`;
+    // A Forecast card has one trace control: a period is a labelled group there, not a button to a source.
+    if(chart.headless)return `<div class="chart-row" role="group" aria-label="${esc(`${period}: ${said}`)}">${inner}</div>`;
     return chips?`<div class="chart-row" role="group" aria-label="${esc(period)}"><button class="chart-open" data-evidence="${esc(key)}" ${label}>${inner}</button>${chipsMarkup(key)}</div>`:`<button class="chart-row" data-evidence="${esc(key)}" ${label}>${inner}</button>`;
   }).join('');
   return `${chartIntro(id,chart)}<div class="column-chart" style="--periods:${rows.length}">${legend}<div class="periods">${periods}</div></div>${note?'<p class="matrix-note">Missing values have no bar.</p>':''}${form}`;
@@ -1147,16 +1151,75 @@ function cashflowSection(model) {
 // The roles a delivery's sources are declared under; an unknown role shows its own token.
 const SOURCE_ROLES={annual:'Annual handoff',quarter:'Quarterly handoff',forecast:'Forecast handoff',forecast_exact:'Forecast calculations',current_synthesis:'Current synthesis'};
 const sourceFile=s=>(s.output||s.path||'').split('/').at(-1);
-// A fact, not a judgement: sources whose file names carry different attempt numbers.
-function attemptNote(sources) {
-  const named=[...new Set(sources.map(sourceFile).filter(f=>/-attempt-\d+/.test(f)))];
-  const attempt=f=>/-attempt-(\d+)/.exec(f)[1];
-  if(new Set(named.map(attempt)).size<2)return '';
-  return `<p class="forecast-attempts">${esc(`These files come from different attempts: ${named.map(f=>`${f} (attempt ${attempt(f)})`).join(', ')}`)}</p>`;
+// ---- The run's charts on the Forecast page: small multiples, one card per chart contract, in the order the data holds them. Nothing is recomputed: a mark is placed from the
+// stated number and the text beside it is the cell. A card has its title, the figure, a Chart or Table toggle (the contract's rows as written, minus the columns a findings page
+// never draws), the contract's "Basis and limitation" as a footnote, ONE trace control and a link to the module that wrote it.
+// The form follows the contract kind and its shape (spec section 5): the kinds readerChart knows draw themselves; two periods of one measure are a prior-value tile, never a
+// two-point line; a kind the page does not know is its table as written. A chart with no numbers is the empty state (C32) with its stated reason.
+const FIGURE_KINDS=new Set([...Object.keys(READER_FIGURES),'grouped']);
+const WIDE_KINDS=new Set(['waterfall','stack','recovery','scatter','range','bullet','limits']);
+const cardContext=(id,title)=>({...moduleTableContext(id),id,module:data[id].module,strict:true,evidenceHref:window.Evidence.href('registers',data[id].module,data[id].run),key:row=>`${id}:${row.line}`,caption:plain(title)});
+// Two periods (or one) of a single measure: the latest large, the earlier beside it, each as the handoff wrote it.
+const isPairContract=(chart,table)=>(!chart.kind||chart.kind==='grouped')&&(chart.columns||[chart.column]).length===1&&(chart.rows||table.rows).length>=1&&(chart.rows||table.rows).length<=2;
+function pairTile(id,chart) {
+  const table=fixtureTable(id,chart.table),col=(chart.columns||[chart.column])[0],rows=(chart.rows||table.rows.map((_,i)=>i)).map(i=>table.rows[i]);
+  const text=cell=>chartNumber(cell)===null?statedReason(id,cell):esc(cell);
+  const [earlier,latest]=rows.length===2?rows:[null,rows[0]];
+  return `<div class="fc-pair"><p class="fc-measure">${esc(table.headers[col])}</p><p class="fc-now"><span class="fc-k">${esc(plain(latest.cells[0]))}</span><strong>${text(latest.cells[col])}</strong></p>${earlier?`<p class="fc-then"><span class="fc-k">${esc(plain(earlier.cells[0]))}</span><span>${text(earlier.cells[col])}</span></p>`:''}</div>`;
+}
+// The contract's "Basis and limitation", verbatim, one line per distinct text; a text that names a file, a code or an identifier is held back and the card links to Evidence once.
+function chartNote(block,ctx) {
+  const at=block.headers.findIndex(h=>window.Shapes.columnKind(h)==='limitation');
+  if(at<0)return '';
+  const seen=new Set(),items=[];
+  let held=false;
+  for(const row of block.rows) {
+    const text=String(row.cells[at]??'').trim();
+    if(text===''||seen.has(text))continue;
+    seen.add(text);
+    const cell=window.Components.findingCell(text,ctx),lead=block.rows.length>1?window.Components.findingCell(String(row.cells[0]??''),ctx).html:undefined;
+    if(cell.html===undefined){held=true;continue;}
+    items.push(`<li>${lead?`<b>${lead}</b> `:''}${cell.html}</li>`);
+  }
+  if(!items.length&&!held)return '';
+  return `<div class="fc-note"><p class="fc-note-k">${esc(block.headers[at])}</p>${items.length?`<ul>${items.join('')}</ul>`:''}${held?`<a class="in-ev" href="${esc(ctx.evidenceHref)}">In Evidence</a>`:''}</div>`;
+}
+function chartCard(id,item) {
+  const out=data[id],chart=item.chart||item.gap,title=chart.title,ctx=cardContext(id,title),block=fixtureTable(id,chart.table);
+  const owner=`<a class="text-action" href="${routeHref(out.module,tableForm(id,'chart'),null,out.run,out.source)}">${esc(moduleTitle(out.module))}${icon('arrow-right')}</a>`;
+  const open=`<article class="fc-card" data-block data-view="chart" aria-label="${esc(plain(title))}">`;
+  if(item.gap||item.hidden) {
+    const reasons=item.hidden?[window.Components.findingCell(item.hidden,ctx).html].filter(Boolean):null;
+    const body=item.hidden?window.Components.emptyState('Not established for this run',reasons,''):window.Components.gapState(block,ctx,chart.gap);
+    return `${open}<div class="fc-head"><h3>${esc(title)}</h3></div>${body}<div class="fc-foot">${owner}</div></article>`;
+  }
+  const known=!chart.kind||FIGURE_KINDS.has(chart.kind);
+  const figure=!known?'':isPairContract(chart,block)?pairTile(id,chart):readerChart(id,chart,false,false,true,true);
+  const label=chart.unit||''; // the run's period is the page's context bar, not each card's
+  const toggle=figure?window.Components.viewToggle(`${plain(title)}: chart or table`,[['chart','Chart'],['table','Table']]):'';
+  const table=window.Components.pane('table',window.Components.chartTable(block,ctx),!figure);
+  const fig=figure?window.Components.pane('chart',`<div class="fc-fig" role="region" aria-label="${esc(`${plain(title)}, chart`)}" tabindex="0">${figure}</div>`,true):'';
+  return `${open}<div class="fc-head"><div class="fc-title"><h3>${esc(title)}</h3>${label?`<span class="fc-unit">${esc(label)}</span>`:''}</div><div class="fc-tools">${chartTrace(id,{...chart,plain:true})}${toggle}</div></div>${fig}${table}${chartNote(block,ctx)}<div class="fc-foot">${owner}</div></article>`;
+}
+// Every chart contract of the run's modules, then the stated gaps, in the order the data holds them; `wide` forms take more of the row.
+function forecastCharts(context) {
+  const ids=Object.values(contexts[context]?.modules||{}).map(entry=>entry.default||entry.outputs[0]).filter(id=>id&&data[id]);
+  const items=ids.flatMap(id=>{
+    const out=data[id],hidden=out.state?.established===false?(out.summary?.limitation||'Module not assessable'):null;
+    return [...(out.charts||[]).map(chart=>({id,chart,hidden})),...(out.chartGaps||[]).map(gap=>({id,gap}))].sort((a,b)=>(a.chart||a.gap).table-(b.chart||b.gap).table);
+  });
+  const open='<section class="fc-charts" id="run-charts"><h2>Run charts</h2>';
+  if(!items.length)return `${open}${window.Components.emptyState('No chart in this run',[],'')}</section>`;
+  const gaps=items.filter(item=>item.gap||item.hidden).length;
+  const cards=items.map(item=>{
+    const chart=item.chart||item.gap,wide=!item.gap&&!item.hidden&&(WIDE_KINDS.has(chart.kind)||(chart.rows||fixtureTable(item.id,chart.table).rows).length>4);
+    return `<div class="${wide?(WIDE_KINDS.has(chart.kind)?'c24':'c16'):'c8'}">${chartCard(item.id,item)}</div>`;
+  }).join('');
+  return `${open}<p class="fc-count">${items.length} ${items.length===1?'chart':'charts'}${gaps?`, ${gaps} not drawn`:''}</p><div class="g24 fc-grid">${cards}</div></section>`;
 }
 function forecastView(context,id) {
   const models=runModels(context);
-  if(!models.length)return forecastEmpty(context);
+  if(!models.length)return forecastEmpty(context)+forecastCharts(context);
   const model=models.find(m=>m.id===id)||models[0];
   const acceptance=reportAcceptance(model);
   const optionLabels=modelOptionLabels(models);
@@ -1166,13 +1229,22 @@ function forecastView(context,id) {
   // The link opens the module that wrote the forecast handoff: CP-2G's forward model, or CP-1 for a layer-1 forecast.
   const fullName=forecast?.output&&(data[forecast.output].module==='CP-2G'?'the full forward credit model output':`the ${data[forecast.output].module} output the forecast was built from`);
   const full=forecast?.output?`<a class="text-action" href="${routeHref(data[forecast.output].module,modules[forecast.output].first,null,forecast.run,data[forecast.output].source)}">Open ${fullName}${icon('arrow-right')}</a>`:'';
-  const assumptions=`<section class="forecast-assumptions"><h2>Assumptions and their rationale</h2>${register?`<h3>${esc(register.heading)}</h3>${register.intro==null?'':`<p class="register-intro">${esc(register.intro)}</p>`}${register.headers.length?`<div class="table-scroll"><table><thead><tr>${register.headers.map(c=>`<th scope="col">${esc(c)}</th>`).join('')}</tr></thead><tbody>${register.rows.map(r=>`<tr>${r.map(c=>`<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`:''}${full}`:'<p>This model’s forecast handoff has no assumption register.</p>'}</section>`;
-  const source=s=>s.output?`<a href="${routeHref(data[s.output].module,modules[s.output].first,null,s.run,data[s.output].source)}">${esc(s.output.split('/').at(-1))}</a>`:`<span title="${esc(s.path)}">${esc(sourceFile(s))}</span>`;
-  // The run is the folder the delivery declares the file under, so every source names one the same way.
-  const run=s=>{const id=/^runs\/([^/]+)\//.exec(s.path||'')?.[1];return id?`<span class="code">${esc(id)}</span>`:'<span class="muted">Not recorded</span>';};
-  const status=s=>s.sha256===null?badge('attention','Invalid path or hash'):s.changed?badge('attention','Changed since publication'):badge('gray','Matches publication');
-  const built=`<section class="forecast-built"><h2>Built from</h2><div class="table-scroll"><table><thead><tr><th scope="col">Role</th><th scope="col">Run</th><th scope="col">Source</th><th scope="col">SHA-256 prefix</th><th scope="col">Status</th></tr></thead><tbody>${model.sources.map(s=>`<tr><th scope="row">${esc(Object.hasOwn(SOURCE_ROLES,s.role)?SOURCE_ROLES[s.role]:s.role)}</th><td>${run(s)}</td><td>${source(s)}</td><td>${s.sha256===null?'':esc(s.sha256.slice(0,12))}</td><td>${status(s)}</td></tr>`).join('')}</tbody></table></div>${attemptNote(model.sources)}</section>`;
-  return `<div class="forecast"><div class="report-tools forecast-tools">${select}${acceptance.html}<a href="${esc(model.download)}" download>Download original HTML</a></div>${cashflowSection(model)}${assumptions}${model.cashflow?`<section class="forecast-limits"><h2>Model limitations</h2><ul>${model.cashflow.limits.map(l=>`<li>${esc(l)}</li>`).join('')}</ul></section>`:''}${why}${built}<details class="model-original"><summary>Published model (original HTML)</summary><div class="frame-host"><p class="frame-status" role="status" hidden></p><iframe id="model-preview" data-download="${esc(model.download)}" data-src="${esc(model.href)}" title="${esc(model.id)} · published model" sandbox="allow-scripts allow-downloads" referrerpolicy="no-referrer"></iframe></div></details></div>`;
+  // The register and the limitation lines are the model's own words. A file name, a module code, a calculation or scenario identifier inside them is held back
+  // (findingCell, strict) and one link to Evidence stands in; a source column and an identifier column are Evidence's.
+  const ctx={tokens:forecast?.output&&data[forecast.output]?moduleTableContext(forecast.output).tokens:[],strict:true,evidenceHref:window.Evidence.href('registers',forecast?.output&&data[forecast.output]?data[forecast.output].module:null,context)};
+  const block=register&&register.headers.length?{headers:register.headers,rows:register.rows.map((cells,at)=>({line:at,cells}))}:null;
+  const table=block&&block.rows.length?window.Components.chartTable(block,{...ctx,caption:register.heading}):'';
+  const assumptions=`<section class="forecast-assumptions"><h2>Assumptions and their rationale</h2>${register?`${register.intro==null?'':`<p class="register-intro">${esc(register.intro)}</p>`}${table?`<details class="forecast-register"><summary>The assumptions behind the forecast (${block.rows.length})</summary>${table}</details>`:''}${full}`:'<p>This model’s forecast handoff has no assumption register.</p>'}</section>`;
+  const limits=model.cashflow?model.cashflow.limits.map(l=>({l,cell:window.Components.findingCell(l,ctx)})):[];
+  const heldLimits=limits.filter(x=>x.cell.html===undefined).length;
+  const limitList=limits.filter(x=>x.cell.html!==undefined).map(x=>`<li>${x.cell.html}</li>`).join('')+(heldLimits?`<li class="fc-held">${heldLimits} further ${heldLimits===1?'limitation is':'limitations are'} stated in Evidence. <a class="in-ev" href="${esc(ctx.evidenceHref)}">In Evidence</a></li>`:'');
+  // Built from: the modules and roles the model read, linked; no file name, hash or folder (those are Evidence's run record).
+  const source=s=>`<li>${s.output?`<a href="${routeHref(data[s.output].module,modules[s.output].first,null,s.run,data[s.output].source)}">${esc(Object.hasOwn(SOURCE_ROLES,s.role)?SOURCE_ROLES[s.role]:'Source')} · ${esc(moduleTitle(data[s.output].module))}</a>`:`<span>${esc(Object.hasOwn(SOURCE_ROLES,s.role)?SOURCE_ROLES[s.role]:'Source')}</span>`}${s.sha256===null?badge('attention','Invalid path or hash'):s.changed?badge('attention','Changed since publication'):''}</li>`;
+  const differing=new Set(model.sources.map(sourceFile).filter(f=>/-attempt-\d+/.test(f)).map(f=>/-attempt-(\d+)/.exec(f)[1])).size>1;
+  const built=model.sources.length?`<section class="forecast-built"><h2>Built from</h2><ul class="fc-built">${model.sources.map(source).join('')}</ul>${differing?'<p class="forecast-attempts">These inputs come from different attempts.</p>':''}</section>`:'';
+  const label=optionLabels[models.indexOf(model)];
+  const frame=`<details class="model-original"><summary>Published model (original HTML)</summary><div class="frame-host"><div class="frame-head"><h3>Published model</h3><span>${esc(label)}</span></div><p class="frame-status" role="status" hidden></p><iframe id="model-preview" data-download="${esc(model.download)}" data-src="${esc(model.href)}" title="Published model, ${esc(label)}" sandbox="allow-scripts allow-downloads" referrerpolicy="no-referrer"></iframe></div></details>`;
+  return `<div class="forecast">${forecastCharts(context)}<div class="report-tools forecast-tools">${select}${acceptance.html}<a href="${esc(model.download)}" download>Download original HTML</a></div>${cashflowSection(model)}${assumptions}${model.cashflow?`<section class="forecast-limits"><h2>Model limitations</h2><ul>${limitList}</ul></section>`:''}${why}${built}${frame}</div>`;
 }
 // The Library screen. The served catalogue (window.DESIGN_CATALOGUE) is screened and sorted by LibraryLogic (screening.js); this places it. Nothing here calculates, converts or rescales a value.
 const METRIC_NAMES={revenue:'Revenue',ebitda:'EBITDA',leverage:'Leverage',net_leverage:'Net leverage',coverage:'Interest coverage',cash:'Closing cash',undrawn:'Undrawn facilities',cashflow:'Cash flow measure'};
@@ -1593,7 +1665,7 @@ function workspaceView(module,section) {
   if(module==='W-Changes')return changesView(context);
   if(module==='W-Report')return historyView(context);
   if(module==='W-Evidence')return evidenceView(context);
-  if(module==='W-Forecast')return forecastView(context,section)+chartIndex(context);
+  if(module==='W-Forecast')return forecastView(context,section);
   if(module==='CP-OS')return activityView(window.RUN_ACTIVITY);
   return '';
 }

@@ -224,6 +224,8 @@
     const parts = text.split(/\s*[;,]\s*/).filter(part => part !== '');
     return parts.length > 0 && parts.every(part => [...STRONG_REFERENCE, ...WEAK_REFERENCE].some(rx => rx.test(part))) && parts.some(part => STRONG_REFERENCE.some(rx => rx.test(part)));
   }
+  const REFERENCE_IN_TEXT = [/[\w-]+\.[A-Za-z]{2,5}\b/, /\bCP-[A-Za-z0-9]+/, /\b[0-9a-f]{32,}\b/i];
+  const SCENARIO_ID = /\bSC\d+\b/;
   const tokenPatterns = new WeakMap();
   function tokensIn(text, tokens) {
     if (!Array.isArray(tokens) || !tokens.length) return [];
@@ -237,6 +239,8 @@
     // Only identifiers (an id cell such as "s00"): rule (a), plain omission. An identifier inside other text: rule (b), the link to Evidence.
     if (found.length && /^[\s;,&]*$/.test(found.reduce((text, token) => text.split(token).join(''), raw))) return {omitted: true};
     if (calculationId().test(raw) || found.length) return {omitted: true, inEvidence: true};
+    // `ctx.strict` (the Forecast page): a file name, a hash or a scenario id inside other text is held back the same way. A module code is not: the page names it (nameCodes).
+    if (ctx.strict && ([REFERENCE_IN_TEXT[0], REFERENCE_IN_TEXT[2]].some(rx => rx.test(readerText().plainText(raw))) || SCENARIO_ID.test(raw))) return {omitted: true, inEvidence: true};
     return {html: readerText().richText(raw)};
   }
   const evidenceLink = ctx => (ctx.evidenceHref ? `<a class="in-ev" href="${escapeHtml(ctx.evidenceHref)}">In Evidence</a>` : '');
@@ -304,6 +308,9 @@
     }).join('')}${Array.from({length: extraWidth(block)}, (_, k) => `<td>${fieldHtml(cellText(row, block.headers.length + k), ctx)}</td>`).join('')}</tr>`).join('');
     return `<div class="dtbl-wrap" role="region" tabindex="0"${ctx.caption ? ` aria-label="${escapeHtml(ctx.caption)}"` : ''}><table class="${className}"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
   }
+
+  // The table inside a chart card: the contract's rows as written, minus the columns a findings page never draws (source, id, inter-module).
+  const chartTable = (block, ctx) => designedTable(block, visibleColumns(block, 'records', ctx), ctx, 'dtbl chart-dtbl');
 
   // C3: one metric tile. `value` is the cell as it stands; a cell longer than 24 characters is text, so its tile is wide and the cell is not set large.
   const WIDE_AT = 24;
@@ -805,7 +812,6 @@
   // findingCell (an identifier keeps the Evidence link in its place). A hidden column's cell that itself states an absence is the module's reason too (a map's last cell says why no edge can be
   // drawn), but only when it is clean: findingCell accepts it and it holds no file name, module code or hash; otherwise it is held back (`held`) and the Evidence link stands in.
   // An inter-module cell is drawn nowhere. `pure`: every visible cell with text states an absence. `found`: how many distinct stated cells there are.
-  const REFERENCE_IN_TEXT = [/[\w-]+\.[A-Za-z]{2,5}\b/, /\bCP-[A-Za-z0-9]+/, /\b[0-9a-f]{32,}\b/i];
   function statedReasons(block, cols, ctx) {
     const seen = new Set(), reasons = [], shownAt = new Set(cols.map(col => col.at)), out = {reasons, held: false, pure: true, found: 0};
     const stated = text => STATED_ABSENCE.test(plain(text).trim());
@@ -834,7 +840,12 @@
   const hasDatedEvent = block => block.rows.some(row => { const when = cellText(row, 0); return when !== '' && !STATED_ABSENCE.test(plain(when).trim()); });
   const absentBlock = (block, ctx, absent) => emptyState(NOT_ESTABLISHED, absent.reasons, stateTools(block, ctx, absent.held));
   // A drawing whose table states none (a chart the module could not draw): the empty state with the table's stated reasons, the same path as a lane or a map.
-  const gapState = (block, ctx) => { const found = statedReasons(block, visibleColumns(block, 'records', ctx), ctx); return emptyState(NOT_ESTABLISHED, found.reasons, stateTools(block, ctx, found.held)); };
+  // `stated` is the reason the build holds for the drawing: it stands in when the table itself states none.
+  const gapState = (block, ctx, stated = '') => {
+    const found = statedReasons(block, visibleColumns(block, 'records', ctx), ctx);
+    const reasons = found.reasons.length || String(stated).trim() === '' ? found.reasons : [fieldHtml(String(stated).trim(), ctx)].filter(html => html !== '');
+    return emptyState(NOT_ESTABLISHED, reasons, stateTools(block, ctx, found.held));
+  };
 
   // ---- dated: C15, the dated timeline. Events stand in the table's own order, equally spaced; a date is drawn as written and no axis is invented.
   // Six events or fewer run across from 992px, more run down the page (grouped by year when every date opens with one); a page that gives the block a narrow column sets `ctx.stacked` to run them down. A category word is drawn with its icon;
@@ -1056,7 +1067,7 @@
     return `<nav class="sec-rail" aria-label="On this page"><p class="eyebrow">On this page</p>${items.map(link).join('')}</nav>`;
   }
 
-  const Components = {icon, traceButton, traceRow, headerChips, placePill, toast, toastHost, tipAttributes, verdictPanel, findingsFeed, callout, limitationsBlock, recordCards, findingCell, render, casesBlock, caseRowsBlock, rankedLadder, statementCard, metricTiles, measureTiles, changeCards, statusChecklist, sidedBoard, moduleStateTiles, hasDatedEvent, metricStrip, moduleTiles, attribution, qaAccordion, factList, riskMatrix, watchList, datedTimeline, pathwayFlow, emptyState, gapState, loopNote, mapLayers, pathwayDiagram, foldsForPrint, paragraphText, handleClick, sectionRail, ICON_PATHS};
+  const Components = {icon, traceButton, traceRow, headerChips, placePill, toast, toastHost, tipAttributes, verdictPanel, findingsFeed, callout, limitationsBlock, recordCards, findingCell, render, casesBlock, caseRowsBlock, rankedLadder, statementCard, metricTiles, measureTiles, changeCards, statusChecklist, sidedBoard, moduleStateTiles, hasDatedEvent, metricStrip, moduleTiles, attribution, qaAccordion, factList, riskMatrix, watchList, datedTimeline, pathwayFlow, emptyState, gapState, chartTable, viewToggle, pane, visibleColumns, loopNote, mapLayers, pathwayDiagram, foldsForPrint, paragraphText, handleClick, sectionRail, ICON_PATHS};
   if (typeof window !== 'undefined') window.Components = Components;
   if (typeof document !== 'undefined' && document.body) toastHost();
   if (typeof module !== 'undefined') module.exports = Components;

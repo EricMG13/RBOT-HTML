@@ -278,7 +278,7 @@ test('the library page lists the folders not shown and the build issues closed, 
 
 test('Forecast for a run with no CP-2G output says no model was published', () => {
   const views = read('views.js');
-  assert.ok(views.includes('if(!models.length)return forecastEmpty(context);'));
+  assert.ok(views.includes('if(!models.length)return forecastEmpty(context)+forecastCharts(context);'));
   assert.ok(views.includes("data[forecast.output].module==='CP-2G'?'the full forward credit model output':`the ${data[forecast.output].module} output the forecast was built from`"), 'the link names the module it opens');
   assert.ok(views.includes('>Open ${fullName}${icon'), 'the label is not fixed text');
   assert.ok(views.includes('No forecast model was published from this run’s files'));
@@ -999,7 +999,7 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules, more
   const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag', 'eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'eventTicks', 'eventAsOf', 'eventStack', 'eventRoom', 'earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes', 'matchesHeading', 'readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml', 'passageControls', 'eventTimeline', '$', 'appDestinations', 'document'];
   const eventTimeline = realEventTimeline(esc, rich);
   const args = [{ ratingScope: 'issuer' }, libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head', sections: more.sections?.[id] || [] }])), contexts, more.store || {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => '', ...['eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'eventTicks', 'eventAsOf', 'eventStack', 'eventRoom'].map(name => require('./calendar.js')[name]), ...['earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes'].map(name => require('./reader.js')[name]), (heading, prefix) => (prefix.startsWith('=') ? heading === prefix.slice(1) : heading.startsWith(prefix)), ...['readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml', 'passageControls'].map(name => require('./reader.js')[name]), eventTimeline, more.dom?.$, new Set(['W-Library', 'CP-OS']), more.dom?.document];
-  return new Function(...names, `${src}; return {runReport, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, moduleHead, headerChipMarkup, traceHref, drawerFoot, runName, updateWorkspaceChrome, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, chartIndex, moduleReport, reportParts, outlineMarkup, navigatorView, issuerMeta, startRunHref, startRunLink, drawnAnchors, defaultOutput, firstSection, cashflowSection, modelOptionLabels};`)(...args);
+  return new Function(...names, `${src}; return {runReport, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, moduleHead, headerChipMarkup, traceHref, drawerFoot, runName, updateWorkspaceChrome, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, chartIndex, moduleReport, reportParts, outlineMarkup, navigatorView, issuerMeta, startRunHref, startRunLink, drawnAnchors, defaultOutput, firstSection, cashflowSection, modelOptionLabels, forecastView, forecastCharts, chartCard};`)(...args);
 }
 const countOf = (html, re) => (html.match(re) || []).length;
 
@@ -4098,4 +4098,131 @@ test('changesView hands changes.js the CP-8 output (id, module, run, chip counts
   const none = new Function('contexts', 'data', 'historyRows', 'sameIssuer', 'window', 'runPathway', 'displayDate', 'routeHref', 'ChangesView', `${body}; return changesView;`)(
     { 'run-1': { ...run, modules: {} } }, {}, rows => rows, (a, b) => a === b, win, () => 'Credit snapshot', iso => iso, () => '#x', spy)('run-1');
   assert.ok(none.includes('The explanation of the changes is not held for this run.') && given[1].output === null && given[1].cp8 === null);
+});
+
+// ---- The Forecast page's run charts (Task 10): small multiples, one card per chart contract; form by contract kind and shape; the table, the footnote and ONE trace control per card.
+const FC_HEAD = ['Period', 'EBITDA / cash interest', 'Reporting unit', 'Basis and limitation'];
+const fcSections = () => [
+  sec('Chart data: cover', 3, 10, 'consumed', [table(12, FC_HEAD, [[13, 'FY2023', '2.93', 'x', 'EBITDA over interest; calculation C13'], [14, 'FY2024', '3.60', 'x', 'Over cash interest, net']])]),
+  sec('Chart data: revenue', 3, 20, 'consumed', [table(22, ['Period', 'Revenue', 'Adjusted EBITDA', 'Reporting unit', 'Basis and limitation'], [[23, 'FY2023', '6585', '3395', 'US$m', 'Annual; K_10.htm.jsonl, pages 71'], [24, 'FY2024', '7940', '4173', 'US$m', 'Annual <b>&"quoted"']])]),
+  sec('Chart data: maturities', 3, 30, 'consumed', [table(32, ['Period', 'Debt maturing', 'Reporting unit', 'Basis and limitation'], [[33, 'FY2025', '93', 'US$m', 'Schedule; downside SC1 case'], [34, 'FY2026', '92', 'US$m', 'Schedule'], [35, 'FY2027', '6637', 'US$m', 'Schedule']])]),
+  sec('Chart data: odd', 3, 40, 'consumed', [table(42, ['Item', 'Value', 'Source'], [[43, 'Alpha <b>&"', '12', 'K.jsonl, page 3']])]),
+  sec('Chart data: limits', 3, 50, 'consumed', [table(52, ['Period', 'Limit'], [[53, 'FY2024', 'Not supplied: no limit stated in any source']])]),
+];
+const fcOutput = (extra = {}) => runOutput('CP-1', {
+  sections: fcSections(), state: { established: true, declared: null }, summary: null, words: {}, period: 'As of 2025-03-31',
+  charts: [{ title: 'Interest cover', unit: 'x', table: 12, columns: [1] }, { title: 'Revenue and EBITDA', unit: 'US$m', table: 22, columns: [1, 2] }, { title: 'Debt maturities', unit: 'US$m', table: 32, columns: [1] }, { title: 'Odd chart', unit: '', table: 42, kind: 'sunburst' }],
+  chartGaps: [{ title: 'Portfolio limits', table: 52, gap: 'no limit stated' }], ...extra,
+});
+const fcPage = (extra, more = {}) => runPage(() => ({ [outId('CP-1')]: fcOutput(extra) }), [], m => m, { record: steps(['CP-1']), runFields: { asOf: '2025-03-31' }, ...more });
+const fcCards = html => html.split('<article class="fc-card"').slice(1).map(card => `<article class="fc-card"${card.split('</article>')[0]}</article>`);
+const cardOf = (html, title) => fcCards(html).find(card => card.includes(`<h3>${title}</h3>`));
+const fcAuditText = /\.jsonl|\.htm\b|[Cc]alculations? [A-Z]{1,2}\d{2}\b|\bSC\d\b|sha256/;
+
+test('Forecast charts: one card per contract and gap, in the data\'s order, in the 24-column grid; a two-row single-measure period contract is a prior-value tile, never a line', () => {
+  const html = fcPage().forecastCharts(RUN);
+  assert.deepEqual([...html.matchAll(/<article class="fc-card"[^>]*aria-label="([^"]*)"/g)].map(m => m[1]), ['Interest cover', 'Revenue and EBITDA', 'Debt maturities', 'Odd chart', 'Portfolio limits']);
+  assert.ok(html.includes('class="g24 fc-grid"') && html.includes('id="run-charts"') && html.includes('5 charts, 1 not drawn'));
+  const cover = cardOf(html, 'Interest cover');
+  const figure = cover.replace(/<svg class="i"[\s\S]*?<\/svg>/g, '');
+  assert.ok(cover.includes('class="fc-pair"') && !/<polyline|<path|<svg/.test(figure), 'no line is drawn through two points');
+  assert.ok(/<span class="fc-k">FY2024<\/span><strong>3\.60<\/strong>/.test(cover) && /<span class="fc-k">FY2023<\/span><span>2\.93<\/span>/.test(cover), 'the cells as written, the later period first');
+  const revenue = cardOf(html, 'Revenue and EBITDA');
+  assert.ok(!revenue.includes('fc-pair') && revenue.includes('class="column-chart"'), 'two measures over two periods are paired columns');
+  assert.ok(cardOf(html, 'Debt maturities').includes('class="column-chart"'), 'amounts by period are columns');
+});
+
+test('Forecast charts: every non-hidden cell of a contract\'s rows is in the card\'s table; a cell that names an identifier is held back with a link to Evidence', () => {
+  const html = fcPage().forecastCharts(RUN);
+  const tableOf = card => /<div data-pane="table"[^>]*>(.*?)<\/table>/s.exec(card)[1];
+  const cover = tableOf(cardOf(html, 'Interest cover'));
+  for (const text of ['FY2023', '2.93', 'FY2024', '3.60', 'Over cash interest, net', 'Period', 'EBITDA / cash interest', 'Reporting unit', 'Basis and limitation']) assert.ok(strip(cover).includes(text), text);
+  assert.ok(cover.includes('class="in-ev"') && !strip(cover).includes('calculation C13'));
+  const revenue = tableOf(cardOf(html, 'Revenue and EBITDA'));
+  for (const text of ['6585', '3395', '7940', '4173', 'US$m']) assert.ok(strip(revenue).includes(text), text);
+  assert.ok(!revenue.includes('.jsonl'), 'a file name inside a basis cell is held back');
+});
+
+test('Forecast charts: each card has exactly one trace control and no per-period source button', () => {
+  const html = fcPage().forecastCharts(RUN);
+  for (const card of fcCards(html)) {
+    assert.equal(countOf(card, /class="basis-link/g), 1, card.slice(0, 200));
+    assert.ok(!/<button[^>]*class="chart-row"/.test(card) && !card.includes('View source'));
+  }
+});
+
+test('Forecast charts: no file name, calculation ID or scenario id in the text or any attribute of the page (the drawer keys of the trace buttons aside)', () => {
+  const html = fcPage().forecastCharts(RUN).replace(/ data-evidence="[^"]*"/g, '');
+  assert.ok(!fcAuditText.test(html), (html.match(fcAuditText) || [])[0]);
+  assert.ok(!html.includes('SC1') && !html.includes('K_10'));
+});
+
+test('Forecast charts: the contract\'s Basis and limitation is a visible footnote, verbatim, and a held-back text is one link to Evidence', () => {
+  const html = fcPage().forecastCharts(RUN);
+  const cover = cardOf(html, 'Interest cover'), note = /<div class="fc-note">.*?<\/div>/s.exec(cover)[0];
+  assert.ok(note.includes('Basis and limitation') && note.includes('Over cash interest, net') && countOf(note, /class="in-ev"/g) === 1);
+  const maturities = /<div class="fc-note">.*?<\/div>/s.exec(cardOf(html, 'Debt maturities'))[0];
+  assert.ok(maturities.includes('<b>FY2026</b> Schedule') && !maturities.includes('SC1'));
+});
+
+test('Forecast charts: a chart gap is the empty state with its stated reason verbatim, in a card of its own, with one trace control', () => {
+  const html = fcPage().forecastCharts(RUN), gap = cardOf(html, 'Portfolio limits');
+  assert.ok(gap.includes('class="empty-state"') && strip(gap).includes('Not supplied: no limit stated in any source') && !gap.includes('class="column-chart"'));
+  assert.equal(countOf(gap, /class="basis-link/g), 1);
+  const bare = fcPage({ charts: [], chartGaps: [{ title: 'Portfolio limits', table: 42, gap: 'No holdings report attached' }] }).forecastCharts(RUN);
+  assert.ok(strip(cardOf(bare, 'Portfolio limits')).includes('No holdings report attached'), 'the build\'s stated reason stands in when the table states none');
+});
+
+test('Forecast charts: the toggle is the shared Chart or Table switch (aria-pressed, the table hidden at first); an unknown contract kind is its table as written, with no toggle', () => {
+  const html = fcPage().forecastCharts(RUN), cover = cardOf(html, 'Interest cover');
+  assert.ok(cover.includes('data-block') && cover.includes('data-view="chart"') && cover.includes('data-view-pick="chart" aria-pressed="true"') && cover.includes('data-view-pick="table" aria-pressed="false"'));
+  assert.ok(cover.includes('<div data-pane="chart">') && cover.includes('<div data-pane="table" hidden>'));
+  const odd = cardOf(html, 'Odd chart');
+  assert.ok(odd.includes('<div data-pane="table">') && !odd.includes('data-view-pick') && !odd.includes('data-pane="table" hidden') && odd.includes('dtbl'), 'never an empty card');
+  assert.ok(odd.includes('Alpha &lt;b&gt;&amp;&quot;') && !odd.includes('K.jsonl'), 'a cell with <b>&" is escaped');
+});
+
+test('Forecast charts: a contract that carries markup characters is escaped in the figure and the table', () => {
+  const html = fcPage().forecastCharts(RUN), revenue = cardOf(html, 'Revenue and EBITDA');
+  assert.ok(!revenue.includes('<b>&"') && revenue.includes('&lt;b&gt;&amp;&quot;'), 'the basis cell');
+});
+
+test('Forecast charts: a run with no chart says so (the empty state), and a not-assessable module\'s chart is a card saying why', () => {
+  const none = fcPage({ charts: [], chartGaps: [] }).forecastCharts(RUN);
+  assert.ok(none.includes('class="empty-state"') && none.includes('No chart in this run') && !none.includes('fc-grid'));
+  const only = fcPage({ charts: [] }).forecastCharts(RUN);
+  assert.ok(only.includes('1 chart, 1 not drawn') && fcCards(only).length === 1, 'gaps only');
+  const hidden = fcPage({ state: { established: false, declared: null }, summary: { limitation: 'No comparable source.' } }).forecastCharts(RUN);
+  assert.ok(strip(cardOf(hidden, 'Interest cover')).includes('No comparable source.') && !cardOf(hidden, 'Interest cover').includes('fc-pair'));
+});
+
+test('Forecast page: charts but no model show the charts after the no-model statement; the Chart index is no longer on the page', () => {
+  const page = fcPage();
+  const html = page.forecastView(RUN);
+  assert.ok(html.includes('No forecast model was published') && html.indexOf('missing-state') < html.indexOf('run-charts'));
+  assert.ok(!html.includes('Chart index') && !html.includes('index-table'));
+});
+
+test('Forecast page with a model: the register, the limitations and Built from draw no file name, hash, calculation or scenario id; the model frame gains only a framed header', () => {
+  const model = pickModel(HASH_1, {
+    mode: 'candidate', qualification: 'partial', download: '../d/model.html', href: '../d/model.html', scope: 'A forecast.',
+    register: { heading: 'Assumption register', headers: ['assumption_id', 'driver', 'source', 'rationale'], rows: [['A-01', 'revenue growth', 'K_10.htm.jsonl, page 45', 'Fade from 16.2%'], ['A-02', 'downside shock SC1', 'calculation G06', 'Moderate case']] },
+    cashflow: { units: 'USD millions', columns: gridColumns, notes: [], limits: ['Every figure is arithmetic.', 'Downside is scenario SC1: a rate rise.'], rows: [gridRow('Revenue', 'Revenue', false, [cell('value', '1,000'), cell('value', '1,050')])], other: null },
+    sources: [{ role: 'annual', run: RUN, path: `runs/${RUN}/x/annual.md`, sha256: HASH_1, changed: false }],
+  });
+  const html = fcPage(undefined, { models: [model], runFields: PICK_RUNS }).forecastView(RUN, HASH_1);
+  const clean = html.replace(/ data-evidence="[^"]*"/g, '').replace(/ (?:value|data-download|data-src|href)="[^"]*"/g, '');
+  assert.ok(!fcAuditText.test(clean) && !clean.includes(HASH_1.slice(0, 12)) && !/SHA-256|attempt-/.test(clean), (clean.match(fcAuditText) || [])[0]);
+  assert.ok(html.includes('class="frame-head"') && html.includes('id="model-preview"') && html.includes('data-src="../d/model.html"') && html.includes('Open ') === false);
+  assert.ok(strip(html).includes('Every figure is arithmetic.') && strip(html).includes('1 further limitation is stated in Evidence'));
+  assert.ok(html.indexOf('id="run-charts"') < html.indexOf('id="model-select"') && html.includes('<details class="forecast-register">'));
+  assert.ok(!strip(html.slice(html.indexOf('forecast-register'), html.indexOf('</details>', html.indexOf('forecast-register')))).includes('A-01'), 'the id column is Evidence\'s');
+});
+
+test('Forecast charts: an earlier-format run draws the same cards and links each to its module\'s Key numbers; a new-format run links the Charts part', () => {
+  const earlier = fcPage().forecastCharts(RUN);
+  assert.equal(fcCards(earlier).length, 5);
+  assert.ok(earlier.includes('#CP-1/numbers?') && !earlier.includes('#CP-1/charts?'));
+  const newer = fcPage({ sections: [...passageSections({ bottom: 'Cash is up.' }), ...fcSections()] }).forecastCharts(RUN);
+  assert.ok(newer.includes('#CP-1/charts?') && !newer.includes('#CP-1/numbers?'));
 });
