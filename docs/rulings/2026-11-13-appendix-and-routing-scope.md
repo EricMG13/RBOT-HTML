@@ -102,12 +102,13 @@ token figures above are upper bounds for it; characters and tokens are not conve
 ## Library check
 
 On a library rebuilt offline from a copy of the medium Sol run with the cut handoffs
-(`.superpowers/sdd/quality-defects/t4-library-check.md`): the Modules page loses 91 sections (exactly
-the cut and routing registers present, plus the `## Next module` bodies); Overview, Changes and
-Forecast are identical; the Evidence page's own data is identical, but its "Original Markdown" links
-and `handoffs.zip` carry the shorter handoffs (719,342 to 510,094 bytes) and the retired delivered
-report's evidence-only coverage entries fall from 467 to 355. So "the Evidence page is unaffected" is
-partly true. Measured with T5B.3 and T6A.7 still cut; keeping them restores two Modules sections.
+(`.superpowers/sdd/quality-defects/t4-library-check-2.md`, on the current cut list): the Modules page
+loses 81 sections, 86 tables and 522 table rows (exactly the cut and routing registers present, plus
+the `## Next module` bodies); CP-2E still shows T2G.1 to T2G.8, CP-5 still shows T5B.3 and CP-6 still
+shows T6A.7; Overview, Changes and Forecast are identical; the Evidence page's own data is identical,
+but its "Original Markdown" links and `handoffs.zip` carry the shorter handoffs (719,342 to 526,450
+bytes) and the retired delivered report's evidence-only coverage entries fall from 467 to 365. So
+"the Evidence page is unaffected" is partly true.
 
 ## Not accepted
 
