@@ -12,6 +12,7 @@ from pathlib import Path
 
 from deploy_workflow.signal.fetch import FetchRefused, check_address
 from deploy_workflow.signal.ingest import health, run_due
+from deploy_workflow.signal.service import serve
 from deploy_workflow.signal.store import (
     KINDS,
     ROLES,
@@ -22,6 +23,7 @@ from deploy_workflow.signal.store import (
     set_source_state,
     sources,
 )
+from deploy_workflow.signal.topics import add_topic, list_topics
 
 LOOP_SECONDS = 60
 _STORIES_SQL = """
@@ -54,8 +56,20 @@ def _parser() -> argparse.ArgumentParser:
         srcs.add_parser(action).add_argument("id", type=int)
     srcs.add_parser("list")
 
+    topics = commands.add_parser("topics").add_subparsers(dest="action", required=True)
+    new_topic = topics.add_parser("add")
+    new_topic.add_argument("name")
+    new_topic.add_argument("--keywords", required=True, help="comma-separated phrases")
+    new_topic.add_argument("--kinds", default="", help="comma-separated; empty means every kind")
+    new_topic.add_argument("--by", required=True)
+    topics.add_parser("list")
+
     ingest = commands.add_parser("ingest")
     ingest.add_argument("--loop", action="store_true", help="a pass every 60 seconds")
+
+    serving = commands.add_parser("serve", help="the feed service and its ingest loop")
+    serving.add_argument("--host", default="127.0.0.1")
+    serving.add_argument("--port", type=int, default=8766)
 
     stories = commands.add_parser("stories")
     stories.add_argument("--limit", type=_positive_int, default=20)
@@ -100,6 +114,18 @@ def _stories(db: sqlite3.Connection, limit: int) -> None:
         print(f"{when}  {row['source_name']}  {row['title']}{folded}")
 
 
+def _split(text: str) -> list[str]:
+    return [part.strip() for part in text.split(",") if part.strip()]
+
+
+def _topics(db: sqlite3.Connection, args: argparse.Namespace) -> None:
+    if args.action == "add":
+        add_topic(db, args.name, _split(args.keywords), _split(args.kinds), args.by)
+    else:
+        for row in list_topics(db, ""):
+            print(f"{row['id']}  {row['stories']}  {row['name']}")
+
+
 def _dispatch(args: argparse.Namespace) -> None:
     db = open_db(args.root)
     try:
@@ -114,6 +140,8 @@ def _dispatch(args: argparse.Namespace) -> None:
             else:
                 state = "approved" if args.action == "approve" else "paused"
                 set_source_state(db, args.id, state)
+        elif args.command == "topics":
+            _topics(db, args)
         elif args.command == "ingest":
             _ingest(db, args.loop)
         else:
@@ -138,6 +166,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         args = _parser().parse_args(argv)
     except SystemExit as exit_:
         return exit_.code if isinstance(exit_.code, int) else 2
+    if args.command == "serve":
+        return serve(args.root, args.host, args.port)
     try:
         _dispatch(args)
     except (StoreError, FetchRefused) as error:

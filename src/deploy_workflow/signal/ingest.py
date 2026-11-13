@@ -9,7 +9,17 @@ from typing import Literal
 from deploy_workflow.signal import fetch
 from deploy_workflow.signal.feeds import FeedError, parse_feed
 from deploy_workflow.signal.fetch import Fetched, FetchRefused
-from deploy_workflow.signal.store import Check, add_story, last_check, record_check, sources
+from deploy_workflow.signal.fold import link_key
+from deploy_workflow.signal.store import (
+    Check,
+    _utc_text,
+    add_story,
+    last_check,
+    record_check,
+    set_meta,
+    sources,
+)
+from deploy_workflow.signal.topics import match_story
 
 MIN_INTERVAL = timedelta(seconds=600)
 QUIET_AFTER = timedelta(days=7)
@@ -22,6 +32,13 @@ FetchFn = Callable[[str, str | None, str | None], Fetched]
 def _is_due(db: sqlite3.Connection, source_id: int, now: datetime) -> bool:
     previous = last_check(db, source_id)
     return previous is None or datetime.fromisoformat(previous["at"]) <= now - MIN_INTERVAL
+
+
+def _match_new(db: sqlite3.Connection, source_id: int, link: str) -> None:
+    story = db.execute(
+        "SELECT id FROM stories WHERE source_id=? AND link_key=?", (source_id, link_key(link))
+    ).fetchone()
+    match_story(db, story["id"])
 
 
 def _check_source(
@@ -37,7 +54,11 @@ def _check_source(
         entries = parse_feed(fetched.body)
     except (FetchRefused, FeedError) as error:
         return Check(now, False, str(error), etag, modified, 0)
-    new = sum(1 for entry in entries if add_story(db, source["id"], entry, now) == "new")
+    new = 0
+    for entry in entries:
+        if add_story(db, source["id"], entry, now) == "new":
+            new += 1
+            _match_new(db, source["id"], entry.link)
     return Check(now, True, f"{new} new", fetched.etag, fetched.modified, new)
 
 
@@ -55,6 +76,7 @@ def run_due(
         check = _check_source(db, source, now, fetch_fn if fetch_fn is not None else fetch.fetch)
         record_check(db, source["id"], check)
         results.append((source["id"], check.ok, check.reason))
+    set_meta(db, "last_pass_at", _utc_text(now))
     return results
 
 

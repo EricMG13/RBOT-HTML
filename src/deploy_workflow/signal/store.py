@@ -87,8 +87,35 @@ CREATE TRIGGER stories_au AFTER UPDATE ON stories BEGIN
 END;
 """
 
+_MIGRATION_2 = """
+CREATE TABLE topics(
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    keywords TEXT NOT NULL,
+    kinds TEXT NOT NULL,
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE TABLE topic_stories(
+    topic_id INTEGER NOT NULL REFERENCES topics(id),
+    story_id INTEGER NOT NULL REFERENCES stories(id),
+    UNIQUE(topic_id, story_id)
+);
+CREATE TABLE topic_follows(
+    user_name TEXT NOT NULL,
+    topic_id INTEGER NOT NULL REFERENCES topics(id),
+    UNIQUE(user_name, topic_id)
+);
+CREATE TABLE saves(
+    user_name TEXT NOT NULL,
+    story_id INTEGER NOT NULL REFERENCES stories(id),
+    saved_at TEXT NOT NULL,
+    UNIQUE(user_name, story_id)
+);
+"""
+
 # Ordered; later slices append. Index i holds the script that brings the schema to version i + 1.
-MIGRATIONS = [_MIGRATION_1]
+MIGRATIONS = [_MIGRATION_1, _MIGRATION_2]
 _BUSY_SECONDS = 30
 
 
@@ -169,6 +196,16 @@ def open_db(root: Path) -> sqlite3.Connection:
         db.close()
         raise
     return db
+
+
+def set_meta(db: sqlite3.Connection, key: str, value: str) -> None:
+    with db:
+        db.execute("INSERT OR REPLACE INTO meta(key, value) VALUES(?, ?)", (key, value))
+
+
+def get_meta(db: sqlite3.Connection, key: str) -> str | None:
+    row = db.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()
+    return str(row["value"]) if row else None
 
 
 def _utc_text(at: datetime) -> str:
