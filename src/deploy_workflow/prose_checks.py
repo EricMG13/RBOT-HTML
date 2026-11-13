@@ -35,6 +35,7 @@ comments, list markers removed. Decisions where the ruling is silent:
 
 import re
 from collections.abc import Mapping
+from decimal import ROUND_HALF_EVEN, ROUND_HALF_UP, Context, Decimal, localcontext
 from itertools import groupby
 from typing import NamedTuple
 
@@ -871,8 +872,11 @@ def prose_issues(text: str, accepted: Mapping[str, str] = {}) -> tuple[str, ...]
 # check: it is not one of the eight prose checks. A number as the reader sees it is the longest
 # run of digits at that place (3.14 is read whole, never as 3.1; a malformed 1.2.3 or 12,5 is
 # still read, as 1.2 and 3, or 12 and 5), with the sign it was written with (a leading minus, or
-# parentheses) and the unit or scale beside it. On the passage side dates and period labels
-# are masked as in check 8. A held currency code is not compared with the passage's (old behaviour).
+# parentheses) and the unit or scale beside it. A comma between digit groups of three is a
+# thousands separator (4,173 is 4173); a parenthesised figure is a negative unless it directly
+# follows a real figure and is a ratio or a rounding of it (`3,395 (51.6%)`), a note read as
+# written. On the passage side dates and period labels are masked as in check 8. A held currency
+# code is not compared with the passage's (old behaviour).
 CODE = re.compile(r"\bCP-[A-Z0-9]+\b|\bT\d+[A-Z]?\.\d+\b|\b[0-9A-Fa-f]{16,}\b")
 _NUMBER_UNIT = (
     r"%|x\b|\s?pp\b|\s?bps\b|\s?bp\b|\s?per ?cent\b"
@@ -920,24 +924,126 @@ def _unit(written: str | None) -> str | None:
 PERIOD_WORD = re.compile(r"\b(?:[QH][1-4]|FY\d{2,4}E?|LTM|\d+M)\b")
 
 
+_REFERENCE = re.compile(
+    r"\b(?:notes?|pages?|pp?\.|rows?|items?|steps?|sections?|tables?)\s*$", re.IGNORECASE
+)
+_YEAR = re.compile(r"(?:19|20)\d\d")
+_CURRENCY_BEFORE = re.compile(r"(?:US\$|USD|\$|EUR|€|GBP|£)\s?$", re.IGNORECASE)
+_PERIOD_BEFORE = re.compile(
+    r"\b(?:FY|CY|LTM|YTD|Q[1-4]|H[12]|[1-4]Q|[12]H|years?|yr)\s?$", re.IGNORECASE
+)
+
+
+# The longest word these three patterns match is `sections` (8), plus at most one space for the
+# currency and period patterns; 40 characters before the figure cover that with room to spare.
+_LOOK_BEHIND = 40
+
+
+def _ends_at(pattern: re.Pattern[str], base: str, end: int) -> re.Match[str] | None:
+    """`pattern` (anchored with `$`) matched against `base[:end]`, reading only the last
+    `_LOOK_BEHIND` characters (after any run of spaces, which `_REFERENCE` allows) instead of
+    copying the whole text before the figure."""
+    first = end
+    while first > 0 and base[first - 1].isspace():
+        first -= 1
+    return pattern.search(base, max(first - _LOOK_BEHIND, 0), end)
+
+
+def _is_amount_alone(found: re.Match[str], base: str) -> bool:
+    """An amount, not a label number or a glued token: after a space, `|`, `(`, `:` or the start
+    (a currency sign or code and a minus sign aside), and carrying a unit, a decimal part, a
+    thousands separator or 100 or more (`Year 2`, `FY 24`, `Sep-24`, `A1`, `v2.5` are not)."""
+    end = found.start("minus") if found["minus"] else found.start("n")
+    currency = _ends_at(_CURRENCY_BEFORE, base, end)
+    end = currency.start() if currency else end
+    unit = found["u1"] or found["u2"] or currency or "." in found["n"] or "," in found["n"]
+    return (end == 0 or base[end - 1].isspace() or base[end - 1] in "|(:") and bool(
+        unit or len(found["n"].lstrip("0")) >= 3
+    )
+
+
+def _is_real_figure(found: re.Match[str], base: str, labels: list[tuple[int, int]]) -> bool:
+    """A figure that is an amount (see `_is_amount_alone`), not in parentheses, not part of a date
+    or period label, not a bare year, not a reference after `Note`, `page`, ... and not directly
+    after a period word (`FY`, `Q3`, `H1`, `LTM`, `year`, ...)."""
+    start, end = found.start("n"), found.end("n")
+    return _is_amount_alone(found, base) and not (
+        found["open"]
+        or found["close"]
+        or any(a < end and start < b for a, b in labels)
+        or (_YEAR.fullmatch(found["n"]) and not (found["u1"] or found["u2"]))
+        or _ends_at(_REFERENCE, base, start)
+        or _ends_at(_PERIOD_BEFORE, base, start)
+    )
+
+
+def _is_note_on(found: re.Match[str], before: re.Match[str]) -> bool:
+    """A bracketed figure that is a ratio (`%` or `x`), or, with no unit change, either the figure
+    before it rounded to FEWER decimal places, or the same number to the same places with
+    thousands separators the figure before it lacks (`9432.72 (9,432.72)`). `100 (100)` is
+    neither."""
+    unit = _unit(found["u1"] or found["u2"])
+    if unit in ("%", "x"):
+        return True
+    if unit not in (None, _unit(before["u1"] or before["u2"])):
+        return False
+    if before["minus"]:  # `-1,291.272 (1,291.27)`: an unsigned bracket is not a rounding of it
+        return False
+    original, written = before["n"], found["n"]
+    places = len(written.partition(".")[2])
+    if len(original.partition(".")[2]) <= places:
+        return (
+            len(original.partition(".")[2]) == places
+            and "," in written
+            and "," not in original
+            and written.replace(",", "") == original
+        )
+    # The context is sized from the operands, so quantize cannot overflow on a long figure.
+    size = len(original.replace(",", "")) + places + 2
+    with localcontext(Context(prec=size, Emax=size)):
+        digits = Decimal(original.replace(",", ""))
+        exponent = Decimal(1).scaleb(-places)
+        return Decimal(written.replace(",", "")) in (
+            digits.quantize(exponent, ROUND_HALF_UP),
+            digits.quantize(exponent, ROUND_HALF_EVEN),
+        )
+
+
 def _figures(text: str, passage: bool = False) -> list[_Figure]:
     """Figures of `text`. On the passage side dates and period labels are not figures (as in
     check 8); held text is read unmasked, so a year held only in a date still matches."""
-    masked = CODE.sub(" ", text)
+    base = CODE.sub(" ", text)
+    spans = [m.span() for pattern in (DATE, PERIOD_WORD) for m in pattern.finditer(base)]
+    masked = base
     if passage:
         masked = PERIOD_WORD.sub(
-            lambda m: " " * len(m[0]), DATE.sub(lambda m: " " * len(m[0]), masked)
+            lambda m: " " * len(m[0]), DATE.sub(lambda m: " " * len(m[0]), base)
         )
-    return [
-        _Figure(
-            found["n"].rstrip("0").rstrip(".") if "." in found["n"] else found["n"],
-            bool(found["minus"] or (found["open"] and found["close"])),
-            bool(found["open"] and found["close"] and not found["minus"]),
-            _unit(found["u1"] or found["u2"]),
-            found[0].strip(),
+    figures: list[_Figure] = []
+    before: re.Match[str] | None = None
+    for found in NUMBER.finditer(masked):
+        bracketed = bool(found["open"] and found["close"] and not found["minus"])
+        # A bracketed figure right after a real figure annotates it when it is a ratio or a
+        # rounding of it: 3,395 (51.6%). Any other bracketed figure is an accounting negative.
+        annotation = (
+            bracketed
+            and before is not None
+            and base[before.end() : found.start()].strip(" \t") == ""
+            and _is_real_figure(before, base, spans)
+            and _is_note_on(found, before)
         )
-        for found in NUMBER.finditer(masked)
-    ]
+        before = found
+        number = found["n"].replace(",", "")  # a comma in a figure is a thousands separator
+        figures.append(
+            _Figure(
+                number.rstrip("0").rstrip(".") if "." in number else number,
+                bool(found["minus"] or (bracketed and not annotation)),
+                bracketed and not annotation,
+                _unit(found["u1"] or found["u2"]),
+                found[0].strip(),
+            )
+        )
+    return figures
 
 
 def _fidelity_problem(figure: _Figure, held: list[_Figure]) -> str | None:
