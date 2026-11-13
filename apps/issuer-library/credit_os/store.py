@@ -623,6 +623,9 @@ def _reader_summary(section: dict[str, Any]) -> dict[str, Any] | None:
 
 
 PLAIN_AMOUNT = re.compile(r"-?\d[\d,]*(?:\.\d+)?")
+# CP-1's money tables state the issuer's own currency: `US$m`, or its code and `m` (`GBPm`).
+MONEY_UNIT = re.compile(r"US\$m|[A-Z]{3}m", re.ASCII)
+MONEY_HEADINGS = ("Chart data: revenue and EBITDA", "Chart data: EBITDA bridge")
 STATED_GAP = re.compile(r"Not supplied:\s*\S")
 
 
@@ -722,10 +725,11 @@ def _row_chart(table: dict[str, Any]) -> dict[str, Any] | None:
             return None
         if not _row_relations_ok(rows, roles["kind"]):
             return None
-        if roles["kind"] == "stack" and any(
-            not STATED_GAP.match(r["cells"][3]) and r["cells"][-2] != "US$m" for r in rows
+        amount_units = {r["cells"][-2] for r in rows if not STATED_GAP.match(r["cells"][3])}
+        if roles["kind"] == "stack" and (
+            len(amount_units) > 1 or not all(map(MONEY_UNIT.fullmatch, amount_units))
         ):
-            return None
+            return None  # The debt stack is one money unit: the issuer's own currency.
         units = {row["cells"][-2] for row in rows}
         # A single stated unit is the figure's; rows in different units each state their own.
         return {**roles, "unit": units.pop() if len(units) == 1 else "", "columns": list(numeric)}
@@ -739,11 +743,28 @@ def _chart_head(section: dict[str, Any], table: dict[str, Any]) -> dict[str, Any
 
 
 def _period_cells_ok(section: dict[str, Any], table: dict[str, Any]) -> bool:
-    """Owner period and step tables use US$m, except cells explicitly stating a gap."""
+    """Owner period and step tables use US$m (CP-1's revenue and EBITDA and EBITDA bridge, the
+    issuer's one money unit), except cells explicitly stating a gap."""
     fixed = table["headers"][0] == "Step" or section["heading"] in (
         "Chart data: revenue and EBITDA",
         "Chart data: refinancing need",
     )
+    if fixed and section["heading"] in MONEY_HEADINGS:
+        stated = {
+            r["cells"][-2]
+            for r in table["rows"]
+            for c in r["cells"][1:-2]
+            if not STATED_GAP.match(c)
+        }
+        return (
+            len(stated) <= 1
+            and all(map(MONEY_UNIT.fullmatch, stated))
+            and all(
+                STATED_GAP.match(c) or PLAIN_AMOUNT.fullmatch(c)
+                for r in table["rows"]
+                for c in r["cells"][1:-2]
+            )
+        )
     return not fixed or all(
         STATED_GAP.match(c) or (PLAIN_AMOUNT.fullmatch(c) and r["cells"][-2] == "US$m")
         for r in table["rows"]

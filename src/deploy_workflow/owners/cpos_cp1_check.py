@@ -44,7 +44,8 @@ GAP_WORDS = ("Not supplied:", "Not calculable:")
 MAX_CELL = 25  # A longer cell is not a plain number; this also bounds every sum.
 PERIOD_FORMS = ("FY2024", "Q3 2025", "H1 2025", "9M 2025")
 UNIT_EXAMPLE = "USD millions"
-REGISTER_UNIT = "US$m"  # The Net debt table's Reporting unit.
+MONEY = "the money unit"  # Stands for the issuer's own currency unit in CP-1's money tables.
+REGISTER_UNIT = MONEY  # The Net debt table's Reporting unit.
 PLAIN = (
     f"a plain number of at most {MAX_CELL} characters (a negative has a minus sign, a positive "
     "no plus sign) or `Not supplied: <reason>` / `Not calculable: <reason>`"
@@ -438,14 +439,8 @@ class Statement:
         row = self.rows.get(label)
         return row[-3] if row else None
 
-    def usd(self, label: str) -> bool:
-        """Whether the row's Unit is `USD millions` or `USD thousands`: only a USD statement is
-        tied to the US$m tables."""
-        unit = self.unit(label) or ""
-        return _UNIT.fullmatch(unit) is not None and unit[:3] == "USD"
-
     def per(self, label: str) -> int | None:
-        """How many of the row's units make one of the US$m tables' (1 for millions, 1,000 for
+        """How many of the row's units make one of the money tables' (1 for millions, 1,000 for
         thousands); None when the Unit cell is neither (refused where it is read)."""
         found = _UNIT.fullmatch(self.unit(label) or "")
         return None if found is None else 1000 if found[1] == "thousands" else 1
@@ -528,7 +523,7 @@ def _find(regs: list[Reg], name: str, period: str, periods: Periods) -> Reg | No
 
 class Side(NamedTuple):
     """One side of a tie: what it is called, its cell (None when no such cell exists), where it
-    is stated, and `per`, how many of its units make one of the US$m tables' unit."""
+    is stated, and `per`, how many of its units make one of the money tables' unit."""
 
     name: str
     cell: str | None
@@ -578,11 +573,9 @@ def _tie(where: str, left: Side, right: Side) -> str | None:
 
 
 def _line_tie(found: Statement, label: str, year: str, side: Side, where: str) -> list[str]:
-    """A figure of a US$m table against the statement line for the same fiscal year (`year`, the
+    """A figure of a money table against the statement line for the same fiscal year (`year`, the
     statement column's header). A fiscal year with no column in the statement is refused when the
-    figure is stated. A statement not in USD is not tied: its figures are in another currency."""
-    if not found.usd(label):
-        return []  # refused where the Unit cell is read, or in a currency the tables do not state
+    figure is stated."""
     at = found.column(year)
     if at is None:
         if _stated(side.cell) is None:
@@ -829,9 +822,48 @@ def _orderable(period: str) -> bool:
     return period_order(period) is not None or period_of(period) is not None
 
 
-def _row_issues(reg: Reg, listed: list[dict[str, str]]) -> list[str]:
+def _currencies(statements: list[Statement | None]) -> list[tuple[str, str, str]]:
+    """(table, row, currency code) of each fixed row whose Unit cell is readable, in order."""
+    return [
+        (found.spec.heading, label, unit[:3])
+        for found in statements
+        if found
+        for label in found.spec.fixed
+        if (unit := found.unit(label)) and _UNIT.fullmatch(unit)
+    ]
+
+
+def _money_of(code: str) -> str:
+    return "US$m" if code == "USD" else f"{code}m"
+
+
+def money_unit(text: str) -> str | None:
+    """The money unit of CP-1's tables: `US$m` for USD statements, else the statements' currency
+    code and `m` (`GBPm`), in millions even where a statement prints thousands. The single
+    currency of the fixed rows' Unit cells; None when there is none or more than one."""
+    lines = _findings(text)
+    codes = {c for _, _, c in _currencies([_statement(lines, spec) for spec in STATEMENTS])}
+    return _money_of(next(iter(codes))) if len(codes) == 1 else None
+
+
+def _currency_issues(found: list[tuple[str, str, str]]) -> list[str]:
+    """Fixed rows naming more than one currency are refused, naming the first two that differ."""
+    other = next((row for row in found if row[2] != found[0][2]), None) if found else None
+    if other is None:
+        return []
+    table, label, code = found[0]
+    text = (
+        f"The statement tables state more than one currency: `{table}` {label} is {code} but "
+        f"`{other[0]}` {other[1]} is {other[2]}; write every statement in the issuer's own "
+        "currency."
+    )
+    return [text]
+
+
+def _row_issues(reg: Reg, listed: list[dict[str, str]], code: str | None = None) -> list[str]:
     """One register row's cells: readable, its Period one of the Net debt rows', its Unit that
-    row's Reporting unit, its Calculated Value to two places."""
+    row's Reporting unit and the money unit, its Currency the statements' code, its Calculated
+    Value to two places."""
     issues = [
         f"{reg.where}: {column} `{reg.cells[column]}` must be {PLAIN}."
         for column in ("Numerator Value", "Denominator Value", "Calculated Value")
@@ -854,7 +886,16 @@ def _row_issues(reg: Reg, listed: list[dict[str, str]]) -> list[str]:
         for column in ("Currency", "Unit")
         if not reg.cells[column]
     ]
-    unit = reg.cells["Unit"]
+    unit, currency = reg.cells["Unit"], reg.cells["Currency"]
+    if code and currency and currency != code:
+        issues.append(
+            f"{reg.where}: Currency `{currency}` is not `{code}`, the statements' currency."
+        )
+    if code and unit and unit != _money_of(code):
+        issues.append(
+            f"{reg.where}: Unit `{unit}` is not `{_money_of(code)}`, the money unit (the "
+            "statements' currency code and `m`, `US$m` for USD)."
+        )
     if unit and reg.nd and reg.nd.get("Reporting unit", unit) != unit:
         issues.append(
             f"{reg.where}: Unit `{unit}` is not the Reporting unit `{reg.nd['Reporting unit']}` "
@@ -864,11 +905,13 @@ def _row_issues(reg: Reg, listed: list[dict[str, str]]) -> list[str]:
     return issues
 
 
-def _register_cells(regs: list[Reg], net_debt: list[dict[str, str]]) -> list[str]:
+def _register_cells(
+    regs: list[Reg], net_debt: list[dict[str, str]], code: str | None = None
+) -> list[str]:
     issues = []
     seen: set[tuple[str, str]] = set()
     for reg in regs:
-        issues += _row_issues(reg, net_debt)
+        issues += _row_issues(reg, net_debt, code)
         issues += _precision(reg)
         key = (reg.metric.name, reg.period)
         if key in seen:
@@ -1215,6 +1258,8 @@ def cp1_issues(text: str) -> tuple[str, ...]:
     periods = _periods(lines)
     found_regs, unreadable = _register(lines, net_debt, periods)
     regs = found_regs or []
+    currencies = _currencies(statements)
+    code = currencies[0][2] if len({c for _, _, c in currencies}) == 1 else None
     steps: list[Callable[[], list[str]]] = [
         lambda: _placement(text, TRACKED),
         lambda: _transport(text),
@@ -1228,7 +1273,8 @@ def cp1_issues(text: str) -> tuple[str, ...]:
         ),
         lambda: [i for found in statements if found for i in _statement_cells(found)],
         lambda: unreadable,
-        lambda: _register_cells(regs, net_debt),
+        lambda: _currency_issues(currencies),
+        lambda: _register_cells(regs, net_debt, code),
         lambda: _long_cells(lines, net_debt),
         lambda: _ratios(regs),
         lambda: _chart_ties(lines, regs, periods) if found_regs is not None else [],

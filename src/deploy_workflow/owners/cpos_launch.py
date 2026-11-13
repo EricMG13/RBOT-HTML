@@ -21,11 +21,11 @@ import tempfile
 import textwrap
 from collections import Counter
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Any, TextIO, get_args
+from typing import Any, TextIO, cast, get_args
 
 from deploy_vii.business_context import Category
 from deploy_vii.contracts import DEACTIVATED_MESSAGE, DEACTIVATED_PATHWAYS, PATHWAY_MODULES, Run
@@ -89,7 +89,7 @@ from deploy_workflow.model.pricing import (
 from deploy_workflow.model.turn import MODEL_EFFORTS, dump_json
 from deploy_workflow.model_testing.configs import CONFIGS
 from deploy_workflow.owners import cp2g, cpos_cp1_check as cp1_check, cpos_forecast
-from deploy_workflow.owners.cpos_cp1_check import cp1_issues as _cp1_issues
+from deploy_workflow.owners.cpos_cp1_check import cp1_issues as _cp1_issues, money_unit
 from deploy_workflow.owners.cpos import (
     WEB_SEARCH_GRANT,
     HandoffPlan,
@@ -611,11 +611,12 @@ def read_documents(folder: Path) -> Reading:
 
 
 # Fixed so any run's charts can be read without issuer-specific row selectors.
+MONEY = cp1_check.MONEY  # CP-1's money tables' unit, resolved per handoff by `money_unit`.
 CHART_TABLES: dict[str, tuple[str, tuple[str, ...], str]] = {
     "S.1": ("Chart data: leverage", ("Total debt / EBITDA", "Net debt / EBITDA"), "x"),
     "S.2": ("Chart data: interest cover", ("EBITDA / cash interest",), "x"),
-    "S.3": ("Chart data: liquidity", ("Cash", "Undrawn committed facilities"), "US$m"),
-    "S.4": ("Chart data: debt maturities", ("Debt maturing",), "US$m"),
+    "S.3": ("Chart data: liquidity", ("Cash", "Undrawn committed facilities"), MONEY),
+    "S.4": ("Chart data: debt maturities", ("Debt maturing",), MONEY),
 }
 CHART_BLOCKS = frozenset(STRIP_FIGURES) - {"yield-against-maturity"}
 NOT_SUPPLIED = "Not supplied:"
@@ -629,10 +630,11 @@ def _chart_route(block_id: str, figure: str) -> MarkdownRoute:
         heading=heading,
         kind="chart",
         block_id=block_id,
-        figure_id=figure,
+        figure_id=cast(Any, figure),
         value_columns=columns,
         orientation="period-rows",
-        chart_unit=unit,
+        # The route's class; CP-1's money unit is resolved per handoff (`_owner_table`).
+        chart_unit=cast(Any, "US$m" if unit == MONEY else unit),
     )
 
 
@@ -675,6 +677,7 @@ class OwnerTable:
         ""  # The words of an Event cell that states none: the one row `_states_none` takes.
     )
     scored: bool = False  # The confidence inputs table: its rows are `confidence`'s, not columns.
+    money_table: bool = False  # `chart_unit` is the handoff's resolved money unit (`MONEY` was it).
 
     @property
     def bare(self) -> bool:
@@ -686,7 +689,7 @@ NET_DEBT_HEADING = "Net debt data"  # not a `Chart data:` heading: the library d
 NET_DEBT = OwnerTable(
     NET_DEBT_HEADING,
     ("Gross debt", "Cash", "Net debt"),
-    "US$m",
+    MONEY,
     rules=(
         "Gross debt is total debt at balance-sheet carrying value (current plus long-term, net of"
         " issuance costs and discounts), not principal, and the Basis and limitation cell says "
@@ -782,7 +785,7 @@ def _net_debt_issues(text: str) -> tuple[str, ...]:
 DEBT_RECON = OwnerTable(
     cp1_check.RECON_HEADING,
     cp1_check.RECON_COLUMNS,
-    "US$m",
+    MONEY,
     rules=(
         "One row, for the balance-sheet date the maturity ladder is drawn at; `Period` is written "
         "as in `Net debt data`. Contractual principal is the sum of the `Debt maturing` rows of "
@@ -851,7 +854,7 @@ OWNER_TABLES: dict[str, tuple[OwnerTable, ...]] = {
         OwnerTable(
             "Chart data: revenue and EBITDA",
             ("Revenue", "Adjusted EBITDA"),
-            "US$m",
+            MONEY,
             rules=(
                 "The Adjusted EBITDA column is the EBITDA measure the method specifies; name its "
                 "identity (reported, issuer-adjusted or house-adjusted) in Basis and "
@@ -864,7 +867,7 @@ OWNER_TABLES: dict[str, tuple[OwnerTable, ...]] = {
         OwnerTable(
             "Chart data: debt stack",
             (),
-            "US$m",
+            MONEY,
             rules=(
                 "Rows run in legal rank order, most senior first. Ranking is the legal rank as "
                 "a plain whole number (1 is most senior; equal ranks share a number); a "
@@ -873,9 +876,9 @@ OWNER_TABLES: dict[str, tuple[OwnerTable, ...]] = {
                 "through that facility over the common EBITDA denominator, as times without an "
                 "`x`; state it only for a positive common EBITDA denominator, else "
                 "`Not supplied: <reason>`. Name each facility's guarantor or obligor scope in "
-                "Basis and limitation. Reporting unit is the Amount's unit only (`US$m`): write "
-                "leverage in times and any other note in Basis and limitation. An enterprise value "
-                "is not a sourced fact merely because "
+                "Basis and limitation. Reporting unit is the Amount's unit only (the money unit): "
+                "write leverage in times and any other note in Basis and limitation. An enterprise "
+                "value is not a sourced fact merely because "
                 "it is a chart marker: add no enterprise value row unless a source states it."
             ),
             columns=("Facility", "Ranking", "Secured", "Amount", "Cumulative leverage"),
@@ -888,7 +891,7 @@ OWNER_TABLES: dict[str, tuple[OwnerTable, ...]] = {
         OwnerTable(
             "Chart data: EBITDA bridge",
             ("Amount",),
-            "US$m",
+            MONEY,
             steps=True,
             rules=(
                 "The first row is the reported measure and the last row is the specified "
@@ -1369,11 +1372,8 @@ for _heading, _module, _types, _guard in MAPS:
 def _owner_table(table: MarkdownRoute | OwnerTable) -> OwnerTable:
     if isinstance(table, OwnerTable):
         return table
-    return OwnerTable(
-        table.heading,
-        table.value_columns,
-        str(table.chart_unit),
-    )
+    unit = MONEY if table.module_id == "CP-1" and table.chart_unit == "US$m" else table.chart_unit
+    return OwnerTable(table.heading, table.value_columns, str(unit))
 
 
 def _chart_header(table: MarkdownRoute | OwnerTable) -> list[str]:
@@ -1460,7 +1460,18 @@ def _unit_advice(spec: OwnerTable, unit: str) -> str:
             f"the Reporting unit must be exactly `{spec.chart_unit}` (the Amount's unit only); "
             "move the rest to Basis and limitation."
         )
+    if spec.money_table:
+        return (
+            f"use `{spec.chart_unit}` if the figure is in the statement currency, else write "
+            f"`Not supplied: reported in {unit}`."
+        )
     return f"write `Not supplied: reported in {unit}`."
+
+
+NO_MONEY = (
+    "the statement tables do not state one currency, so no money unit is known; state every "
+    "statement's Unit in the issuer's one currency, or write `Not supplied: <reason>`."
+)
 
 
 def _number_issue(spec: OwnerTable, name: str, cell: str, unit: str) -> str | None:
@@ -1468,6 +1479,8 @@ def _number_issue(spec: OwnerTable, name: str, cell: str, unit: str) -> str | No
         return None
     if not PLAIN_NUMBER.fullmatch(cell):
         return f"{name} `{cell}` must be a plain number or `Not supplied: <reason>`."
+    if spec.chart_unit == MONEY and name in (spec.in_unit or spec.numbers):
+        return f"{name} {cell} is stated, but {NO_MONEY}"
     if spec.chart_unit and name in (spec.in_unit or spec.numbers) and unit != spec.chart_unit:
         return (
             f"{name} in {unit} cannot be charted as {spec.chart_unit}; {_unit_advice(spec, unit)}"
@@ -1699,9 +1712,31 @@ def _confidence_issues(text: str, heading: str) -> tuple[str, ...]:
     return ()
 
 
-def chart_issues(text: str, table: MarkdownRoute | OwnerTable) -> tuple[str, ...]:
-    """A chart table's cells reach the page as they are, so each must already be chart-ready."""
-    spec = _owner_table(table)
+def _resolved(spec: OwnerTable, money: str | None) -> OwnerTable:
+    """A `MONEY` table in the handoff's money unit; unchanged when there is none (`NO_MONEY`)."""
+    if spec.chart_unit == MONEY and money:
+        return replace(spec, chart_unit=money, money_table=True)
+    return spec
+
+
+def _unit_issue(spec: OwnerTable, unit: str) -> str | None:
+    """What is wrong with a stated number whose row states `unit`, in a period table."""
+    if spec.chart_unit == MONEY:
+        return f"a number is stated, but {NO_MONEY}"
+    if unit != spec.chart_unit:
+        return (
+            f"a number in {unit} cannot be charted as {spec.chart_unit}; {_unit_advice(spec, unit)}"
+        )
+    return None
+
+
+def chart_issues(
+    text: str, table: MarkdownRoute | OwnerTable, *, money: str | None = None
+) -> tuple[str, ...]:
+    """A chart table's cells reach the page as they are, so each must already be chart-ready.
+    `money` is the handoff's money unit (`money_unit`); a `MONEY` table states it, and without
+    one no figure of it is stated."""
+    spec = _resolved(_owner_table(table), money)
     heading = f"### {spec.heading}"
     if heading not in text.splitlines():
         return _absent_issues(text, spec, heading)
@@ -1731,11 +1766,8 @@ def chart_issues(text: str, table: MarkdownRoute | OwnerTable) -> tuple[str, ...
                     f"`{heading}` {period}: `{value} |` must be a plain number "
                     "or `Not supplied: <reason>`."
                 )
-            elif unit != spec.chart_unit:
-                issues.append(
-                    f"`{heading}` {period}: a number in {unit} cannot be charted as "
-                    f"{spec.chart_unit}; {_unit_advice(spec, unit)}"
-                )
+            elif problem := _unit_issue(spec, unit):
+                issues.append(f"`{heading}` {period}: {problem}")
     if spec.steps and not issues:
         issues += _bridge_issues(heading, stated)
     return tuple(issues)
@@ -2070,19 +2102,21 @@ CP1_CHECK_BLOCK = (
     + ". `Period` is the Period cell of the "
     "`Net debt data` row the ratio belongs to (`FY2024 / 2024-09-30` or the date alone, which "
     "must be the `End` of a Period-table row), "
-    f"`Unit` is that row's Reporting unit (`{cp1_check.REGISTER_UNIT}`), "
-    "`Currency` is the code. Numerator and Denominator Value are the plain figures of the "
-    "statement tables and `Net debt data`; Calculated Value is numerator over denominator printed "
-    "to exactly two decimal places, worked with `calculate`; a zero or negative denominator is "
+    "`Unit` is that row's Reporting unit, `Currency` the code. Numerator and Denominator Value "
+    "are the plain figures of the statement tables and `Net debt data`; Calculated Value is "
+    "numerator over denominator printed to exactly two decimal places, worked with "
+    "`calculate`; a zero or negative denominator is "
     "`Not calculable: <reason>`.\n"
     f"`### {cp1_check.RECON_HEADING}` (selector below) ties the maturity ladder to the carrying "
     "value in `Net debt data`.\n"
     f"The {cp1_check.PERIOD_TABLE} (a row for every statement column, asked for separately) is "
     "the sixth table: a row is a fiscal-year row when its date is the "
     "`End` of that column's row there, whatever form its Period cell takes (an `FY2024 / date` "
-    "cell must name a row and its `End`). Statement ties run for `USD` statements only: a non-USD "
-    "issuer writes its statements in its own currency and `Not supplied: <reason>` in the US$m "
-    "tables.\n"
+    "cell must name a row and its `End`). The money unit is `US$m` when your statements are in "
+    "USD, else their currency code and `m` (`GBPm`), in millions even where a statement prints "
+    "thousands; the net debt, chart and reconciliation tables and the register's fixed rows use "
+    "it, and `Currency` is the statements' code. A figure in another currency is `Not "
+    "supplied: reported in <unit>`.\n"
     "Refused, naming the row, both figures and the difference: a table or fixed row missing; a "
     "Unit, period header or Period not as above; a cell that is not a plain number or stated gap; "
     "a Calculated Value more than half a unit of its second decimal from numerator over "
@@ -2258,7 +2292,7 @@ def _selector(route: MarkdownRoute | OwnerTable) -> str:
             f"`| {' | '.join(_chart_header(spec))} |`, one row per "
             f"{'step' if spec.steps else spec.noun}. "
             f"Value cells{numbers} are plain numbers {where}, or `Not supplied: <reason>`.{rest} "
-            + (CURRENCY_RULE if spec.chart_unit else "")
+            + (CURRENCY_RULE if spec.chart_unit and spec.chart_unit != MONEY else "")
             + f"{'Every other cell is stated, never blank. ' if spec.columns else ''}"
             "Basis and limitation is never blank."
             + (BRIDGE_RULES if spec.steps else "")
@@ -2813,7 +2847,10 @@ def without_for(ordered: Sequence[str], items: Sequence[Item]) -> dict[str, list
 def _owned_issues(module: str, routes: Sequence[MarkdownRoute], text: str) -> list[str]:
     """The tables a module is asked for beside its report routes, checked; for CP-1 also the net
     debt table's arithmetic."""
-    issues = [i for owned in _owner_tables(module, routes) for i in chart_issues(text, owned)]
+    money = money_unit(text)
+    issues = [
+        i for owned in _owner_tables(module, routes) for i in chart_issues(text, owned, money=money)
+    ]
     return [*issues, *_net_debt_issues(text), *_cp1_issues(text)] if module == "CP-1" else issues
 
 
@@ -2890,7 +2927,7 @@ def checker(layout: MarkdownLayout) -> Check:
             issues.append(f"The report adapter refused this handoff: {error}")
         for route in routes:
             if route.kind == "chart":
-                issues += chart_issues(text, route)
+                issues += chart_issues(text, route, money=money_unit(text))
         issues += _owned_issues(task.module_id, routes, text)
         return (*issues, *_forecast_issues(task, text))
 

@@ -8,18 +8,21 @@ from decimal import Decimal
 from fractions import Fraction
 
 import pytest
-from hypothesis import given
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from deploy_workflow.confidence import INPUT_ROWS
 from deploy_workflow.owners import cpos_cp1_check as check
 from deploy_workflow.owners.cpos_launch import (
     CHART_TABLES,
     CP1_CHECK_BLOCK,
+    CURRENCY_CODES,
     DEBT_RECON,
     PERIOD_REQUIRED_BLOCK,
     _chart_header,
     _cp1_issues,
     _owned_issues,
+    chart_issues,
 )
 
 BASIS = "Synthetic."
@@ -257,14 +260,14 @@ def test_a_reported_ebitda_operand_that_differs_from_the_statement_is_refused():
     named(issue, "Net debt / EBITDA", "FY2024", "4,173", "3,813", "EBITDA (Reported)")
 
 
-def test_the_statement_ties_are_skipped_whole_for_a_statement_not_in_usd():
-    # R13 (replaces R3's any-currency tie): a EUR statement is not tied to the US$m tables, in
-    # either direction; the same wrong operand under a USD statement is refused (next test).
+def test_the_statement_ties_run_for_a_statement_in_any_currency():
+    # C1 (replaces R13, which skipped a non-USD statement): the same wrong operand is refused
+    # under a EUR statement as under a USD one, in the issuer's own currency.
     reg = register(overrides={("Net debt / EBITDA", "FY2024"): ["18,619", "4,173", "4.46"]})
     text = build(reg=reg, leverage=(("6.53", "4.46"), ("6.27", "5.17")))
-    assert _cp1_issues(text.replace("| USD millions |", "| EUR millions |")) == ()
-    issue = only(_cp1_issues(text))
-    named(issue, "Net debt / EBITDA", "4,173", "3,813", "EBITDA (Reported)", "difference 360")
+    for statements in (text, relabel(text, "EUR")):
+        issue = only(_cp1_issues(statements))
+        named(issue, "Net debt / EBITDA", "4,173", "3,813", "EBITDA (Reported)", "difference 360")
 
 
 def test_a_balance_sheet_debt_that_differs_from_gross_debt_is_refused():
@@ -430,8 +433,9 @@ def test_the_launcher_text_names_every_fixed_row_and_metric_and_is_short():
     assert check.RECON_HEADING in CP1_CHECK_BLOCK
     assert "| " + " | ".join(check.REGISTER_COLUMNS) + " |" in CP1_CHECK_BLOCK
     # 4,498 at 4de3482; round 2 may add 1,200; round 3 added 378 (4,907 -> 5,285); the budget cut
-    # removed 128 (5,285 -> 5,157), so the bound falls by the same 128
-    assert len(CP1_CHECK_BLOCK) <= 4_498 + 1_200 + 250
+    # removed 128 (5,285 -> 5,157), so the bound falls by the same 128; the money-unit sentence
+    # replaced the USD-only one (5,157 -> 5,337), so it rises by the same 180
+    assert len(CP1_CHECK_BLOCK) <= 4_498 + 1_200 + 250 + 180
 
 
 def test_the_launcher_text_states_every_refusal_of_the_rulings_from_the_constants():
@@ -450,8 +454,14 @@ def test_the_launcher_text_states_every_refusal_of_the_rulings_from_the_constant
         "Gross debt and Cash against `Total Debt` and `Cash & Equivalents`",
         "is the sixth table",
         "`End` of that column's row",
-        "`USD` statements only",
-        "`Not supplied: <reason>` in the US$m tables",
+        (
+            "The money unit is `US$m` when your statements are in USD, else their currency code "
+            "and `m` (`GBPm`), in millions even where a statement prints thousands"
+        ),
+        (
+            "and `Currency` is the statements' code. A figure in another currency is `Not "
+            "supplied: reported in <unit>`"
+        ),
         "once in the whole handoff",
     ):
         assert words in CP1_CHECK_BLOCK, words
@@ -1125,8 +1135,11 @@ def eur_issuer(*, cover_stated: bool) -> str:
 
 
 @pytest.mark.parametrize("cover_stated", [False, True], ids=["six rows gapped", "cover stated"])
-def test_a_eur_issuer_with_gapped_us_dollar_tables_is_accepted(cover_stated):
-    assert _cp1_issues(eur_issuer(cover_stated=cover_stated)) == ()
+def test_a_eur_issuer_with_gapped_us_dollar_tables_is_refused_naming_its_money_unit(cover_stated):
+    # C1 reverses the old premise (a EUR issuer's money tables were gapped US$m tables): its
+    # money tables are in `EURm`, so these US$m ones are refused and the advice names `EURm`.
+    issues = _cp1_issues(eur_issuer(cover_stated=cover_stated))
+    assert issues and any("`EURm`" in i for i in issues), issues
 
 
 @pytest.mark.parametrize("cell", ["\uff12\uff14\uff0c\uff18\uff18\uff10", "24,88O", "24.880,0"])
@@ -1368,3 +1381,230 @@ def test_a_chart_row_dated_with_an_interim_end_does_not_match_the_fiscal_year_ro
         issue, "Chart data: interest cover", "2024-12-31", "3.29", "no EBITDA / cash interest row"
     )
     assert "not stated" not in issue and "Not supplied" not in issue
+
+
+# --- the issuer's own currency (owner ruling C1, 2026-11-13) --------------------------------
+
+
+def money(code: str) -> str:
+    """The money unit, written here independently of the code under test."""
+    return "US$m" if code == "USD" else f"{code}m"
+
+
+def relabel(text: str, code: str = "GBP") -> str:
+    """The fixture with its statements in `code` and every CP-1 money table in its money unit."""
+    text = text.replace("| USD | US$m |", f"| {code} | {money(code)} |")
+    text = text.replace("USD millions", f"{code} millions")
+    text = text.replace("USD thousands", f"{code} thousands")
+    return text.replace("US$m", money(code))
+
+
+def owner_tables(unit: str) -> str:
+    """The CP-1 owner tables `build()` does not print, so a whole handoff passes `_owned_issues`."""
+    tail = ["Reporting unit", "Basis and limitation"]
+    return "\n\n".join(
+        [
+            table(
+                "Chart data: liquidity",
+                ["Period", "Cash", "Undrawn committed facilities", *tail],
+                [["FY2024", "6,261", "500", unit, BASIS], ["FY2023", "3,472", "400", unit, BASIS]],
+            ),
+            table(
+                "Chart data: revenue and EBITDA",
+                ["Period", "Revenue", "Adjusted EBITDA", *tail],
+                [["FY2024", "11,000", "4,173", unit, BASIS]],
+            ),
+            table(
+                "Chart data: debt stack",
+                ["Facility", "Ranking", "Secured", "Amount", "Cumulative leverage", *tail],
+                [["Term loan", "1", "Yes", "12,000", "3.1", unit, BASIS]],
+            ),
+            table(
+                "Chart data: EBITDA bridge",
+                ["Step", "Amount", *tail],
+                [
+                    ["Reported EBITDA", "3,813", unit, BASIS],
+                    ["Add-backs", "360", unit, BASIS],
+                    ["Adjusted EBITDA", "4,173", unit, BASIS],
+                ],
+            ),
+            table(
+                "Confidence inputs",
+                ["Input", "Value"],
+                [
+                    [name, value]
+                    for name, value in zip(
+                        INPUT_ROWS,
+                        [
+                            "8",
+                            "2",
+                            "2",
+                            "0",
+                            "0",
+                            "0",
+                            "0",
+                            "0",
+                            "95",
+                            "100",
+                            "pass",
+                            "0",
+                            "0",
+                            "1",
+                        ],
+                        strict=True,
+                    )
+                ],
+            ),
+            table(
+                "Post-balance-sheet adjustments",
+                ["Event", "Date", "Amount", "Pro forma net debt", "Pro forma net leverage", *tail],
+                [["None found in the sources read", *["—"] * 4, unit, BASIS]],
+            ),
+        ]
+    )
+
+
+def complete(text: str, unit: str = "US$m") -> str:
+    return text.replace("\n\n## Calculations", "\n\n" + owner_tables(unit) + "\n\n## Calculations")
+
+
+def owned(text: str) -> list[str]:
+    return _owned_issues("CP-1", [], text)
+
+
+def in_section(text: str, heading: str, old: str, new: str) -> str:
+    """`old` replaced by `new` inside the one table under `### heading`."""
+    start = text.index(f"### {heading}")
+    end = text.find("\n### ", start + 1)
+    end = len(text) if end < 0 else end
+    return text[:start] + text[start:end].replace(old, new) + text[end:]
+
+
+def test_the_usd_handoff_passes_whole_in_us_dollars():
+    assert owned(complete(build())) == []
+
+
+def test_a_gbp_issuer_states_leverage_in_its_own_currency():
+    text = relabel(build())
+    assert "6.53" in text and "GBPm" in text and "US$m" not in text
+    assert owned(complete(text, "GBPm")) == []
+
+
+@pytest.mark.parametrize("code", ["EUR", "JPY", "CHF"])
+def test_another_currency_takes_its_code_and_m(code):
+    assert owned(complete(relabel(build(), code), f"{code}m")) == []
+
+
+def test_a_gbp_balance_sheet_in_thousands_ties_to_the_gbpm_tables():
+    text = relabel(balance_in_thousands(thousands(BALANCE)))
+    assert text.count("GBP thousands") == len(BALANCE)
+    assert owned(complete(text, "GBPm")) == []
+
+
+def test_gbp_statements_with_us_dollar_tables_are_refused_naming_the_money_unit():
+    text = complete(build().replace("USD millions", "GBP millions"))
+    issues = owned(text)
+    assert issues and any("`GBPm`" in i for i in issues), issues
+
+
+def test_usd_statements_with_gbpm_tables_are_refused():
+    text = relabel(build()).replace("GBP millions", "USD millions")
+    issues = owned(complete(text, "GBPm"))
+    assert issues and any("`US$m`" in i for i in issues), issues
+
+
+def test_a_gbp_gross_debt_that_is_not_the_total_debt_is_refused_with_the_difference():
+    text = relabel(build(balance={**BALANCE, "Total Debt": ("25,068", "19,750")}))
+    issue = only(_cp1_issues(text))
+    named(issue, "Gross debt", "25,068", "Total Debt", "24,880", "difference 188")
+
+
+def test_gbp_thousands_that_are_one_million_off_the_gbpm_figure_are_refused():
+    debt = {**thousands(BALANCE), "Total Debt": ("24,881,000", "19,750,000")}
+    issue = only(_cp1_issues(relabel(balance_in_thousands(debt))))
+    named(issue, "Total Debt", "24,881,000", "24,880", "difference 1")
+
+
+def test_fixed_rows_in_two_currencies_are_refused_naming_both_rows_and_codes():
+    text = in_section(relabel(build()), "T4.6 Balance sheet", "GBP millions", "USD millions")
+    issue = next(i for i in _cp1_issues(text) if "currency" in i)
+    named(issue, "GBP", "USD", "EBITDA (Reported)", "Total Assets")
+
+
+def test_a_register_currency_that_is_not_the_statement_currency_is_refused():
+    text = relabel(build()).replace("| GBP | GBPm |", "| USD | GBPm |")
+    issues = [i for i in _cp1_issues(text) if "Currency" in i]
+    assert len(issues) == 12, issues
+    named(issues[0], "`USD`", "`GBP`")
+
+
+def test_a_register_unit_that_is_not_the_money_unit_is_refused():
+    text = relabel(build()).replace("| GBP | GBPm |", "| GBP | US$m |")
+    issues = [i for i in _cp1_issues(text) if "the money unit" in i and "`GBPm`" in i]
+    assert len(issues) == 12, issues
+
+
+def test_figures_with_no_single_statement_currency_are_refused_not_assumed_usd():
+    text = build().replace("| USD millions |", "| Not supplied: no unit |")
+    issues = owned(complete(text))
+    assert any("do not state one currency" in i for i in issues), issues
+
+
+def test_money_unit_is_the_one_currency_of_the_fixed_rows():
+    assert check.money_unit(build()) == "US$m"
+    assert check.money_unit(relabel(build())) == "GBPm"
+    assert check.money_unit(relabel(balance_in_thousands(thousands(BALANCE)))) == "GBPm"
+    mixed = in_section(relabel(build()), "T4.6 Balance sheet", "GBP millions", "USD millions")
+    assert check.money_unit(mixed) is None
+    assert check.money_unit(build().replace("| USD millions |", "| n/a |")) is None
+    assert check.money_unit("## Findings\n\nNone.\n") is None
+
+
+def test_a_money_table_with_no_money_unit_refuses_a_stated_figure_and_accepts_gaps():
+    stated = relabel(complete(build()), "GBP")
+    issues = chart_issues(stated, DEBT_RECON)
+    assert len(issues) == 3, issues  # each of the three stated figures
+    for issue in issues:
+        named(issue, "do not state one currency")
+    gap = "Not supplied: pending"
+    row = f"| FY2024 / 2024-09-30 | {gap} | {gap} | {gap} | GBPm | {BASIS} |"
+    header = (
+        "| Period | Contractual principal | Reconciling items | Carrying value "
+        "| Reporting unit | Basis and limitation |"
+    )
+    rule = "| --- | --- | --- | --- | --- | --- |"
+    section = f"### Debt principal to carrying value\n\n{header}\n{rule}\n{row}"
+    assert chart_issues(section, DEBT_RECON) == ()
+
+
+def test_a_wrong_unit_cell_in_the_statement_currency_is_told_to_use_the_money_unit():
+    text = relabel(build()).replace(
+        "| 24,319 | 561 | 24,880 | GBPm |", "| 24,319 | 561 | 24,880 | US$m |"
+    )
+    issues = chart_issues(text, DEBT_RECON, money="GBPm")
+    assert len(issues) == 3, issues
+    named(issues[0], "US$m", "use `GBPm`", "Not supplied: reported in US$m")
+
+
+@settings(deadline=None, max_examples=40)
+@given(
+    code=st.sampled_from(CURRENCY_CODES),
+    other=st.sampled_from(CURRENCY_CODES),
+    in_thousands=st.booleans(),
+)
+def test_a_handoff_passes_with_its_own_currencys_money_unit_and_fails_with_any_other(
+    code, other, in_thousands
+):
+    base = (
+        build(
+            income=thousands(INCOME),
+            cash_flow=thousands(CASH_FLOW),
+            balance=thousands(BALANCE),
+        ).replace("USD millions", "USD thousands")
+        if in_thousands
+        else build()
+    )
+    assert owned(complete(relabel(base, code), money(code))) == []
+    if other != code:
+        wrong = relabel(base, code).replace(money(code), money(other))
+        assert owned(complete(wrong, money(other)))

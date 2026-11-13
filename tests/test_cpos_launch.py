@@ -5311,9 +5311,9 @@ def test_checker_sends_back_each_malformed_credit_structure_table(
 
 def test_the_debt_stack_instruction_keeps_leverage_out_of_the_money_unit(tmp_path):
     text = instruction_text(tmp_path, "CP-1")
-    assert "(Amount) are plain numbers in US$m" in text
+    assert "(Amount) are plain numbers in the money unit" in text
     assert "Cumulative leverage is a plain number in the unit its rule states" in text
-    assert "(Amount, Cumulative leverage) are plain numbers in US$m" not in text
+    assert "(Amount, Cumulative leverage) are plain numbers in the money unit" not in text
 
 
 # ---- Package 3 (2026-11-10): the comparison tables. Every value is synthetic.
@@ -5713,15 +5713,17 @@ def test_a_period_table_unit_and_second_table_get_the_same_advice():
     row = "| FY2024 | 100 | 20 | {} | Basis. |"
     heading = f"### {spec.heading}\n\n"
     issues = cpos_launch.chart_issues(
-        heading + synthetic_table(head, row.format("US$m; per year")), spec
+        heading + synthetic_table(head, row.format("US$m; per year")), spec, money="US$m"
     )
     assert len(issues) == 2  # one per number cell, as before
     assert all("must be exactly `US$m`" in i and "Basis and limitation" in i for i in issues)
-    other = cpos_launch.chart_issues(heading + synthetic_table(head, row.format("EUR m")), spec)
+    other = cpos_launch.chart_issues(
+        heading + synthetic_table(head, row.format("EUR m")), spec, money="US$m"
+    )
     assert len(other) == 2 and all("write `Not supplied: reported in EUR m`" in i for i in other)
     second = "| Other | Date |\n| --- | --- |\n| x | 2024-10-18 |"
     text = heading + synthetic_table(head, row.format("US$m")) + "\n" + second
-    (two,) = cpos_launch.chart_issues(text, spec)
+    (two,) = cpos_launch.chart_issues(text, spec, money="US$m")
     assert "a second table under this heading: give it its own ### heading" in two
 
 
@@ -5844,7 +5846,7 @@ DEBT_UNIT_ROW = "| Term loan | 1 | Yes | 1871 | 4.72 | {} | Equal rank. |"
 def debt_stack_issues(*rows: str) -> tuple[str, ...]:
     spec = next(t for t in ROW_SPECS if t.heading == "Chart data: debt stack")
     text = "### Chart data: debt stack\n\n" + synthetic_table(DEBT_STACK_HEAD, *rows)
-    return cpos_launch.chart_issues(text, spec)
+    return cpos_launch.chart_issues(text, spec, money="US$m")
 
 
 def test_a_unit_that_starts_with_the_chart_unit_is_told_to_keep_only_the_unit():
@@ -5889,7 +5891,7 @@ def test_a_second_table_under_one_heading_is_named_not_reported_as_malformed_row
     text = (
         "### Chart data: debt stack\n\n" + synthetic_table(DEBT_STACK_HEAD, first) + "\n" + second
     )
-    (issue,) = cpos_launch.chart_issues(text, spec)
+    (issue,) = cpos_launch.chart_issues(text, spec, money="US$m")
     assert "a second table under this heading: give it its own ### heading" in issue
     assert "needs 7 cells" not in issue
 
@@ -5917,8 +5919,15 @@ def test_a_user_reminder_status_the_cp6_guard_names_is_accepted_and_a_lookalike_
 def test_the_currency_sentence_is_sent_only_with_a_unit_constraint():
     sentence = "reported in <unit>"
     for spec in ROW_SPECS:
-        assert (sentence in cpos_launch._selector(spec)) is bool(spec.chart_unit), spec.heading
-    bridge = next(t for ts in cpos_launch.OWNER_TABLES.values() for t in ts if t.steps)
+        # CP-1's money tables state the money unit in the check block instead (C1).
+        sent = bool(spec.chart_unit) and spec.chart_unit != cpos_launch.MONEY
+        assert (sentence in cpos_launch._selector(spec)) is sent, spec.heading
+    bridge = next(
+        t
+        for ts in cpos_launch.OWNER_TABLES.values()
+        for t in ts
+        if t.steps and t.chart_unit != cpos_launch.MONEY
+    )
     assert sentence in cpos_launch._selector(bridge)
 
 
@@ -7719,3 +7728,114 @@ def test_attemptless_starts_are_matched_to_attemptless_ends_by_count(tmp_path):
     )
     (line,) = cpos_launch._charge_notes(tmp_path)
     assert line.startswith("Charged excludes 1 context summary ")
+
+
+# ---- C1 (owner ruling, 2026-11-13): CP-1's money tables are in the issuer's own currency.
+def gbp(raw: str) -> str:
+    return (
+        raw.replace("| USD | US$m |", "| GBP | GBPm |")
+        .replace("USD millions", "GBP millions")
+        .replace("US$m", "GBPm")
+    )
+
+
+def test_a_gbp_issuers_cp1_handoff_is_accepted_and_its_strip_is_in_gbpm(tmp_path):
+    prepared, task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
+    raw = gbp(answer(context, list(prepared.plan.layout.routes)))
+    assert "US$" not in raw and "GBPm" in raw
+    assert _checked_handoff(task, raw.encode(), checker(prepared.layout)) == ()
+    block = strip_of(prepared, raw, tmp_path, "model-chart-strip")
+    liquidity, ladder = block.figures[2], block.figures[3]
+    assert liquidity.chart.unit == ladder.chart.unit == "GBPm"
+    assert [m.value for m in liquidity.chart.marks][:2] == [Decimal(300), Decimal(450)]
+    assert "US$" not in block.model_dump_json()
+
+
+def test_a_gbp_strip_fact_states_gbp_and_never_usd(tmp_path):
+    prepared, _task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
+    raw = gbp(answer(context, list(prepared.plan.layout.routes)))
+    routes = tuple(r for r in prepared.layout.routes if r.module_id == "CP-1")
+    own = prepared.layout.model_copy(
+        update={
+            "blocks": tuple(dict.fromkeys(r.block_id for r in routes)),
+            "routes": routes,
+            "front": (),
+        }
+    )
+    (tmp_path / "cp-1.md").write_text(raw)
+    handoff = HandoffInput(path="cp-1.md", sha256=hashlib.sha256(raw.encode()).hexdigest())
+    request = DeliveryRequest(run=prepared.plan.run, handoffs={"CP-1": handoff}, layout=own)
+    files = markdown_files(request, tmp_path)
+    view = json.loads(files["view.json"])
+    typed = [
+        f
+        for m in view["modules"]
+        for f in m["facts"]
+        if f["table_id"].startswith("chart-") and f["status"] == "known" and f["unit"] == "MILLIONS"
+    ]
+    assert typed and {f["currency"] for f in typed} == {"GBP"}
+    assert b"US$" not in files["report-view.json"]
+
+
+def test_a_strip_figure_in_two_units_is_refused_by_the_adapter(tmp_path):
+    prepared, _task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
+    raw = gbp(answer(context, list(prepared.plan.layout.routes)))
+    mixed = raw.replace("| FY2024 | 275 | 400 | GBPm |", "| FY2024 | 275 | 400 | EURm |")
+    assert mixed != raw
+    with pytest.raises(ValueError, match="one unit"):
+        strip_of(prepared, mixed, tmp_path, "model-chart-strip")
+
+
+def test_gbp_tables_under_usd_statements_are_sent_back_naming_the_money_unit(tmp_path):
+    prepared, task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
+    raw = answer(context, list(prepared.plan.layout.routes)).replace("US$m", "GBPm")
+    issues = _checked_handoff(task, raw.encode(), checker(prepared.layout))
+    assert any("`US$m`" in i for i in issues), issues
+
+
+def test_gbp_statements_with_us_dollar_tables_are_sent_back_naming_the_money_unit(tmp_path):
+    prepared, task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
+    raw = answer(context, list(prepared.plan.layout.routes)).replace("USD millions", "GBP millions")
+    issues = _checked_handoff(task, raw.encode(), checker(prepared.layout))
+    assert any("`GBPm`" in i for i in issues), issues
+
+
+def test_another_modules_money_table_is_still_refused_in_gbpm(tmp_path):
+    prepared, task, context = good_task(tmp_path, "CP-2D")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    assert "| 120 | US$m |" in raw
+    issues = _checked_handoff(
+        task, raw.replace("| 120 | US$m |", "| 120 | GBPm |").encode(), checker(prepared.layout)
+    )
+    refused = (
+        "`### Chart data: liquidity bridge` Free cash flow: a number in GBPm cannot be charted "
+        "as US$m; write `Not supplied: reported in GBPm`."
+    )
+    assert refused in issues, issues
+
+
+def test_only_cp1s_money_tables_say_the_money_unit_and_every_other_selector_is_unchanged():
+    text = "\n".join(
+        cpos_launch._selector(t)
+        for module in sorted(cpos_launch.OWNER_TABLES)
+        if module != "CP-1"
+        for t in cpos_launch.OWNER_TABLES[module]
+    )
+    # sha256 of these selectors at HEAD c532bb3 (measured before the change, not by this code)
+    digest = "4d55db88a6eed14bb347da382d11b7f595a784faeec8466c1b50045b8712ba72"
+    assert hashlib.sha256(text.encode()).hexdigest() == digest
+    assert "the money unit" not in text
+    for table in cpos_launch.OWNER_TABLES["CP-1"]:
+        if table.chart_unit != cpos_launch.MONEY:
+            continue
+        selector = cpos_launch._selector(table)
+        assert "the money unit" in selector and "US$m" not in selector, table.heading
+        assert cpos_launch.CURRENCY_RULE not in selector
+    assert "The money unit is `US$m` when your statements are in USD" in cpos_launch.CP1_CHECK_BLOCK
+
+
+def test_a_non_usd_reporting_currency_no_longer_limits_the_chart_strip():
+    # The owner's C1 ruling reverses the expectation that the strip is US$m only.
+    assert "chart-strip-usd" not in {rule.key for rule in RULES}
+    key_text = (ROOT / "tests/fixtures/run-expectations/outcome-key.json").read_text()
+    assert "chart-strip-usd" not in key_text and "US$m only" not in key_text

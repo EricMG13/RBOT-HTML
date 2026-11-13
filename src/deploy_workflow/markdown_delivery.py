@@ -64,6 +64,21 @@ from deploy_workflow.handoff_delivery import (
 )
 
 CHART_UNITS: dict[str, UnitClass] = {"x": "multiple", "US$m": "amount", "%": "percent"}
+# CP-1's money figures state the issuer's own currency: `US$m` or its code and `m` (`GBPm`).
+MONEY_UNIT = re.compile(r"US\$m|[A-Z]{3}m", re.ASCII)
+
+
+def _unit_class(unit: str) -> UnitClass:
+    return "amount" if MONEY_UNIT.fullmatch(unit) else CHART_UNITS[unit]
+
+
+def _currency_of(unit: str | None) -> str | None:
+    """The currency a money unit states: `USD` for `US$m`, the code of `GBPm`; None when no unit
+    is stated (nothing is assumed)."""
+    if unit is None:
+        return None
+    return "USD" if unit == "US$m" else unit[:3]
+
 
 STRIP_FIGURES = {
     "model-chart-strip": ("S.1", "S.2", "S.3", "S.4"),
@@ -538,24 +553,65 @@ def _chronological(points: tuple[_ChartPoint, ...]) -> tuple[_ChartPoint, ...]:
     return tuple(sorted(points, key=lambda p: known[p.category]))
 
 
+def _is_money(route: MarkdownRoute) -> bool:
+    """CP-1's money strips: their unit is the issuer's own currency, not fixed to US$m."""
+    return route.module_id == "CP-1" and route.chart_unit == "US$m"
+
+
 def _require_reporting_unit(
     facts: dict[str, Fact], row: TableRow, columns: list[str], column: str, route: MarkdownRoute
-) -> None:
-    """Refuse a number its own `Reporting unit` cell places in another unit than the chart's;
-    a table without that column makes no claim. Nothing is converted or relabelled."""
+) -> str | None:
+    """Refuse a number its own `Reporting unit` cell places in another unit than the chart's
+    (a money strip takes `US$m` or a currency code and `m`); a table without that column makes no
+    claim. Returns the unit stated. Nothing is converted or relabelled."""
     if "Reporting unit" not in columns:
-        return
+        return None
     own = (facts[row.fact_ids[columns.index("Reporting unit")]].text or "").strip()
+    if _is_money(route) and MONEY_UNIT.fullmatch(own):
+        return own
     if own != route.chart_unit:
         raise ValueError(
             f"markdown_chart: {row.label} {column} is reported in {own or 'no unit'}, "
             f"not {route.chart_unit}; write `Not supplied: reported in <unit>`"
         )
+    return own
+
+
+def _figure_money(
+    facts: dict[str, Fact],
+    selected: list[TableRow],
+    columns: list[str],
+    route: MarkdownRoute,
+) -> str | None:
+    """The one money unit a figure's stated cells give (a figure is one unit); with none stated,
+    the one unit its rows' Reporting unit cells give; None when neither names one."""
+    stated: dict[str, str] = {}
+    for row in selected:
+        for column in route.value_columns:
+            source = facts[row.fact_ids[columns.index(column)]]
+            token = source.text or ""
+            if source.amount is not None or source.status != "known" or is_gap(token):
+                continue
+            own = _require_reporting_unit(facts, row, columns, column, route)
+            if own is not None:
+                stated.setdefault(own, f"{row.label} {column}")
+    if len(stated) > 1:
+        raise ValueError(
+            "markdown_chart: a figure states one unit, but "
+            + " and ".join(f"{where} is in {unit}" for unit, where in stated.items())
+        )
+    if stated or "Reporting unit" not in columns:
+        return next(iter(stated), None)
+    rows = {
+        (facts[row.fact_ids[columns.index("Reporting unit")]].text or "").strip()
+        for row in selected
+    }
+    return rows.pop() if len(rows) == 1 and MONEY_UNIT.fullmatch(next(iter(rows))) else None
 
 
 def _numeric_observations(
     module: ModuleView, table: ReportTable, route: MarkdownRoute
-) -> tuple[ModuleView, tuple[str, ...], tuple[_ChartPoint, ...]]:
+) -> tuple[ModuleView, tuple[str, ...], tuple[_ChartPoint, ...], str]:
     """Copy explicitly selected cells into the existing charts without calculating finance."""
     columns = [column.label for column in table.columns]
     labels = [row.label for row in table.rows]
@@ -570,6 +626,8 @@ def _numeric_observations(
         raise ValueError("markdown_chart: unique source rows and columns must match selectors")
     selected = [row for row in table.rows if not route.row_labels or row.label in route.row_labels]
     facts = {fact.fact_id: fact for fact in module.facts}
+    figure_unit = _figure_money(facts, selected, columns, route) if _is_money(route) else None
+    label_unit = figure_unit or route.chart_unit or ""
     tid = "chart-" + route.block_id + "-" + str(route.figure_id)
     values: list[Fact] = []
     rows: list[TableRow] = []
@@ -627,7 +685,9 @@ def _numeric_observations(
                         route.chart_unit or ""
                     ],
                     scale=Decimal(1000000) if route.chart_unit == "US$m" else Decimal(1),
-                    currency="USD" if route.chart_unit == "US$m" else None,
+                    currency=(_currency_of(figure_unit) if _is_money(route) else None)
+                    if route.chart_unit == "US$m"
+                    else None,
                     period=category,
                     decimals=source.decimals
                     if source.amount is not None
@@ -654,12 +714,12 @@ def _numeric_observations(
     all_series = tuple(dict.fromkeys(p.series for p in points))
     chronological = _chronological(tuple(points))
     if module.module_id == "CP-MODEL":
-        return module, all_series, chronological
+        return module, all_series, chronological, label_unit
     typed = ReportTable(
         table_id=tid,
         title=route.label or table.title,
         row_header="Observation",
-        columns=(TableColumn(field="value", label=route.chart_unit or "Value"),),
+        columns=(TableColumn(field="value", label=label_unit or "Value"),),
         rows=tuple(rows),
     )
     return (
@@ -668,6 +728,7 @@ def _numeric_observations(
         ),
         all_series,
         chronological,
+        label_unit,
     )
 
 
@@ -963,7 +1024,7 @@ def markdown_files(  # noqa: C901, PLR0912, PLR0915 - pre-existing complexity
             figure_specs = strip_charts.setdefault(route.block_id, {})
             if route.figure_id in figure_specs:
                 raise ValueError("markdown_chart: exactly one selector per figure")
-            updated, series, points = _numeric_observations(module, table, route)
+            updated, series, points, label_unit = _numeric_observations(module, table, route)
             if module.module_id != "CP-MODEL":
                 module_views[module_views.index(module)] = updated
                 typed = updated.tables[-1]
@@ -981,7 +1042,7 @@ def markdown_files(  # noqa: C901, PLR0912, PLR0915 - pre-existing complexity
             figure_specs[route.figure_id] = (
                 module.module_id,
                 route.label or table.title,
-                route.chart_unit or "",
+                label_unit,
                 series,
                 points,
             )
@@ -1094,7 +1155,7 @@ def markdown_files(  # noqa: C901, PLR0912, PLR0915 - pre-existing complexity
                             fig_id=fig_id,
                             title=title,
                             kind="grouped" if fig_id in {"S.4", "RV.1"} else "line",
-                            unit_class=CHART_UNITS[unit],
+                            unit_class=_unit_class(unit),
                             unit=unit,
                             series=series,
                             points=points,
