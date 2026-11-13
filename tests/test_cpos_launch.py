@@ -1868,7 +1868,8 @@ def test_cp0_runs_the_deploy_v_skill_not_the_json_stand_in(tmp_path):
         "T8 recommended run command sheet",
         "the minimum missing documents",
         "only for a source the effective-source set does not carry",
-        "never for an upstream analytical handoff that has not been produced yet",
+        "never a readiness ground and never a `CONDITIONAL` condition",
+        "The package, parse and hash checks were done by the launcher: record no result for them",
         "the objective is the selected pathway's use case",
         "record it in T1",
     ):
@@ -2010,7 +2011,10 @@ def test_cp4c_instruction_answers_no_distress_gate_with_not_applicable(tmp_path)
         "returns `Not Applicable` (Phase 1), which is a complete answer; only an unresolved "
         "scope holds the run." in text
     )
-    assert "requires a validated handoff from CP-0, CP-1, CP-2A, CP-2G and CP-4" in text
+    assert "Requires a validated handoff from CP-0, CP-1, CP-2A, CP-2G and CP-4" in text  # E4
+    # Named edit E4 (2026-11-13): the profile distinction no longer exists in the text.
+    assert "In FULL_CREDIT_32, requires" not in text
+    assert "in both profiles" not in text
     assert "Optional upstream, used when present: CP-2A, CP-2G, CP-4." not in text
     for gone in (  # the named edits: caos-only profile text and the qa_status map
         "LITE_CREDIT_22",
@@ -2225,6 +2229,8 @@ def test_every_module_is_told_what_stands_for_acceptance_scripts_and_questions(t
 # CP-2D, CP-4 and CP-4C changed on 2026-11-13 (Deploy V methods plan, Task 5A): they now send the
 # caos-databricks versions with named edits, so runs made before it are correctly marked "Earlier
 # methods" for these three modules.
+# CP-4C changed again on 2026-11-13 (minors batch, named edit E4): the two phrases that pointed at
+# the removed profile distinction (`In FULL_CREDIT_32, ` and ` in both profiles`) are cut.
 # CP-3C changed on 2026-11-13 (Deploy V methods plan, Task 2): it now sends Deploy V's skill, so
 # runs made before it are correctly marked "Earlier methods" for CP-3C.
 # CP-0 changed on 2026-11-13 (Deploy V methods plan, Task 3): it now sends Deploy V's skill, so
@@ -2258,7 +2264,7 @@ METHOD_TEXT_SHA256_AT_1B41E65 = {
     "CP-3C": "d1038d5097955d6bf47ccae01fee07bdc1db0b2e49eb7b77d0153c07b48768ac",
     "CP-3D": "a35a8a1d6f1b7aaecf7e98613e80a04c4c158f9163f315edbd004647463aa698",
     "CP-4": "a769b7456e5661d70cb25388fc4acb444cfd0aecd8f778554f98369ebadc7f7e",
-    "CP-4C": "3f70a354c3af18aad766ca847d1fd8922fe2e3a4156715f502a32b95be789491",
+    "CP-4C": "1d96547563190f89b909c37ea47969ecb04a2c794c5971b6db8f7c94c836b1f8",
     "CP-5": "9ac221698cc36a06473ce8cd9c2128c1705da362b289163d4ab54fda0d418d76",
     "CP-6": "115d07e8934f049b920e497834bcf61d53c6fe0cdd0266daf56b87d18d5e1f26",
     "CP-8": "7801db139f31238e89757e40fbe588a6cefb9d26ccdab57e2719de4a8654df7c",

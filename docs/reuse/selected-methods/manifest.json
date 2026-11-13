@@ -164,7 +164,7 @@
       "archive_path": "docs/reuse/selected-methods/skills/cp-4-legal-covenant-interpreter/SKILL.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/caos-databricks/vendor/deploy-v/skills/cp-4-legal-covenant-interpreter/SKILL.md",
       "sha256": "f9387cf2e5afc0f934f3fa909de7e46c2ea5cb85b94972f2d86535d6204c4025",
-      "use": "unchanged selected legal interpretation methodology; historical evidence, not inherited authority",
+      "use": "selected legal interpretation methodology with a named edit (see `edit`); historical evidence, not inherited authority",
       "source_sha256": "40ebb2613562b4fc36d7880aa5ed04a88bbc4648ee9bc157f41f61d77150f6f7",
       "edit": "qa_status map sentence removed from common rule 10 (host overrides qa_status; canon D1 map not supplied here); wording from caos-databricks vendor/deploy-v (last changed 2975872f, repo HEAD dfff264); sha256 is this edited file, source_sha256 the byte-for-byte copy"
     },
@@ -221,10 +221,10 @@
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-4c-restructuring-fulcrum/SKILL.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-4c-restructuring-fulcrum/SKILL.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/caos-databricks/vendor/deploy-v/skills/cp-4c-restructuring-fulcrum/SKILL.md",
-      "sha256": "fdd6deadfcb1601fb3d1bd0289d752b9f08c85f269c2a4cf51c14b2d8cc4d80a",
-      "use": "Unchanged historical restructuring method/helper; current project instructions govern scope and transport",
+      "sha256": "7c18e46a9eb9b2de9e3e1e708f6b1eadcc70411035d9b850cd81c27c2b645856",
+      "use": "selected historical restructuring method with named edits (see `edit`); current project instructions govern scope and transport",
       "source_sha256": "dc1666f10022fc121dd2db19440e8e00cc5e91f5791cef5fbdd83c4c6a856da2",
-      "edit": "qa_status map sentence removed from common rule 10 (host overrides qa_status; canon D1 map not supplied here); LITE-profile sentence removed from Dependencies and the whole `## LITE profile compatibility` section removed (no LITE route, no UPGRADE, no CP-L10 screen substitute here); wording from caos-databricks vendor/deploy-v (last changed 592ee83a, repo HEAD dfff264); sha256 is this edited file, source_sha256 the byte-for-byte copy"
+      "edit": "qa_status map sentence removed from common rule 10 (host overrides qa_status; canon D1 map not supplied here); LITE-profile sentence removed from Dependencies and the whole `## LITE profile compatibility` section removed (no LITE route, no UPGRADE, no CP-L10 screen substitute here); named edit E4: the two words left pointing at the removed profile distinction cut, `In FULL_CREDIT_32, requires` -> `Requires` (Dependencies, line 8) and `requires CP-2A in both profiles;` -> `requires CP-2A;` (line 12); wording from caos-databricks vendor/deploy-v (last changed 592ee83a, repo HEAD dfff264); sha256 is this edited file, source_sha256 the byte-for-byte copy"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-4c-restructuring-fulcrum/references/REF_CP-4C_STEPS.md",

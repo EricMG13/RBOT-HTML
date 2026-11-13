@@ -1775,8 +1775,10 @@ CP0_BLOCK = (
     "T2 source register, T3 source hierarchy, T4 content-to-module map, T5 gaps and conflicts, "
     "T6 evidence trace, T7 master index state, T8 recommended run command sheet), the document "
     "hierarchy and the minimum missing documents. A result is CONDITIONAL only for a source the "
-    "effective-source set does not carry, never for an upstream analytical handoff that has not "
-    "been produced yet: modules are put in order by navigation, not by readiness. When no "
+    "effective-source set does not carry. An upstream analytical handoff that has not been "
+    "produced yet is never a readiness ground and never a `CONDITIONAL` condition: modules are "
+    "put in order by navigation, not by readiness. The package, parse and hash checks were done "
+    "by the launcher: record no result for them. When no "
     "objective is stated, the objective is the selected pathway's use case; record it in T1 and "
     "assess readiness against it.\n\n"
 )

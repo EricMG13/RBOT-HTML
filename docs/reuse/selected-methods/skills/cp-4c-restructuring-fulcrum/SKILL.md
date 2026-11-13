@@ -5,11 +5,11 @@ description: "Start-of-message trigger: Run CP-4C or bare CP-4C. Embedded, quote
 
 # CP-4C Restructuring Scenario & Fulcrum Analysis
 
-**Dependencies — CP-4C.** In FULL_CREDIT_32, requires a validated handoff from CP-0, CP-1, CP-2A, CP-2G and CP-4 before this module can run — not merely the file, but an accepted artifact with matching identity and lineage — and uses CP-3C when present.
+**Dependencies — CP-4C.** Requires a validated handoff from CP-0, CP-1, CP-2A, CP-2G and CP-4 before this module can run — not merely the file, but an accepted artifact with matching identity and lineage — and uses CP-3C when present.
 
 Follow the dependency plan in CP-0 and `CREDIT_OS_V_MODULE_CATALOG_v2.json`. Module IDs and layer labels are not execution order. Run selected producers before consumers, including legal evidence before dependent security selection; revisit a layer when the plan requires it.
 
-The selected restructuring workflow requires CP-2A in both profiles; its distress gate makes downside preparation an active prerequisite.
+The selected restructuring workflow requires CP-2A; its distress gate makes downside preparation an active prerequisite.
 
 Run command: `Run CP-4C`. Every invocation is a full run.
 
