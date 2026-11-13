@@ -31,7 +31,8 @@ const Shapes = (() => {
   // The one list of file extensions an issuer document or handoff can carry (longest first), and the two shapes of an audit string a findings page never draws:
   // a file name, and a hash of 32 or more hex characters. components.js reads cells with them; a column is classed by them below.
   const FILE_EXTENSIONS = 'jsonl|json|xhtml|html|htm|xml|pdf|docx|doc|xlsx|xlsm|xls|csv|tsv|pptx|ppt|txt|md|zip';
-  const FILE_NAME = new RegExp(`[\\w-]+(?:\\.[\\w-]+)*\\.(?:${FILE_EXTENSIONS})\\b`, 'i');
+  // The lookbehind makes a match start only at the start of a word, so a long run of word characters or dotted words is read once, not once per position.
+  const FILE_NAME = new RegExp(`(?<![\\w.-])[\\w-]+(?:\\.[\\w-]+)*\\.(?:${FILE_EXTENSIONS})\\b`, 'i');
   const LONG_HEX = /\b[0-9a-f]{32,}\b/i;
   // The next module's own columns, by their whole name (a word pattern would take "Downstream revenue"). Matched on the header with its hyphens read as spaces.
   const INTERMODULE = /^(?:supplied handoff|use in this module|effect on this module|consumer|downstream module|receiving module|responsible module|command|required consumer action|escalation consequence|next commands?|next modules?|downstream consumers?|downstream modules? affected|downstream handoff impact|downstream owners|affected consumers|affected modules)$/;

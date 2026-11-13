@@ -223,3 +223,12 @@ test('M2: the inter-module headers the ruling names are read by their normalised
   for (const h of ['Next command', 'Next commands', 'next_module', 'Next-Modules', 'Downstream consumers', 'downstream_consumer', 'Downstream Module Affected', 'Downstream modules affected', 'Downstream Handoff Impact', 'downstream-owners', 'Affected consumers', 'Affected Modules']) assert.equal(Shapes.columnKind(h), 'intermodule', h);
   for (const h of ['Downstream revenue', 'Next maturity', 'Affected assets', 'Downstream Use', 'Modules']) assert.notEqual(Shapes.columnKind(h), 'intermodule', h);
 });
+
+test('M1: the file-name and hash patterns read a 5,000-character cell in linear time (no quadratic backtracking on a long word or dotted run)', () => {
+  const cells = ['A'.repeat(5000), 'a-'.repeat(2500), 'a.'.repeat(2500), 'a.b-'.repeat(1250), 'word '.repeat(1000)];
+  const started = process.hrtime.bigint();
+  for (let n = 0; n < 40; n += 1) for (const cell of cells) { Shapes.FILE_NAME.test(cell); Shapes.LONG_HEX.test(cell); }
+  const ms = Number(process.hrtime.bigint() - started) / 1e6;
+  assert.ok(ms < 400, `200 reads of long cells took ${ms} ms`);
+  assert.equal(Shapes.FILE_NAME.test(`${'a.'.repeat(2500)}pdf`), true, 'and a file name at the end of a long dotted run is still found');
+});
