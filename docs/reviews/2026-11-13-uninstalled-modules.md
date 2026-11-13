@@ -9,8 +9,8 @@ One module that every run depends on, Financial foundation (CP-1), still runs on
 the older full method. Three older modules were never brought into this project at all: sector review,
 issuer monitoring and email intake. Eight were retired or replaced on purpose and are not missing. The
 other 19 analytical modules are installed and are sent their full method. Seven modules that the June
-Credit Operating System ran on their own run here only as a part of another module, with no launch and
-no page of their own (see the crosswalk below).
+Credit Operating System ran on their own, and the ESG module added after it, run here only as a part of
+another module, with no launch and no page of their own (see the crosswalk and the ESG section below).
 
 "Installed" here means two things the code shows: CP-OS can order and launch the module (it has an entry
 in the routing table `_SELECTED`, `src/deploy_workflow/owners/cpos_launch.py:154-273`, and sits in at
@@ -142,6 +142,31 @@ the method text is already here. The library already names three sub-parts of Le
 Modules this project has that the Credit Operating System did not: Earnings quality (CP-1D), Forward
 credit model (CP-2G), Ratings & triggers (CP-2H), Market-implied risk (CP-3D), Recovery & fulcrum (CP-4C),
 Research questions (CP-DR), Changes since the last run (CP-8).
+
+## The ESG module
+
+There was one, and its method is still sent, but nothing in this project shows it by name.
+
+| When | Where | Form |
+|---|---|---|
+| May to early June 2026 | `~/Documents/prompts`, `Agent Files`, `Modular OS`, `Credit Operating System` | No ESG module. The only mention is one row of the sector review's criteria (`Modular OS/CP-SR/REF_CP-SR_B_InvestigationCriteria.md:39`) |
+| 22 June 2026 | `~/Documents/Co-Pilot Agents/_PROPOSED/PROPOSED_MODULES.md` | Proposed and promoted as its own module, then coded CP-2G, "ESGSustainabilityCreditRisk", because ESG had been covered "only at sector level" and sustainability-linked margin ratchets were not modelled |
+| July to August 2026 | `Co-Pilot Agents/DEPLOY_A_ONEDRIVE_AGENTS/CP-2F`, `DEPLOY_B_COWORK_SKILLS/skills/cp-2f-esg-sustainability-credit-risk`, `DEPLOY_C_GENERATED_SKILLS/skills/cp-2f-…` | Its own module, coded CP-2F, nine steps |
+| September 2026, Deploy V `c4d2e35` | `Deploy V/skills/cp-2e-macro-fx-hedging-sensitivity/SKILL.md:311` | Folded into Rates, FX & hedging: "Absorbed phase — CP-2F, binding on every CP-2E run" |
+| This project | `docs/reuse/selected-methods/skills/cp-2e-macro-fx-hedging-sensitivity/` | The same: the nine-step file is byte-identical to Deploy V's and is sent with CP-2E (`cpos_launch.py:203-207`) |
+
+What it is for: it answers "which environmental, social and transition factors actually reach this
+credit, and through what channel?" Its nine steps are a disclosure inventory, environmental and
+transition exposure, social and operational exposure, a materiality classification, sustainability-linked
+debt mechanics (targets and margin step-ups), the link to refinancing access and cost of capital, a credit
+synthesis, gaps and an overall implication. It is not an ESG score: most factors are to be marked
+immaterial.
+
+Status: inside a parent, like the seven above, and less visible than any of them. The words "ESG" and
+"sustainability" appear nowhere in this project's launcher, catalogue or library pages; the reader sees
+only "Rates, FX & hedging" (`src/deploy_workflow/credit_os_chips.py:70`). Making it its own module is
+small (routing entry, name, preset line). Not verified: whether any run's Rates, FX & hedging handoff
+actually contains the ESG tables; the run folders were not available to this session.
 
 ## Installed, but one part cannot work yet
 
