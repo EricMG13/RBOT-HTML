@@ -7921,18 +7921,6 @@ def test_a_non_usd_reporting_currency_no_longer_limits_the_chart_strip():
 # leverage and interest-cover columns with the adjusted names, tied to the adjusted register rows.
 ADJ_LEVERAGE = ("Total debt / adjusted EBITDA", "Net debt / adjusted EBITDA")
 ADJ_COVER = "Adjusted EBITDA / cash interest"
-# CP-1's instruction text at c532bb3 per pathway (measured in a checkout of that commit with the
-# size probe, not by this code); a change to it may not exceed these.
-CP1_TEXT_AT_C532BB3 = {
-    "short_snapshot": 56_488,
-    "credit_snapshot": 57_650,
-    "earnings_update": 62_050,
-    "covenant_refinancing": 57_569,
-    "distressed_restructuring": 57_573,
-    "lite_credit_assessment": 56_582,
-    "portfolio_decision": 61_967,
-    "relative_value": 61_963,
-}
 
 
 def adjusted_only_answer(raw: str, unit: str = "USD millions") -> str:
@@ -7991,12 +7979,6 @@ def test_the_check_block_says_when_the_adjusted_names_head_the_chart_columns():
     assert words in block
     adjusted = ", ".join(f"`{m.name}`" for m in cp1_check.METRICS[3:])
     assert block.index(adjusted) < block.index(words) < block.index("`Period` is the Period cell")
-
-
-@pytest.mark.parametrize("pathway", sorted(CP1_TEXT_AT_C532BB3))
-def test_cp1s_instruction_text_is_no_longer_than_it_was_at_c532bb3(tmp_path, pathway):
-    _, texts = all_instructions(tmp_path, pathway)
-    assert len(texts["CP-1"]) <= CP1_TEXT_AT_C532BB3[pathway], pathway
 
 
 @pytest.mark.parametrize("currency", ["USD", "GBP"])

@@ -1603,8 +1603,8 @@ def test_a_wrong_unit_cell_in_the_statement_currency_is_told_to_use_the_money_un
 
 @settings(deadline=None, max_examples=40)
 @given(
-    code=st.sampled_from(CURRENCY_CODES),
-    other=st.sampled_from(CURRENCY_CODES),
+    code=st.sampled_from(sorted(CURRENCY_CODES)),
+    other=st.sampled_from(sorted(CURRENCY_CODES)),
     in_thousands=st.booleans(),
 )
 def test_a_handoff_passes_with_its_own_currencys_money_unit_and_fails_with_any_other(
