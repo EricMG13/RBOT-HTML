@@ -1501,14 +1501,30 @@ def _millions_of(unit: str, codes: Collection[str]) -> bool:
     return bool(re.fullmatch(rf"{token}\s*{_MILLIONS}|{_MILLIONS}\s+{token}", unit.strip()))
 
 
+_PREFIXED = re.compile(rf"[A-Za-z][{''.join(_SYMBOL_CODE)}]")
+
+
+def _unidentified_symbols(unit: str) -> tuple[bool, str]:
+    """Whether `unit` has a currency symbol with a letter right before it (`C$`, `A$`, `CN\u00a5`):
+    the symbol alone does not say which currency it is. `US$` is the launcher's own spelling of
+    USD, so it is not one. Also returns `unit` with those prefixed symbols removed."""
+    text = unit.replace("US$", "USD")
+    return bool(_PREFIXED.search(text)), re.sub(rf"[A-Za-z]+[{''.join(_SYMBOL_CODE)}]", "", text)
+
+
 def _money_advice(money: str, unit: str) -> str:
     """What to do about a cell that is not a CP-1 money table's unit. Only a millions spelling of
     the statement currency is told to use the money unit: the same currency at another scale is
-    restated first, so no figure is read 1,000 times too large; another currency keeps the gap."""
+    restated first, so no figure is read 1,000 times too large; another currency keeps the gap.
+    A letter-prefixed symbol is not identified as the statement currency, so it is told to use the
+    money unit only if the figure is that currency in millions, else to write the gap."""
     own, _ = _own_currency(money)
     gap = f"write `Not supplied: reported in {unit}`"
     if _millions_of(unit, own):
         return f"use `{money}`."
+    prefixed, rest = _unidentified_symbols(unit)
+    if prefixed and not _other_currency(rest, money):
+        return f"use `{money}` if the figure is in the statement currency in millions, else {gap}."
     if _millions_of(unit, CURRENCY_CODES):
         return f"use `{money}` if the figure is in the statement currency, else {gap}."
     if _names_currency(unit, own, "".join(_own_currency(money)[1])) and not _other_currency(
