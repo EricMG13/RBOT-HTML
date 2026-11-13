@@ -346,7 +346,7 @@ LONG_FOLDER = (
 )
 
 
-def run_activity_library(tmp_path: Path) -> Path:
+def run_activity_library(tmp_path: Path, queued_pathway: str = "earnings_update") -> Path:
     make_run(tmp_path, "run-a")
     update_library.update_library(tmp_path)
     modules = [
@@ -373,7 +373,7 @@ def run_activity_library(tmp_path: Path) -> Path:
                 "id": "q1",
                 "status": "queued",
                 "issuer_name": "Queued Issuer One",
-                "pathway": "earnings_update",
+                "pathway": queued_pathway,
                 "folder": LONG_FOLDER + "-q1",
                 "files": ["queued-a.pdf", "queued-b.pdf"],
             },
@@ -421,6 +421,88 @@ def test_run_activity_has_no_horizontal_scroll_on_a_phone(tmp_path):
     seen = probe_json(dom)
     assert seen["innerWidth"] == 375 and seen["scrollWidth"] <= 375, seen
     assert seen["contentScroll"] <= seen["contentClient"], seen
+
+
+def cdp_measure(page: Path, route: str, measure: str, wait_for: str, options: dict | None = None):
+    """A JS expression's value after a real hover or an emulated media feature (DevTools Protocol).
+
+    options: width, hover (a selector to point at), features (media features to emulate)."""
+    job = {"width": 1440, "hover": None, "features": None, **(options or {})}
+    job |= {"url": page.as_uri() + route, "height": 900, "waitFor": wait_for, "measure": measure}
+    job_file = page.parent / "cdp-job.json"
+    job_file.write_text(json.dumps(job), encoding="utf-8")
+    script = Path(__file__).with_name("browser_cdp_measure.cjs")
+    done = subprocess.run(
+        ["node", str(script), chrome(), str(job_file)],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert done.returncode == 0, done.stderr
+    return json.loads(done.stdout)
+
+
+def test_the_empty_states_library_button_keeps_its_white_label_on_hover(tmp_path):
+    run_activity_library(tmp_path)
+    (tmp_path / "activity.js").write_text(
+        'window.RUN_ACTIVITY={"updated":"2026-11-12T00:00:00Z","runs":[]};\n', encoding="utf-8"
+    )
+    seen = cdp_measure(
+        tmp_path / "library/index.html",
+        "#CP-OS/activity",
+        '(() => { const e = document.querySelector(".activity-empty a");'
+        " return { hover: e.matches(':hover'), color: getComputedStyle(e).color }; })()",
+        ".activity-empty a",
+        {"hover": ".activity-empty a"},
+    )
+    assert seen == {"hover": True, "color": "rgb(255, 255, 255)"}
+
+
+def test_forced_colours_outline_the_run_cards_chips_and_table_and_keep_the_progress_bar(tmp_path):
+    page = run_activity_library(tmp_path)
+    seen = cdp_measure(
+        page,
+        "#CP-OS/activity",
+        "(() => { const style = s => getComputedStyle(document.querySelector(s));"
+        " return { chip: style('.run-mods .chip').borderTopStyle,"
+        " card: style('.run-card').borderTopStyle,"
+        " table: style('.run-table-wrap').borderTopStyle,"
+        " progress: style('.run-progress progress').appearance }; })()",
+        ".run-table",
+        {"features": [{"name": "forced-colors", "value": "active"}]},
+    )
+    assert seen == {"chip": "solid", "card": "solid", "table": "solid", "progress": "auto"}
+
+
+def test_the_waiting_tables_header_is_centred_and_its_card_keeps_a_top_edge(tmp_path):
+    page = run_activity_library(tmp_path)
+    seen = cdp_measure(
+        page,
+        "#CP-OS/activity",
+        "(() => { const t = document.querySelector('.run-table thead th');"
+        " const r = document.createRange(); r.selectNodeContents(t);"
+        " const x = r.getBoundingClientRect(), b = t.getBoundingClientRect();"
+        " return { above: Math.round(x.top - b.top), below: Math.round(b.bottom - x.bottom),"
+        " edge: getComputedStyle(document.querySelector('.run-table-wrap')).borderTopWidth }; })()",
+        ".run-table",
+    )
+    assert abs(seen["above"] - seen["below"]) <= 2, seen
+    assert seen["edge"] == "1px", seen
+
+
+def test_a_real_pathway_id_stays_on_one_line_in_the_waiting_table(tmp_path):
+    page = run_activity_library(tmp_path, queued_pathway="distressed_restructuring")
+    seen = cdp_measure(
+        page,
+        "#CP-OS/activity",
+        "(() => { const cell = [...document.querySelectorAll('.run-table tbody td')]"
+        ".find(td => td.textContent === 'distressed_restructuring');"
+        " const r = document.createRange(); r.selectNodeContents(cell);"
+        " return cell ? r.getClientRects().length : -1; })()",
+        ".run-table",
+    )
+    assert seen == 1
 
 
 def test_an_empty_library_says_so(tmp_path):

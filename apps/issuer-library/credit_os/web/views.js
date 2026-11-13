@@ -1438,7 +1438,7 @@ function runReport(context) {
 function activityView(live) {
   const top=liveActivityView(live);
   if(!live||typeof live!=='object'||Array.isArray(live)||!Array.isArray(live.runs))return '<div class="missing-state activity-empty"><div class="empty-symbol">'+icon('file-text')+'</div><h2>Run activity could not be read</h2><p>No live run data was supplied, so nothing is claimed about runs in progress or waiting.</p></div>';
-  if(!top.includes('<section'))return top+'<div class="missing-state activity-empty"><div class="empty-symbol">'+icon('file-text')+'</div><h2>No run in progress</h2><p>No run is running or waiting. Finished runs are in the Issuer library.</p><a class="run-primary" href="#W-Library/cases">Issuer library</a></div>';
+  if(!top.includes('<section'))return top+'<div class="missing-state activity-empty"><div class="empty-symbol">'+icon('file-text')+'</div><h2>No run in progress</h2><p>No run is running or waiting. Finished runs are in the Issuer library.</p><a class="primary-action" href="#W-Library/cases">Issuer library</a></div>';
   return top;
 }
 // Live runs from _engine/activity.js (window.RUN_ACTIVITY). Every field may be missing and the whole object may be malformed:
@@ -1448,7 +1448,7 @@ const ACTIVITY_RELOAD_MS=30000;
 const ENDED_STATUSES=['finished','failed','capped','rejected','interrupted'];
 // Only strings and finite numbers reach the page; any other value in a field renders as empty text.
 function liveText(value) {return esc(typeof value==='string'||(typeof value==='number'&&Number.isFinite(value))?value:'');}
-const LIVE_STATUSES=['queued','running','finished','failed','capped','rejected','interrupted'];
+const LIVE_STATUSES=['queued','running','finished','failed','capped','rejected','interrupted']; // read only by tests/test_context_form.py, which holds it to the run start service's statuses
 const servedOverHttp=()=>typeof window!=='undefined'&&/^https?:$/.test(window.location?.protocol); // a page with no location (the node tests) is not served
 const MODULE_STATES=['done','running','waiting'];
 // What a run's head and a waiting row say about it: each part that has text, joined with " · ".
@@ -1467,17 +1467,20 @@ function liveRunFiles(run) {
   const has=typeof run.id==='string'&&run.id||typeof run.id==='number'&&Number.isFinite(run.id),tag=has?` data-run="${liveText(run.id)}"`:'';
   return files.length?`<details class="run-files"${tag}><summary>${files.length} file${files.length===1?'':'s'} read</summary><ul>${files.map(f=>`<li>${liveText(f)}</li>`).join('')}</ul></details>`:'';
 }
+// The reason a run is not progressing and the name warning, as spans: the card and the waiting row both show them.
+function liveRunNotes(run) {
+  return [run.reason&&liveText(run.reason)?`<span class="run-reason">${liveText(run.reason)}</span>`:'',run.name_differs?'<span class="run-note">issuer name differs from earlier runs</span>':''].filter(Boolean);
+}
 function liveRunCard(run) {
   const modules=Array.isArray(run.modules)?run.modules.filter(Array.isArray):[];
-  const kind=LIVE_STATUSES.includes(run.status)?run.status:'unknown';
   const line=liveRunLine(run),pathway=liveText(run.pathway);
-  const notes=[run.reason&&liveText(run.reason)?`<span class="run-reason">${liveText(run.reason)}</span>`:'',run.name_differs?'<span class="run-note">issuer name differs from earlier runs</span>':''].filter(Boolean).join(' ');
+  const notes=liveRunNotes(run).join(' · ');
   const list=liveRunFiles(run);
   const badge=run.stalled?'<span class="run-badge run-badge-stalled">Running · stalled</span>':'<span class="run-badge run-badge-running">Running</span>';
-  return `<li class="run-card live-run live-${kind}"><div class="run-head"><div class="run-who"><strong>${liveText(run.issuer_name||run.folder||run.id)}</strong>${line?`<p>${line}</p>`:''}</div><div class="run-marks">${pathway?`<span class="run-tag">${pathway}</span>`:''}${badge}</div></div>${liveRunProgress(modules)}${list||notes?`<div class="run-foot">${list}${notes?`<span class="run-foot-notes">${notes}</span>`:''}</div>`:''}</li>`;
+  return `<li class="run-card live-run live-running"><div class="run-head"><div class="run-who"><strong>${liveText(run.issuer_name||run.folder||run.id)}</strong>${line?`<p>${line}</p>`:''}</div><div class="run-marks">${pathway?`<span class="run-tag">${pathway}</span>`:''}${badge}</div></div>${liveRunProgress(modules)}${list||notes?`<div class="run-foot">${list}${notes?`<span class="run-foot-notes">${notes}</span>`:''}</div>`:''}</li>`;
 }
 function liveWaitingRow(run) {
-  const extra=[run.reason&&liveText(run.reason)?`<span class="run-reason">${liveText(run.reason)}</span>`:'',run.name_differs?'<span class="run-note">issuer name differs from earlier runs</span>':'',run.stalled?'<span class="run-stalled">stalled</span>':''].filter(Boolean);
+  const extra=[...liveRunNotes(run),...(run.stalled?['<span class="run-stalled">stalled</span>']:[])];
   const line=liveRunLine({submitted_by:run.submitted_by,folder:run.folder},extra);
   return `<tr class="live-run live-queued"><th scope="row"><span class="run-name">${liveText(run.issuer_name||run.folder||run.id)}</span>${line?`<span class="run-sub">${line}</span>`:''}${liveRunFiles(run)}</th><td>${liveText(run.pathway)}</td></tr>`;
 }

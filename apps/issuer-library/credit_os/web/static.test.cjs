@@ -1520,7 +1520,7 @@ test('the counts show running and waiting as numbers under their labels; empty r
   assert.ok(empty.includes('<dt>Running</dt><dd>0</dd>') && empty.includes('<dt>Waiting</dt><dd>0</dd>'));
   assert.ok(empty.includes('No run in progress') && empty.includes('No run is running or waiting. Finished runs are in the Issuer library.'));
   assert.strictEqual(countOf(empty, /<a /g), 1);
-  assert.ok(empty.includes('<a class="run-primary" href="#W-Library/cases">Issuer library</a>'));
+  assert.ok(empty.includes('<a class="primary-action" href="#W-Library/cases">Issuer library</a>'));
   const unread = activityViewLive(null);
   assert.ok(unread.includes('Run activity could not be read') && !unread.includes('<a ') && !unread.includes('<dl'));
 });
@@ -1548,7 +1548,7 @@ test('Run activity styles take the component reference values (card, badge, tag,
   assert.ok(/height:8px/.test(rule('.run-progress progress')) && /border-radius:6px/.test(rule('.run-progress progress')));
   assert.ok(/height:44px/.test(rule('.run-table thead th')) && /600 12px\/18px/.test(rule('.run-table thead th')));
   assert.ok(/padding:8px 12px/.test(rule('.run-held')) && /border-radius:8px/.test(rule('.run-held')) && rule('.run-held').includes('var(--amber-bg)'));
-  assert.ok(/height:40px/.test(rule('.run-primary')) && /padding:10px 14px/.test(rule('.run-primary')) && rule('.run-primary').includes('var(--blue)'));
+  assert.ok(/margin-top:20px/.test(rule('.activity-empty .primary-action')) && !css.includes('.run-primary'), 'the empty-state link is the shared primary action, spaced 20px');
   assert.ok(css.includes('grid-template-columns:minmax(0,1fr) 440px'));
   assert.ok(/\.run-mods \.chip-done\{[^}]*background:#e8fff4/.test(css), 'done badge ground is the literal #e8fff4');
   assert.ok(!/:root\{[^}]*--green-bg/.test(css), 'the library :root declares no --green-bg (the run start page owns it)');
@@ -1586,9 +1586,9 @@ test('the empty-state heading and sentence set no font property', () => {
   assert.ok(rules.length >= 2);
   for (const r of rules) assert.ok(!/(?:^|;)\s*(font|font-size|line-height|font-weight|font-family)\s*:/.test(r.body), `${r.selector} sets a font property`);
 });
-test('forced colours keep an outline on the run badges and module badges', () => {
-  const m = /@media\(forced-colors:active\)\{([^@]*?\{[^}]*\})/.exec(read('screen.css'));
-  assert.ok(m && /\.run-mods \.chip/.test(m[1]) && /\.run-badge/.test(m[1]) && /border:1px solid/.test(m[1]));
+test('a running card joins its reason and the name warning with a middle dot, as a waiting row does', () => {
+  const html = liveActivityView({ runs: [{ id: 'r', status: 'running', folder: 'f', reason: 'reading the filing', name_differs: true }] });
+  assert.ok(html.includes('<span class="run-reason">reading the filing</span> · <span class="run-note">issuer name differs from earlier runs</span>'), html);
 });
 test('live run activity names who submitted a run, as text', () => {
   const html = liveActivityView({cap:'20', held:'', runs:[
@@ -3516,8 +3516,11 @@ test('brand colours: a hatched stack segment on a bright fill draws its stripe i
       const sel = prefix === '.stack-seg' ? `.stack-seg.series-${n}.hatch` : `${prefix} .series-${n}.hatch`;
       const found = rules.filter((r) => r.selector.split(',').map((s) => s.trim()).includes(sel));
       assert.ok(found.length, `no hatch rule for ${sel}`);
-      assert.ok(found.some((r) => r.body.includes(`var(--series-${fill}-ln)`)), `${sel} stripe is not --series-${fill}-ln`);
-      for (const rule of found) assert.ok(!/rgba?\(\s*255\s*,\s*255\s*,\s*255|#fff/i.test(rule.body), `${sel} draws a white stripe`);
+      // The same selector text has the same specificity, so the last rule that sets the stripe is the one that draws it.
+      const winner = found.filter((r) => /(?:^|;)\s*background(?:-image)?\s*:/.test(r.body)).at(-1);
+      assert.ok(winner, `${sel} sets no stripe`);
+      assert.ok(winner.body.includes(`var(--series-${fill}-ln)`), `${sel} stripe is not --series-${fill}-ln`);
+      assert.ok(!/rgba?\(\s*255\s*,\s*255\s*,\s*255|#fff/i.test(winner.body), `${sel} draws a white stripe`);
     }
   }
 });
