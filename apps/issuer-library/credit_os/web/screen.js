@@ -433,13 +433,24 @@ function writeLibraryHash() {
 function resetLibrary() {
   Object.assign(libraryFilters,LIBRARY_DEFAULTS);
   Object.assign(libraryState,{selected:'',sortKey:'',direction:'asc',hidden:''});
+  delete $('run-detail').dataset.chosen; // the card view shows the details panel only once an issuer's Details was used
   updateLibrary(true);
 }
 // Clicks inside the Library screen; true when one was handled.
 function libraryClick(target) {
-  const choose=target.closest('[data-library-select]'),sort=target.closest('[data-library-sort]'),source=target.closest('[data-library-source]'),hide=target.closest('[data-library-hidden]'),back=target.closest('[data-library-back]');
-  if(choose) {
-    libraryState.selected=choose.dataset.librarySelect;updateLibrary();
+  const choose=target.closest('[data-library-select]'),sort=target.closest('[data-library-sort]'),hide=target.closest('[data-library-hidden]'),back=target.closest('[data-library-back]');
+  const chip=target.closest('[data-library-chip]'),unset=target.closest('[data-library-unset]');
+  if(chip) {
+    const value=libraryChipValue(chip.dataset.libraryChip,chip.dataset.value);
+    if(value!==null){libraryFilters[chip.dataset.libraryChip]=value;updateLibrary();}
+  } else if(unset) {
+    if(unset.dataset.libraryUnset==='sort')Object.assign(libraryState,{sortKey:'',direction:'asc'});
+    else if(Object.hasOwn(LIBRARY_DEFAULTS,unset.dataset.libraryUnset))libraryFilters[unset.dataset.libraryUnset]=LIBRARY_DEFAULTS[unset.dataset.libraryUnset];
+    updateLibrary(true);$('library-facets').focus({preventScroll:true});
+  } else if(choose) {
+    const run=libraryRows().rows[Number(choose.dataset.librarySelect)]; // a row or card is chosen by its place in the list: no run code is written into the page
+    if(run)libraryState.selected=run.id;
+    $('run-detail').dataset.chosen='1';updateLibrary();
     $('run-detail').focus({preventScroll:true});$('run-detail').scrollIntoView({block:'start'});
   } else if(sort) {
     const key=sort.dataset.librarySort;
@@ -450,9 +461,6 @@ function libraryClick(target) {
   } else if(back) {
     const group=libraryState.hidden;libraryState.hidden='';updateLibrary();
     $('library-coverage').querySelector(`[data-library-hidden="${group}"]`)?.focus();
-  } else if(source) {
-    $('metric-sources').open=true;
-    const block=$(`source-${source.dataset.librarySource}`);block.focus({preventScroll:true});block.scrollIntoView({block:'center'});
   } else if(target.closest('#library-clear,#library-empty-reset')) {
     resetLibrary();$('library-query').focus();
   } else return false;
@@ -624,6 +632,12 @@ function renderRoute() {
 }
 document.addEventListener('change',event=>{
   if(event.target.matches('[data-library-filter]'))readLibraryFilters();
+  if(event.target.matches('[data-library-sort-select]')) {
+    const [key,direction]=event.target.value.split(':');
+    if(!key)Object.assign(libraryState,{sortKey:'',direction:'asc'});
+    else if(LIBRARY_COLUMNS.some(([column])=>column===key)&&(direction==='asc'||direction==='desc'))Object.assign(libraryState,{sortKey:key,direction});
+    updateLibrary();$('library-sort').focus();
+  }
   if(event.target.id==='model-select')go(current.module,event.target.value);
   if(event.target.id==='output-select')go(current.module,current.section,null,event.target.value);
   if(event.target.id==='chart-metric') {

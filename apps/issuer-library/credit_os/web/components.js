@@ -297,7 +297,8 @@
   const positionOn = (axis, value) => percent((value - axis.min) / (axis.max - axis.min) * 100);
 
   // ---- shared markup
-  const viewToggle = (label, options) => `<div class="seg" data-i="0" role="group" aria-label="${escapeHtml(label)}"><span class="seg-thumb"></span>${options.map(([value, text], n) => `<button type="button" data-view-pick="${value}" aria-pressed="${n === 0}">${escapeHtml(text)}</button>`).join('')}</div>`;
+  // `shown` is the option on view (the first unless a page that redraws the block says otherwise).
+  const viewToggle = (label, options, shown = options[0][0]) => `<div class="seg" data-i="${Math.max(0, options.findIndex(([value]) => value === shown))}" role="group" aria-label="${escapeHtml(label)}"><span class="seg-thumb"></span>${options.map(([value, text]) => `<button type="button" data-view-pick="${value}" aria-pressed="${value === shown}">${escapeHtml(text)}</button>`).join('')}</div>`;
   const pane = (name, html, shown) => `<div data-pane="${name}"${shown ? '' : ' hidden'}>${html}</div>`;
   const shapeBlock = (cls, ctx, state, inner) => `<div class="shape-block ${cls}" data-block${state ? ` ${state}` : ''} role="group"${ctx.caption ? ` aria-label="${escapeHtml(ctx.caption)}"` : ''}>${inner}</div>`;
   const shapeBar = (left, right) => `<div class="shape-bar"><div class="shape-bar-l">${left}</div><div class="shape-bar-r">${right}</div></div>`;
@@ -717,6 +718,42 @@
     const tiles = groups.flatMap(group => group.items.map(item => moduleTile(item, group.title)));
     return tiles.length ? `<div class="mt-grid">${tiles.join('')}</div>` : '';
   }
+  // C21 (library redesign, Task 11): one dot per module of a run, in the order given, coloured only by the state tokens and always carrying the state's icon, so a state is never colour alone.
+  // `items` are {title, state, blocked, choose}: the module's catalogue title, its declared state as written (a usable one picks the tone and icon; its word joins the label), whether the
+  // handoff says it is not assessable, and whether saved outputs were left unchosen. A module with no usable state is a hollow dot. Each dot is an image named by its label and shows it as a tooltip.
+  function moduleDots(items) {
+    if (!items.length) return '';
+    const dot = item => {
+      const usable = item.state && findingCell(item.state, {}).html !== undefined;
+      const mark = item.blocked ? {tone: 'warn', icon: 'triangle-alert'} : usable ? stateOf(item.state) : null;
+      const word = item.blocked ? 'Not assessable' : usable ? plain(item.state).trim() : item.choose ? 'saved outputs, none chosen' : '';
+      return `<li class="mdot ${mark ? mark.tone : 'none'}"><span role="img" ${tipAttributes(word ? `${item.title}: ${word}` : item.title)}>${mark ? icon(mark.icon) : ''}</span></li>`;
+    };
+    return `<ul class="mdots" aria-label="Modules in this run: ${items.length}">${items.map(dot).join('')}</ul>`;
+  }
+  // The first sentence of the first paragraph of a passage, as inline markup (the figures as the page draws them); '' when the passage has no text.
+  function firstSentenceOf(texts, figure) {
+    const [first] = paragraphs(texts || [], figure);
+    return first ? first.show(...firstSentence(first.body).lead) : '';
+  }
+  // C31 (Task 11): the mark of a run's status. A running run shows a small lattice loader, which moves only inside the stylesheet's no-preference media query; every status has its word.
+  const RUN_MARKS = {running: ['new', 'Running'], queued: ['same', 'Waiting'], done: ['ok', 'Done'], failed: ['bad', 'Failed']};
+  const LATTICE = `<span class="lat" aria-hidden="true">${'<i></i>'.repeat(9)}</span>`;
+  function runMark(status, note = '') {
+    if (!Object.hasOwn(RUN_MARKS, status)) return '';
+    const [tone, word] = RUN_MARKS[status], glyph = {running: LATTICE, queued: icon('history'), done: icon('circle-check'), failed: icon('x')}[status];
+    return `<span class="state ${tone} rmark ${status}">${glyph}<span class="state-w">${word}${note ? ` · ${escapeHtml(note)}` : ''}</span></span>`;
+  }
+  // C13 (Task 11): a run's progress as connected steps, one segment per module in the order given. `steps` are {title, state} with state done, running or waiting (anything else waits).
+  // Under the segments: the module(s) running now and how many are done of how many (counts of listed items). Only the running segment moves, by the stylesheet's own rule.
+  const STEP_WORDS = {done: 'done', running: 'running', waiting: 'waiting'};
+  function runSteps(steps) {
+    if (!steps.length) return '';
+    const kind = step => (Object.hasOwn(STEP_WORDS, step.state) ? step.state : 'waiting'), done = steps.filter(step => kind(step) === 'done').length;
+    const running = steps.filter(step => kind(step) === 'running').map(step => step.title);
+    const segment = step => `<li class="step ${kind(step)}" ${tipAttributes(`${step.title}: ${STEP_WORDS[kind(step)]}`)}></li>`;
+    return `<div class="steps-w"><ol class="steps" aria-label="Modules, ${done} of ${steps.length} done">${steps.map(segment).join('')}</ol><p class="steps-t">${running.length ? `<span class="steps-now"><span class="steps-k">Running</span> ${running.map(escapeHtml).join(', ')}</span>` : ''}<span class="steps-n">${done} of ${steps.length} done</span></p></div>`;
+  }
   // Where a block on the Overview comes from: a link to the module page that holds it.
   const attribution = ({title, href}) => `<p class="from"><a href="${escapeHtml(href)}">From ${escapeHtml(title)}${icon('arrow-right')}</a></p>`;
 
@@ -864,16 +901,19 @@
     const absent = absenceOf(block, cols, ctx);
     if (absent) return absentBlock(block, ctx, absent);
     const catCol = cols.find(col => col !== dateCol && col !== eventCol && /category/.test(labelNorm(col))), rest = cols.filter(col => ![dateCol, eventCol, catCol].includes(col));
-    const items = block.rows.map(row => {
+    // `ctx.slot(row, n)` is markup the page adds under an entry (the library's run history puts a state mark, a module dot strip and a link there), `ctx.current(row, n)` marks the entry
+    // the reader is on, and `ctx.unit` is the [singular, plural] the count names (default event). The entries stay the component's own.
+    const unit = ctx.unit ?? ['event', 'events'];
+    const items = block.rows.map((row, n) => {
       const when = cellText(row, dateCol.at), title = cellText(row, eventCol.at), word = catCol ? cellText(row, catCol.at) : '', wordHtml = word === '' ? '' : fieldHtml(word, ctx);
       const mark = icon(wordHtml === '' ? 'calendar-days' : categoryIcon(plain(word))), more = fieldList(row, rest, ctx) + extraList(block, row, ctx);
       const kind = wordHtml === '' ? '' : `<span class="tl-cat">${mark}${wordHtml}</span>`;
-      return {when, html: `<li class="tl-i"><div class="tl-d">${fieldHtml(when, ctx)}</div><div class="tl-row"><span class="tl-dot" aria-hidden="true">${mark}</span></div><div class="tl-b"><p class="tl-t">${fieldHtml(title, ctx)}</p>${kind}${more ? `<div class="tl-more">${more}</div>` : ''}${traceFor(ctx, row, rowLabelOf(block, ctx, row, title))}</div></li>`};
+      return {when, html: `<li class="tl-i"${ctx.current?.(row, n) ? ' aria-current="true"' : ''}><div class="tl-d">${fieldHtml(when, ctx)}</div><div class="tl-row"><span class="tl-dot" aria-hidden="true">${mark}</span></div><div class="tl-b"><p class="tl-t">${fieldHtml(title, ctx)}</p>${kind}${more ? `<div class="tl-more">${more}</div>` : ''}${ctx.slot?.(row, n) ?? ''}${traceFor(ctx, row, rowLabelOf(block, ctx, row, title))}</div></li>`};
     });
     const years = items.map(item => ISO_DATE.exec(item.when)?.[1]);
     const vertical = Boolean(ctx.stacked) || items.length > HORIZONTAL_MAX, grouped = vertical && years.every(Boolean) && new Set(years).size > 1;
     const list = items.map((item, n) => (grouped && years[n] !== years[n - 1] ? `<li class="tl-yr" data-tick>${years[n]}</li>` : '') + item.html).join('');
-    const bar = shapeBar(`<span class="eyebrow"><span data-count>${items.length}</span> ${items.length === 1 ? 'event' : 'events'}</span>`, '');
+    const bar = shapeBar(`<span class="eyebrow"><span data-count>${items.length}</span> ${items.length === 1 ? unit[0] : unit[1]}</span>`, '');
     return shapeBlock('shape-dated', ctx, '', `${bar}<ol class="tl ${vertical ? 'tl-v' : 'tl-h'}">${list}</ol>`);
   }
 
@@ -1071,7 +1111,7 @@
     return `<nav class="sec-rail" aria-label="On this page"><p class="eyebrow">On this page</p>${items.map(link).join('')}</nav>`;
   }
 
-  const Components = {icon, traceButton, traceRow, headerChips, placePill, toast, toastHost, tipAttributes, verdictPanel, findingsFeed, callout, limitationsBlock, recordCards, findingCell, render, casesBlock, caseRowsBlock, rankedLadder, statementCard, metricTiles, measureTiles, changeCards, statusChecklist, sidedBoard, moduleStateTiles, hasDatedEvent, metricStrip, moduleTiles, attribution, qaAccordion, factList, riskMatrix, watchList, datedTimeline, pathwayFlow, emptyState, gapState, chartTable, viewToggle, pane, visibleColumns, loopNote, mapLayers, pathwayDiagram, foldsForPrint, paragraphText, handleClick, sectionRail, ICON_PATHS};
+  const Components = {stateOf, stateBadge, moduleDots, firstSentenceOf, runMark, runSteps, icon, traceButton, traceRow, headerChips, placePill, toast, toastHost, tipAttributes, verdictPanel, findingsFeed, callout, limitationsBlock, recordCards, findingCell, render, casesBlock, caseRowsBlock, rankedLadder, statementCard, metricTiles, measureTiles, changeCards, statusChecklist, sidedBoard, moduleStateTiles, hasDatedEvent, metricStrip, moduleTiles, attribution, qaAccordion, factList, riskMatrix, watchList, datedTimeline, pathwayFlow, emptyState, gapState, chartTable, viewToggle, pane, visibleColumns, loopNote, mapLayers, pathwayDiagram, foldsForPrint, paragraphText, handleClick, sectionRail, ICON_PATHS};
   if (typeof window !== 'undefined') window.Components = Components;
   if (typeof document !== 'undefined' && document.body) toastHost();
   if (typeof module !== 'undefined') module.exports = Components;

@@ -1227,3 +1227,73 @@ test('gapState: the stated reason of the build stands in only when the table sta
   const none = { headers: ['Period', 'Limit'], rows: [{ line: 1, cells: ['FY24', '1.2'] }] };
   assert.ok(C.gapState(none, {}, 'The build says').includes('The build says'));
 });
+
+// ---- Library home and report history (library redesign, Task 11): the module dot strip, the run mark, the run steps, the shared toggle and timeline extensions.
+const tagText = html => html.replace(/<[^>]+>/g, '');
+const dotLabelsOf = html => [...html.matchAll(/<span role="img" data-tip="([^"]*)" aria-label="([^"]*)"/g)].map(m => [m[1], m[2]]);
+
+test('moduleDots (C21): one dot per module in the order given, each an image named by its title (and its state word) with the tooltip attributes; state is icon and token, never colour alone', () => {
+  const html = C.moduleDots([{ title: 'Source readiness', state: 'Ready' }, { title: 'Downside', state: null, blocked: true }, { title: 'Committee decision', state: 'Restricted' }, { title: 'Liquidity', state: null }, { title: 'Pricing', choose: true }, { title: 'Review', state: 'Failed' }]);
+  assert.deepEqual(dotLabelsOf(html), [['Source readiness: Ready', 'Source readiness: Ready'], ['Downside: Not assessable', 'Downside: Not assessable'], ['Committee decision: Restricted', 'Committee decision: Restricted'], ['Liquidity', 'Liquidity'], ['Pricing: saved outputs, none chosen', 'Pricing: saved outputs, none chosen'], ['Review: Failed', 'Review: Failed']]);
+  assert.deepEqual([...html.matchAll(/<li class="mdot (\w+)">/g)].map(m => m[1]), ['ok', 'warn', 'warn', 'none', 'none', 'bad']);
+  assert.ok(html.startsWith('<ul class="mdots" aria-label="Modules in this run: 6">'));
+  const dots = html.split('<li ').slice(1);
+  assert.ok(dots.filter((_, n) => [0, 1, 2, 5].includes(n)).every(dot => dot.includes('<svg class="i"')), 'a dot with a state carries its icon');
+  assert.ok(dots.filter((_, n) => [3, 4].includes(n)).every(dot => !dot.includes('<svg')), 'a module with no usable state is a hollow dot');
+  assert.equal(tagText(html), '', 'the module names are labels, not text');
+  assert.equal(C.moduleDots([]), '');
+});
+
+test('moduleDots: a state the findings rule holds back (an identifier) is not a state word; text is escaped', () => {
+  const html = C.moduleDots([{ title: 'A <b>&"x"', state: 'CP-1' }, { title: 'B', state: 'Ready <i>' }]);
+  assert.ok(html.includes('data-tip="A &lt;b&gt;&amp;&quot;x&quot;"') && html.includes('data-tip="B: Ready &lt;i&gt;"'), html);
+  assert.ok(!html.includes('<b>') && !html.includes('<i>'));
+});
+
+test('stateOf and stateBadge are exported for the library pages: a word with its icon, an unusable state has no word', () => {
+  assert.deepEqual(C.stateOf('Restricted'), { tone: 'warn', icon: 'triangle-alert' });
+  assert.ok(C.stateBadge('Restricted', {}).startsWith('<span class="state warn"><svg class="i"') && C.stateBadge('Restricted', {}).includes('<span class="state-w">Restricted</span>'));
+});
+
+test('firstSentenceOf: the first sentence of the first paragraph, figures as plain text; nothing for no text', () => {
+  assert.equal(C.firstSentenceOf([T('Hold the position. Leverage is 5.5x.\nBasis: file.pdf, page 1', 3)], null), 'Hold the position.');
+  assert.equal(C.firstSentenceOf([T('**Hold.** Next.', 3)], null), '<strong>Hold.</strong>');
+  assert.equal(C.firstSentenceOf([], null), '');
+  assert.equal(C.firstSentenceOf(undefined, null), '');
+});
+
+test('runMark (C31): the status as its icon and word; running shows the lattice loader and may carry a note; an unknown status draws nothing', () => {
+  const running = C.runMark('running');
+  assert.ok(running.startsWith('<span class="state new rmark running"><span class="lat" aria-hidden="true">') && (running.match(/<i><\/i>/g) || []).length === 9 && running.endsWith('<span class="state-w">Running</span></span>'));
+  assert.ok(C.runMark('running', 'stalled <b>').includes('<span class="state-w">Running · stalled &lt;b&gt;</span>'));
+  assert.deepEqual(['queued', 'done', 'failed'].map(status => tagText(C.runMark(status))), ['Waiting', 'Done', 'Failed']);
+  assert.ok(['queued', 'done', 'failed'].every(status => C.runMark(status).includes('<svg class="i"')), 'every status but running is an icon and a word');
+  assert.equal(C.runMark('finished'), '');
+});
+
+test('runSteps (C13): one segment per module in order, the running module and done of total in words; a state it does not know waits; text is escaped', () => {
+  const html = C.runSteps([{ title: 'Source readiness', state: 'done' }, { title: 'Financial <foundation>', state: 'running' }, { title: 'Downside', state: 'waiting' }, { title: 'Pricing', state: 'odd' }]);
+  assert.deepEqual([...html.matchAll(/<li class="step (\w+)"/g)].map(m => m[1]), ['done', 'running', 'waiting', 'waiting']);
+  assert.ok(html.includes('<ol class="steps" aria-label="Modules, 1 of 4 done">') && html.includes('data-tip="Financial &lt;foundation&gt;: running"'));
+  assert.ok(html.includes('<span class="steps-k">Running</span> Financial &lt;foundation&gt;') && html.includes('<span class="steps-n">1 of 4 done</span>'));
+  assert.ok(!C.runSteps([{ title: 'A', state: 'done' }]).includes('steps-now'), 'nothing running, no running line');
+  assert.equal(C.runSteps([]), '');
+});
+
+test('viewToggle takes the option on view; the default is the first', () => {
+  const two = [['cards', 'Cards'], ['list', 'List']];
+  assert.ok(C.viewToggle('Issuers', two).includes('data-i="0"') && C.viewToggle('Issuers', two).includes('data-view-pick="cards" aria-pressed="true"'));
+  const list = C.viewToggle('Issuers', two, 'list');
+  assert.ok(list.includes('data-i="1"') && list.includes('data-view-pick="list" aria-pressed="true"') && list.includes('data-view-pick="cards" aria-pressed="false"'));
+});
+
+test('datedTimeline: a page adds its markup under an entry, marks the current one and names the count; without them the entry is unchanged', () => {
+  const block = { headers: ['Date', 'Event'], rows: [{ cells: ['31 December 2025', 'Credit snapshot'], line: 1 }, { cells: ['31 March 2025', 'Credit snapshot'], line: 2 }] };
+  const plain = C.datedTimeline(block, { stacked: true });
+  assert.ok(plain.includes('<span data-count>2</span> events') && !plain.includes('aria-current'));
+  const html = C.datedTimeline(block, { stacked: true, unit: ['run', 'runs'], current: (row, n) => n === 1, slot: (row, n) => `<p class="slot">${n}:${row.cells[0]}</p>` });
+  assert.ok(html.includes('<span data-count>2</span> runs') && html.includes('<p class="slot">0:31 December 2025</p>') && html.includes('<p class="slot">1:31 March 2025</p>'));
+  assert.deepEqual([...html.matchAll(/<li class="tl-i"( aria-current="true")?>/g)].map(m => Boolean(m[1])), [false, true]);
+  assert.ok(html.includes('<ol class="tl tl-v">'));
+  assert.equal(C.datedTimeline({ headers: ['Date', 'Event'], rows: [{ cells: ['31 March 2025', 'Credit snapshot'], line: 1 }] }, { stacked: true, unit: ['run', 'runs'] }).includes('<span data-count>1</span> run<'), true, 'one entry, singular');
+});
