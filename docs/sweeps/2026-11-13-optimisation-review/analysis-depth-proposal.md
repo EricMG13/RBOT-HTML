@@ -1,10 +1,9 @@
 # Analysis depth and model routing as launcher settings: proposal for the owner, 2026-11-13
 
 Proposal only. No code, test, run folder or method text was changed, and no model was called.
-Revision 2: adds the owner's two ideas (routing presets on the Advanced level; depth by limiting
-steps in every module except the critical ones) and is checked against the methodology work in PRs
-107, 108, 110 and 111. Those PRs are open, not merged; I read their branch tips (`9c185c7`,
-`e76625c`, `c532bb3`).
+Revision 3: adds the owner's two ideas (routing presets on the Advanced level; depth by limiting
+steps in every module except the critical ones) and is re-checked against `main` at `43b3513`, which
+holds PRs 103, 107, 108 and 113. PRs 110 and 111 are open; I read them at `e76625c` and `c532bb3`.
 
 Three separate controls: **tier** (Lite, Full, Deep: which modules run), **routing** (which model
 and reasoning effort each module gets) and **depth** (how far a module that runs takes its analysis).
@@ -15,8 +14,8 @@ and reasoning effort each module gets) and **depth** (how far a module that runs
   critical modules.
 - Depth: one run-wide setting, **Brief**, **Standard** or **Extended**. Standard is today's
   behaviour, byte for byte. Brief is a named list of method steps each non-critical module does not
-  run; Extended turns on the long forms the methods already define. Critical modules are always
-  Standard.
+  run; Extended turns on the long forms the methods already define. Critical modules are never
+  reduced.
 - A step list, not a step count or a turn limit. A module that runs out of turns is lost, not
   shortened, and the method's steps are chained by gates, so the skipped steps have to be named.
 - The register cut in PR 107/108 has already taken most of what Brief could save by writing less.
@@ -28,11 +27,14 @@ and reasoning effort each module gets) and **depth** (how far a module that runs
 - "Critical and large" should be "critical, where a gain is measured". Evidence validation (CP-5) is
   the largest module (USD 2.26 of 8.62) because of what it is sent, not what it reasons; on Opus it
   alone would cost an estimated USD 6 to 7.
-- Estimates for a Full run at medium, none measured: Brief saves about 7 to 10 minutes of 62.5 and
-  USD 0.4 to 0.6 of 8.62; Extended adds 6 to 16 minutes and USD 0.5 to 1.5; Mixed costs about USD 11
+- Estimates for a Full run at medium, none measured: Brief saves about 5 to 8 minutes of 62.5 and
+  USD 0.3 to 0.5 of 8.62; Extended adds 6 to 16 minutes and USD 0.5 to 1.5; Mixed costs about USD 11
   to 13 a run. The tier remains the large lever.
-- Build order: the critical list and the record; Extended; Brief for three modules; Mixed last, after
-  one paid Mixed against Balanced comparison.
+- Brief is a small prize (5% to 13% of a run, inside unknown run-to-run variation) for a scope file,
+  three check changes, page statements and paid proof. Extended and the Balanced change are cheap.
+  Decide whether Brief is worth building at all (question 15).
+- Build order: the critical list and the record; the Balanced change; Extended; Brief for two
+  modules if wanted; Mixed last, after one paid Mixed against Balanced comparison.
 
 ## 2. The critical modules
 
@@ -41,27 +43,28 @@ charts compute from its figures or reuse its text.
 
 | Module | Why it is critical | Depth | Routing |
 | --- | --- | --- | --- |
-| Source readiness (CP-0) | Its input gate and content map decide what every module may read | Always Standard | Medium: measured adequate |
-| Financial foundation (CP-1) | Nine Full modules, Forecast, charts and Changes read it. PR 111 gives it the Deploy V method and recomputes its figures in code at acceptance | Always Standard | Medium: measured adequate, and now checked in code |
-| Business and transaction (CP-1A) | Its transaction, revenue-mix and operating-model registers are reused downstream | Always Standard | High: modest measured gain |
-| Fundamental credit (CP-2) | Five Full modules and Changes carry its passages, triggers and definitions | Always Standard (Extended adds Deep Synthesis) | High: the measured gain |
-| Forward credit model (CP-2G) | The forecast is computed from its inputs block | Always Standard | Medium: untested |
-| Changes (CP-8) | Runs from a pack Python builds; compares the two runs | Always Standard | Medium |
+| Source readiness (CP-0) | Its input gate and content map decide what every module may read | Never reduced | Medium: measured adequate |
+| Financial foundation (CP-1) | Nine Full modules, Forecast, charts and Changes read it. PR 111 gives it the Deploy V method and recomputes its figures in code at acceptance | Never reduced | Medium: measured adequate, and now checked in code |
+| Business and transaction (CP-1A) | Its transaction, revenue-mix and operating-model registers are reused downstream | Never reduced | High: modest measured gain |
+| Fundamental credit (CP-2) | Five Full modules and Changes carry its passages, triggers and definitions | Never reduced; Extended adds Deep Synthesis | High: the measured gain |
+| Downside (CP-2A) | Since PR 113 the Forecast page's Downside is computed from its scenario row, and the launcher checks CP-2G's shock against it | Never reduced; Extended allows up to four scenarios | High: the forward interest schedule is its input |
+| Forward credit model (CP-2G) | The forecast is computed from its inputs block | Never reduced | Medium: untested |
+| Changes (CP-8) | Runs from a pack Python builds; compares the two runs | Never reduced | Medium |
 
-Not critical in a Full run, and so open to Brief: Research (CP-DR), Legal (CP-4), Downside (CP-2A),
+Not critical in a Full run, and so open to Brief: Research (CP-DR), Legal (CP-4),
 Rates, FX and ESG (CP-2E), Security selection (CP-3), Evidence validation (CP-5), Committee (CP-6).
-They were 62% of the medium run's model time and 66% of its cost.
+They were 53% of the medium run's model time and 59% of its cost.
 
 Inside a non-critical module some items stay protected at every depth, because a page or a check
 reads them: the four reader passages, Basis lines, `## Sources`, `## Gaps`, confidence inputs, every
-report selector, chart and owner table, CP-2A's scenario table and paired scenario, the ESG tables
+report selector, chart and owner table, the ESG tables
 (owner, 2026-11-13: kept), and CP-5's checks of critical-module figures.
 
 ## 3. Depth by step list
 
 ### What the landed work changes
 
-| Landed (open PRs) | Effect on a depth setting |
+| Landed (PRs 107 and 108 merged; 110 and 111 open) | Effect on a depth setting |
 | --- | --- |
 | Register scope per module, `CPOS_REGISTER_SCOPE.md`, for ten modules (PR 107) | The fixed cut is done at every depth. CP-2A no longer writes ten registers, CP-3 twenty-three, CP-5 thirteen. Brief cannot save that output again |
 | The cut tells the model to keep doing the work: "Any figure, limitation or conclusion you draw from that work goes in a register you do write" | The steps still run. Not running them is the remaining lever, and it is the owner's second idea |
@@ -87,6 +90,7 @@ report selector, chart and owner table, CP-2A's scenario table and paired scenar
   below", and the transport rule that a file not sent "could not be established".
 - Extended uses the methods' own trigger words, as `DEEP_DEBATE_BLOCK` does for CP-6. CP-2's Deep
   Synthesis has no switch today; Extended adds one.
+- An Extended block must fit the same ceilings: CP-2's Deep Synthesis block is checked per pathway.
 - Standard sends no block, so today's instruction files and their test pins do not change.
 - Never a turn limit, write limit or output limit: each cuts a module off instead of shortening it.
 
@@ -99,12 +103,11 @@ confirmed against each method and `appendix-inventory.md` when the scope file is
 | --- | --- | --- | --- | --- | --- |
 | CP-DR | 0.28 / 151 | Research steps | None skipped; fewer ranked questions and a 15-page lookup limit instead of 40 | More questions; the full 40 pages | USD 0.02, 30 s |
 | CP-4 | 0.37 / 67 (blocked) | 14 + 4A 13 + 4B 9 | 4A and 4B files withheld when legal documents are declared "none"; with documents, steps 10 and 11 (market-norm comparison, aggressiveness score) | Nothing | USD 0.05 |
-| CP-2A | 0.62 / 381 | 10 + events 9 | Steps 03 to 05 (fragility map, stress transmission, pathway register) and events steps 02 to 05: every register they write is already cut. Step 06 (sensitivity matrix) to the drivers ranked first | Up to four scenarios; full matrix | USD 0.08, 95 s |
 | CP-2E | 0.66 / 350 | 10 + ESG 9 | Steps 06 and 07 (FX, commodity) only when step 01 finds no exposure. ESG steps untouched | Every sensitivity | USD 0.04, 50 s |
 | CP-3 | 0.80 / 352 | 11 + instrument 12 + portfolio 10 | Portfolio file withheld when no portfolio file is supplied; step 04 (override review); instrument steps 04 to 07 for the recommended instrument and its nearest alternative only | Every instrument | USD 0.08, 75 s |
 | CP-5 | 2.26 / 649 | 9 + integrity 11 | Integrity steps 07, 08 and 10 (duplication and committee readiness, handoff envelope, remediation map); steps 04, 05 and 07 (lineage, calculation register, auditability: registers already cut). Citation, maths and consistency audits stay | Trace beyond the top five drivers | USD 0.09, 105 s |
 | CP-6 | 0.73 / 566 | 11 + portfolio debate 11 | Portfolio debate file withheld when no portfolio file is supplied | Deep Debate (exists today) | USD 0.06, 45 s |
-| Seven modules | 5.72 / 2,516 | | | | About USD 0.4 and 400 s, before fewer calls |
+| Six modules | 5.10 / 2,135 | | | | About USD 0.35 and 305 s, before fewer calls |
 
 Basis of the estimates: output is USD 10 a million tokens; a fit over 26 module results gives about
 7.6 seconds a call plus 12.3 seconds per 1,000 output tokens (R² 0.82); each figure is an assumed 10%
@@ -146,7 +149,8 @@ The run-start page already offers a model (GPT or Claude) and an effort at the A
 - CP-0 and CP-1 were measured adequate at medium, and CP-1's figures are now recomputed in code.
 - High effort's one clear gain (next year's scheduled interest) came from a single source search in
   CP-2, which one instruction sentence would secure at medium.
-- So the high set is the critical modules with a measured gain, plus CP-2A, until runs show more.
+- So the high set is three of the critical modules: CP-1A and CP-2 on a measured gain, and CP-2A
+  because the forecast's Downside now rests on it. Others join when a run shows a gain.
 
 ### What Mixed needs
 
@@ -188,7 +192,7 @@ The run-start page already offers a model (GPT or Claude) and an effort at the A
 | Evidence validation checks less | Its audits of critical figures are never skipped |
 | Savings are smaller than run-to-run variation, which is unknown | Two runs per setting before any figure is shown on the page |
 
-Paid runs, after PRs 107, 108, 110 and 111 merge (they change the baseline). Each needs its own
+Paid runs, after PRs 110 and 111 merge (they change the baseline). Each needs its own
 explicit action under the standing ruling.
 
 1. One Standard, Balanced run on the merged tree: the baseline.
@@ -196,7 +200,7 @@ explicit action under the standing ruling.
 3. One Extended run, read for whether the extra length is extra sourced analysis.
 4. A Brief run after a Standard run, to read how Changes words the difference.
 5. Two Mixed runs against the Balanced baseline on the same issuer, scored against the same list.
-6. The reader check `AGENTS.md` requires for the new statements on Overview and Modules.
+6. The fidelity check `AGENTS.md` requires for the new statements on Overview and Modules.
 
 About nine runs, an estimated USD 85 to 100.
 
@@ -206,9 +210,9 @@ Build order.
    and summary line. Standard changes no instruction byte. Offline only.
 2. Balanced's high set moved to the measured modules. A one-line change, with paid run 1.
 3. Extended: CP-2's Deep Synthesis block; Extended sets CP-6's existing option. Removes nothing.
-4. The depth scope file with Brief sections for CP-2A, CP-3 and CP-5, read by the presence check and
+4. If Brief is wanted: the depth scope file with Brief sections for CP-3 and CP-5, read by the presence check and
    CP-5's note; the consumer test; the ceiling test.
-5. The depth statements in the library, with the reader check; the Changes pack fields and cause.
+5. The depth statements in the library, with the fidelity check; the Changes pack fields and cause.
 6. Paid runs 2 to 4. Only then widen Brief or show a saving on the page.
 7. Mixed: a config per module, the per-model reservation, the ruling amendment, then paid run 5.
 
@@ -216,7 +220,7 @@ Build order.
 
 | # | Question | Recommended answer |
 | --- | --- | --- |
-| 1 | Which modules are critical? | CP-0, CP-1, CP-1A, CP-2, CP-2G and CP-8. One list for depth and routing |
+| 1 | Which modules are critical? | CP-0, CP-1, CP-1A, CP-2, CP-2A, CP-2G and CP-8. One list: depth never reduces them, and the high-effort set is drawn only from them |
 | 2 | Is Brief a list of named steps per module, or a number of steps? | Named steps. A number lets the model choose what to drop, which cannot be checked or told to the reader |
 | 3 | Depth names | Brief, Standard, Extended. Not the tier names, the effort names, or "level" (the page's disclosure setting) |
 | 4 | May Brief skip a step whose registers are all already cut? | Yes for non-critical modules, after the paid comparison shows the module's call and figures unchanged |
@@ -230,6 +234,7 @@ Build order.
 | 12 | Who states depth and routing to the reader? | CP-OS from the run record: summary, Overview, Modules; model and effort per module on Evidence |
 | 13 | Are runs of different depth or routing compared by Changes? | Yes, same issuer and pathway as now, with the new cause `Depth setting` |
 | 14 | May sub-part files be withheld when their input is absent? | Yes, and at every depth: it is a source rule, not a depth choice |
+| 15 | Is Brief worth building? | Not yet. Build Extended and the Balanced change; decide on Brief after the tier work shows what time remains to save |
 
 ## Not verified
 
@@ -241,8 +246,9 @@ Build order.
 - That Copilot serves two models within one run without a new session cost or cache loss.
 - The candidate step lists. I read step names and the register scope file, not each step's text; a
   step whose registers are cut may still feed a kept step. Each list must be checked when written.
-- The merged state. PRs 107, 108, 110 and 111 are open; I read their branch tips, not a tree with all
-  four merged. PR 111's whole-branch review has two open findings. `run_script` has no PR yet.
+- PRs 110 and 111. Both are open and being changed; PR 110 has moved past the commit I read, and PR
+  111 is being revised for two owner rulings. Their final text, and the combined instruction size
+  against the ceilings, are not checked here. `run_script` has no PR yet.
 - How the model behaves when a Brief block and a method gate disagree, and the cost of any rejected
   drafts that follow.
 - Whether today's nine-module Balanced set outperforms the proposed three: six of the nine are untested.
