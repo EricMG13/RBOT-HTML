@@ -208,7 +208,14 @@ _SELECTED: dict[str, tuple[str, ...]] = {
         _SKILLS + "cp-3-relative-value-security-selection/references/CP-3B_RUNBOOK.md",
         _SKILLS + "cp-3-relative-value-security-selection/references/CP-3_SCHEMA_REFERENCE.md",
     ),
-    "CP-3C": (_VII + "cp3c.md",),
+    # Owner-directed, 2026-11-13 (Deploy V methods plan, Task 2): Deploy V's skill with the runbook
+    # and step file its SKILL binds, from Deploy V c4d2e35, plus the named r17 `Scale` edit to
+    # register T3D.2. The DEPLOY VII stand-in (cp3c.md) is no longer sent.
+    "CP-3C": (
+        _SKILLS + "cp-3c-refinancing-lme-risk/SKILL.md",
+        _SKILLS + "cp-3c-refinancing-lme-risk/references/REF_CP-3C_STEPS.md",
+        _SKILLS + "cp-3c-refinancing-lme-risk/references/CP-3C_RUNBOOK.md",
+    ),
     "CP-3D": (
         _SKILLS + "cp-3d-market-implied-risk/SKILL.md",
         _SKILLS + "cp-3d-market-implied-risk/references/REF_CP-3D_STEPS.md",

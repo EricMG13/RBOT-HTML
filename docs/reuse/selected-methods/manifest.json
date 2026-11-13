@@ -1017,7 +1017,9 @@
       "consumed_path": "skills/cp-3c-refinancing-lme-risk/SKILL.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-3c-refinancing-lme-risk/SKILL.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/Deploy V/skills/cp-3c-refinancing-lme-risk/SKILL.md",
-      "sha256": "8c8c0534932f653288c68954406262c40e2fd6dcb6f23916220b5cec3e42d4bd"
+      "sha256": "eac3b117d9e1c7227cdfe12a83f51476cf5d7eedeea02857fdef4e2518447189",
+      "source_sha256": "8c8c0534932f653288c68954406262c40e2fd6dcb6f23916220b5cec3e42d4bd",
+      "edit": "r17 Scale column added to register T3D.2; wording from caos-databricks vendor/deploy-v (dfff264); sha256 is this edited file, source_sha256 the byte-for-byte copy of Deploy V c4d2e35"
     },
     {
       "consumed_path": "skills/cp-3c-refinancing-lme-risk/references/CP-3C_RUNBOOK.md",
@@ -1029,7 +1031,9 @@
       "consumed_path": "skills/cp-3c-refinancing-lme-risk/references/REF_CP-3C_STEPS.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-3c-refinancing-lme-risk/references/REF_CP-3C_STEPS.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/Deploy V/skills/cp-3c-refinancing-lme-risk/references/REF_CP-3C_STEPS.md",
-      "sha256": "a0b1abe8f5ce28cf7d962aa26e72ae12326c102fba34f4d66f52b620dd40bf84"
+      "sha256": "29b5949a9acfc98386bd1062474504fdc9fa6c632a43f2b8b87cf965e2188a74",
+      "source_sha256": "a0b1abe8f5ce28cf7d962aa26e72ae12326c102fba34f4d66f52b620dd40bf84",
+      "edit": "r17 Scale column added to register T3D.2; wording from caos-databricks vendor/deploy-v (dfff264); sha256 is this edited file, source_sha256 the byte-for-byte copy of Deploy V c4d2e35"
     }
   ],
   "companions_note": "2026-11-10 (owner: keep a copy of the methodology in the repo): companion references, CANON_SHARED.md, the CP-DR research brief and the cp-1b-earnings-delta skill copied read-only from cp-os at commit b57a344. Four SKILL.md files archived earlier (cp-2h, cp-3, cp-6, cp-dr) differ from cp-os at that commit and are kept as archived. Not copied: scripts (not run in this transport) and the three .xlsx deployment placeholders (CP-3 Sector RV, CP-3B portfolio constraints, CP-6A debate inputs)."

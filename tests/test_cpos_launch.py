@@ -432,9 +432,10 @@ SCORED = (
     "CP-2G",
     "CP-2H",
     "CP-3",
+    "CP-3C",
 )
 SCORED += ("CP-3D", "CP-4", "CP-4C", "CP-5", "CP-6", "CP-DR")
-UNSCORED = ("CP-0", "CP-1", "CP-L10", "CP-3C", "CP-8")
+UNSCORED = ("CP-0", "CP-1", "CP-L10", "CP-8")
 CONFIDENCE_ROWS = (
     "| Directly Sourced | 8 |\n| Calculated | 2 |\n| Assumption-Based | 2 |\n"
     "| Analyst Inference | 0 |\n| Weak Lineage | 0 |\n| Untraced | 0 |\n| Conflicting | 0 |\n"
@@ -1708,6 +1709,10 @@ BINDING_COMPANIONS = {
     ),
     "CP-2": ("cp-2-fundamental-credit-synthesizer/references/REF_CP-2_STEPS.md",),
     "CP-2A": ("cp-2a-downside-pathway/references/REF_CP-2A_STEPS.md",),
+    "CP-3C": (
+        "cp-3c-refinancing-lme-risk/references/REF_CP-3C_STEPS.md",
+        "cp-3c-refinancing-lme-risk/references/CP-3C_RUNBOOK.md",
+    ),
     "CP-3": (
         "cp-3-relative-value-security-selection/references/CP-3A_RUNBOOK.md",
         "cp-3-relative-value-security-selection/references/CP-3B_RUNBOOK.md",
@@ -1738,6 +1743,7 @@ SKILL_MODULES = [
         "CP-2G",
         "CP-2H",
         "CP-3",
+        "CP-3C",
         "CP-3D",
     ),
     *("CP-4", "CP-4C", "CP-5", "CP-6", "CP-DR"),
@@ -1796,6 +1802,30 @@ def test_cp2_and_cp1a_run_the_deploy_v_skills_not_the_deploy_vii_stand_ins(tmp_p
         assert "`### Confidence inputs`" in texts[module].partition(cpos_launch.METHOD_MARK)[0]
 
 
+def test_cp3c_runs_the_deploy_v_skill_not_the_deploy_vii_stand_in():
+    """The stand-in (cp3c.md) forced the liability-management path to Insufficient Information
+    and barred every digit from text; the Deploy V skill assesses legal capacity, sponsor
+    willingness, the path taxonomy and a scenario map."""
+    text = cpos_launch.method_text("CP-3C")
+    for heading in (
+        "# CP-3C Refinancing and Liability-Management Risk",
+        "## REF_CP-3C_04_LegalCapacityForLME.md",
+        "## REF_CP-3C_05_SponsorGovernanceWillingness.md",
+        "## Refinancing / LME Path Taxonomy (12 paths)",
+        "## REF_CP-3C_10_ScenarioMap.md",
+    ):
+        assert heading in text, heading
+    for phrase in (
+        "Text carries no figure and no digit",
+        "The liability-management path is Insufficient Information",
+        "src/deploy_vii/methods/cp3c.md",
+    ):
+        assert phrase not in text, phrase
+    # The r17 edit: register T3D.2 carries Scale, in the skill and in the step file.
+    assert "Currency`|`Scale`|`Maturity Date`" in text
+    assert "        - Currency\n        - Scale\n        - Maturity Date\n" in text
+
+
 def test_cp1b_runs_the_deploy_v_method_not_the_structured_runtime_step():
     """Live runs 2026-11-09 and 2026-11-10: CP-1B blocked both times for want of a `read_inputs`
     view with `pairs`, which only the older structured runtime gives."""
@@ -1813,7 +1843,7 @@ def test_skill_modules_carry_the_confidence_score_rules_their_script_would_apply
         assert body.startswith("## CP_CONFIDENCE_SCORE.md\n")
         assert "score = clamp( (0.6 * E + 0.4 * C) * S - P , 0 , 100 )" in body
         assert "CP_LIMITATION_TAXONOMY" not in body  # the next canon section is not swept in
-    assert [name for name, _ in cpos_launch.method_sections("CP-3C")][1:] == list(
+    assert [name for name, _ in cpos_launch.method_sections("CP-L10")][1:] == list(
         READER_LAYER_SECTIONS
     )
 
@@ -1880,6 +1910,8 @@ def test_every_module_is_told_what_stands_for_acceptance_scripts_and_questions(t
 # methods" when the text after METHOD_MARK differs, so the shared-text change must leave every
 # one of these as it was. CP-8 alone changed on main after that commit (36a4c52, 184bfbb, 1e46c49:
 # src/deploy_vii/methods/cp8.md, the withheld-difference rules); its pin is the merged text.
+# CP-3C changed on 2026-11-13 (Deploy V methods plan, Task 2): it now sends Deploy V's skill, so
+# runs made before it are correctly marked "Earlier methods" for CP-3C.
 # CP-1A and CP-2 changed on 2026-11-13 (owner: "Build rec. 1, then run"): they now send Deploy V's
 # skills, so runs made before it are correctly marked "Earlier methods" for these two modules.
 METHOD_TEXT_SHA256_AT_1B41E65 = {
@@ -1896,7 +1928,7 @@ METHOD_TEXT_SHA256_AT_1B41E65 = {
     "CP-2G": "6d15e5eee90a18410466fad2d60efb05740f7eb0972595ceae8116ba1f0db76f",
     "CP-2H": "e98d0b0c5c84059ef7f10e595c270c4532cf29246c612bb0f108809010c3e3a8",
     "CP-3": "144798da83e3aab842f8a2e187008a95ecc5c7b387f9e5bc1b31b92ffdf20f1c",
-    "CP-3C": "51efb56c61d6f8051d134efbfcdc76aa8eb2af3c3a7331b449c093d24279803e",
+    "CP-3C": "c88298f0bb03b0cc7a4975f1eb523f5a8771ebe4e4e4ac2b24168acf343a0c43",
     "CP-3D": "e43f2d5d73d7e15e24d53e302d84d8eca543e14848656dc3a3dc7fb85fde25f8",
     "CP-4": "fb2e764ed645f3d65112aebe8db12feb215763ffdaca25e6d70a627250d1c6bc",
     "CP-4C": "2e70ce4fd894deba7bc2a6234953689f898d73c0ac093336806d70fd16815d8e",
