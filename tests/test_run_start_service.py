@@ -925,3 +925,111 @@ def test_the_inputs_route_does_not_serve_file_content(svc, fake_env):
     assert reply.status == 200
     assert b"plover" not in reply.body and b"424242" not in reply.body
     assert reply.json()["files"] == [{"name": "notes/a.txt", "size": len(secret)}]
+
+
+RAIL_MARKER = b"<!--rail-signal-->"
+FORM_PAGE = Path(__file__).resolve().parents[1] / "docs/templates/context-form.html"
+
+
+def test_without_a_signal_url_the_page_is_the_template_without_its_marker(svc):
+    template = FORM_PAGE.read_bytes()
+    assert template.count(RAIL_MARKER) == 1
+    page = svc.call("GET", "/").body
+    assert page == template.replace(RAIL_MARKER, b"")
+    assert b"rail-signal" not in page and RAIL_MARKER not in page
+
+
+def test_a_signal_url_adds_one_rail_link_after_the_activity_link(root, fake_env, monkeypatch):
+    fake_env({"sleep": 30})
+    watcher = Scheduler(settings(root))
+    server = service.make_server(watcher, "127.0.0.1", 0, signal_url="http://10.1.2.3:8766/")
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        host = f"127.0.0.1:{server.server_address[1]}"
+        with urllib.request.urlopen(f"http://{host}/", timeout=20) as response:
+            page = response.read().decode()
+        policy = response.headers["Content-Security-Policy"]
+    finally:
+        server.shutdown()
+        server.server_close()
+        watcher.close()
+    assert page.count('id="rail-signal"') == 1
+    assert page.count("http://10.1.2.3:8766/") == 1
+    assert "<!--rail-signal-->" not in page
+    link = page[page.index('<a id="rail-signal"') :]
+    assert link.startswith('<a id="rail-signal" href="http://10.1.2.3:8766/" title="Signal">')
+    assert '<path d="M5 20v-4M10 20v-8M15 20V8M20 20V4"/>' in link.split("</a>")[0]
+    assert '<span class="sr-only">Signal</span></a>' in link
+    assert page.index('id="rail-activity"') < page.index('id="rail-signal"')
+    assert "10.1.2.3" not in policy
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "javascript:alert(1)",
+        "http://a/b",
+        "http://u@a:1/",
+        "http://u:p@a:1/",
+        "https://a:1/",
+        'http://a:1/"><script>',
+        "http://a/",
+        "http://a:0/",
+        "http://a:99999/",
+        "http://a:1/?x",
+        "http://a:1/#x",
+        "http://a:1/ ",
+        "http://a b:1/",
+        "http://a:1/'",
+        "http://a:1/<",
+        "http://é:1/",
+        "HTTP://a:1/",
+        "http://[::1]:1/",
+        "http://[vF.example]:8766/",
+        "",
+    ],
+)
+def test_a_signal_url_that_is_not_a_plain_http_host_and_port_is_refused(root, capsys, url):
+    assert service.main(["--root", str(root), "--port", "0", "--signal-url", url]) == 2
+    assert "--signal-url" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("raw", ["javascript:alert(1)", "data:text/html,x", "http://[::1]:1/"])
+def test_make_server_refuses_a_signal_url_before_binding(raw, monkeypatch):
+    opened: list[object] = []
+    monkeypatch.setattr(service, "_Server", lambda *args: opened.append(args))
+    with pytest.raises(ValueError, match="--signal-url"):
+        service.make_server(Path("unused"), "127.0.0.1", 0, signal_url=raw)
+    assert opened == []  # no socket was asked for
+
+
+def test_an_accepted_signal_url_reaches_the_server_normalised_through_main(
+    root, fake_env, monkeypatch
+):
+    fake_env({"sleep": 30})
+    real, seen = service.make_server, []
+
+    def capture(scheduler: Any, host: str, port: int, signal_url: str = "") -> Any:
+        seen.append(signal_url)
+        return real(scheduler, host, port, signal_url)
+
+    def interrupt(_scheduler: Any) -> None:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(service, "make_server", capture)
+    monkeypatch.setattr(service, "_loop", interrupt)
+    argv = ["--root", str(root), "--port", "0", "--signal-url", "http://A:1"]
+    assert service.main(argv) == 0
+    assert seen == ["http://a:1/"]
+
+
+@pytest.mark.parametrize(
+    ("given", "stored"),
+    [
+        ("http://a:1", "http://a:1/"),
+        ("http://Box.example:8766/", "http://box.example:8766/"),
+        ("http://10.0.0.5:65535/", "http://10.0.0.5:65535/"),
+    ],
+)
+def test_an_accepted_signal_url_is_stored_normalised(given, stored):
+    assert service.signal_link(given) == stored
