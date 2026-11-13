@@ -75,11 +75,31 @@ set `DEPLOY_WORKFLOW_SEC_USER_AGENT` and is a separate paid action.
   (headless Chrome, synthetic case).
 - Not verified: live network behaviour; real SEC responses, headers, encodings and content types; real model use of the
   tools and its citations; the full suite; concurrent writers to one run's web folder.
+## 2026-11-13 — Routing rules, register scope and presence check (branch `claude/t4-register-cut-27e6ea`)
+Scope: offline only; no provider or model call. Ruling `docs/rulings/2026-11-13-appendix-and-routing-scope.md`. Built, not accepted: no paid before and after run and no reader check against the September VMO2 reference, so what a model does with the new text is not shown.
+- Sent text: `ROUTING_RULES` after `TRANSPORT_RULES` in every module of every offered pathway (once each); `CP0_BLOCK` no longer asks for T7, T8, P5, T3 or T5; ten modules end their method block with their section of `CPOS_REGISTER_SCOPE.md`; CP-5's head lists the upstream modules' scope. CP-5A is not a launched module.
+- `tests/test_cpos_register_scope.py` (161 tests with stage B; the scope, routing and CP-5 tests failed first on the missing names, the CP-0 pin on the old block): every scope id is CUT in every inventory row of both runs; no check, delivery reader or library source reads a cut or routing id once two ids are off the lists (CP-1A's `ownership_register` is named by handoff_delivery.py:488; CP-5's T5B.3 and CP-6's T6A.7 are the `firstHeading` of those modules in `apps/issuer-library/credit_os/catalog.json`, read at store.py:1154 and web/views.js:91; the first stage-A text said no library source read one, which was wrong for these two).
+- Method pins: the ten modules' `METHOD_TEXT_SHA256_AT_1B41E65` values recomputed (only the scope section was added); the other twelve unchanged; `tests/test_cpos_scale.py` has no size ceiling and passed unchanged.
+- Cut size from the inventory, list as finally cut (without T5B.3, T6A.7 and the ESG tables T2G.1 to T2G.8): 150,578 characters (medium run), 171,507 (high run) (166,882 and 189,139 as first listed; CP-2E alone 17,069 and 18,182, was 29,514 and 31,117), so the per-run no-consumer figures are upper bounds for it.
+- Replay `.superpowers/sdd/quality-defects/t4-replay.py` over the two Sol runs' accepted handoffs (copies, run folders not written), cut registers and routing registers removed and `## Next module` reduced to one line: medium 178,903 of 694,448 characters cut (25.8%), high 222,665 of 867,850 (25.7%) (195,207 and 240,297 as first listed); both Sol runs wrote T2G.1 to T2G.8, so keeping them leaves 0 missing in the presence replay; CP-OS's checker gives the same issues as on the originals (0 new, every module; the originals' 5 to 17 issues are a date rule newer than those runs) and `delivery_files` builds (23 files).
+- Tests: `PYTHONPATH=src:. uv run pytest tests/test_cpos_launch.py tests/test_cpos_scale.py tests/test_library_index.py tests/test_cpos_register_scope.py tests/test_credit_os_store.py -q`: exit 0, 1387 passed, 1 skipped (paid) after stage B over these five files; at stage A the first four files gave 997 passed, 1 skipped. Other `checker`-driving files (test_changes, inbox_scheduler, run_start_page, cpos_facilities, cpos_periods, context_form, inbox_runs, run_start_submissions, credit_os_store): exit 0, 1622 passed. `uv run python tools/quality_gate.py`: exit 0, 0 findings.
+- Stage B, presence check (`required_registers`, `register_issues`, called from `checker` for the ten modules only): every in-scope required register, derived from the sent method text, must be present, else one issue names them all and the accepted forms. Calibration `.superpowers/sdd/quality-defects/t4-presence-replay.py` over the accepted handoffs of both Sol runs: zero in-scope registers missing in either. A register is recognised by a heading that opens with its id (or a list of ids that includes it) or a `<!-- table-id: -->` tag (an id in a table cell or another register's heading is a citation and does not count; the calibration replay uses the production recogniser and still shows zero missing); its body is not judged (`Not supplied: <reason>` is the form for one with nothing to report). A module whose front matter states `module_status: Blocked` is exempt (the method's own stop). The synthetic `answer()` fixture now writes each module's required registers. The instruction sentence is in `ROUTING_RULES`. Pins recomputed again (canon-rule clause; CP-5 and CP-6 keep T5B.3 and T6A.7; CP-2E keeps the ESG tables, owner 2026-11-13 "Yes, keep ESG tables"; every scope section names its routing registers, `ROUTING_REGISTERS` is per module; a heading must start with its id, in bold or backticks, optionally after a number).
+- Library check (`.superpowers/sdd/quality-defects/t4-library-check-2.md`, on the current cut list; library rebuilt offline from a copy of the medium Sol run with the cut handoffs): the Modules page loses 81 sections, 86 tables and 522 table rows (exactly the cut and routing registers present, plus the `## Next module` bodies); CP-2E still shows T2G.1 to T2G.8, CP-5 still shows T5B.3 and CP-6 still shows T6A.7; Overview, Changes and Forecast are identical; the Evidence page's own data is identical, but its "Original Markdown" links and `handoffs.zip` carry the shorter handoffs (719,342 to 526,450 bytes) and the retired delivered report's evidence-only coverage entries fall from 467 to 365. So "Evidence unaffected" is partly true, not true outright. Not run in a browser.
+- Size trim: the presence sentence moved from `ROUTING_RULES` to `PRESENCE_RULE`, sent after it only to the ten `REGISTER_SCOPE_MODULES` (CP-1, CP-1B, CP-1D, CP-L10 get none), and the override sentence was shortened; the budget test's total (all modules but CP-8) fell from 537,525 to 535,162 for earnings_update (2,363), 146,875 to 145,623 for short_snapshot and 405,517 to 404,212 for lite_credit_assessment; ceilings unchanged; `len(ROUTING_RULES)` <= 1250, `len(PRESENCE_RULE)` <= 340.
+- Not shown: any model following `ROUTING_RULES`, a scope section or the presence rule; that CP-5 stops flagging absent registers; that CP-6 and CP-8 raise none (read, no step audits register completeness).
 
 ## 2026-11-13 — Quality-defects appendix: Published rule, context-summary charges, dropped values on repair (branch `claude/quality-defects-appendix-cpdr`, whole-branch review and fix wave, origin/main merged at `0b46fa5`)
 Scope: OFFLINE only. Tests, reviewer probes (`.superpowers/sdd/quality-defects/probes/`) and a replay of the retained raw bodies of four Copilot runs and one opus run; no provider or model call, no live Copilot run. No instruction or checker changed here has been sent to a live model. T1: the Published rule is stated once and checked once, the unit and second-table messages are specific, and the library accepts a Published equal to the event date and a stated gap; no page layout changed, so no reader check is claimed (if the owner reads the Calendar change as presentational, T1 is built, not accepted). T2: a repair's dropped sourced values are listed; replay of 34 rejected-then-rewritten pairs reports only CP-6 USD 247 million and USD 755 million. T3: three completed context summaries (USD 0.353237 in all) sit inside their calls' settlements; four starts with no completion are disclosed, not charged; a late charge is disclosed beside `Charged:`, not settled or capped. Fix wave after the whole-branch review: the launcher prints a `Review:` line for an accepted repair that dropped values and for a failed check (M1); an unquoted, line-less issue no longer excuses a value through a number already on its line (L1); the unit advice recognises any ISO 4217 code (`prose_checks.ISO_4217`) or currency symbol as another currency, so LTM, PIK, RCF and TTM do not (L2, widened from a 24-code list after the PR review); id-less failed summaries no longer hide an unended start (L3).
 Gates: quality gate exit 0; affected tests (`tests/model`, `test_handoff_loop.py`, `test_cpos_launch.py`, `test_credit_os_store.py`) only the three known failures (`tests/known-failures.txt`: `test_gate` x2, `test_o5_done_when`). Probes that exit 1 by ruling: `t2-p3-mask`, `t2fix-p4-correction`, and `branch-guarded-twin-suite.py` (shows a rejected simplification); `t3adv-p1`, `t3adv-p4-cap` and `t3adv-p2` were rerun after the fix round and exit 0; the branch probes for M1 and L1 to L3 exit 0 after the fix wave.
 Not demonstrated: a live Copilot run on this code; `drain_compactions` against the real SDK; the `Review:` and `Charged excludes` lines on a real run; the `run_comparison` call site (unreachable today); the 3.85 bytes-per-token estimate beyond the 15 modules measured; the opus limit; mutation and property tests (not run); PR size over the 800-line guide (ruled).
+
+## 2026-11-13 — The Forecast page's Downside follows the forward credit model; the shock's interest figure is proportional and checked against the downside module (branch `claude/downside-follows-forward-model`)
+Scope: offline; no provider or model call; no paid run. Owner ruling `docs/rulings/2026-11-13-downside-follows-forward-model.md` (option A, the owner's words relayed by the coordinator session) reverses the 2026-11-10 ruling: the Downside stress case is the downside module's shock applied to the forward credit model's own downside drivers (base drivers when it sets none); `forecast_exact.json` carries `downside_basis` only then and the page label and note follow it; the CP-2G instruction says both shock values are copied unchanged from one CP-2A scenario and `rate_increase` is proportional, never a yield (+171 characters per pathway with CP-2G, every pathway under its unchanged ceiling); the launcher sends back a block whose shock is no scenario of CP-2A's table T2DS.1, only when it read the whole table without doubt, else it lets the block through and logs why at WARNING, which a run with no logging set up prints to the launcher's stderr (seen by the controller with a table-less CP-2A; not traced into the run-start service's record).
+- Fidelity check, scope: ONE real run (`tdg-full-copilot-sol-high-001-resume`, TransDigm, as of 30 September 2024), re-derived by the controller from its own CP-1 and CP-2G handoffs at `5cbe19d` (exit 0), against the forward credit model's printed downside. With the shock as sent (0.2 / 0.0184): revenue 7,940 and EBITDA 3,338.6112 in every year, equal to the module; interest 1,553.21 and coverage 2.15x against the module's 1,982.94 and 1.68x, because 0.0184 is a yield change read as proportional. With `rate_increase` corrected to 0.3 (what CP-2A states): interest 1,982.6872 / 1,936.467 / 1,929.13552 against the module's 1,982.936 / 1,936.71 / 1,929.3776 (it rounded its yield to 0.0797; the test asserts the exact figure, no tolerance), coverage 1.68x / 1.72x / 1.73x as the module, closing cash 1,553.50 / -309.77 / -2,165.72 against 1,553.26 and funding gaps of 310.26 and 2,166.45. Base, upside and own-drivers cases equal the delivered file. The delivered file has no `downside_basis`, so its page keeps the old label. The page itself was not opened in a browser (no `.js` changed); the VMO2 reader check is not listed, retired by the owner's ruling relayed by the coordinator (PR 103).
+- Reviews: task review approve with one Medium; adversarial review (financial calculation) found no calculation defect (300 random blocks against a hand-merged oracle, 0 mismatches; blocks with no downside drivers or no shock byte-identical to `main`) and one High, two Medium in the launcher check (a correct block sent back unsatisfiably for percent or ambiguous tables; one real table form never read; a control-only table forcing 0 / 0). Fix round 1 `3e49df1`, tests first; scoped re-review: pass, five Low, closed in one batch `5cbe19d` checked against the reviewer's probes (four of five exit 0). CI then failed on `test_cp2g_upside_and_downside_drivers_are_computed_as_their_own_cases`, which encoded the reversed ruling and was outside the controller's `-k` filter; its own Fraction oracle now takes the shock over the downside drivers (`9d04880`). Coordinator's adversarial review at `0e5fc6f`: CONCERNS, W1 (the skip logged at INFO, never shown) answered by `1044de9`.
+- Gates (controller; the first three at `5cbe19d`, the new tests with facilities 98 passed and the quality gate again at `1044de9`): new tests with periods, scale, facilities and packaging 440 passed, exit 0; `tests/test_credit_os_store.py` 254 passed, exit 0; `tests/test_cpos_launch.py -k "budget or forecast_issues or forecast or instruction"` 81 passed, exit 0; `uv run python tools/quality_gate.py` exit 0, 0 findings. One existing expectation changed with the ruling (`test_debt_outside_the_facilities_bears_the_analyst_rate_in_every_case`, re-derived by hand by the reviewer).
+- Open for the owner: replaying the real run's retained CP-2G response now stops with `cpos_retained_rejected` (it carries 0.0184), so that run cannot be delivered again without a paid repair; it agrees with its forward credit model only after a re-run. Python still publishes net leverage and liquidity for downside years with negative cash (FY2026 7.34x and 533.23, FY2027 7.87x and -1,322.72 with the shock at 0.3), which the module calls not calculable (predates this change; the owner's decision, not changed here).
+- Not verified: a live model under the new instruction and repair text; mutation testing (not run; the reviewer's two mutants of the check are killed); a T2DS.1 marker inside a fenced example still misleads the check (reviewer's probe `q02`, one case); how often a real CP-2A table fails open (two real forms seen); the full suite; Windows.
 
 ## 2026-11-13 — Status checklist: a long state no longer squeezes the row label to zero width (branch `claude/eloquent-colden-9607aa`)
 Scope: presentation only, offline, one CSS declaration; no provider or model call, no markup or cell text change. Seen in PR 100's reader check, older than it.
@@ -924,60 +944,4 @@ Owner: "Add docx compatibility too". Input only: nothing is written as Word.
     permission tests that also fail on main here, because the sandbox runs as root.
   - Quality gate: 0 findings.
 - Not verified: Word files made by Word itself; the tests build minimal files by hand.
-
-## 2026-11-10 — Web search for the research module, offline (branch `claude/optimistic-johnson-bmnwip`, after main `1fbc57c`)
-
-Owner: "Cp-dr supplies the peers … By default cp-dr always provides the peers or 1C and 2 can never
-run", then "Yes" to working out web search for CP-DR. No provider was called; no paid run.
-
-- Sources:
-  - OpenAI pages fetched 2026-11-10 through owner-approved network access: the pricing page, the
-    web search guide, the Responses reference and the gpt-6.1-sol model page.
-  - Quoted in `cases/pricing/openai-web-search.json`: USD 10.00 per 1,000 calls plus search
-    content tokens at model rates; tool `{"type": "web_search"}`; `include`
-    `web_search_call.action.sources`; `max_tool_calls`; web search listed as supported for
-    gpt-6.1-sol.
-- What changed:
-  - **Grant.** CP-DR searches only when the run's ruling lists `web-search` on its `configs:`
-    line (`owners/cpos.py` `web_search_ruled`), and only on OpenAI. Other providers are refused
-    before a call. The launcher prints a `Web:` line when CP-DR runs.
-  - **Request.** Only CP-DR's requests carry the hosted tool, with at most 16 calls per response.
-    Its system text adds the rules: public names only in a query, nothing published after the
-    research cutoff, every web item cited by URL and date, figures quoted verbatim.
-  - **Record.** A reply's `web_search_call` items are kept in the response record under
-    `openai-web-search` and never sent back. A reasoning item before one is dropped, since it
-    would go back without the item that followed it.
-  - **Money.** Each searching call holds USD 0.16 more and is charged USD 0.01 per search action.
-    Opening a page or searching within one is not charged; the guide names only search actions.
-    A sent reply that cannot be read is charged the whole USD 0.16.
-- Unchanged without the grant: the stored request and the OpenAI body for CP-2 and for CP-DR
-  hash the same before and after (checked by script on both checkouts).
-- Tests:
-  - Written first: `tests/model/test_providers.py` (3) and `tests/test_handoff_loop.py` (3) failed
-    at import before the code existed. `tests/test_cpos_launch.py` (1) fails with the launcher's
-    grant wiring reverted.
-  - Added after: the unreadable-reply charge test; reverting that charge to zero fails it.
-  - `tests/model/test_pricing.py` pins the fee to the key file.
-  - `tests/model`, the loop, launcher, library-page, context-form and inbox-watcher tests: 1,178
-    passed, 3 skipped. 8 failed, every one of them also failing on unchanged code here: the 3 on
-    `tests/known-failures.txt`, and 5 inbox-watcher permission tests, because the sandbox runs as
-    root.
-  - Quality gate: 0 findings.
-- Not verified, until a paid run:
-  - that web search runs with `store: false`;
-  - that search content tokens are in `usage.input_tokens`;
-  - that CP-DR ends a searching turn with a tool call under `tool_choice: "required"`;
-  - whether its peer pack respects the cutoff;
-  - whether CP-1C then has peers.
-- Not done: the standing inbox ruling and every other ruling are unchanged, so web search stays off
-  until the owner adds `web-search` to a ruling.
-- Merged as `88c50ee` (#30). Owner: "Merge then test".
-  - Ruling `docs/rulings/2026-11-10-cpdr-web-search-test.md`: CP-0, CP-1, CP-DR and CP-1C on TDG,
-    `sol-medium` with web search, cap USD 10.
-  - Dry launch here (no provider call) with tdg-all-001's context and a one-line stand-in source:
-    the four modules are accepted and the launcher prints "CP-DR searches the web (the ruling lists
-    web-search)".
-  - Each call holds USD 5.73, or 5.89 for CP-DR, so the run can spend about USD 4.10 before the
-    next hold no longer fits the cap. A stop there can be resumed.
-  - The paid run needs the owner's machine, which has the TDG files and the key.
 
