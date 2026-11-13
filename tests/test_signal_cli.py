@@ -160,3 +160,26 @@ def test_approving_an_unknown_source_exits_2_with_one_line(tmp_path):
 def test_adding_a_user_with_an_empty_name_exits_2(tmp_path):
     code, out = run(tmp_path, "users", "add", "", "--role", "reader")
     assert code == 2 and out.splitlines() == ["error: name must not be empty"]
+
+
+def test_topics_add_and_list(tmp_path):
+    assert (
+        run(
+            tmp_path,
+            "topics",
+            "add",
+            "Competition",
+            "--keywords",
+            "merger review,remedy",
+            "--by",
+            "ak",
+        )[0]
+        == 0
+    )
+    code, out = run(tmp_path, "topics", "list")
+    assert code == 0 and len(out.splitlines()) == 1 and "Competition" in out
+
+
+def test_topic_with_no_keywords_exits_2_with_one_line(tmp_path):
+    code, out = run(tmp_path, "topics", "add", "X", "--keywords", "", "--by", "ak")
+    assert code == 2 and len(out.splitlines()) == 1

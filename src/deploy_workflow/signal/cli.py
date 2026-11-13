@@ -21,6 +21,7 @@ from deploy_workflow.signal.store import (
     set_source_state,
     sources,
 )
+from deploy_workflow.signal.topics import add_topic, list_topics
 
 LOOP_SECONDS = 60
 _STORIES_SQL = """
@@ -52,6 +53,14 @@ def _parser() -> argparse.ArgumentParser:
     for action in ("approve", "pause"):
         srcs.add_parser(action).add_argument("id", type=int)
     srcs.add_parser("list")
+
+    topics = commands.add_parser("topics").add_subparsers(dest="action", required=True)
+    new_topic = topics.add_parser("add")
+    new_topic.add_argument("name")
+    new_topic.add_argument("--keywords", required=True, help="comma-separated phrases")
+    new_topic.add_argument("--kinds", default="", help="comma-separated; empty means every kind")
+    new_topic.add_argument("--by", required=True)
+    topics.add_parser("list")
 
     ingest = commands.add_parser("ingest")
     ingest.add_argument("--loop", action="store_true", help="a pass every 60 seconds")
@@ -99,6 +108,18 @@ def _stories(db: sqlite3.Connection, limit: int) -> None:
         print(f"{when}  {row['source_name']}  {row['title']}{folded}")
 
 
+def _split(text: str) -> list[str]:
+    return [part for part in text.split(",") if part.strip()] if text.strip() else []
+
+
+def _topics(db: sqlite3.Connection, args: argparse.Namespace) -> None:
+    if args.action == "add":
+        add_topic(db, args.name, _split(args.keywords), _split(args.kinds), args.by)
+    else:
+        for row in list_topics(db, ""):
+            print(f"{row['id']}  {row['stories']}  {row['name']}")
+
+
 def _dispatch(args: argparse.Namespace) -> None:
     db = open_db(args.root)
     try:
@@ -113,6 +134,8 @@ def _dispatch(args: argparse.Namespace) -> None:
             else:
                 state = "approved" if args.action == "approve" else "paused"
                 set_source_state(db, args.id, state)
+        elif args.command == "topics":
+            _topics(db, args)
         elif args.command == "ingest":
             _ingest(db, args.loop)
         else:
