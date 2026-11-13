@@ -99,7 +99,9 @@ Status: **Done** (in a PR), **Needed** (the screen is wrong or incomplete withou
 | --- | --- | --- | --- | --- | --- |
 | 33 | A delivery with no `model.html` pins `annual.md` | Forecast | Link reads "Download published model (Markdown)" and no HTML frame is drawn | Done in PR 112; owner accepted it without the VMO2 reader check, 2026-11-13 | Review of PR 112 |
 | 34 | The Pro forma column said no handoff states pro forma adjustments | Forecast | One reason for every run: "pro forma figures are not placed in this column; the financial foundation shows any it states"; deliveries already made keep the old sentence | Done in PR 112 (`5e82133`); owner accepted it without the VMO2 reader check, 2026-11-13 | Re-review of PR 112 |
-| 35 | The page's Downside case differs from the forward credit model's own (coverage 2.41x against 1.68x on TDG) | Forecast, Overview | Owner, 2026-11-13: "A": the page's Downside uses the forward model's downside drivers plus the upstream shock (reverses the 2026-11-10 ruling); existing runs differ until re-run | Needed (own PR, not built) | PR 112 body; not checked here |
+| 35 | The page's Downside case differs from the forward credit model's own (coverage 2.41x against 1.68x on TDG) | Forecast, Overview | Owner, 2026-11-13: "A": the page's Downside uses the forward model's downside drivers plus the upstream shock (reverses the 2026-11-10 ruling); existing runs differ until re-run | Built in PR 113 (label "Downside stress (shock on downside drivers)" and its note); not merged | PR 112 body; not checked here |
+| 36 | The new Downside can run out of cash (TDG: funding gap from FY2026) | Forecast, Overview | Net leverage and liquidity are still published for those years though the forward model calls them not calculable | Needed (owner decision) | Review of PR 113 |
+| 37 | The Downside basis changes between an old and a new run | Changes | Show it as a method change, not a change in the issuer | Needed | Review of PR 113 |
 
 ## Not verified
 
