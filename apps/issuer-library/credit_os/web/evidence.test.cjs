@@ -179,6 +179,7 @@ test('Trace opens a row to the excerpts the build holds for it, by the paragraph
 test('Gaps: a table with a Severity column is cards with the three-segment meter; the cells keep their words', () => {
   const html = view('gaps', 'CP-2A');
   assert.equal((html.match(/class="ev-gap"/g) || []).length, 2);
+  assert.equal((html.match(/class="ev-gap" data-line="\d+"/g) || []).length, 2, 'each gap card carries its handoff line, as a row does, so a search hit lands on it');
   assert.ok(html.includes('Missing lease schedule') && html.includes('Required source') && html.includes('Lease note'));
   const high = html.slice(html.indexOf('Missing lease schedule'), html.indexOf('No peer set'));
   assert.equal((high.match(/<i class="f">/g) || []).length, 3, 'High fills three');

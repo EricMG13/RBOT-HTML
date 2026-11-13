@@ -261,7 +261,7 @@ function renderSearch(query) {
     return has(title)||!cell||cell.length>80?title:`${title} · ${cell}`;
   };
   const figures=outputs.flatMap(id=>{
-    const tables=data[id].sections.filter(s=>s.blocks.some(b=>b.type==='table')),visual=data[id].visual;
+    const hidden=hiddenSections(id),tables=data[id].sections.filter(s=>!hidden.has(s)&&s.blocks.some(b=>b.type==='table')),visual=data[id].visual; // a section written for another module is not a figure (rule 7)
     const plotted=visual&&tables.find(s=>s.blocks.some(b=>b.line===visual.table));
     return [...(plotted?[[id,visual.title,plotted.heading]]:[]),...tables.map(s=>[id,plain(s.heading.replace(METHOD_CODE,'')),s.heading])];
   }).filter(([id,label])=>has(label,data[id].module));
@@ -540,9 +540,9 @@ function scrollToPart(part) {
 }
 // A search hit's row on an Evidence tab: the first row of the panel with that handoff line is marked and brought into view.
 function showEvidenceRow(line) {
-  const row=$('ev-panel')?.querySelector(`tr[data-line="${line}"]`);
+  const row=$('ev-panel')?.querySelector(`[data-line="${line}"],[data-lines~="${line}"]`);
   if(!row)return;
-  $('ev-panel').querySelectorAll('tr.is-hit').forEach(other=>other.classList.remove('is-hit'));
+  $('ev-panel').querySelectorAll('.is-hit').forEach(other=>other.classList.remove('is-hit'));
   row.classList.add('is-hit');
   const content=$('content');
   content.scrollTop=Math.max(0,content.scrollTop+row.getBoundingClientRect().top-content.getBoundingClientRect().top-80);
@@ -585,10 +585,15 @@ function renderRoute() {
     const raw=location.hash.slice(1).split('?')[0].split('/')[0],requested=new URLSearchParams(location.hash.split('?')[1]).get('c');
     const module=Object.hasOwn(moduleNames,raw)?raw:'W-Library',context=Object.hasOwn(contexts,requested)?requested:current?.context||Object.keys(contexts)[0]||null;
     current={module,output:null,file:null,section:'',label:moduleNames[module],context,evidence:null,chip:null,part:null,tab:null,row:null,evidenceModule:null};
-    $('module-head').innerHTML=moduleHead(current);
-    updateWorkspaceChrome(module);
+    // The statement is written first, from static text and a link to the library only; the header and tabs are then tried on their own (logged).
     setDrawer(false);
-    $('content').innerHTML=couldNotPresent('page');
+    $('content').innerHTML=`${couldNotPresent('page')}<p><a class="text-action" href="#W-Library/cases">Issuer library</a></p>`;
+    try {
+      $('module-head').innerHTML=moduleHead(current);
+      updateWorkspaceChrome(module);
+    } catch(chromeError) {
+      console.error('The header and tabs could not be drawn',chromeError);
+    }
   }
 }
 function drawRoute() {

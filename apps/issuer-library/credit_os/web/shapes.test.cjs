@@ -232,3 +232,12 @@ test('M1: the file-name and hash patterns read a 5,000-character cell in linear 
   assert.ok(ms < 400, `200 reads of long cells took ${ms} ms`);
   assert.equal(Shapes.FILE_NAME.test(`${'a.'.repeat(2500)}pdf`), true, 'and a file name at the end of a long dotted run is still found');
 });
+
+test('LONG_HEX holds a hash (a letter a-f in a 32+ character hex run), never a 32-digit number or a run of zeros', () => {
+  for (const hash of ['4e5e4b7b'.repeat(8), 'a'.repeat(32), '0'.repeat(31) + 'f', `sha ${'0123456789abcdef'.repeat(4)} end`]) assert.ok(Shapes.LONG_HEX.test(hash), hash);
+  for (const figure of ['1'.repeat(32), '0'.repeat(40), `Balance ${'9'.repeat(33)} units`]) assert.ok(!Shapes.LONG_HEX.test(figure), figure);
+});
+
+test('sectionRole reads the top heading by own key: "constructor", "toString" and "__proto__" are ordinary unknown headings', () => {
+  for (const heading of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) assert.equal(Shapes.sectionRole([heading]), 'registers', heading);
+});

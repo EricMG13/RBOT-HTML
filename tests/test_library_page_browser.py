@@ -2753,3 +2753,128 @@ def test_the_trace_drawer_is_a_modal_dialog_that_makes_the_page_behind_it_inert(
     assert seen["name"] == "Evidence inspector" and seen["focusIn"], seen
     assert seen["canvasInert"] and seen["railInert"] and seen["outside"] == 0, seen
     assert seen["closed"] and seen["after"]["inert"] == 0 and seen["focusBack"], seen
+
+
+HIDDEN_TABLE = """
+## Consumer readiness and command sheet
+
+| Consumer | Command |
+| --- | --- |
+| Liquidity | Run HIDDENFIGUREUNIQUE next. |
+"""
+
+
+def with_hidden_table(text: str) -> str:
+    """The synthetic CP-2 handoff with a table in a section written for another module."""
+    marker = "\n## Next module"
+    assert marker in text
+    return text.replace(marker, HIDDEN_TABLE + marker, 1)
+
+
+def test_a_section_written_for_another_module_is_not_a_figure_hit(tmp_path):
+    """Round 2, H2 residual: the Figures group skips hidden sections, as the item map does."""
+    page = synthetic_workspace(tmp_path, with_hidden_table)
+    config = {"query": "consumer readiness"}
+    seen = read_probe(page, f"#W-Overview?c={NEW_FORMAT_RUN}", 1280, SEARCH_AUDIT_PROBE, config)
+    assert seen["hits"] == [], seen
+
+
+ROUTE_CHROME_FAILURE_PROBE = """
+(async () => {
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  for (let i = 0; i < 200 && !document.querySelector('header.issuer h1'); i++) await sleep(50);
+  window.Shapes.tableShape = () => { throw new Error('probe: cannot classify'); };
+  window.updateWorkspaceChrome = () => { throw new Error('probe: no chrome'); };
+  location.hash = PROBE.route;
+  await sleep(700);
+  const out = document.createElement('pre');
+  out.id = 'probe';
+  out.textContent = JSON.stringify({
+    content: document.getElementById('content').innerText,
+    link: document.querySelector('#content a[href="#W-Library/cases"]')?.textContent ?? null,
+  });
+  document.body.appendChild(out);
+})();
+"""
+
+
+def test_the_route_failure_statement_does_not_depend_on_the_header_and_tabs(tmp_path):
+    """Round 2: the stated failure is written first; a fault in the header code is logged apart."""
+    page = synthetic_workspace(tmp_path, with_chart_and_event)
+    inject_probe(page, ROUTE_CHROME_FAILURE_PROBE, {"route": f"#CP-2/head?c={NEW_FORMAT_RUN}"})
+    dom, console = visit(page, f"#W-Overview?c={NEW_FORMAT_RUN}")
+    seen = probe_json(dom)
+    assert "Couldn\u2019t present this page" in seen["content"] and seen["link"] == "Issuer library"
+    assert any("The route could not be drawn" in line for line in console), console
+    assert any("header and tabs could not be drawn" in line for line in console), console
+
+
+EVIDENCE_HIT_PROBE = """
+(async () => {
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const seen = [];
+  for (const href of PROBE.hrefs) {
+    location.hash = href;
+    await sleep(900);
+    const row = /[?&]r=(\\d+)/.exec(href)[1];
+    seen.push({href, marked: document.querySelectorAll('#ev-panel .is-hit').length,
+      onCard: document.querySelectorAll(`#ev-panel [data-line="${row}"].is-hit`).length});
+  }
+  const out = document.createElement('pre');
+  out.id = 'probe';
+  out.textContent = JSON.stringify(seen);
+  document.body.appendChild(out);
+})();
+"""
+
+
+def test_a_search_hit_on_the_sources_and_gaps_tabs_lands_on_and_marks_its_card(tmp_path):
+    """Round 2: the file card and the gap card carry the handoff line a hit names."""
+    page = synthetic_workspace(tmp_path, with_chart_and_event)
+    probe = SEARCH_AUDIT_PROBE
+    asked = {}
+    for name, query in (("sources", "annual-report.pdf"), ("gaps", "No peer set supplied")):
+        inject_probe(page, probe, {"query": query})
+        dom, _ = visit(page, f"#W-Overview?c={NEW_FORMAT_RUN}")
+        asked[name] = [
+            h["href"] for h in probe_json(dom)["hits"] if f"W-Evidence/{name}" in h["href"]
+        ]
+        page.write_text(
+            page.read_text().replace(
+                '<script src="probe-config.js"></script><script src="probe.js"></script>', ""
+            )
+        )
+        assert asked[name], (name, asked)
+    hrefs = [href for found in asked.values() for href in found]
+    seen = read_probe(
+        page, f"#W-Overview?c={NEW_FORMAT_RUN}", 1280, EVIDENCE_HIT_PROBE, {"hrefs": hrefs}
+    )
+    for entry in seen:
+        assert entry["marked"] == 1 and entry["onCard"] == 1, entry
+
+
+RAGGED_ROW = """
+### Ragged
+
+| Item | Status |
+| --- | --- |
+| Covenant test | Passed | EXTRA |
+| Only one |
+"""
+
+
+def with_ragged_table(text: str) -> str:
+    """The synthetic CP-2 handoff with a ragged table (read as one unstructured block)."""
+    marker = "\n## Calculations"
+    assert marker in text
+    return text.replace(marker, RAGGED_ROW + marker, 1)
+
+
+def test_the_module_page_of_a_handoff_that_could_not_be_read_draws_no_raw_text(tmp_path):
+    """Round 2: the audit fold states it and links the download; no raw text is drawn."""
+    page = synthetic_workspace(tmp_path, with_ragged_table)
+    dom, console = visit(page, f"#CP-2/head?c={NEW_FORMAT_RUN}")
+    assert console == []
+    assert "could not be read into sections. Its file is in the run" in html.unescape(dom)
+    assert "SYNTHETIC FIXTURE" not in dom and "Covenant test" not in dom
+    assert 'class="text-action" href="' in dom and "download" in dom

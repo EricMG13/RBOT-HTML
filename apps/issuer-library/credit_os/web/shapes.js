@@ -18,7 +18,7 @@ const Shapes = (() => {
   function sectionRole(chain, placement) {
     const own = chain[chain.length - 1] ?? '';
     if (chain.some(h => HIDDEN_HEADING.test(h))) return 'hidden';
-    if (TOP_ROLE[chain[0]]) return TOP_ROLE[chain[0]];
+    if (Object.hasOwn(TOP_ROLE, chain[0])) return TOP_ROLE[chain[0]];
     if (chain[0] !== 'Findings') return 'registers';                          // an unknown level-2 heading stays visible, in Evidence
     if (chain.length === 2 && PASSAGES.includes(own)) return 'passage';
     if (DRAWING_HEADING.test(own)) return 'drawing';
@@ -33,7 +33,7 @@ const Shapes = (() => {
   const FILE_EXTENSIONS = 'jsonl|json|xhtml|html|htm|xml|pdf|docx|doc|xlsx|xlsm|xls|csv|tsv|pptx|ppt|txt|md|zip';
   // The lookbehind makes a match start only at the start of a word, so a long run of word characters or dotted words is read once, not once per position.
   const FILE_NAME = new RegExp(`(?<![\\w.-])[\\w-]+(?:\\.[\\w-]+)*\\.(?:${FILE_EXTENSIONS})\\b`, 'i');
-  const LONG_HEX = /\b[0-9a-f]{32,}\b/i;
+  const LONG_HEX = /\b(?=[0-9a-f]*[a-f])[0-9a-f]{32,}\b/i; // a hash holds a letter a-f: a 32-digit number or a run of zeros is a figure
   // The next module's own columns, by their whole name (a word pattern would take "Downstream revenue"). Matched on the header with its hyphens read as spaces.
   const INTERMODULE = /^(?:supplied handoff|use in this module|effect on this module|consumer|downstream module|receiving module|responsible module|command|required consumer action|escalation consequence|next commands?|next modules?|downstream consumers?|downstream modules? affected|downstream handoff impact|downstream owners|affected consumers|affected modules)$/;
   const KIND_RULES = [

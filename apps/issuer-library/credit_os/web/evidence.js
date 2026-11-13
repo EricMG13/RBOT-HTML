@@ -199,15 +199,28 @@
 
   const avatar = (code, deps) => `<span class="ev-av" role="img" tabindex="0" ${components().tipAttributes(deps.moduleTitle(code))}>${esc(code.replace(/^CP-/, ''))}</span>`;
   const copyButton = (text, label) => `<button class="ev-cpy" type="button" data-copy="${esc(text)}" data-tip="Copy" aria-label="Copy ${esc(label)}">${icon('copy')}</button>`;
-  function fileCard(file, deps, counted = false) {
+  // The handoff lines of the Sources-section rows and paragraphs that name each supplied file, so a search hit on one lands on and marks the file's card (a card carries the first line as `data-line`, all of them as `data-lines`).
+  function sourceLines(input) {
+    const names = knownFiles(input.run.evidence), found = new Map();
+    for (const mod of input.modules) for (const output of mod.outputs) for (const {section, role} of classify(output.sections, output.placement)) {
+      if (role !== 'sources') continue;
+      for (const block of section.blocks) {
+        const items = block.type === 'table' ? block.rows.map(row => [row.line, row.cells.join(' ')]) : [[block.line, block.text]];
+        for (const [line, text] of items) for (const name of names) if (text.includes(name)) found.set(name, [...new Set([...(found.get(name) || []), line])]);
+      }
+    }
+    return found;
+  }
+  function fileCard(file, deps, counted = false, lines = []) {
     const readers = file.readBy.length ? `<div><div class="ev-k">Read by</div><div class="ev-stack">${file.readBy.map(code => avatar(code, deps)).join('')}</div></div>` : '';
-    return `<article class="ev-card ev-src" ${counted ? 'data-hay' : 'data-find'}="${hay(file.name, file.type, file.readBy.map(deps.moduleTitle).join(' '))}"><div class="ev-src-top"><span class="ev-src-ic">${icon(file.type === 'pdf' ? 'files' : 'file-text')}</span><div><div class="ev-src-n">${esc(file.name)}</div><span class="ev-src-t">${esc(shownOrNot(file.type))}</span></div></div>` +
+    const marker = lines.length ? ` data-line="${esc(lines[0])}" data-lines="${esc(lines.join(' '))}"` : '';
+    return `<article class="ev-card ev-src"${marker} ${counted ? 'data-hay' : 'data-find'}="${hay(file.name, file.type, file.readBy.map(deps.moduleTitle).join(' '))}"><div class="ev-src-top"><span class="ev-src-ic">${icon(file.type === 'pdf' ? 'files' : 'file-text')}</span><div><div class="ev-src-n">${esc(file.name)}</div><span class="ev-src-t">${esc(shownOrNot(file.type))}</span></div></div>` +
       `<div><div class="ev-k">Document date</div><div>${esc(shownOrNot(file.documentDate))}</div></div>${readers}` +
       `<div><div class="ev-k">sha256</div><div class="ev-hash"><code title="${esc(file.sha256)}">${esc(shownOrNot(file.sha256))}</code>${file.sha256 ? copyButton(file.sha256, `hash of ${file.name}`) : ''}</div></div></article>`;
   }
   function sourcesPanel(input, module) {
     const {evidence: ev} = input.run, {deps} = input;
-    const unrecorded = ev.unrecorded || [], cards = (files, counted = false) => `<div class="ev-src-g">${files.map(f => fileCard(f, deps, counted)).join('')}</div>`;
+    const unrecorded = ev.unrecorded || [], lines = sourceLines(input), cards = (files, counted = false) => `<div class="ev-src-g">${files.map(f => fileCard(f, deps, counted, lines.get(f.name))).join('')}</div>`;
     // A run that records no supplied file is not one whose every file was used: missing is not zero.
     if (!ev.sources.length && !ev.unused.length && !unrecorded.length) return empty('Source files', 'The run record lists no supplied files.');
     const used = ev.sources.filter(f => !module || f.readBy.includes(module));
@@ -235,7 +248,7 @@
       const word = severity < 0 ? '' : row.cells[severity].trim().toLowerCase(), level = Object.hasOwn(SEVERITY, word) ? SEVERITY[word] : 0;
       const meter = level ? `<span class="ev-meter" aria-hidden="true">${[1, 2, 3].map(n => `<i${n <= level ? ' class="f"' : ''}></i>`).join('')}</span>` : '';
       const fields = view.headers.map((header, at) => (at === title || row.cells[at] === '' ? '' : `<div><div class="ev-l">${esc(header)}</div><div class="ev-v">${at === severity ? meter : ''}${rich(row.cells[at])}</div></div>`)).join('');
-      return `<div class="ev-gap" data-hay="${hay(c.name, row.cells.join(' '))}"><div class="ev-gap-t">${icon('triangle-alert')}<span>${rich(row.cells[title])}</span></div><div class="ev-gap-f">${fields}</div></div>`;
+      return `<div class="ev-gap" data-line="${esc(row.line)}" data-hay="${hay(c.name, row.cells.join(' '))}"><div class="ev-gap-t">${icon('triangle-alert')}<span>${rich(row.cells[title])}</span></div><div class="ev-gap-f">${fields}</div></div>`;
     }).join('')}</div>`;
   }
   // The model's scope limits as the calculation record states them, one counted line each, under a head that counts them.

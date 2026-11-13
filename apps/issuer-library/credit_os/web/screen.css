@@ -994,6 +994,7 @@ td .basis-link{margin-left:4px}
 .ev-tbl td{min-width:0;padding:7px 12px;border-bottom:1px solid var(--rule);vertical-align:top;font:400 12px/1.45 'Red Hat Text',sans-serif;color:var(--navy);font-variant-numeric:tabular-nums}
 .ev-tbl tr:last-child td{border-bottom:0}
 .ev-tbl tr.is-hit td{background:var(--selection)}
+.ev-card.is-hit,.ev-gap.is-hit{background:var(--selection)}
 .ev-tbl th.num,.ev-tbl td.num{text-align:right}
 .ev-tbl td.wide{min-width:240px}
 .ev-tbl td.num{font-weight:500}

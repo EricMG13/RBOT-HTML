@@ -650,7 +650,12 @@ function reportAudit(id) {
   }).join('')}</ul></details>`;
 }
 // A module that reaches no conclusion (established false) keeps its head, band, findings and limits; the reading and reference parts fold under one closed disclosure.
+// A handoff the build could not structure (Shapes.isUnstructured) is stated, with the output's own download, and its raw text is drawn nowhere: the Evidence page's ruling, here on the module page.
+function unreadAudit(id) {
+  return `<details class="audit" id="audit"><summary>${icon('chevron-right')}<span class="fold-title">Evidence &amp; audit</span></summary><p class="small">This module's handoff could not be read into sections. Its file is in the run's downloads.</p><p><a class="text-action" href="${esc(data[id].href)}" download>Download the original handoff</a></p></details>`;
+}
 function reportParts(id) {
+  if(window.Shapes.isUnstructured(data[id].sections))return [['head','Module',reportHead(id)],['audit','Evidence & audit',unreadAudit(id)]];
   if(isNewFormat(data[id].sections))return newFormatParts(id);
   const out=data[id],folded=out.state.established===false,label=anchor=>anchor==='maps'?'Maps':anchor==='timeline'?'Timeline':REPORT_PARTS.find(part=>part[0]===anchor)[1];
   const analysis=reportAnalysis(id),reference=reportReference(id),calculations=reportCalculations(id),limits=reportLimits(id);
