@@ -38,13 +38,25 @@ modules measured".
   run is a consumer, so the lists are the intersection: the sizes below measured for one run are
   upper bounds for this list. Headings the model chose without an id are not listed. CP-1A's
   `ownership_register` is left out: `handoff_delivery.py` line 488 reads a section `Ownership and
-  control` into a table of that name. TDR.2 is kept (the peer pack block requires its gap row);
+  control` into a table of that name. CP-5's T5B.3 and CP-6's T6A.7 are left out too: the library's
+  `catalog.json` sets them as the modules' `firstHeading` (store.py:1154, web/views.js:91). TDR.2 is kept (the peer pack block requires its gap row);
   TDR.4 to TDR.6 are never cut. T2DS.2 and T2B.1 stay (`cp1_references` has later consumers).
 - The methods' own validators (`required_register_ids`, `appendix_contract`, the lossless profile,
   `completeness_check.py`) are never run here, but `TRANSPORT_RULES` has a module do their checks
   itself. So `ROUTING_RULES` and each scope section end with one sentence: a register excluded there
-  is not required by those checks in this transport, and the module neither restores it nor blocks
-  for want of it.
+  is not required by those checks or by the canon's Analytical appendix rule in this transport, and
+  the module neither restores it nor blocks for want of it. E8 and E10 are the HANDOFF gate items at
+  `docs/reuse/selected-methods/CANON_SHARED.md` lines 459 and 461 (not sent to any module); they are
+  superseded for the listed registers only.
+- Presence check. Every register a module's method requires that is not excluded (the method's
+  `required_register_ids`, less the scope section, the routing registers and, for CP-0, what
+  `CP0_BLOCK` says the launcher did) must be in the handoff; `ROUTING_RULES` says so and how to
+  write one with nothing to report (one row `Not supplied: <reason>`). The checker
+  (`required_registers`, `register_issues`, ten modules only) sends back a handoff that lacks one,
+  with one issue naming all of them. A register is recognised by a heading carrying its id, a
+  `<!-- table-id: -->` tag or an id cell; its body is not judged. A module whose front matter says
+  `module_status: Blocked` is exempt (the method's stop). Calibrated over the accepted handoffs of
+  both retained Sol runs first: zero in-scope registers missing in either.
 - CP-5 is sent, in its head, a generated note listing for each upstream module in the run that has
   a scope section the registers it was told not to write, and that their absence is not a finding;
   it carries the routing rule too. No other module carries it. CP-6's and CP-8's methods were read
@@ -57,7 +69,7 @@ modules measured".
 
 For the registers and routing text named above only, this supersedes decisions 8 ("tables and
 registers, unchanged and exact") and H1 and H4 of `2026-11-11-reader-and-issuer-report.md`, which
-stay as written for every other register. The Evidence page is unchanged. The Modules page loses
+stay as written for every other register. The Modules page loses
 the sections that are no longer written; the figure check still requires every figure in a
 reader passage to appear in a table the module writes or in `## Calculations`.
 
@@ -72,6 +84,16 @@ For the list this change cuts (the intersection of both runs, with no routing re
 characters in the inventory are 166,882 (medium run) and 189,139 (high run), ownership_register
 excluded. The list is the intersection of both runs, so by construction the per-run no-consumer
 token figures above are upper bounds for it; characters and tokens are not converted here.
+
+## Library check
+
+On a library rebuilt offline from a copy of the medium Sol run with the cut handoffs
+(`.superpowers/sdd/quality-defects/t4-library-check.md`): the Modules page loses 91 sections (exactly
+the cut and routing registers present, plus the `## Next module` bodies); Overview, Changes and
+Forecast are identical; the Evidence page's own data is identical, but its "Original Markdown" links
+and `handoffs.zip` carry the shorter handoffs (719,342 to 510,094 bytes) and the retired delivered
+report's evidence-only coverage entries fall from 467 to 355. So "the Evidence page is unaffected" is
+partly true. Measured with T5B.3 and T6A.7 still cut; keeping them restores two Modules sections.
 
 ## Not accepted
 

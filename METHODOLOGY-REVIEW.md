@@ -840,7 +840,8 @@ on disk and in the method block, so this marks no run "Earlier methods" by a cha
 the project-written `CPOS_REGISTER_SCOPE.md` is a new last section of the method block of CP-0, CP-1A,
 CP-DR, CP-2, CP-2A, CP-2E, CP-2G, CP-3, CP-5 and CP-6, so the library's method pin for those ten
 changes. It lists the registers each of those modules does not write: the ones with a method id that
-no later module, check, chart, the Forecast page or the library read in either retained Sol run.
+no later module, check, chart, the Forecast page or the library read in either retained Sol run (CP-5's T5B.3 and CP-6's T6A.7 were taken off the lists after review:
+the library's catalogue opens those modules' pages at them, `catalog.json` `firstHeading`).
 `ROUTING_RULES`, sent to every module, drops the methods' routing text (next-command recommendations,
 Master Index, run command sheet, dependency maps, research requests, registers addressed to receiving
 modules, and the tables `cp2g.cp_model_forecast_drivers` and `cp2b.cp_model_catalysts`); CP-0's block

@@ -11,6 +11,7 @@ needs issuer-specific row selectors; add it when a run can derive those from CP-
 """
 
 import argparse
+import functools
 import hashlib
 import importlib.util
 import json
@@ -1840,8 +1841,12 @@ ROUTING_RULES = (
     "in plain words. Every figure in a reader passage must still appear in a table you write or "
     "in `## Calculations`. A register or text excluded here or in a `Register scope` section of "
     "the method block is not required by the method's `required_register_ids`, "
-    "`appendix_contract`, lossless profile or completeness check in this transport: when you "
-    "run those checks yourself, do not restore it and do not block for want of it.\n\n"
+    "`appendix_contract`, lossless profile or completeness check, or by the canon's Analytical "
+    "appendix rule, in this transport: when you run those checks or apply that rule yourself, "
+    "do not restore it and do not block for want of it. Every register the method requires "
+    "that is not excluded here or in a `Register scope` section must be present under a heading "
+    "or `<!-- table-id: -->` tag that carries its id; one with nothing to report is written "
+    "with one row `Not supplied: <reason>`, never left out.\n\n"
 )
 # CP-5 only: it audits the other modules' handoffs. The first line is the marker the tests look for;
 # `{lines}` is one `- <module>: <registers>` line per upstream module that has a scope section.
@@ -2277,6 +2282,102 @@ def register_scope(module: str) -> str:
     (`<id> <title>; <id> <title>`)."""
     section = dict(method_sections(module))[f"{REGISTER_SCOPE} § {module}"]
     return section.partition("do not write ")[2].partition(". Any figure")[0]
+
+
+# Registers ROUTING_RULES tells every module not to write; the presence check never requires them.
+ROUTING_REGISTERS = (
+    "T7",
+    "T8",
+    "T2D.10",
+    "downstream_readiness",
+    "T2B.8",
+    "T5.6",
+)
+_REQUIRED_KEY = re.compile(r"^(\s*)- \*\*required_register_ids\*\*:(.*)$")
+_REGISTER_ID = re.compile(r"[A-Za-z]\w*(?:\.\w+)*")
+_BLOCKED = re.compile(r"""^module_status:\s*["']?blocked["']?\s*$""", re.IGNORECASE)
+_MISSING_REGISTERS = (
+    "Missing registers: {ids}. The method requires each of them and CP-OS does not cut them. "
+    "Write each as its own register: a `###` heading that carries its id (`### {first} - <title>`) "
+    "or a `<!-- table-id: ... {first} -->` tag above its table. A register with nothing to "
+    "report is still written, with one row `Not supplied: <reason>` (or the method's own "
+    "placeholder row), never left out. A module that cannot run at its gate says so with "
+    "`module_status: Blocked` in the front matter and is not asked for them."
+)
+
+
+def _listed_ids(lines: list[str]) -> list[str]:
+    """The ids of every `required_register_ids` entry in a method file, in order (the entry is
+    one `;` line or, as `structured below`, the deeper bullets under it)."""
+    ids: list[str] = []
+    for number, line in enumerate(lines):
+        key = _REQUIRED_KEY.match(line)
+        if not key:
+            continue
+        body = [key[2]]
+        for later in lines[number + 1 :]:
+            if not later.lstrip().startswith("- ") or len(later) - len(later.lstrip()) <= len(
+                key[1]
+            ):
+                break
+            body.append(later.lstrip()[2:])
+        ids += [p.strip() for p in ";".join(body).split(";")]
+    return [i for i in ids if _REGISTER_ID.fullmatch(i) and i != "none"]
+
+
+@functools.cache
+def required_registers(module: str) -> tuple[str, ...]:
+    """The registers a module's handoff must carry: the method's `required_register_ids` (CP-0:
+    less what CP0_BLOCK says the launcher did), less the module's scope section and the routing
+    registers. Derived from the method text the module is sent; empty outside the ten modules."""
+    if module not in REGISTER_SCOPE_MODULES:
+        return ()
+    listed: list[str] = []
+    for name, text in method_sections(module):
+        if not name.startswith(REGISTER_SCOPE):
+            listed += _listed_ids(text.split("\n"))
+    out = {part.strip().split(" ")[0] for part in register_scope(module).split(";")}
+    if module == "CP-0":
+        launcher = re.search(r"Do not write the registers ([^.]*)\.", CP0_BLOCK)
+        if launcher is None:
+            raise ValueError("CP0_BLOCK no longer says which registers the launcher made")
+        out |= set(re.findall(r"\bP\d+\b", launcher[1]))
+    return tuple(dict.fromkeys(i for i in listed if i not in out and i not in ROUTING_REGISTERS))
+
+
+def _blocked_at_gate(text: str) -> bool:
+    """`module_status: Blocked` in the front matter: the method's own stop ("Module Status =
+    Blocked, STOP"); the retained CP-4 handoff writes its source gate and nothing else."""
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return False
+    head = lines[1:]
+    head = head[: head.index("---")] if "---" in head else head
+    return any(_BLOCKED.match(line.strip()) for line in head)
+
+
+def _has_register(text: str, ident: str) -> bool:
+    """A `###` heading naming the id, a `<!-- table-id: ... -->` tag whose last part is the id,
+    or a table row whose first cell is the id: the three forms the retained handoffs use."""
+    named = rf"(?<![\w.]){re.escape(ident)}(?!\w|\.\d)"
+    patterns = (
+        re.compile(rf"^<!-- table-id: (?:\S*\.)?{re.escape(ident)} -->\s*$", re.MULTILINE),
+        re.compile(rf"^#{{2,6}} .*{named}", re.MULTILINE),
+        re.compile(rf"^\|\s*{re.escape(ident)}\s*\|", re.MULTILINE),
+    )
+    return any(p.search(text) for p in patterns)
+
+
+def register_issues(module: str, text: str) -> tuple[str, ...]:
+    """One issue naming every in-scope required register the handoff lacks; none for a module
+    outside the ten or one blocked at its gate. A register's body is not judged."""
+    required = required_registers(module)
+    if not required or _blocked_at_gate(text):
+        return ()
+    missing = [i for i in required if not _has_register(text, i)]
+    if not missing:
+        return ()
+    return (_MISSING_REGISTERS.format(ids=", ".join(missing), first=missing[0]),)
 
 
 def upstream_scope_note(ordered: Sequence[str]) -> str:
@@ -2845,6 +2946,7 @@ def checker(layout: MarkdownLayout) -> Check:
             if route.kind == "chart":
                 issues += chart_issues(text, route)
         issues += _owned_issues(task.module_id, routes, text)
+        issues += register_issues(task.module_id, text)
         return (*issues, *_forecast_issues(task, text))
 
     return check

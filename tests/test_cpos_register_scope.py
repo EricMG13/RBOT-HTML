@@ -45,10 +45,10 @@ CUT = {
         *("T3C.1", "T3C.2", "T3C.3", "T3C.5", "T3C.6", "T3C.7", "T3C.8", "T3C.9"),
     ],
     "CP-5": [
-        *("T5B.3", "T5B.4", "T5B.5", "T5B.6", "T5B.7", "T5B.8"),
+        *("T5B.4", "T5B.5", "T5B.6", "T5B.7", "T5B.8"),
         *("T5.1", "T5.2", "T5.4", "T5.5", "T5.6", "T5.7", "T5.8", "T5.9"),
     ],
-    "CP-6": ["T6A.6", "T6A.7", "T6A.11", "T6E.4", "T6E.6", "T6E.7", "T6E.11"],
+    "CP-6": ["T6A.6", "T6A.11", "T6E.4", "T6E.6", "T6E.7", "T6E.11"],
 }
 # The medium run wrote four CP-1A registers under names, not ids (checked against that run's
 # `<!-- table-id: ... -->` tags: T2D.2, T2D.6, T2D.7, T2D.8).
@@ -84,6 +84,7 @@ SELF_CHECK_WORDS = (
     "`appendix_contract`",
     "lossless",
     "completeness check",
+    "Analytical appendix",
     "do not restore it",
     "do not block",
 )
@@ -132,10 +133,12 @@ def every_module(tmp_path_factory):
 def test_routing_rules_are_the_owners_text_plus_the_self_check_sentence():
     text = cpos_launch.ROUTING_RULES
     assert text.startswith(VERBATIM)
-    added = text[len(VERBATIM) :].strip()
-    assert added.count(".") == 1, "R4: one added sentence"
+    first, second = text[len(VERBATIM) :].strip().split(". ", 1)
+    assert second.count(".") == 1, "R4 and the presence rule: two added sentences"
     for words in SELF_CHECK_WORDS:
-        assert words in added, words
+        assert words in first, words
+    for words in ("Every register the method requires", "table-id", "Not supplied: <reason>"):
+        assert words in second, words
 
 
 def test_routing_rules_name_no_register_the_peer_pack_or_the_checks_need():
@@ -249,7 +252,7 @@ def test_no_check_reader_or_library_names_a_cut_or_routing_register():
     sources = {
         "cpos_launch.py": _without_constants(
             (ROOT / "src/deploy_workflow/owners/cpos_launch.py").read_text(),
-            ("ROUTING_RULES", "CP0_BLOCK", "UPSTREAM_SCOPE_NOTE"),
+            ("ROUTING_RULES", "CP0_BLOCK", "UPSTREAM_SCOPE_NOTE", "ROUTING_REGISTERS"),
         ),
         **{
             name: (ROOT / "src/deploy_workflow" / name).read_text()
@@ -261,10 +264,14 @@ def test_no_check_reader_or_library_names_a_cut_or_routing_register():
             )
         },
         "store.py": (ROOT / "apps/issuer-library/credit_os/store.py").read_text(),
+        # `firstHeading` is read by store.py:1154 and views.js:91 (T5B.3 and T6A.7 stay in scope).
+        "catalog.json": (ROOT / "apps/issuer-library/credit_os/catalog.json").read_text(),
     }
     ids = sorted({i for ids in CUT.values() for i in ids} | set(ROUTING_IDS))
     # Mentions that are not readers: none today. Add (file, id) here, with the reason, if one is.
-    allowed: set[tuple[str, str]] = set()
+    # catalog.json `call.heading` (T5B.7, TDR.3) is read only by `pinned_fields` for an entry whose
+    # `path` equals the output (store.py:1164); no catalog entry has a `path`, so nothing reads it.
+    allowed = {("catalog.json", "T5B.7"), ("catalog.json", "TDR.3")}
     hits = []
     for ident in ids:
         pattern = re.compile(rf"(?<![A-Za-z0-9_.]){re.escape(ident)}(?![A-Za-z0-9_]|\.[0-9A-Za-z])")
@@ -327,7 +334,141 @@ def test_a_handoff_without_the_cut_registers_and_with_the_one_line_next_module_p
     text = answer(context, list(prepared.plan.layout.routes))
     assert "## Next module\n\nNone." in text
     text = text.replace("## Next module\n\nNone.", f"## Next module\n\n{NEXT_MODULE}")
+    text = text.replace("## Calculations", registers(module) + "## Calculations", 1)
     if with_cut_registers:
         text = text.replace("## Calculations", _cut_registers_text() + "## Calculations", 1)
     issues = _checked_handoff(task, text.encode(), checker(prepared.layout))
     assert issues == ()
+
+
+# The presence check (T4 stage B). Derived from the method text each module is sent, less its scope
+# section and the routing registers; pinned as literals so a method change shows as a diff here.
+REQUIRED = {
+    "CP-0": ["T1", "T2", "T4", "T6", "P3"],
+    "CP-1A": [
+        *(
+            "transaction_summary",
+            "company_description",
+            "revenue_business_mix",
+            "ownership_register",
+        ),
+        *("operating_model", "events_timeline", "gaps_ledger", "conflict_log"),
+        *("T2D.1", "T2D.3", "T2D.4", "T2D.5", "T2D.9", "T2D.11"),
+    ],
+    "CP-DR": ["TDR.2", "TDR.4", "TDR.5", "TDR.6"],
+    "CP-2": ["T2.1", "T2.10", "T2.12"],
+    "CP-2A": ["T2B.1", "T2B.2", "T2B.6", "T2B.7", "T2B.9", "T5.5", "T5.7"],
+    "CP-2E": ["T2F.1", "T2F.3", "T2F.6", "T2F.7"],
+    "CP-2G": ["T2H.3", "T2H.4", "T2H.5", "T2H.6", "T2H.7", "T2H.8"],
+    "CP-3": ["T3.3", "T3.6", "T3B.1", "T3C.4"],
+    "CP-5": ["T5B.1", "T5B.2", "T5B.3", "T5.3"],
+    "CP-6": ["T6A.4", "T6A.7"],
+}
+NOTHING = "| Item | Value |\n| --- | --- |\n| Observed | Not supplied: nothing to report |\n\n"
+
+
+def register(ident: str, form: str = "heading") -> str:
+    """One register written the way the retained handoffs write one."""
+    if form == "tag":
+        return f"### Register\n\n<!-- table-id: cp.{ident} -->\n{NOTHING}"
+    if form == "cell":
+        return f"### Register\n\n| Id | Value |\n| --- | --- |\n| {ident} | Not supplied |\n\n"
+    return f"### {ident} — Register\n\n{NOTHING}"
+
+
+def registers(module: str, *, skip: tuple[str, ...] = (), form: str = "heading") -> str:
+    return "".join(register(i, form) for i in REQUIRED[module] if i not in skip)
+
+
+def refusal(module: str, text: str) -> list[str]:
+    return [i for i in cpos_launch.register_issues(module, text) if "Missing registers" in i]
+
+
+@pytest.mark.parametrize("module", list(REQUIRED))
+def test_the_required_registers_derived_from_the_method_text_are_pinned(module):
+    assert list(cpos_launch.required_registers(module)) == REQUIRED[module]
+
+
+@pytest.mark.parametrize("module", list(REQUIRED))
+def test_no_required_register_is_a_cut_or_routing_register(module):
+    named = set(CUT[module]) | set(ROUTING_IDS)
+    assert not named & set(cpos_launch.required_registers(module))
+
+
+def test_a_missing_register_is_refused_with_one_issue_naming_every_missing_id_and_the_forms():
+    text = registers("CP-2A", skip=("T2B.1", "T2B.7", "T5.7"))
+    issues = cpos_launch.register_issues("CP-2A", text)
+    assert len(issues) == 1
+    for ident in ("T2B.1", "T2B.7", "T5.7"):
+        assert ident in issues[0]
+    for form in ("heading", "<!-- table-id:", "Not supplied: <reason>", "module_status: Blocked"):
+        assert form in issues[0]
+    assert "T2B.2" not in issues[0]
+
+
+@pytest.mark.parametrize("module", list(REQUIRED))
+def test_a_handoff_with_no_register_is_refused_naming_all_of_the_module(module):
+    (issue,) = cpos_launch.register_issues(module, "## Findings\n\nText.\n")
+    assert all(ident in issue for ident in REQUIRED[module])
+
+
+@pytest.mark.parametrize("form", ["heading", "tag", "cell"])
+@pytest.mark.parametrize("module", list(REQUIRED))
+def test_each_recognised_form_of_a_register_with_nothing_to_report_is_accepted(module, form):
+    assert cpos_launch.register_issues(module, registers(module, form=form)) == ()
+
+
+def test_one_heading_that_names_several_ids_counts_for_each():
+    heading = "### T2B.1, T2B.2 and T2B.6 — Joint\n\n" + NOTHING
+    text = heading + registers("CP-2A", skip=("T2B.1", "T2B.2", "T2B.6"))
+    assert cpos_launch.register_issues("CP-2A", text) == ()
+
+
+def test_an_id_that_is_a_prefix_of_another_does_not_count():
+    text = registers("CP-1A", skip=("T2D.1",)) + register("T2D.10") + register("T2D.12")
+    assert re.search(r"T2D\.1(?![\w.])", refusal("CP-1A", text)[0])
+
+
+def test_an_id_named_only_in_prose_does_not_count():
+    text = registers("CP-6", skip=("T6A.4",)) + "The T6A.4 register is discussed here.\n"
+    assert "T6A.4" in refusal("CP-6", text)[0]
+
+
+@pytest.mark.parametrize("module", list(REQUIRED))
+def test_a_cut_register_is_neither_required_nor_refused(module):
+    cut = "".join(register(i) for i in CUT[module])
+    assert cpos_launch.register_issues(module, registers(module)) == ()
+    assert cpos_launch.register_issues(module, registers(module) + cut) == ()
+
+
+@pytest.mark.parametrize("status", ["Blocked", "blocked", '"Blocked"'])
+def test_a_module_blocked_at_its_gate_is_exempt_as_the_method_defines(status):
+    front = f"---\nmodule_id: CP-2\nmodule_status: {status}\n---\n\n## Findings\n\nStopped.\n"
+    assert cpos_launch.register_issues("CP-2", front) == ()
+
+
+def test_a_status_other_than_blocked_is_not_exempt():
+    front = "---\nmodule_status: Ready with Limitations\ncommittee_status: Blocked\n---\n\nText.\n"
+    assert refusal("CP-2", front)
+    assert refusal("CP-2", "Text.\nmodule_status: Blocked\n")  # outside the front matter
+
+
+@pytest.mark.parametrize("module", ["CP-4", "CP-1", "CP-1B", "CP-2D", "CP-3C", "CP-8", "CP-L10"])
+def test_modules_outside_the_ten_are_never_checked(module):
+    assert cpos_launch.register_issues(module, "## Findings\n\nNo registers.\n") == ()
+
+
+def test_the_checker_sends_a_handoff_without_its_registers_back_with_one_issue(tmp_path):
+    prepared, task, context = good_task(tmp_path, "CP-2")
+    full = answer(context, list(prepared.plan.layout.routes))
+    assert _checked_handoff(task, full.encode(), checker(prepared.layout)) == ()
+    text = re.sub(r"### T2\.\d+ - Register\n\n(?:\|.*\n)+\n", "", full)  # the fixture's own
+    assert text != full
+    check = checker(prepared.layout)
+    issues = _checked_handoff(task, text.encode(), check)
+    assert [i for i in issues if "Missing registers" in i] == [
+        i for i in issues if "T2.1" in i and "T2.10" in i and "T2.12" in i
+    ]
+    assert len([i for i in issues if "Missing registers" in i]) == 1
+    again = text.replace("## Calculations", registers("CP-2") + "## Calculations", 1)
+    assert _checked_handoff(task, again.encode(), check) == ()
