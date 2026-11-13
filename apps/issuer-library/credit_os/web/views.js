@@ -668,10 +668,10 @@ function reportParts(id) {
 // order, and nothing else. Sources, Calculations, Gaps, registers, method notes and the sections written for other modules are the Evidence page's (or drawn nowhere).
 const passageSections=id=>Object.values(readerPassages(data[id].sections)).filter(Boolean);
 // A finding section has something to draw when it holds a prose block that is not a note, or a table with a row and a column the reader sees.
-const drawsSomething=section=>section.blocks.some(block=>block.type==='table'?block.rows.length>0&&window.Shapes.hiddenColumns(block.headers,'records').length<block.headers.length:window.Shapes.blockRole(block.text)!=='note');
+const drawsSomething=section=>section.blocks.some(block=>block.type==='table'?block.rows.length>0&&window.Shapes.hiddenColumns(block.headers,'records',block.rows).length<block.headers.length:window.Shapes.blockRole(block.text)!=='note');
 // Ruling 2026-11-13: a table of a registers section whose shape is promoted (Shapes.promoted) is drawn on the page, in its shape's component; the table as written stays in Evidence.
 // A registers table of any other shape is Evidence only.
-const promotedTables=section=>section.blocks.filter(block=>block.type==='table'&&block.rows.length>0&&window.Shapes.promoted(window.Shapes.tableShape(block))&&window.Shapes.hiddenColumns(block.headers,'records').length<block.headers.length);
+const promotedTables=section=>section.blocks.filter(block=>block.type==='table'&&block.rows.length>0&&window.Shapes.promoted(window.Shapes.tableShape(block))&&window.Shapes.hiddenColumns(block.headers,'records',block.rows).length<block.headers.length);
 // Ruling 2026-11-12, decisions 1 and 2. A chart, map or timeline is drawn once, in its panel: the `Chart data:`, `Map:` or `Events:` section the store drew is `drawings`
 // (its numbers are the drawing's Table form, its prose the caption). A drawing section the store could not draw has no drawing, so it stays in the body with the
 // findings. A section that is not a passage, finding or drawing (its role says Evidence or nowhere) is in neither list.
@@ -993,7 +993,8 @@ function tableForm(id,kind,section) {
 }
 // ---- The run label (decision 12 of the 2026-11-11 reader ruling): every run page says which run it shows, and where the issuer's other runs are.
 // H7: a run is "Earlier format" when any of its handoffs (every saved output of every module, not only the defaults) has no Bottom line first under Findings.
-const earlierFormat=run=>earlierFormatRun(Object.values(run.modules).flatMap(entry=>entry.outputs).filter(id=>data[id]).map(id=>data[id].sections));
+// A handoff the build could not read at all (Shapes.isUnstructured) is not an earlier format: it is stated on the Evidence page as not read.
+const earlierFormat=run=>earlierFormatRun(Object.values(run.modules).flatMap(entry=>entry.outputs).filter(id=>data[id]).map(id=>data[id].sections).filter(sections=>!window.Shapes.isUnstructured(sections)));
 const EARLIER_FORMAT_BADGE='<span class="badge badge-gray earlier-format">Earlier format</span>';
 // A run whose module methods have changed since it ran is listed and marked (owner, 2026-11-11); the store's own list decides.
 const EARLIER_METHODS_BADGE='<span class="badge badge-gray earlier-methods">Earlier methods</span>';

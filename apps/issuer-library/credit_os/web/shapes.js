@@ -28,10 +28,17 @@ const Shapes = (() => {
 
   // ---- columns ----
   const norm = header => String(header ?? '').trim().toLowerCase().replace(/_/g, ' ').replace(/\s+/g, ' ');
+  // The one list of file extensions an issuer document or handoff can carry (longest first), and the two shapes of an audit string a findings page never draws:
+  // a file name, and a hash of 32 or more hex characters. components.js reads cells with them; a column is classed by them below.
+  const FILE_EXTENSIONS = 'jsonl|json|xhtml|html|htm|xml|pdf|docx|doc|xlsx|xlsm|xls|csv|tsv|pptx|ppt|txt|md|zip';
+  const FILE_NAME = new RegExp(`[\\w-]+(?:\\.[\\w-]+)*\\.(?:${FILE_EXTENSIONS})\\b`, 'i');
+  const LONG_HEX = /\b[0-9a-f]{32,}\b/i;
+  // The next module's own columns, by their whole name (a word pattern would take "Downstream revenue"). Matched on the header with its hyphens read as spaces.
+  const INTERMODULE = /^(?:supplied handoff|use in this module|effect on this module|consumer|downstream module|receiving module|responsible module|command|required consumer action|escalation consequence|next commands?|next modules?|downstream consumers?|downstream modules? affected|downstream handoff impact|downstream owners|affected consumers|affected modules)$/;
   const KIND_RULES = [
     ['id', /^id$|\bid$|^linked pathway row$/],                                  // before source: "Evidence ID" is an id
-    ['source', /^(?:(?:sources?|evidence)(?:\s*\/\s*clause|\s+(?:trace|locator|register|document|file|sha|hash|page|reference|ref|link)s?)?|sha256|source document name|source and basis|source\(s\)|source row\/section\/quote|sha256 hash)$/],
-    ['intermodule', /^(supplied handoff|use in this module|effect on this module|consumer|downstream module|receiving module|responsible module|command|required consumer action|escalation consequence)$|^consequence for cp-/],
+    ['source', /^(?:(?:sources?|evidence)(?:\s*\/\s*clause|\s+(?:trace|locator|register|document|file|sha|hash|page|reference|ref|link)s?)?|sha256|source document name|source and basis|source\(s\)|source row\/section\/quote|sha256 hash|where found)$|\b(?:hash(?:es)?|sha|sha256|locators?|citations?|file ?names?)\b/],
+    ['intermodule', {test: text => INTERMODULE.test(text.replace(/-/g, ' ')) || /^consequence for cp-/.test(text)}],
     ['limitation', /limitation/],
     ['consequence', /creditor consequence|effect on the credit view/],
     ['period', /^(?:(?:fy|cy|ltm|pf|[hq][1-4])\s*)?\d{4}[ae]?\b|^(?:fy|cy)\s*\d{2}[ae]?\b/],
@@ -40,11 +47,24 @@ const Shapes = (() => {
   ];
   // The two machine names keep their underscore: "downstream_use" addresses another module, "Downstream Use" (a source register's column) does not.
   const MACHINE_INTERMODULE = /^(?:downstream_use|consumer_module_id)$/i;
-  const columnKind = header => (MACHINE_INTERMODULE.test(String(header ?? '').trim()) ? 'intermodule' : (KIND_RULES.find(([, rx]) => rx.test(norm(header))) || ['text'])[0]);
+  // "Reference" and "Code" are also ordinary words ("Reference rate", a "Code" column of words): such a column is an id column only when at least half of its non-empty cells
+  // are id-shaped (an identifier of the module, a file name or a long hash). `cells` are the column's cell texts; without them the header alone decides, and these headers stay findings.
+  const AMBIGUOUS_ID = /^(?:references?|ref\.?|code)$/;
+  const idShaped = value => isToken(value) || FILE_NAME.test(value) || LONG_HEX.test(value);
+  function columnKind(header, cells = []) {
+    if (MACHINE_INTERMODULE.test(String(header ?? '').trim())) return 'intermodule';
+    if (AMBIGUOUS_ID.test(norm(header))) {
+      const filled = cells.map(cell => String(cell ?? '').trim()).filter(cell => cell !== '');
+      return filled.length > 0 && filled.filter(idShaped).length * 2 >= filled.length ? 'id' : 'text';
+    }
+    return (KIND_RULES.find(([, rx]) => rx.test(norm(header))) || ['text'])[0];
+  }
+  // The kind of each column of a table (its cells read where the header alone cannot decide).
+  const columnKinds = block => (block.headers ?? []).map((header, at) => columnKind(header, (block.rows ?? []).map(row => row.cells?.[at])));
   const HIDDEN_KINDS = new Set(['source', 'id', 'intermodule']);
-  // A plain "Module" header says which module a row concerns, so it is not inter-module; `shape` is kept for the interface.
-  const hiddenColumns = (headers, shape) => headers
-    .map((h, c) => (HIDDEN_KINDS.has(columnKind(h)) ? c : -1))
+  // A plain "Module" header says which module a row concerns, so it is not inter-module; `shape` is kept for the interface. `rows` (the table's) lets a "Reference" or "Code" column be read by its cells.
+  const hiddenColumns = (headers, shape, rows) => columnKinds({headers, rows})
+    .map((kind, c) => (HIDDEN_KINDS.has(kind) ? c : -1))
     .filter(c => c >= 0);
 
   // ---- table shapes: the first rule that matches wins; the order is the precedence ----
@@ -76,6 +96,10 @@ const Shapes = (() => {
     return (SHAPE_RULES.find(([, rule]) => rule(h)) || ['records'])[0];
   }
 
+  // The store's fallback for a handoff its parser refused: one level-1 "Unstructured handoff" section holding the whole file as one text block (store.py `structured`).
+  // Nothing of it is a finding, a register or a count: the page says it could not be read.
+  const isUnstructured = sections => Array.isArray(sections) && sections.length === 1 && sections[0].heading === 'Unstructured handoff' && sections[0].level === 1 && (sections[0].blocks ?? []).length === 1;
+
   // ---- paragraphs ----
   const NOTE = /^(?:Module status|Two method texts)\b|^Confidence is \d|qa_status|committee_status/i;
   const SKILL = /\bSKILL\b/;  // the method file's name, upper case only
@@ -100,8 +124,9 @@ const Shapes = (() => {
   function idTokens(sections) {
     const found = new Set();
     for (const block of tablesIn(sections)) {
+      const kinds = columnKinds(block);
       block.headers.forEach((header, at) => {
-        if (columnKind(header) !== 'id') return;
+        if (kinds[at] !== 'id') return;
         for (const row of block.rows) {
           const value = String(row.cells[at] ?? '').trim();
           if (isToken(value)) found.add(value);
@@ -121,7 +146,7 @@ const Shapes = (() => {
     if (cases.length !== 1) return null;
     const names = cases[0].block.headers.filter(header => columnKind(header) === 'case').map(header => String(header).trim());
     // The source: exactly one caseRows table with one row per case column whose FIRST column is an id column, and whose ids are all different and non-empty.
-    const sources = typed.filter(entry => entry.shape === 'caseRows' && entry.block.rows.length === names.length && columnKind(entry.block.headers[0]) === 'id');
+    const sources = typed.filter(entry => entry.shape === 'caseRows' && entry.block.rows.length === names.length && columnKinds(entry.block)[0] === 'id');
     if (!names.length || sources.length !== 1) return null;
     const ids = sources[0].block.rows.map(row => String(row.cells[0] ?? '').replace(/^[*_`~\s]+|[*_`~\s]+$/g, ''));  // marks stripped, as the case title reads the cell
     if (ids.some(id => id === '') || new Set(ids).size !== ids.length) return null;
@@ -142,7 +167,7 @@ const Shapes = (() => {
     return tokenPatterns.get(tokens).test(text) ? 'registers' : null;
   }
 
-  return {sectionRole, tableShape, columnKind, hiddenColumns, blockRole, promoted, isLedger, idTokens, casePairing, methodNote, CALCULATION_ID, PERIOD_LABEL, METHOD_CODE};
+  return {sectionRole, tableShape, columnKind, columnKinds, hiddenColumns, isUnstructured, FILE_EXTENSIONS, FILE_NAME, LONG_HEX, blockRole, promoted, isLedger, idTokens, casePairing, methodNote, CALCULATION_ID, PERIOD_LABEL, METHOD_CODE};
 })();
 
 if (typeof window !== 'undefined') window.Shapes = Shapes;

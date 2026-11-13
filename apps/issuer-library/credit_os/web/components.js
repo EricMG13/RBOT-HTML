@@ -236,8 +236,9 @@
   // The one cell rule. (a) only references (calculation IDs, file names, handoff names): omitted, reached by the row's trace control. (b) an identifier
   // of the module, or a calculation ID, inside other text: omitted, and the row links to Evidence. (c) anything else: drawn as rich text.
   const calculationId = () => shapes().CALCULATION_ID;  // the one pattern, owned by shapes.js
-  // The one list of file extensions an issuer document or handoff can carry (longest first), used by the plain rule and the strict one.
-  const FILE_EXTENSIONS = 'jsonl|json|xhtml|html|htm|xml|pdf|docx|doc|xlsx|xlsm|xls|csv|tsv|pptx|ppt|txt|md|zip';
+  // The one list of file extensions an issuer document or handoff can carry (longest first), and the file-name and long-hash patterns built on it: shapes.js's, so that a column
+  // is classed and a cell is read by the same words.
+  const {FILE_EXTENSIONS, FILE_NAME: FILE_NAME_IN_TEXT, LONG_HEX} = shapes();
   const STRONG_REFERENCE = [{test: part => new RegExp(`^(?:${calculationId().source})$`).test(part)}, new RegExp(`^[^\\s;,]+\\.(?:${FILE_EXTENSIONS})$`, 'i'), /\(CP-[0-9A-Z]+\)$/, /^CP-[0-9A-Z]+$/];
   const WEAK_REFERENCE = [/^[A-Z]{1,2}\d{2}$/, /^pages?\s+\d+(?:\s*[-–]\s*\d+)?$/i];
   function referencesOnly(text) {
@@ -245,7 +246,8 @@
     return parts.length > 0 && parts.every(part => [...STRONG_REFERENCE, ...WEAK_REFERENCE].some(rx => rx.test(part))) && parts.some(part => STRONG_REFERENCE.some(rx => rx.test(part)));
   }
   const REFERENCE_IN_TEXT = [/[\w-]+\.[A-Za-z]{2,5}\b/, /\bCP-[A-Za-z0-9]+/, /\b[0-9a-f]{16,}\b/i, new RegExp(`(?<![\\w.-])[\\w.-]+(?:\\/[\\w.-]+){2,}|(?<![\\w.-])[\\w.-]+\\/[\\w-]+\\.(?:${FILE_EXTENSIONS})\\b`, 'i')];  // a file name, a module code, a hex id of 16 or more, a slash path (two or more slashes, or a last segment with a file extension; "FY23/FY24" and "and/or" are phrases)
-  const STRICT_REFERENCE = [new RegExp(`[\\w-]+(?:\\.[\\w-]+)*\\.(?:${FILE_EXTENSIONS})\\b`, 'i'), /\b(?=[0-9]*[a-f])[0-9a-f]{16,}\b/i, /\bsc\d+\b/i, /\bCP-[0-9A-Z]+\s+[A-Z]{1,2}\d{2}\b/];
+  const CELL_REFERENCE = [FILE_NAME_IN_TEXT, LONG_HEX];
+  const STRICT_REFERENCE = [/\b(?=[0-9]*[a-f])[0-9a-f]{16,}\b/i, /\bsc\d+\b/i, /\bCP-[0-9A-Z]+\s+[A-Z]{1,2}\d{2}\b/];
   const tokenPatterns = new WeakMap();
   function tokensIn(text, tokens) {
     if (!Array.isArray(tokens) || !tokens.length) return [];
@@ -259,10 +261,12 @@
     // Only identifiers (an id cell such as "s00"): rule (a), plain omission. An identifier inside other text: rule (b), the link to Evidence.
     if (found.length && /^[\s;,&]*$/.test(found.reduce((text, token) => text.split(token).join(''), raw))) return {omitted: true};
     if (calculationId().test(raw) || found.length) return {omitted: true, inEvidence: true};
-    // `ctx.strict` (the Forecast page): what a findings page never draws is held back the same way when it stands inside other text: a file name (an issuer document extension, chained too), a hash
-    // of 16 or more hex characters, a scenario id in any case and a module code followed by an id-shaped word. An id value of the run's own tables is held by `ctx.tokens` as everywhere; another id-shaped word (G20, P50, EU27) is ordinary text.
+    // A file name (an issuer document extension, chained too) or a hash of 32 or more hex characters inside a cell is held back the same way, on every findings page. A passage is not read here: the page draws
+    // a module's own paragraphs, a cell is read by this function.
+    // `ctx.strict` (the Forecast page) adds a hash of 16 or more hex characters, a scenario id in any case and a module code followed by an id-shaped word. An id value of the run's own tables is held by `ctx.tokens` as everywhere; another id-shaped word (G20, P50, EU27) is ordinary text.
     // A module code on its own is not held: the page names it. Ordinary prose stays: 3.5x, 2.36x, U.S. GAAP, e.g., Sep. 2024, $1.2bn, FY2024, 10-K, Under U.S.GAAP rules, 10-K.Item 7.
-    if (ctx.strict && STRICT_REFERENCE.some(rx => rx.test(readerText().plainText(raw)))) return {omitted: true, inEvidence: true};
+    const plainRaw = readerText().plainText(raw);
+    if (CELL_REFERENCE.some(rx => rx.test(plainRaw)) || (ctx.strict && STRICT_REFERENCE.some(rx => rx.test(plainRaw)))) return {omitted: true, inEvidence: true};
     return {html: readerText().richText(raw)};
   }
   const evidenceLink = ctx => (ctx.evidenceHref ? `<a class="in-ev" href="${escapeHtml(ctx.evidenceHref)}">In Evidence</a>` : '');
@@ -290,10 +294,10 @@
   }
   // The columns a findings page may draw: not source, id or inter-module, and with a header it can name. `at` is the column's place in the table.
   function visibleColumns(block, shape, ctx) {
-    const hidden = new Set(shapes().hiddenColumns(block.headers, shape)), out = [];
+    const hidden = new Set(shapes().hiddenColumns(block.headers, shape, block.rows)), kinds = shapes().columnKinds(block), out = [];
     block.headers.forEach((header, at) => {
       const label = hidden.has(at) ? null : resolveHeader(header, ctx);
-      if (label !== null) out.push({at, label, kind: shapes().columnKind(header)});
+      if (label !== null) out.push({at, label, kind: kinds[at]});
     });
     return out;
   }
@@ -404,7 +408,7 @@
     const own = cellText(row, 0), name = pairedName(own, ctx);
     if (name) return {html: escapeHtml(name), name, link: ''};
     const numbered = (html, link) => ({html, name: html ? own : '', badge: n + 1, link});
-    if (shapes().hiddenColumns(block.headers, 'caseRows').includes(0)) return numbered('', '');
+    if (shapes().hiddenColumns(block.headers, 'caseRows', block.rows).includes(0)) return numbered('', '');
     const cell = findingCell(own, ctx);
     return cell.html !== undefined ? numbered(cell.html, '') : numbered('', cell.inEvidence ? evidenceLink(ctx) : '');
   }

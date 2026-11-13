@@ -3303,6 +3303,14 @@ test('Report history: the selected run\'s entry is marked aria-current and every
   assert.ok(rows[1].marks.includes('<span class="badge badge-gray">Showing</span>') && !rows[0].marks.includes('Showing'));
 });
 
+test('M6: a handoff the build could not read is not an Earlier format; a run with an old-format handoff beside it still is', () => {
+  const unread = [{ heading: 'Unstructured handoff', level: 1, line: 1, blocks: [{ type: 'text', line: 1, text: '## Request\nx' }] }];
+  const page = swap => runPage(d => d, [], m => m, { ...HIST, data: { ...HIST.data, [HIST_D0]: { ...HIST.data[HIST_D0], sections: swap } } }).runLabel('W-Evidence', 'run-d');
+  assert.ok(!page(unread).includes('Earlier format'), 'one unreadable handoff does not make the run an earlier format');
+  const old = [{ heading: 'Findings', level: 2, line: 1, blocks: [{ type: 'text', line: 2, text: 'An older handoff.' }] }];
+  assert.ok(page(old).includes('Earlier format'), 'an old-format handoff still is');
+});
+
 test('run label: the run\'s date, pathway and code, the Earlier format badge only where H7 holds, and the link to the Report history', () => {
   const page = histPage();
   const earlier = page.runLabel('W-Evidence', RUN);
@@ -4403,7 +4411,9 @@ test('M4: the delivered model\'s inputs are in the Run record, its scope limits 
   const gaps = E.view(input, { tab: 'gaps', module: null });
   assert.ok(gaps.includes('Model scope limits') && gaps.includes('<span data-count>2</span> scope limits') && strip(gaps).includes('Downside is scenario SC1: a rate rise.'));
   const badge = (html, tab) => Number(new RegExp(`id="ev-tab-${tab}"[^>]*>.*?data-count>(\\d+)<`, 's').exec(html)[1]);
-  assert.equal(badge(gaps, 'gaps'), countOf(gaps.slice(gaps.indexOf('id="ev-panel"')), /data-hay=/g), 'the Gaps badge is the counted lines');
+  // A17 (re-ruled): the badge is the gap count the tile shows; the scope limits are counted by their own group head (asserted above). Old pin: the badge was the panel's counted lines.
+  assert.equal(badge(gaps, 'gaps'), E.gapCount(input), 'the Gaps badge is the number of the Gaps tile');
+  assert.equal(countOf(gaps.slice(gaps.indexOf('id="ev-panel"')), /data-hay=/g), badge(gaps, 'gaps') + 2, 'the two scope limits are counted by their head, not the badge');
   const record = E.view(input, { tab: 'record', module: null });
   assert.ok(record.includes('Model inputs') && record.includes('CP-1-attempt-2.md') && record.includes(`SHA-256 ${HASH.slice(0, 12)}`) && record.includes('Changed since publication') && record.includes('Matches publication') && strip(record).includes('These files come from different attempts'));
   assert.equal(badge(record, 'record'), countOf(record.slice(record.indexOf('id="ev-panel"')), /data-hay=/g), 'the Run record badge is the counted items');

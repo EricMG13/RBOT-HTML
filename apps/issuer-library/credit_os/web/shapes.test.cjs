@@ -201,3 +201,25 @@ test('isLedger: a table that lists a comparison\'s limitations by the earlier an
   assert.equal(Shapes.isLedger({headers: ['Earlier ref', 'Current ref'], rows: [{cells: ['a', 'b']}]}), true);
   assert.equal(Shapes.tableShape(ledger), 'status', 'the shape classifier is unchanged');
 });
+
+test('M1(b): source words (hash, sha, file name, locator, citation, Where found) class a column as source; Reference, Ref and Code are id columns only by their cells', () => {
+  for (const h of ['Hash', 'SHA256 value', 'sha', 'Document hash', 'File name', 'Filename', 'Locator', 'Page locator', 'Citation', 'Citations', 'Where found', 'where_found']) assert.equal(Shapes.columnKind(h), 'source', h);
+  for (const h of ['Share count', 'Cash', 'Where found it', 'Shadow price']) assert.notEqual(Shapes.columnKind(h), 'source', h);
+  for (const h of ['Reference', 'References', 'Ref', 'Ref.', 'Code', 'reference']) {
+    assert.equal(Shapes.columnKind(h), 'text', `${h} without cells is a findings column`);
+    assert.equal(Shapes.columnKind(h, ['REF-0007', 'REF-0008', 'x']), 'id', `${h}: two of three cells are id-shaped`);
+    assert.equal(Shapes.columnKind(h, ['REF-0007', 'plain', 'words', 'here']), 'text', `${h}: one of four`);
+    assert.equal(Shapes.columnKind(h, ['', '  ', 'a.pdf']), 'id', `${h}: empty cells do not count`);
+    assert.equal(Shapes.columnKind(h, ['d41d8cd98f00b204e9800998ecf8427e', 'n/a']), 'id', `${h}: a 32-character hash is id-shaped`);
+  }
+  for (const h of ['Reference rate', 'Currency code', 'Code of conduct']) assert.equal(Shapes.columnKind(h, ['ROW-1', 'ROW-2']), 'text', h);
+  assert.equal(Shapes.columnKind('Code', ['USD', 'EUR', 'Floating']), 'text', 'a Code column of words stays a findings column');
+  assert.deepEqual(Shapes.hiddenColumns(['Line', 'Reference', 'Code'], 'records', [{cells: ['a', 'REF-1', 'USD']}, {cells: ['b', 'REF-2', 'EUR']}]), [1]);
+  assert.deepEqual(Shapes.columnKinds({headers: ['Line', 'Reference'], rows: [{cells: ['a', 'ROW-1']}]}), ['label', 'id']);
+  assert.deepEqual(Shapes.idTokens([{blocks: [{type: 'table', headers: ['Item', 'Reference'], rows: [{cells: ['a', 'REF-0007']}, {cells: ['b', 'REF-0008']}]}]}]), ['REF-0007', 'REF-0008']);
+});
+
+test('M2: the inter-module headers the ruling names are read by their normalised whole name; a findings column that starts the same way is not', () => {
+  for (const h of ['Next command', 'Next commands', 'next_module', 'Next-Modules', 'Downstream consumers', 'downstream_consumer', 'Downstream Module Affected', 'Downstream modules affected', 'Downstream Handoff Impact', 'downstream-owners', 'Affected consumers', 'Affected Modules']) assert.equal(Shapes.columnKind(h), 'intermodule', h);
+  for (const h of ['Downstream revenue', 'Next maturity', 'Affected assets', 'Downstream Use', 'Modules']) assert.notEqual(Shapes.columnKind(h), 'intermodule', h);
+});

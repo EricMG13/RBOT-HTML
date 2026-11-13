@@ -119,7 +119,7 @@ function issuerPart(pack, parts, cards = '') {
 // a section with a `change` table is the issuer part (C19 cards), one with a `moduleState` table the analysis part (C20 tiles), any other keeps its own heading.
 // A section whose role is Evidence's (sources, calculations, gaps, registers) or nobody's (hidden) is not drawn: the ledger is one of them.
 const textsOf = section => (section ? section.blocks.filter(b => b.type === 'text').map(b => ({text: b.text, line: b.line})) : []);
-const drawsSomething = section => section.blocks.some(b => (b.type === 'table' ? b.rows.length > 0 && Shapes.hiddenColumns(b.headers, 'records').length < b.headers.length : Shapes.blockRole(b.text) !== 'note'));
+const drawsSomething = section => section.blocks.some(b => (b.type === 'table' ? b.rows.length > 0 && Shapes.hiddenColumns(b.headers, 'records', b.rows).length < b.headers.length : Shapes.blockRole(b.text) !== 'note'));
 function cp8Page(sections, output, counts) {
   const out = {id: 'cp8', module: 'CP-8', run: null, chips: () => 0, ...output};
   const passages = ChangesReader.readerPassages(sections), held = new Set(Object.values(passages).filter(Boolean));

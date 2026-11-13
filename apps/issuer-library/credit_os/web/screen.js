@@ -89,6 +89,7 @@ function nameCodes(root,output=current?.output,marks=true) {
 
 for (const [id, output] of Object.entries(data)) {
   const located={module:output.module,output:id,run:output.run};
+  if (window.Shapes.isUnstructured(output.sections)) continue; // a handoff the build could not read is drawn as no text, and so is not a search hit or a drawer item
   // Rule 7, here as on the Evidence page (Evidence.classify, Shapes.columnKind): a section written for another module or the orchestrator is not indexed, and an inter-module column is not a field.
   for (const {section,role} of window.Evidence.classify(output.sections,output.placement)) for (const block of role==='hidden'?[]:section.blocks) {
     if (block.type === 'table') for (const row of block.rows) {

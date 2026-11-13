@@ -73,8 +73,10 @@
   // One module's content: trace statements, calculation, gap and register entries, finding tables as written, method notes.
   function moduleContent(mod, input) {
     const known = knownFiles(input.run.evidence);
-    const content = {id: mod.id, name: input.deps.moduleTitle(mod.id), trace: [], calcs: [], gaps: [], ledger: [], comparison: [], regs: [], written: [], notes: [], calcNotes: [], regNotes: []};
+    const content = {id: mod.id, name: input.deps.moduleTitle(mod.id), unread: false, trace: [], calcs: [], gaps: [], ledger: [], comparison: [], regs: [], written: [], notes: [], calcNotes: [], regNotes: []};
     for (const output of mod.outputs) {
+      // A handoff the build could not structure is drawn nowhere as text (it would show the Request and Next module sections); its counts read "Not read" and its file is in the downloads.
+      if (shapes.isUnstructured(output.sections)) { content.unread = true; continue; }
       const tokens = shapes.idTokens(output.sections);
       for (const {section, chain, role} of classify(output.sections, output.placement)) {
         if (role === 'hidden') continue;
@@ -123,7 +125,13 @@
   // The number of gap items the Gaps tab lists for a scope: the whole run, or one module (the tab's module filter), over every saved output of each module. The tab's badge, the summary and
   // every findings page's gap signal are this one count.
   // The comparison ledger is counted apart: its rows are limitations with a status, not gaps. The tab's badge is both, as the panel's counted elements are.
-  const gapRows = all => all.reduce((n, c) => n + rowTotal(c.gaps), 0);
+  // A row whose first cell says there is no gap ("None", "No", "Nil", "N/A") is not one; a Gaps section that holds text and no table is listed as text, not counted.
+  const NO_GAP = /^(?:none|no|nil|n\/a|n\.a\.)\.?$/i;
+  const gapsIn = c => c.gaps.reduce((n, e) => n + e.tables.reduce((k, t) => k + t.rows.filter(row => !NO_GAP.test(plain(row.cells[0]).trim())).length, 0), 0);
+  const gapsAsText = c => c.gaps.some(e => e.notes.length) && !c.gaps.some(e => e.tables.length);
+  const gapRows = all => all.reduce((n, c) => n + gapsIn(c), 0);
+  // The words that stand where a module's gap count is not a count: its Gaps section is text, or only rows that say "None". A module with no Gaps section is a plain zero.
+  const gapWords = c => (c.unread ? 'Not read' : gapsAsText(c) ? 'Listed as text' : c.gaps.length && gapsIn(c) === 0 ? 'None stated' : null);
   const ledgerRows = all => all.reduce((n, c) => n + rowTotal(c.ledger), 0);
   const gapCount = (input, module = null) => gapRows(selected(contents(input), module));
   const ledgerCount = (input, module = null) => ledgerRows(selected(contents(input), module));
@@ -143,14 +151,23 @@
   // `counted` is what the tab's badge counts: 'rows' (each row), 'table' (the whole table) or nothing. Counted elements carry data-hay; every other searchable one data-find.
   function tableMarkup(view, caption, name, counted = '') {
     const numeric = view.headers.map((header, at) => numericColumn(view.rows.map(r => r.cells[at])));
-    const mono = view.headers.map(header => ['source', 'id'].includes(shapes.columnKind(header)));
+    const mono = shapes.columnKinds(view).map(kind => ['source', 'id'].includes(kind));
     const head = view.headers.map((header, at) => `<th scope="col" class="${numeric[at] ? 'num' : ''}${mono[at] ? ' mono' : ''}">${esc(header)}</th>`).join('');
     const body = view.rows.map(row => `<tr ${counted === 'rows' ? 'data-hay' : 'data-find'}="${hay(name, row.cells.join(' '))}" data-line="${esc(row.line)}">${row.cells.map((cell, at) => `<td class="${numeric[at] ? 'num ' : ''}${mono[at] ? 'mono ' : ''}${cell.length > 60 ? 'wide' : ''}">${rich(cell)}</td>`).join('')}</tr>`).join('');
     const tableHead = hay(name, caption, view.headers.join(' '));
     return `<div class="ev-tbl" role="region" aria-label="${esc(caption)}" tabindex="0" data-group data-head="${tableHead}"${counted === 'table' ? ` data-hay="${tableHead}"` : ''}><table><caption class="sr-only">${esc(caption)}</caption><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
   }
   const noteMarkup = (text, name, counted = false) => `<p class="ev-note" ${counted ? 'data-hay' : 'data-find'}="${hay(name, text)}">${rich(text)}</p>`;
-  const moduleHead = (c, n, one, many) => `<div class="ev-grp-h"><span>${esc(c.name)}</span><span class="ev-cd">${esc(c.id)}</span><span class="ev-ct"><span data-count>${n}</span> ${n === 1 ? one : many}</span></div>`;
+  // `n` is a count, or the words that stand where a count cannot ("Listed as text", "Not read").
+  const moduleHead = (c, n, one, many) => `<div class="ev-grp-h"><span>${esc(c.name)}</span><span class="ev-cd">${esc(c.id)}</span><span class="ev-ct">${typeof n === 'number' ? `<span data-count>${n}</span> ${n === 1 ? one : many}` : esc(n)}</span></div>`;
+  // A tab's count: a number, or the words "Not read" for a module whose handoff could not be read (a number there would be a zero it has not earned).
+  const countSpan = n => `<span class="ev-cnt"${typeof n === 'number' ? ' data-count' : ''}>${esc(n)}</span>`;
+  const NOT_READ = "This module's handoff could not be read into sections. Its file is in the run's downloads.";
+  // One note per module whose handoff could not be structured: the statement and the module's own download link; no text of the file is drawn.
+  function unreadNote(c, input) {
+    const handoff = (input.run.evidence.handoffs || []).find(h => h.module === c.id);
+    return `<section class="ev-grp" data-group>${moduleHead(c, 'Not read')}<p class="ev-note" data-find="${hay(c.name, NOT_READ)}">${esc(NOT_READ)}</p>${downloadLink(input.deps.moduleTitle(c.id), handoff && handoff.href, `${input.deps.moduleTitle(c.id)} handoff`)}</section>`;
+  }
   const subHead = label => (label ? `<h4 class="ev-sub">${esc(label)}</h4>` : '');
 
   // ---- panels ----
@@ -213,7 +230,7 @@
   const SEVERITY = {high: 3, medium: 2, low: 1};
   // A table of a gaps section is a list of gaps: a title, the other cells as fields, and a three-segment meter where the table has a severity column.
   function gapCards(view, c) {
-    const severity = view.headers.findIndex(h => /severity/i.test(h)), title = Math.max(0, view.headers.findIndex(h => shapes.columnKind(h) !== 'id'));
+    const severity = view.headers.findIndex(h => /severity/i.test(h)), title = Math.max(0, shapes.columnKinds(view).findIndex(kind => kind !== 'id'));
     return `<div data-group>${view.rows.map(row => {
       const word = severity < 0 ? '' : row.cells[severity].trim().toLowerCase(), level = Object.hasOwn(SEVERITY, word) ? SEVERITY[word] : 0;
       const meter = level ? `<span class="ev-meter" aria-hidden="true">${[1, 2, 3].map(n => `<i${n <= level ? ' class="f"' : ''}></i>`).join('')}</span>` : '';
@@ -231,7 +248,7 @@
     const groups = all.filter(c => c.gaps.length || c.ledger.length), models = modelsOf(input, module).filter(m => m.limits.length);
     if (!groups.length && !models.length) return empty('Gaps', 'No gap is listed for this selection.');
     // Each module's gaps are cards under a head that counts gaps; its comparison ledger is a table as written (counted by row) under its own head that counts ledger rows.
-    const gaps = c => (c.gaps.length ? `<section class="ev-grp" data-group>${moduleHead(c, rowTotal(c.gaps), 'gap', 'gaps')}${c.gaps.map(e => `${subHead(e.label)}${e.notes.map(n => noteMarkup(n, c.name)).join('')}${e.tables.map(t => gapCards(t, c)).join('')}`).join('')}</section>` : '');
+    const gaps = c => (c.gaps.length ? `<section class="ev-grp" data-group>${moduleHead(c, gapWords(c) ?? gapsIn(c), 'gap', 'gaps')}${c.gaps.map(e => `${subHead(e.label)}${e.notes.map(n => noteMarkup(n, c.name)).join('')}${e.tables.map(t => gapCards(t, c)).join('')}`).join('')}</section>` : '');
     const ledger = c => (c.ledger.length ? `<section class="ev-grp" data-group>${moduleHead(c, rowTotal(c.ledger), 'ledger row', 'ledger rows')}${c.ledger.map(e => `${subHead(e.label)}${e.tables.map(t => tableMarkup(t, `${c.name}: ${e.heading}`, c.name, 'rows')).join('')}`).join('')}</section>` : '');
     return groups.map(c => gaps(c) + ledger(c)).join('') + models.map(m => limitsGroup(m, input)).join('');
   }
@@ -291,8 +308,8 @@
   function governance(all, input) {
     const {run, deps} = input, ev = run.evidence;
     const delivered = input.modules.filter(m => m.outputs.length).length, total = input.modules.length, fraction = total ? delivered / total : 0;
-    const gaps = all.map(c => rowTotal(c.gaps)), calcs = all.reduce((n, c) => n + rowTotal(c.calcs), 0), gapTotal = gapRows(all), most = Math.max(1, ...gaps);
-    const bars = all.map((c, at) => `<div class="ev-gb${gaps[at] ? '' : ' z'}" tabindex="0" role="img" ${components().tipAttributes(`${c.name}: ${count(gaps[at], 'gap', 'gaps')}`)}><b>${esc(c.id.replace(/^CP-/, ''))}</b><i style="width:${gaps[at] ? `${(gaps[at] / most * 100).toFixed(1)}%` : '2px'}"></i></div>`).join('');
+    const gaps = all.map(gapsIn), words = all.map(c => gapWords(c) ?? count(gapsIn(c), 'gap', 'gaps')), calcs = all.reduce((n, c) => n + rowTotal(c.calcs), 0), gapTotal = gapRows(all), most = Math.max(1, ...gaps);
+    const bars = all.map((c, at) => `<div class="ev-gb${gaps[at] ? '' : ' z'}" tabindex="0" role="img" ${components().tipAttributes(`${c.name}: ${words[at]}`)}><b>${esc(c.id.replace(/^CP-/, ''))}</b><i style="width:${gaps[at] ? `${(gaps[at] / most * 100).toFixed(1)}%` : '2px'}"></i></div>`).join('');
     const arc = 'M12 78 A66 66 0 0 1 144 78';
     const first = run.steps[0], last = run.steps[run.steps.length - 1];
     const methods = run.methodChanges.length ? `<ul class="ev-mc-list">${run.methodChanges.map(line => `<li>${icon('git-compare')}<span class="mono">${esc(deps.methodChange(line))}</span></li>`).join('')}</ul>` : '<div class="ev-cap">None listed</div>';
@@ -310,16 +327,18 @@
 
   // ---- tabs, filter bar, the guide, the foot ----
   function tabCounts(all, input, module) {
-    const orphan = orphanComparison(input, module);
     const ev = input.run.evidence;
-    return {
+    const counts = {
       trace: all.reduce((n, c) => n + c.trace.length, 0),
       sources: ev.sources.filter(f => !module || f.readBy.includes(module)).length,
-      calculations: all.reduce((n, c) => n + rowTotal(c.calcs) + c.calcNotes.length + rowTotal(c.comparison), 0) + (orphan ? rowTotal(orphan.comparison) : 0),
-      gaps: gapRows(all) + ledgerRows(all) + limitRows(input, module),
+      calculations: all.reduce((n, c) => n + rowTotal(c.calcs), 0),
+      gaps: gapRows(all),
       registers: all.reduce((n, c) => n + tableTotal(c) + c.regNotes.length, 0),
       record: input.run.steps.filter(s => !module || s.module === module).length + inputRows(input, module),
     };
+    // A module whose handoff could not be read has no count of its own to give.
+    if (module && all.some(c => c.unread)) for (const tab of ['trace', 'sources', 'calculations', 'gaps', 'registers']) counts[tab] = 'Not read';
+    return counts;
   }
   function filterBar(input, route) {
     const {context} = input.run;
@@ -329,10 +348,10 @@
   }
   function tabs(input, route, counts) {
     const {context} = input.run;
-    return `<nav class="ev-tabs" aria-label="Evidence kinds">${TABS.map(([id, label]) => `<a class="ev-tab" id="ev-tab-${id}" href="${esc(href(id, route.module, context))}"${id === route.tab ? ' aria-current="page"' : ''}><span>${esc(label)}</span>${counts[id] === undefined ? '' : `<span class="ev-cnt" data-count>${counts[id]}</span>`}</a>`).join('')}</nav>`;
+    return `<nav class="ev-tabs" aria-label="Evidence kinds">${TABS.map(([id, label]) => `<a class="ev-tab" id="ev-tab-${id}" href="${esc(href(id, route.module, context))}"${id === route.tab ? ' aria-current="page"' : ''}><span>${esc(label)}</span>${counts[id] === undefined ? '' : countSpan(counts[id])}</a>`).join('')}</nav>`;
   }
   function guide(input, route, counts) {
-    return `<div class="ev-guide">${TABS.slice(1).map(([id, label, name, blurb]) => `<a class="ev-card ev-guide-card" href="${esc(href(id, route.module, input.run.context))}"><span class="ev-gi">${icon(name)}</span><span class="ev-gt">${esc(label)}<span class="ev-cnt" data-count>${counts[id]}</span></span><span class="ev-gb-text">${esc(blurb)}</span></a>`).join('')}</div>`;
+    return `<div class="ev-guide">${TABS.slice(1).map(([id, label, name, blurb]) => `<a class="ev-card ev-guide-card" href="${esc(href(id, route.module, input.run.context))}"><span class="ev-gi">${icon(name)}</span><span class="ev-gt">${esc(label)}${countSpan(counts[id])}</span><span class="ev-gb-text">${esc(blurb)}</span></a>`).join('')}</div>`;
   }
   const downloadLink = (label, url, named = label) => (url ? `<a class="ev-dl" href="${esc(url)}" download aria-label="Download ${esc(named)}">${icon('download')}<span>${esc(label)}</span></a>` : `<span class="ev-dl off"><span>${esc(label)}</span><span class="ev-muted">No link</span></span>`);
   function foot(input) {
@@ -361,7 +380,10 @@
     };
     current = {rows: all.flatMap(c => c.trace), chips: input.chips, limit: PAGE};
     const label = TABS.find(t => t[0] === tab)[1];
-    return `<div class="ev"><h2 class="ev-title">Audit, tracing and governance</h2>${governance(everyone, input)}${filterBar(input, here)}${tabs(input, here, counts)}<div class="ev-panel" id="ev-panel" role="region" aria-label="${esc(label)}">${panels[tab]()}<div class="ev-empty ev-nomatch" hidden>${icon('search')}<strong>Nothing matches</strong><p>No row of this tab matches the search.</p></div></div>${foot(input)}</div>`;
+    // The modules of this selection whose handoff could not be read are stated at the top of the tabs that would list their content; a bare "nothing listed" beneath would read as a finding.
+    const notes = ['trace', 'calculations', 'gaps', 'sources', 'registers'].includes(tab) && (module || tab !== 'sources' && tab !== 'registers') ? all.filter(c => c.unread).map(c => unreadNote(c, input)).join('') : '';
+    const body = panels[tab]();
+    return `<div class="ev"><h2 class="ev-title">Audit, tracing and governance</h2>${governance(everyone, input)}${filterBar(input, here)}${tabs(input, here, counts)}<div class="ev-panel" id="ev-panel" role="region" aria-label="${esc(label)}">${notes}${notes && body.startsWith('<div class="ev-empty"') ? '' : body}<div class="ev-empty ev-nomatch" hidden>${icon('search')}<strong>Nothing matches</strong><p>No row of this tab matches the search.</p></div></div>${foot(input)}</div>`;
   }
 
   // ---- the page: the rows of the open view, search in place, clicks ----

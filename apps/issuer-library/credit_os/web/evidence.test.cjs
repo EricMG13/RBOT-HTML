@@ -411,8 +411,10 @@ test('method notes: an identifier paragraph is under Registers, a calculation pa
   assert.ok(/<p class="ev-note" data-hay="cp-9 the ev-1 bridge needs review\./.test(registers), 'the note is searchable by the module name and its words');
   // the tab badge is the number of counted elements, which now include the notes (the status note stays searched, not counted)
   assert.equal(hayCount(registers), badgeOf(registers, 'registers'));
-  assert.equal(hayCount(calcs), badgeOf(calcs, 'calculations'));
-  assert.equal(badgeOf(calcs, 'calculations'), 1);
+  // A17 (re-ruled): a tab badge is the number its summary tile shows; the Calculations tile counts calculation rows, so a method note is counted by its own group head, not by the badge.
+  assert.equal(badgeOf(calcs, 'calculations'), 0, 'no calculation row, so the tile and the badge say 0');
+  assert.equal(hayCount(calcs), 1, 'the note is still a counted, searchable element');
+  assert.ok(/<span data-count>1<\/span> method note</.test(calcs), 'its own head counts it');
   assert.equal(badgeOf(registers, 'registers'), 2, 'the Liquidity table as written plus the note');
 });
 
@@ -467,9 +469,10 @@ test('ledger: its rows are on the Gaps tab, as written minus the inter-module co
 test('ledger: the Gaps badge, the group count and the counted [data-hay] elements agree (1 gap + 3 ledger rows)', () => {
   const html = cp8View('gaps'), badge = /id="ev-tab-gaps"[^>]*aria-current="page"><span>[^<]*<\/span><span class="ev-cnt" data-count>(\d+)</.exec(html)[1];
   const panel = html.slice(html.indexOf('id="ev-panel"'), html.indexOf('class="ev-card ev-foot"'));
-  assert.equal(badge, '4');
-  assert.equal(panel.match(/data-hay=/g).length, 4);
-  // Ruling: ledger rows are not gaps. The gap group's head counts the 1 gap, the ledger's own head counts its 3 rows; the badge is both because the panel's counted elements are.
+  // A17 (re-ruled): the badge is the number the Gaps tile shows (gap rows); the 3 ledger rows are counted by their own head. Old pin: badge '4' = the panel's 4 counted elements.
+  assert.equal(badge, '1', 'the badge is Evidence.gapCount, the number of the tile');
+  assert.equal(panel.match(/data-hay=/g).length, 4, 'the panel still lists 1 gap and 3 ledger rows, each counted by its own head');
+  // Ruling: ledger rows are not gaps. The gap group's head counts the 1 gap, the ledger's own head counts its 3 rows.
   assert.ok(/<span data-count>1<\/span> gap</.test(panel) && /<span data-count>3<\/span> ledger rows</.test(panel), 'each head says what its number is');
   assert.ok(!/<span data-count>4<\/span>/.test(panel));
   assert.equal(Evidence.gapCount(cp8Input(), 'CP-8'), 1);
@@ -485,7 +488,8 @@ test('one gap enumeration: a second saved output of the module is counted by the
   const html = Evidence.view(two, {tab: 'gaps', module: 'CP-8'});
   assert.equal(Evidence.gapCount(two, 'CP-8'), 3);
   assert.ok(/<span data-count>3<\/span> gaps</.test(html) && /<span data-count>3<\/span> ledger rows</.test(html));
-  assert.ok(/id="ev-tab-gaps"[^>]*aria-current="page"><span>[^<]*<\/span><span class="ev-cnt" data-count>6</.test(html));
+  // A17 (re-ruled): the badge is the gap count (old pin: 6 = 3 gaps + 3 ledger rows; the ledger's 3 are in its own head, asserted above).
+  assert.ok(/id="ev-tab-gaps"[^>]*aria-current="page"><span>[^<]*<\/span><span class="ev-cnt" data-count>3</.test(html), 'the badge is the number the tile shows');
   // The governance summary's tile is the same count.
   assert.ok(/Gaps recorded<\/div><span class="ev-big" data-count>3</.test(html));
 });
@@ -497,7 +501,10 @@ test('the comparison\'s own figures, built from the two runs\' packs, are listed
   assert.ok(calc.includes('Difference computed by the comparison') && calc.includes('0.31x') && calc.includes('Comparison figures'));
   assert.ok(!other.includes('0.31x'), 'only the named module lists it');
   const badge = /id="ev-tab-calculations"[^>]*aria-current="page"><span>[^<]*<\/span><span class="ev-cnt" data-count>(\d+)</.exec(calc)[1];
-  assert.equal(calc.slice(calc.indexOf('id="ev-panel"'), calc.indexOf('class="ev-card ev-foot"')).match(/data-hay=/g).length, Number(badge));
+  // A17 (re-ruled): the badge counts calculation rows only (the tile's number); the comparison's row is counted by its own head. Old pin: badge = every counted element of the panel.
+  const panel = calc.slice(calc.indexOf('id="ev-panel"'), calc.indexOf('class="ev-card ev-foot"'));
+  assert.equal(panel.match(/data-hay=/g).length, Number(badge) + 1, 'calculation rows by the badge, the one comparison row by its head');
+  assert.ok(/<span data-count>1<\/span> comparison row</.test(panel));
   assert.ok(/<tr data-hay="[^"]*coverage[^"]*0\.31x/.test(calc), 'searchable by row');
 });
 
@@ -528,15 +535,18 @@ test('the comparison is a group of its own in Calculations, headed by its own ro
   assert.ok(/<span data-count>2<\/span> comparison rows</.test(panel) && /<span data-count>2<\/span> calculations</.test(panel), 'each head says what its number is');
   assert.ok(/Calculations recorded<\/div><span class="ev-big" data-count>2</.test(html) && html.includes('rows in the modules’ Calculations tables'), 'the tile counts calculation rows, as its caption says');
   const badge = Number(/id="ev-tab-calculations"[^>]*><span>[^<]*<\/span><span class="ev-cnt" data-count>(\d+)</.exec(html)[1]);
-  assert.equal(badge, 4);
-  assert.equal(panel.match(/data-hay=/g).length, badge, 'badge parity: calculation rows + comparison rows');
+  // A17 (re-ruled): the badge is the tile's number (2 calculation rows); the 2 comparison rows are counted by their own head. Old pin: badge 4 = both.
+  assert.equal(badge, 2, 'the badge is the number the tile shows');
+  assert.equal(panel.match(/data-hay=/g).length, badge + 2, 'badge parity: calculation rows by the badge, comparison rows by their head');
 });
 
 test('a run with a comparison and no entry for the module that holds it lists the figures under a run-level "Comparison" group', () => {
   const html = Evidence.view(withComparison([{id: 'CP-6', outputs: [out('o2', CP6)]}]), {tab: 'calculations', module: null});
   assert.ok(html.includes('>Comparison<') && html.includes('0.31x') && /<span data-count>2<\/span> comparison rows</.test(html));
   const badge = Number(/id="ev-tab-calculations"[^>]*><span>[^<]*<\/span><span class="ev-cnt" data-count>(\d+)</.exec(html)[1]);
-  assert.equal(html.slice(html.indexOf('id="ev-panel"'), html.indexOf('class="ev-card ev-foot"')).match(/data-hay=/g).length, badge);
+  // A17 (re-ruled): no calculation row here, so the badge is 0; the 2 comparison rows are counted by their own head (asserted above).
+  assert.equal(badge, 0);
+  assert.equal(html.slice(html.indexOf('id="ev-panel"'), html.indexOf('class="ev-card ev-foot"')).match(/data-hay=/g).length, 2, 'the comparison rows are still listed and counted by their head');
   assert.ok(!Evidence.view(withComparison([{id: 'CP-6', outputs: [out('o2', CP6)]}]), {tab: 'calculations', module: 'CP-6'}).includes('0.31x'), 'not under another module');
 });
 
@@ -553,4 +563,56 @@ test('A13: tableView draws every cell of a ragged row, the extra cell under an e
   const view = Evidence.tableView({line: 1, headers: ['A', 'Consumer', 'B'], rows: [{line: 2, cells: ['1', 'c', '2', 'EXTRA']}, {line: 3, cells: ['3', 'c', '4']}]});
   assert.deepEqual(view.headers, ['A', 'B', '']);
   assert.deepEqual(view.rows.map(row => row.cells), [['1', '2', 'EXTRA'], ['3', '4', '']]);
+});
+
+// ---- Whole-branch fix wave 2: M6 (a handoff the build could not read) and L1 (a Gaps section with no table, a "None" row).
+const UNREAD = [sec('Unstructured handoff', 1, 1, [text(1, '## Request\nUNREAD-REQUEST-TEXT\n\n## Gaps\n\n| Gap | Effect |\n| --- | --- |\n| Missing schedule | UNREAD-GAP-ROW\n\n## Next module\nUNREAD-NEXT-TEXT')])];
+const withUnread = () => input({modules: [{id: 'CP-2A', outputs: [out('o1', CP2A)]}, {id: 'CP-6', outputs: [out('o2', UNREAD)]}]});
+const unreadView = (tab, module = 'CP-6') => Evidence.view(withUnread(), {tab, module});
+
+test('M6: an unstructured handoff is drawn as no text; the page says it could not be read and links its file; every count for the module reads "Not read", never 0', () => {
+  const STATEMENT = "This module's handoff could not be read into sections. Its file is in the run's downloads.";
+  for (const tab of ['trace', 'calculations', 'gaps', 'sources', 'registers']) {
+    const html = unreadView(tab);
+    assert.ok(!/UNREAD-(REQUEST|GAP-ROW|NEXT)/.test(html), `${tab}: no raw text of the file`);
+    assert.ok(strip(html).replace(/&#39;/g, "'").includes(STATEMENT), `${tab}: the statement`);
+    assert.ok(html.includes('href="../runs/r/CP-6.md?sha256=2" download'), `${tab}: the module's own download link`);
+    assert.ok(new RegExp(`id="ev-tab-${tab}"[^>]*aria-current="page"><span>[^<]*</span><span class="ev-cnt">Not read</span>`).test(html), `${tab}: the badge reads Not read`);
+  }
+  const summary = unreadView('summary');
+  assert.equal((summary.match(/<span class="ev-cnt">Not read<\/span>/g) || []).length, 10, 'the five count tabs, and the five guide cards under them');
+  assert.ok(!/id="ev-tab-record"[^>]*><span>[^<]*<\/span><span class="ev-cnt">Not read/.test(summary), 'the run record is the build\'s own, not the handoff\'s');
+  const gov = Evidence.view(withUnread(), {tab: 'gaps', module: null});
+  assert.ok(gov.includes('aria-label="Committee decision: Not read"'), 'the governance gap bar of the module reads Not read');
+  assert.ok(!/Committee decision: 0 gaps/.test(gov));
+  assert.ok(!gov.includes('UNREAD-'), 'the whole-run tabs draw none of it either');
+  const none = Evidence.view(withUnread(), {tab: 'registers', module: 'CP-6'});
+  assert.ok(!none.includes('This module has no register'), 'a bare "nothing listed" does not stand beside the statement');
+  assert.equal(Evidence.gapCount(withUnread(), 'CP-6'), 0, 'the pure count is unchanged; the page words its state');
+});
+
+test('M6: a module with one readable and one unstructured output keeps its readable content and still reads Not read', () => {
+  const both = input({modules: [{id: 'CP-6', outputs: [out('o2', CP6), out('o3', UNREAD)]}]});
+  const html = Evidence.view(both, {tab: 'gaps', module: 'CP-6'});
+  assert.ok(html.includes('Thin liquidity note') && !html.includes('UNREAD-') && /id="ev-tab-gaps"[^>]*><span>[^<]*<\/span><span class="ev-cnt">Not read</.test(html));
+});
+
+test('L1: a Gaps section that holds text and no table is "Listed as text", not 0; a row whose first cell says None, No, Nil or N/A is not a gap', () => {
+  const bullets = [sec('Findings', 2, 1), sec('Gaps', 2, 10, [text(11, '- Covenant package not read.\n- Facility agreement not parsed.')])];
+  const noneRows = [sec('Findings', 2, 1), sec('Gaps', 2, 10, [table(11, ['Gap', 'Effect'], [['None', 'n/a']])])];
+  const mixed = [sec('Findings', 2, 1), sec('Gaps', 2, 10, [text(11, 'These gaps stay open.'), table(12, ['Gap', 'Effect'], [['**None**.', 'x'], ['N/A', 'x'], ['nil', 'x'], ['No', 'x'], ['Missing lease note', 'High'], ['None of the leases are read', 'x']])])];
+  const run = sections => input({modules: [{id: 'CP-6', outputs: [out('o2', sections)]}]});
+  assert.equal(Evidence.gapCount(run(bullets), 'CP-6'), 0);
+  assert.equal(Evidence.gapCount(run(noneRows), 'CP-6'), 0, 'a None row is not a gap');
+  assert.equal(Evidence.gapCount(run(mixed), 'CP-6'), 2, 'only the two real rows; "None of the leases are read" is a gap');
+  const textual = Evidence.view(run(bullets), {tab: 'gaps', module: 'CP-6'});
+  assert.ok(textual.includes('Listed as text') && !/<span data-count>0<\/span> gaps/.test(textual), 'the group head says how the gaps are written');
+  assert.ok(textual.includes('aria-label="Committee decision: Listed as text"') || textual.includes('CP-6: Listed as text'), 'and so does the governance bar');
+  const nothing = Evidence.view(run(noneRows), {tab: 'gaps', module: 'CP-6'});
+  assert.ok(nothing.includes('None stated') && !/<span data-count>0<\/span> gaps/.test(nothing), 'a table that says only "None" is the module saying so, not a count of 0');
+  assert.ok(nothing.includes('Committee decision: None stated'), 'and so is its governance bar');
+  const noSection = Evidence.view(run([sec('Findings', 2, 1)]), {tab: 'gaps', module: 'CP-6'});
+  assert.ok(Evidence.gapCount(run([sec('Findings', 2, 1)]), 'CP-6') === 0 && !noSection.includes('None stated') && !noSection.includes('Listed as text'), 'a module with no Gaps section keeps the plain zero of the bar');
+  assert.ok(Evidence.view(run([sec('Findings', 2, 1)]), {tab: 'summary', module: null}).includes('Committee decision: 0 gaps'));
+  assert.ok(Evidence.view(run(mixed), {tab: 'gaps', module: 'CP-6'}).includes('<span data-count>2</span> gaps'));
 });

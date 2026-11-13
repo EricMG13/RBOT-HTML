@@ -1242,9 +1242,12 @@ test('metricStrip: a latest cell longer than a figure is text, set at body size 
   assert.ok(html.includes('<p class="strip-v wide">7.50x net') && html.includes('<p class="strip-v">2.1x</p>'), html);
 });
 
-test('findingCell strict (the Forecast page): a file name, hash or scenario id inside text is held back, a module code is not; the default reading is unchanged', () => {
+test('findingCell strict (the Forecast page): a file name, hash or scenario id inside text is held back, a module code is not; the default reading holds the file name and the 32-character hash only', () => {
   const text = 'Annual; K_10.htm.jsonl, pages 71';
-  assert.ok(C.findingCell(text, {}).html !== undefined, 'the module page reading is unchanged');
+  // Re-pointed by the whole-branch ruling (M1): this line used to say the module page reading holds nothing of the text; it now holds the file name too, as the strict reading does.
+  assert.deepEqual(C.findingCell(text, {}), { omitted: true, inEvidence: true }, 'a file name inside a cell is held on every findings page');
+  assert.ok(C.findingCell('Cash flow 9f86d081884c7d65 noted', {}).html !== undefined, 'a 16-character hex string is held only by the strict reading');
+  assert.deepEqual(C.findingCell('Cash flow 9f86d081884c7d65 noted', { strict: true }), { omitted: true, inEvidence: true });
   assert.deepEqual(C.findingCell(text, { strict: true }), { omitted: true, inEvidence: true });
   assert.deepEqual(C.findingCell('Downside is SC1: a rate rise', { strict: true }), { omitted: true, inEvidence: true });
   assert.ok(C.findingCell('CP-1 prints no line', { strict: true }).html !== undefined, 'the page names a module code');
@@ -1486,4 +1489,28 @@ test('B9: labelled run steps are connected steps, each with its state mark first
   const css = require('node:fs').readFileSync(require('node:path').join(__dirname, 'screen.css'), 'utf8');
   assert.ok(/\.steps-l \.step:not\(:last-child\)::after\{[^}]*height:14px/.test(css) && /@container \(min-width:560px\)\{[^]*width:28px!important/.test(css), 'a connector between consecutive steps, vertical when stacked and horizontal across a row');
   assert.ok(/\.steps-l \.step\{[^}]*min-height:44px/.test(css), 'one height for every step');
+});
+
+test('M1(a): a cell holding a file name or a hex string of 32 or more characters is held back with its link, strict or not; a passage is drawn as written', () => {
+  const hex32 = 'd41d8cd98f00b204e9800998ecf8427e', hex31 = hex32.slice(1);
+  for (const ctx of [{}, {strict: true}, {evidenceHref: '#e'}]) {
+    for (const text of ['see NBG_annual-report.PDF, page 41', 'model_v3.json notes', `hash ${hex32} (md5)`, `${hex32}${hex32}`]) assert.deepEqual(C.findingCell(text, ctx), {omitted: true, inEvidence: true}, `${text} ${JSON.stringify(ctx)}`);
+  }
+  assert.ok(C.findingCell(`ratio ${hex31} noted`, {}).html !== undefined, 'a 31-character string is not held by the plain reading');
+  assert.ok(C.findingCell('Under U.S.GAAP rules, 10-K.Item 7, Sep. 2024', {}).html !== undefined, 'ordinary prose with dots stays');
+  const cell = C.recordCards({headers: ['Item', 'Comment'], rows: [{line: 1, cells: ['Net debt', 'see model_v3.json']}]}, {evidenceHref: '#e', key: r => `k${r.line}`});
+  assert.ok(!cell.includes('model_v3') && cell.includes('class="in-ev"'), cell);
+  const passage = C.verdictPanel([{text: 'Management published model_v3.json with the figures.', line: 1}]);
+  assert.ok(passage.includes('model_v3.json'), 'a module-written passage is not read as a cell');
+});
+
+test('M1(b): a table whose audit columns are headed Reference, Where found, Hash, Code draws none of their cells; a findings column of the same words stays', () => {
+  const rows = [['Net debt', '1,390', 'REF-0007', 'table 4, row 12', '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b', 'ROW-17'], ['EBITDA', '331', 'REF-0008', 'model_v3.json', 'd41d8cd98f00b204e9800998ecf8427e', 'ROW-18']];
+  const block = {type: 'table', line: 1, headers: ['Line', 'FY2024', 'Reference', 'Where found', 'Hash', 'Code'], rows: rows.map((cells, i) => ({line: i + 2, cells}))};
+  const html = C.render('records', block, {key: r => `k${r.line}`, evidenceHref: '#e'});
+  for (const hidden of ['REF-0007', 'REF-0008', 'ROW-17', 'ROW-18', 'table 4, row 12', 'model_v3', '9f86d081', 'd41d8cd9']) assert.ok(!html.includes(hidden), `${hidden} is drawn`);
+  assert.ok(html.includes('Net debt') && html.includes('1,390') && html.includes('331'), 'the findings cells stay');
+  const words = {type: 'table', line: 1, headers: ['Item', 'Reference rate', 'Currency code', 'Code'], rows: [{line: 2, cells: ['Loan', 'SONIA plus 3.5%', 'GBP', 'Floating']}, {line: 3, cells: ['Bond', 'Fixed', 'USD', 'Senior']}]};
+  const kept = C.render('records', words, {key: r => `k${r.line}`, evidenceHref: '#e'});
+  for (const text of ['SONIA plus 3.5%', 'GBP', 'Floating', 'Senior', 'Reference rate', 'Currency code']) assert.ok(kept.includes(text), `${text} was held back`);
 });
