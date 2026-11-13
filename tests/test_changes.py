@@ -2928,7 +2928,7 @@ def test_the_post_balance_sheet_table_leaves_the_changes_pack_unchanged(table, w
 # difference rule only, a bare number equal in magnitude to a withheld size is refused (same
 # lines, same exemptions as with a unit). Expectations hand-written. Recorded limits: a bare count
 # equal to a withheld size ("30 limitations" while a difference of 30 is withheld) is refused, and
-# a size written in words ("thirty") is not read.
+# a size written in words is read only by check W (2026-11-13), not by value.
 
 NC_CASH = (
     "| Cash | 300 US$m (FY2023) | 250 US$m (FY2024) | Unresolved "
@@ -3070,18 +3070,6 @@ def test_a_number_starting_a_fact_rows_effect_cell_is_a_figure():
 
 
 @pytest.mark.parametrize(
-    "passage",
-    [
-        "80. Net debt is the largest item.\n\n",
-        "Findings follow.\n\n80. Net debt is the largest item.\n\n",
-        "1. First point.\n80. Net debt is the largest item.\n\n",
-    ],
-)
-def test_a_real_list_item_number_equal_to_a_withheld_size_is_accepted(passage):
-    assert cp8_issues(nd_row(LEVERAGE_ROW, passage), _ndpack()) == ()
-
-
-@pytest.mark.parametrize(
     "sentence",
     [
         "The period ends 30 September 2024.",
@@ -3109,7 +3097,7 @@ def test_the_verdict_words_doubled_in_another_cell_and_the_effect_cell_are_refus
     assert any("Earlier cell" in i and "not comparable" in i for i in found), found
 
 
-# --- the withheld-size limits: wrapped bullets, dates need a year, numbers in words ---------------
+# --- the withheld-size limits: wrapped bullets, dates need a year ---------------------------------
 
 
 def _says(passage, pack=None):
@@ -3133,8 +3121,6 @@ def test_a_number_wrapped_onto_a_line_after_a_bullet_is_a_figure(passage):
     "passage",
     [
         "- item\n1. first sub-item",
-        "Findings.\n\n30. A numbered item.",
-        "1. First.\n30. A numbered item.",
     ],
 )
 def test_a_list_marker_after_a_bullet_one_or_elsewhere_is_no_figure(passage):
@@ -3178,49 +3164,12 @@ def test_a_full_date_on_a_line_hides_no_other_figure():
     assert any("figure 30" in i for i in found), found
 
 
-def _cash_163_pack():
-    pack = _ndpack()
-    pack["net_debt_change"] |= {"change_in_cash": "-163", "current_cash": "747"}
-    return pack
-
-
-@pytest.mark.parametrize(
-    ("sentence", "pack"),
-    [
-        ("Cash fell by thirty.", None),
-        ("Cash fell by THIRTY.", None),
-        ("Net debt is eighty lower.", None),
-        ("Gross debt changed by one hundred and ten.", None),
-        ("Gross debt changed by One Hundred Ten.", None),
-        ("Cash fell by one hundred and sixty-three.", _cash_163_pack()),
-        ("Cash fell by one hundred sixty three.", _cash_163_pack()),
-        ("Cash fell by one hundred sixty-three.", _cash_163_pack()),
-    ],
-)
-def test_a_withheld_size_written_in_words_is_refused(sentence, pack):
-    found = _says(sentence, pack)
-    assert any("difference" in i and "reword" in i for i in found), found
-
-
-def test_a_large_withheld_size_in_words_is_refused():
-    pack = _ndpack()
-    pack["net_debt_change"] |= {"change_in_cash": "-2005", "current_cash": "-1095"}
-    for sentence in ("Cash fell by two thousand five.", "Cash fell by two thousand and five."):
-        assert any("figure 2005" in i for i in _says(sentence, pack)), sentence
-    pack["net_debt_change"] |= {"change_in_cash": "-250000", "current_cash": "-249090"}
-    assert any("figure 250000" in i for i in _says("It fell by two hundred fifty thousand.", pack))
-
-
 @pytest.mark.parametrize(
     "sentence",
     [
-        "Cash fell by forty.",
-        "Cash fell by thirty-one.",
         "The one covenant is tested.",
         "The thirtieth covenant is tested.",
         "A hundred covenants and a dozen facilities.",
-        "Cash fell by thirty point five.",
-        "Cash fell by twenty and forty.",
     ],
 )
 def test_a_number_in_words_that_is_no_withheld_size_is_accepted(sentence):
@@ -3231,17 +3180,6 @@ def test_the_word_one_is_never_read_as_a_size():
     pack = _ndpack()
     pack["net_debt_change"] |= {"change_in_cash": "-1", "current_cash": "909"}
     assert _says("One facility matured, and no one asked.", pack) == ()
-
-
-def test_a_size_in_words_is_accepted_in_its_own_issuer_row():
-    net = (
-        "| Net debt | 6190 US$m (FY2024) | 6110 US$m (FY2024) | Correction "
-        "| Same definition; net debt is eighty lower after the correction. |"
-    )
-    assert cp8_issues(nd_row(LEVERAGE_ROW + "\n" + net), _ndpack()) == ()
-    elsewhere = net.replace("Net debt |", "Refinancing |")
-    found = cp8_issues(nd_row(LEVERAGE_ROW + "\n" + elsewhere), _ndpack())
-    assert any("80" in i and "difference" in i for i in found), found
 
 
 def _cash_pack(change: str, cash: str):
@@ -3283,29 +3221,6 @@ def test_a_decimal_fraction_or_ordinal_in_words_is_not_read_in_part(sentence, pa
 
 
 @pytest.mark.parametrize(
-    ("sentence", "pack", "size"),
-    [
-        ("Cash fell by thirty and second-lien debt was repaid.", None, "30"),
-        ("Cash fell by thirty and first-lien leverage rose.", None, "30"),
-        ("Cash fell by thirty and half the facility was drawn.", None, "30"),
-        (
-            "Gross debt fell by one hundred and ten and a quarter of the notes were repaid.",
-            None,
-            "110",
-        ),
-        ("Cash fell by thirty quarter-on-quarter.", None, "30"),
-        ("Cash fell by thirty second-lien loans.", None, "30"),
-        ("At that point thirty was drawn from cash.", None, "30"),
-        ("Cash showed a thirty-point swing.", None, "30"),
-        ("Cash is point five of the facility.", _cash_pack("-5", "905"), "5"),
-    ],
-)
-def test_a_spelled_size_beside_an_ordinal_looking_word_is_still_read(sentence, pack, size):
-    found = _says(sentence, pack)
-    assert any(f"figure {size} is the difference" in i for i in found), found
-
-
-@pytest.mark.parametrize(
     ("sentence", "pack"),
     [
         ("The thirty-first covenant test.", None),
@@ -3317,12 +3232,6 @@ def test_a_spelled_size_beside_an_ordinal_looking_word_is_still_read(sentence, p
 )
 def test_a_spelled_ordinal_fraction_or_decimal_is_still_not_read(sentence, pack):
     assert _says(sentence, pack) == ()
-
-
-@pytest.mark.parametrize("hyphen", ["‐", "‑", "‒", "–", "—", "―"])
-def test_a_unicode_hyphen_does_not_split_a_spelled_size(hyphen):
-    found = _says(f"Cash fell by thirty{hyphen}five.", _cash_pack("-35", "875"))
-    assert any("figure 35" in i for i in found), found
 
 
 # --- the year problem, the counts and a spelled size across lines (owner, 2026-11-12: "fix 1 and
@@ -3419,7 +3328,6 @@ def test_a_count_beside_a_count_noun_or_a_reference_word_is_no_withheld_size(sen
     "sentence",
     [
         "Cash fell by 30.",
-        "Cash fell by thirty.",
         "A change of 30 in cash.",
         "30 new modules ran.",
         "Cash fell by 30 quarter-on-quarter.",
@@ -3430,19 +3338,6 @@ def test_a_count_beside_a_count_noun_or_a_reference_word_is_no_withheld_size(sen
 def test_a_bare_number_beside_no_count_noun_is_still_a_withheld_size(sentence):
     found = _hold(sentence)
     assert any("figure 30 is the difference" in i for i in found), found
-
-
-@pytest.mark.parametrize(
-    "sentence",
-    [
-        "Gross debt changed by one hundred\nand ten.",
-        "Gross debt changed by one hundred and\nten.",
-        "Gross debt changed by one\nhundred ten.",
-    ],
-)
-def test_a_spelled_size_broken_across_lines_is_read_and_reported_once(sentence):
-    found = [i for i in _hold(sentence) if "figure 110" in i]
-    assert len(found) == 1, found
 
 
 @pytest.mark.parametrize(
@@ -3522,9 +3417,7 @@ def test_an_iso_date_is_exempt_as_a_whole_after_a_period_marker_or_month(sentenc
     "sentence",
     [
         "Cash shows a 30 difference between the runs.",
-        "Cash shows a thirty difference.",
         "Cash records a 30 change.",
-        "Cash records a thirty change.",
         "Cash shows 30 differences.",
     ],
 )
@@ -3534,20 +3427,11 @@ def test_change_and_difference_are_not_count_nouns(sentence):
 
 
 @pytest.mark.parametrize(
-    "sentence", ["Both runs used thirty\nmodules.", "Both runs used 30\nmodules."]
-)
-def test_a_count_noun_on_the_next_line_of_the_paragraph_makes_a_count(sentence):
-    assert _hold(sentence) == ()
-
-
-@pytest.mark.parametrize(
     "text",
     [
         "Cash fell by 30\n\nmodules.",
         "Cash fell by 30\n- modules",
         "Cash fell by 30\n### modules",
-        "Cash fell by thirty\n| modules |",
-        "Cash fell by thirty\n\nmodules.",
     ],
 )
 def test_a_count_noun_over_a_blank_line_heading_row_or_item_makes_no_count(text):
@@ -4326,3 +4210,88 @@ def test_a_value_cell_the_refusal_states_can_be_written_when_the_pack_holds_a_do
     assert cell_issues("6261 US$m (FY2024 reported)", "3.60x (FY2024)", pack) == []
     (issue,) = cell_issues("6261 US$m (FY2024)", "3.60x (FY2024)", pack)
     assert "write exactly `6261 US$m (FY2024 reported)`" in issue
+
+
+# --- C3: a number word is read by one form check (W), not by a spelled-number grammar -----------
+# `_ndpack` withholds the net debt change's cash difference, 30, and the net debt difference, 80.
+
+
+def _w_issues(passage):
+    return cp8_issues(nd_row(LEVERAGE_ROW, passage + "\n\n"), _ndpack())
+
+
+W_REFUSAL = (
+    "a difference is withheld in this handoff, so write every amount, ratio and difference in "
+    "digits with its unit; a number word is only for a count of things (`three modules`). If the "
+    "figure is a difference the pack withholds, leave it out."
+)
+
+
+@pytest.mark.parametrize(
+    ("sentence", "phrase"),
+    [
+        ("Cash fell by thirty million.", "fell by thirty million"),
+        ("Cash fell thirty percent.", "fell thirty percent"),
+        ("Cash was about thirty basis points lower.", "thirty basis points"),
+        ("Leverage fell by twenty per cent.", "fell by twenty per cent"),
+        ("Leverage rose by roughly four x.", "rose by roughly four x"),
+        ("Cash is twelve US$ lower.", "twelve US$"),
+        ("Cash was nearly ninety USD.", "ninety USD"),
+        ("Leverage is two hundred bps wider.", "hundred bps"),
+        ("Cash is Seventy Five Million.", "Five Million"),
+    ],
+)
+def test_a_number_word_with_a_unit_or_after_a_direction_word_is_refused_with_the_form(
+    sentence, phrase
+):
+    found = _w_issues(sentence)
+    assert any(f"`{phrase}`: {W_REFUSAL}" in i for i in found), found
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "Three modules ran.",
+        "Three UK remains the tenant.",
+        "Six Flags is the comparator.",
+        "The lender added three covenants.",
+        "Leverage was six times covered.",
+        "The two runs differ.",
+    ],
+)
+def test_a_number_word_that_is_a_name_or_a_count_is_accepted(sentence):
+    assert _w_issues(sentence) == ()
+
+
+def test_a_number_word_is_not_refused_when_no_difference_is_withheld():
+    found = cp8_issues(with_row(LEVERAGE_ROW, "Revenue rose by thirty percent.\n\n"), PACK)
+    assert found == ()
+
+
+def test_a_size_in_words_with_neither_a_unit_nor_a_direction_word_passes_the_known_limit():
+    # The residual limit of E3: "thirty" with no unit and no direction word is no longer read.
+    assert _w_issues("The gap is thirty.") == ()
+
+
+def test_a_digit_count_beside_a_count_noun_is_accepted_and_a_new_noun_is_refused():
+    assert _w_issues("There are 30 modules.") == ()
+    found = _w_issues("There are 30 new modules.")
+    assert any("figure 30" in i and "difference of Cash" in i for i in found), found
+
+
+def test_a_numbered_list_item_number_equal_to_a_withheld_size_is_refused_with_a_repair():
+    found = _w_issues("30. Liquidity is unchanged.")
+    assert any("figure 30" in i and "difference of Cash" in i and "reword" in i for i in found), (
+        found
+    )
+    assert _w_issues("- Liquidity is unchanged.") == ()
+
+
+def test_a_count_and_its_noun_on_two_lines_is_no_count():
+    found = _w_issues("Liquidity changed across 30\nmodules in all.")
+    assert any("figure 30" in i and "difference of Cash" in i for i in found), found
+
+
+@pytest.mark.parametrize("sentence", ["It ran at 30 September 2024.", "It ran on 2024-09-30."])
+def test_a_written_date_beside_a_withheld_size_is_no_size(sentence):
+    assert _w_issues(sentence) == ()

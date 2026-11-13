@@ -60,7 +60,6 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from collections import Counter
 from collections.abc import Mapping, Sequence
 from decimal import Decimal
 from typing import Any
@@ -890,10 +889,6 @@ def _may_print(
     return frozenset()
 
 
-_LIST_ITEM = re.compile(r"\s*(?:[-*+]|\d+[.)])\s")
-_BULLET_ITEM = re.compile(r"\s*[-*+]\s")
-_LIST_NUMBER = re.compile(r"^\s*\d+[.)](?=\s)")
-_FIRST_NUMBER = re.compile(r"\s*1[.)]\s")
 _DAY = r"\d{1,2}(?:st|nd|rd|th)?\b"
 _YEAR = r"(?:19|20)\d{2}\b(?![.,]\d)"
 # A date is complete only with its four-digit year: `30 September 2024`, `September 30, 2024`. A day
@@ -902,153 +897,14 @@ _DATE = re.compile(
     rf"(?<![\w.,])(?:{_DAY}\s+{_MONTH},?\s+{_YEAR}|\b{_MONTH}\s+{_DAY},?\s+{_YEAR})",
     re.IGNORECASE,
 )
-_UNITS = {
-    word: n
-    for n, word in enumerate(
-        (
-            "one",
-            "two",
-            "three",
-            "four",
-            "five",
-            "six",
-            "seven",
-            "eight",
-            "nine",
-            "ten",
-            "eleven",
-            "twelve",
-            "thirteen",
-            "fourteen",
-            "fifteen",
-            "sixteen",
-            "seventeen",
-            "eighteen",
-            "nineteen",
-        ),
-        1,
-    )
-}
-_TENS = {
-    word: 10 * n
-    for n, word in enumerate(
-        ("twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"), 2
-    )
-}
-_HYPHENS = "-\u2010-\u2015"
-_WORD_RUN = re.compile(rf"[A-Za-z]+(?:[{_HYPHENS}\s]+[A-Za-z]+)*")
-_ORDINALS = frozenset(
-    ("first", "second", "third", "fifth", "eighth", "ninth", "twelfth", "half", "halve", "quarter")
-)
-
-
-def _ordinal(word: str) -> bool:
-    """Whether `word` is an ordinal or fraction word: `first`, `fourth`, `thirtieth`, `thirds`."""
-    word = word.removesuffix("s")
-    if word in _ORDINALS:
-        return True
-    if word.endswith("ieth"):
-        return word[:-4] + "y" in _TENS
-    return word.endswith("th") and word[:-2] in {*_UNITS, *_TENS, "hundred", "thousand"}
-
-
-def _number_word(word: str) -> bool:
-    return word in _UNITS or word in _TENS or word in ("zero", "hundred", "thousand")
-
-
-def _decimal(words: Sequence[str], i: int, j: int) -> bool:
-    """Whether the number in `words[i:j]` sits in `number-word point number-word` on either side."""
-    after = words[j : j + 2]
-    before = words[max(i - 2, 0) : i]
-    return (len(after) == 2 and after[0] == "point" and _number_word(after[1])) or (
-        len(before) == 2 and before[1] == "point" and _number_word(before[0])
-    )
-
-
-def _part_of_fraction(words: Sequence[str], joined: Sequence[bool], i: int, j: int) -> bool:
-    """Whether the number in `words[i:j]` is part of a decimal, ordinal or fraction. `joined[k]`
-    says `words[k]` is hyphen-joined to the next word. Not read: a decimal (`zero point five`,
-    both sides); an ordinal word ending it (`thirty-first`) unless it is joined on to a further
-    word (`second-lien`); `and` plus an ordinal only after `hundred` or `thousand` (`one hundred
-    and first`); `and a half` / `and a quarter` not followed by `of`."""
-
-    def ends(k: int) -> bool:
-        return k < len(words) and _ordinal(words[k]) and not joined[k]
-
-    big = "hundred" in words[i:j] or "thousand" in words[i:j]
-    return (
-        _decimal(words, i, j)
-        or ends(j)
-        or (big and words[j : j + 1] == ["and"] and ends(j + 1))
-        or (
-            words[j : j + 3] in (["and", "a", "half"], ["and", "a", "quarter"])
-            and words[j + 3 : j + 4] != ["of"]
-        )
-    )
-
-
-def _starts_list_item(lines: Sequence[str], i: int) -> bool:
-    """Whether line `i` can begin a list item: the first line of the passage, or one after a blank
-    line, a heading or a list item. A line that continues a paragraph cannot, and after a bulleted
-    item only `1.` can (CommonMark: a list not starting at 1 cannot interrupt a paragraph)."""
-    if i == 0:
-        return True
-    before = lines[i - 1]
-    if _BULLET_ITEM.match(before):
-        return bool(_FIRST_NUMBER.match(lines[i]))
-    return not before.strip() or bool(_HEADING.match(before) or _LIST_ITEM.match(before))
-
-
-def _group(words: Sequence[str], i: int) -> tuple[int, int]:
-    """(value, next index) of the words from `i` that spell a number below 1,000: `[N hundred]
-    [and] [tens [unit] | 1-19]`. Value 0 and the same index when none."""
-    start, value = i, 0
-    if i + 1 < len(words) and words[i] in _UNITS and words[i + 1] == "hundred":
-        value, i = _UNITS[words[i]] * 100, i + 2
-        if (
-            i + 1 < len(words)
-            and words[i] == "and"
-            and (words[i + 1] in _UNITS or words[i + 1] in _TENS)
-        ):
-            i += 1
-    if i < len(words) and words[i] in _TENS:
-        value, i = value + _TENS[words[i]], i + 1
-        if i < len(words) and words[i] in _UNITS and _UNITS[words[i]] < 10:
-            value, i = value + _UNITS[words[i]], i + 1
-    elif i < len(words) and words[i] in _UNITS:
-        value, i = value + _UNITS[words[i]], i + 1
-    return (value, i) if i > start else (0, start)
-
-
-def _spelled_number(words: Sequence[str], i: int) -> tuple[int, int]:
-    """(value, next index) of the whole number in English words that starts at `i`, up to 999,999
-    (`two thousand five`); value 0 and the same index when none starts there."""
-    value, j = _group(words, i)
-    if j < len(words) and words[j] == "thousand" and value:
-        value, j = value * 1000, j + 1
-        if j + 1 < len(words) and words[j] == "and" and _group(words, j + 1)[0]:
-            j += 1
-        rest, j = _group(words, j)
-        value += rest
-    return (value, j) if j > i else (0, i)
-
-
 _COUNT_NOUN = (
     r"(?:facilit(?:y|ies)|subsidiar(?:y|ies)|(?:module|run|measure|source|period|row|item|document"
     r"|filing|page|section|table|finding|limitation|assumption|conclusion"
     r"|handoff|issuer|lender|tranche|covenant|quarter|month|year|week|day)s?)"
 )
 _REFERENCES = frozenset(("page", "note", "section", "table", "row", "item", "step", "appendix"))
-_COUNT_AFTER = re.compile(rf"\s+{_COUNT_NOUN}(?![{_HYPHENS}\w])", re.IGNORECASE)
+_COUNT_AFTER = re.compile(rf"\s+{_COUNT_NOUN}(?![\u2010-\u2015\w-])", re.IGNORECASE)
 _REFERENCE_BEFORE = re.compile(rf"\b(?:{'|'.join(_REFERENCES)})\s+$", re.IGNORECASE)
-
-
-def _counted_words(words: Sequence[str], joined: Sequence[bool], i: int, j: int) -> bool:
-    """Whether the number in `words[i:j]` is a count: directly followed by a count noun (not joined
-    to it, or the noun to a further word by a hyphen), or directly after a reference word."""
-    noun = j < len(words) and not joined[j - 1] and not joined[j]
-    after = noun and re.fullmatch(_COUNT_NOUN, words[j]) is not None
-    return after or (i > 0 and not joined[i - 1] and words[i - 1] in _REFERENCES)
 
 
 def _counted(text: str, figure: Figure) -> bool:
@@ -1059,91 +915,36 @@ def _counted(text: str, figure: Figure) -> bool:
     )
 
 
-def _spelled(line: str) -> list[Decimal]:
-    """The whole numbers from two up that the line writes in English words, any case, hyphenated or
-    spaced (any Unicode hyphen). Not read: `one` alone, `a hundred`, `a dozen`, and a part of a
-    decimal, fraction or ordinal."""
-    found: list[Decimal] = []
-    for run in _WORD_RUN.finditer(line):
-        words = re.findall(r"[a-z]+", run[0].lower())
-        joined = [
-            bool(re.search(rf"[{_HYPHENS}]", g)) for g in re.findall(r"[^a-z]+", run[0].lower())
-        ]
-        joined.append(False)
-        i = 0
-        while i < len(words):
-            value, j = _spelled_number(words, i)
-            if j == i:
-                i += 1
-                continue
-            if (
-                value >= 2
-                and not _part_of_fraction(words, joined, i, j)
-                and not _counted_words(words, joined, i, j)
-            ):
-                found.append(Decimal(value))
-            i = j
-    return found
-
-
-def _bare(line: str, *, listed: bool) -> str:
-    """The line as the bare-number reading of the withheld-difference rule (K9) takes it: module
-    codes blanked and a leading list number blanked when `listed` (the line begins a list item,
-    never a table cell). Complete dates are blanked by the caller, for both readings."""
-    if listed:
-        line = _LIST_NUMBER.sub(_blanks, line)
-    return _MODULE.sub(_blanks, line)
-
-
 def _blanks(match: re.Match[str]) -> str:
     return " " * len(match[0])
 
 
-_TAIL_RUN = re.compile(rf"[A-Za-z]+(?:[{_HYPHENS}\s]+[A-Za-z]+)*\s*$")
-_HEAD_RUN = re.compile(rf"\s*[A-Za-z]+(?:[{_HYPHENS}\s]+[A-Za-z]+)*")
+# Check W: when a difference is withheld, an amount, ratio or difference is written in digits with
+# its unit (`two` to `nineteen`, the tens, `hundred` and `thousand` are number words). A number word
+# directly before a unit, or after a direction word (a count noun after it makes it a count), is
+# refused. A size in words with neither is not read: a known limit.
+_NUMBER_WORD = (
+    r"(?:two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen"
+    r"|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety"
+    r"|hundred|thousand)"
+)
+_WRITTEN_UNIT = (
+    r"\s*(?P<unit>%|US\$|(?:million|billion|thousand|percent|per cent|basis points?|bps?|x|USD|EUR"
+    r"|GBP|dollars|euros|pounds)\b)"
+)
+_AFTER_DIRECTION = rf"(?P<lead>\b(?:{_UP}|{_DOWN})\b\s+(?:by\s+)?(?:(?:about|roughly|nearly)\s+)?)"
+_WORDED = re.compile(rf"{_AFTER_DIRECTION}?\b{_NUMBER_WORD}\b(?:{_WRITTEN_UNIT})?", re.IGNORECASE)
 
 
-def _words_of(run: str) -> list[str]:
-    return re.findall(r"[a-z]+", run.lower())
-
-
-def _number_edge(words: Sequence[str], *, end: bool) -> bool:
-    """Whether `words` end (or begin) inside a spelled number: a number word, or `and` by one."""
-    if not words:
-        return False
-    word, near = (words[-1], words[-2:-1]) if end else (words[0], words[1:2])
-    return _number_word(word) or (word == "and" and bool(near) and _number_word(near[0]))
-
-
-def _paragraph_continues(lines: Sequence[str], i: int) -> bool:
-    """Whether line `i + 1` continues the paragraph line `i` is in: neither is blank, a heading or a
-    table row, and the next does not start a list item."""
-    here, after = lines[i].strip(), lines[i + 1].strip()
-    if not here or not after or after.startswith("|") or here.startswith("|"):
-        return False
-    if _HEADING.match(lines[i]) or _HEADING.match(lines[i + 1]):
-        return False
-    item = _BULLET_ITEM.match(lines[i + 1]) or (
-        _LIST_ITEM.match(lines[i + 1]) and _starts_list_item(lines, i + 1)
-    )
-    return not item
-
-
-def _across_lines(lines: Sequence[str], i: int) -> list[Decimal]:
-    """The numbers in words that line `i` shares with line `i + 1` of the same paragraph (`one
-    hundred` / `and ten`): read from the two runs of words joined, those not already read in either
-    line alone."""
-    if i + 1 >= len(lines) or not _paragraph_continues(lines, i):
-        return []
-    tail, head = _TAIL_RUN.search(lines[i]), _HEAD_RUN.match(lines[i + 1])
-    if not tail or not head:
-        return []
-    if not (
-        _number_edge(_words_of(tail[0]), end=True) and _number_edge(_words_of(head[0]), end=False)
-    ):
-        return []
-    whole = Counter(_spelled(f"{tail[0].rstrip()} {head[0].strip()}"))
-    return list((whole - Counter(_spelled(tail[0])) - Counter(_spelled(head[0]))).elements())
+def _worded_issues(line: str) -> list[str]:
+    return [
+        f"`{' '.join(m[0].split())}`: a difference is withheld in this handoff, so write every "
+        "amount, ratio and difference in digits with its unit; a number word is only for a count "
+        "of things (`three modules`). If the figure is a difference the pack withholds, leave it "
+        "out."
+        for m in _WORDED.finditer(line)
+        if m["unit"] or (m["lead"] and not _COUNT_AFTER.match(line, m.end()))
+    ]
 
 
 def _header_rows(lines: Sequence[str]) -> frozenset[int]:
@@ -1159,22 +960,6 @@ def _header_rows(lines: Sequence[str]) -> frozenset[int]:
         for i in range(len(lines) - 1)
         if lines[i].strip().startswith("|") and separator(lines[i + 1])
     )
-
-
-def _next_noun(lines: Sequence[str], i: int) -> str:
-    """The count noun that starts line `i + 1` of the paragraph line `i` is in, else nothing."""
-    if i + 1 >= len(lines) or not _paragraph_continues(lines, i):
-        return ""
-    noun = _COUNT_AFTER.match(f" {lines[i + 1].lstrip()}")
-    return noun[0].strip() if noun else ""
-
-
-def _bare_sizes(lines: Sequence[str], i: int, bare_line: str, *, header: bool) -> list[Decimal]:
-    """The sizes the bare-number reading takes from line `i`: its digits and its numbers in words
-    (also those continued on the next line), but a count (`_counted`, `_counted_words`)."""
-    counted = f"{bare_line} {_next_noun(lines, i)}"
-    digits = [f.size for f in _figures(bare_line, header=header) if not _counted(counted, f)]
-    return [*digits, *_spelled(counted), *_across_lines(lines, i)]
 
 
 def _passage_issues(
@@ -1226,9 +1011,13 @@ def _passage_issues(
             continue
         line = _DATE.sub(_blanks, line)
         figures = [f.size for f in _figures(line, counts=False, header=i in headers)]
-        listed = not row and _starts_list_item(lines, i)
         read = line if whole is None else _DATE.sub(_blanks, whole)
-        bare = _bare_sizes(lines, i, _bare(read, listed=listed), header=i in headers)
+        bare_line = _MODULE.sub(_blanks, read)
+        bare = [
+            f.size for f in _figures(bare_line, header=i in headers) if not _counted(bare_line, f)
+        ]
+        if kept:
+            issues += _worded_issues(read)
         for size in dict.fromkeys([*figures, *bare]):
             if size in sizes:
                 issues.append(
