@@ -9,7 +9,7 @@ One run per setting, so differences may be run-to-run variation rather than effo
 - Same credit conclusion in both runs: Requires More Work, relative value Unclear, no size. The same
   core figures, and no wrong shared figure was found in either run.
 - High effort cost 1.32x (USD 11.37 vs 8.62) and took 1.40x the model time (95 vs 68 minutes).
-- High was judged better in 7 of 13 modules, medium in none, no material difference in 4, and CP-5 a
+- High was judged better in 9 of 13 modules, medium in none, no material difference in 3, and CP-5 a
   split. The gain is evidence a committee would use, not a different view. Most of it traces to one
   figure medium did not use: next year's scheduled interest of USD 1,524 million.
 - Medium made two analytical errors that travelled downstream; high made none of that kind, but it
