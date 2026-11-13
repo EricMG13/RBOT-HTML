@@ -107,7 +107,8 @@
     const mono = view.headers.map(header => ['source', 'id'].includes(shapes.columnKind(header)));
     const head = view.headers.map((header, at) => `<th scope="col" class="${numeric[at] ? 'num' : ''}${mono[at] ? ' mono' : ''}">${esc(header)}</th>`).join('');
     const body = view.rows.map(row => `<tr ${counted === 'rows' ? 'data-hay' : 'data-find'}="${hay(name, row.cells.join(' '))}">${row.cells.map((cell, at) => `<td class="${numeric[at] ? 'num ' : ''}${mono[at] ? 'mono ' : ''}${cell.length > 60 ? 'wide' : ''}">${rich(cell)}</td>`).join('')}</tr>`).join('');
-    return `<div class="ev-tbl" role="region" aria-label="${esc(caption)}" tabindex="0" data-group${counted === 'table' ? ` data-hay="${hay(name, view.headers.join(' '), view.rows.map(r => r.cells.join(' ')).join(' '))}"` : ''}><table><caption class="sr-only">${esc(caption)}</caption><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+    const tableHead = hay(name, caption, view.headers.join(' '));
+    return `<div class="ev-tbl" role="region" aria-label="${esc(caption)}" tabindex="0" data-group data-head="${tableHead}"${counted === 'table' ? ` data-hay="${tableHead}"` : ''}><table><caption class="sr-only">${esc(caption)}</caption><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
   }
   const noteMarkup = (text, name) => `<p class="ev-note" data-find="${hay(name, text)}">${rich(text)}</p>`;
   const moduleHead = (c, n, one, many) => `<div class="ev-grp-h"><span>${esc(c.name)}</span><span class="ev-cd">${esc(c.id)}</span><span class="ev-ct"><span data-count>${n}</span> ${n === 1 ? one : many}</span></div>`;
@@ -164,7 +165,7 @@
   function calculationsPanel(all) {
     const groups = all.filter(c => c.calcs.length);
     if (!groups.length) return empty('Calculations', 'No calculation table is listed for this selection.');
-    return groups.map(c => `<section class="ev-grp">${moduleHead(c, rowTotal(c.calcs), 'calculation', 'calculations')}${c.calcs.map(e => `${subHead(e.label)}${e.notes.map(n => noteMarkup(n, c.name)).join('')}${e.tables.map(t => tableMarkup(t, `${c.name}: ${e.heading}`, c.name, 'rows')).join('')}`).join('')}</section>`).join('');
+    return groups.map(c => `<section class="ev-grp" data-group>${moduleHead(c, rowTotal(c.calcs), 'calculation', 'calculations')}${c.calcs.map(e => `${subHead(e.label)}${e.notes.map(n => noteMarkup(n, c.name)).join('')}${e.tables.map(t => tableMarkup(t, `${c.name}: ${e.heading}`, c.name, 'rows')).join('')}`).join('')}</section>`).join('');
   }
   const SEVERITY = {high: 3, medium: 2, low: 1};
   // A table of a gaps section is a list of gaps: a title, the other cells as fields, and a three-segment meter where the table has a severity column.
@@ -180,7 +181,7 @@
   function gapsPanel(all) {
     const groups = all.filter(c => c.gaps.length);
     if (!groups.length) return empty('Gaps', 'No gap is listed for this selection.');
-    return groups.map(c => `<section class="ev-grp">${moduleHead(c, rowTotal(c.gaps), 'gap', 'gaps')}${c.gaps.map(e => `${subHead(e.label)}${e.notes.map(n => noteMarkup(n, c.name)).join('')}${e.tables.map(t => gapCards(t, c)).join('')}`).join('')}</section>`).join('');
+    return groups.map(c => `<section class="ev-grp" data-group>${moduleHead(c, rowTotal(c.gaps), 'gap', 'gaps')}${c.gaps.map(e => `${subHead(e.label)}${e.notes.map(n => noteMarkup(n, c.name)).join('')}${e.tables.map(t => gapCards(t, c)).join('')}`).join('')}</section>`).join('');
   }
   function registerGroup(title, n, inner) {
     return `<details class="ev-reg" open data-group><summary>${esc(title)}<span class="ev-cnt"><span data-count>${n}</span></span><span class="ev-ch">${icon('chevron-down')}</span></summary>${inner}</details>`;
@@ -206,10 +207,10 @@
   function recordPanel(input, module) {
     const {run, deps} = input, r = run.evidence.record;
     const steps = run.steps.filter(s => !module || s.module === module);
-    const changed = run.methodChanges.length ? `<div class="ev-sub-h">Methods changed since this run</div><ul class="ev-mc-list">${run.methodChanges.map(line => `<li data-find="${hay(deps.methodChange(line))}">${icon('git-compare')}<span class="mono">${esc(deps.methodChange(line))}</span></li>`).join('')}</ul>` : '';
-    const hashes = r.hashes.length ? `<ul class="ev-hlist ev-card">${r.hashes.map(h => `<li data-find="${hay(deps.hashLabel(h.name), h.name, h.sha256)}"><div><div class="ev-nm">${esc(deps.hashLabel(h.name))}</div><code>${esc(shownOrNot(h.sha256))}</code></div>${h.sha256 ? copyButton(h.sha256, `hash of ${deps.hashLabel(h.name)}`) : ''}</li>`).join('')}</ul>` : '<p class="ev-intro">The run records no hash.</p>';
+    const changed = run.methodChanges.length ? `<div class="ev-sub-h">Methods changed since this run</div><ul class="ev-mc-list" data-group>${run.methodChanges.map(line => `<li data-find="${hay(deps.methodChange(line))}">${icon('git-compare')}<span class="mono">${esc(deps.methodChange(line))}</span></li>`).join('')}</ul>` : '';
+    const hashes = r.hashes.length ? `<ul class="ev-hlist ev-card" data-group>${r.hashes.map(h => `<li data-find="${hay(deps.hashLabel(h.name), h.name, h.sha256)}"><div><div class="ev-nm">${esc(deps.hashLabel(h.name))}</div><code>${esc(shownOrNot(h.sha256))}</code></div>${h.sha256 ? copyButton(h.sha256, `hash of ${deps.hashLabel(h.name)}`) : ''}</li>`).join('')}</ul>` : '<p class="ev-intro">The run records no hash.</p>';
     const sent = r.instructions.filter(i => !module || i.module === module);
-    const instructions = !r.instructions.length ? '<p class="ev-intro">The run records no instructions.</p>' : !sent.length ? '<p class="ev-intro">No instructions recorded for this module.</p>' : `<ul class="ev-hlist ev-card">${sent.map(i => `<li data-find="${hay(deps.moduleTitle(i.module), 'instructions')}"><div><div class="ev-nm">${i.href ? `<a class="ev-link" href="${esc(i.href)}" download aria-label="Download ${esc(deps.moduleTitle(i.module))} instructions">${esc(deps.moduleTitle(i.module))} instructions${icon('download')}</a>` : `${esc(deps.moduleTitle(i.module))} instructions <span class="ev-muted">No link</span>`}</div>${i.sha256 ? `<code>${esc(i.sha256)}</code>` : ''}</div>${i.sha256 ? copyButton(i.sha256, `hash of ${deps.moduleTitle(i.module)} instructions`) : ''}</li>`).join('')}</ul>`;
+    const instructions = !r.instructions.length ? '<p class="ev-intro">The run records no instructions.</p>' : !sent.length ? '<p class="ev-intro">No instructions recorded for this module.</p>' : `<ul class="ev-hlist ev-card" data-group>${sent.map(i => `<li data-find="${hay(deps.moduleTitle(i.module), 'instructions')}"><div><div class="ev-nm">${i.href ? `<a class="ev-link" href="${esc(i.href)}" download aria-label="Download ${esc(deps.moduleTitle(i.module))} instructions">${esc(deps.moduleTitle(i.module))} instructions${icon('download')}</a>` : `${esc(deps.moduleTitle(i.module))} instructions <span class="ev-muted">No link</span>`}</div>${i.sha256 ? `<code>${esc(i.sha256)}</code>` : ''}</div>${i.sha256 ? copyButton(i.sha256, `hash of ${deps.moduleTitle(i.module)} instructions`) : ''}</li>`).join('')}</ul>`;
     const byModule = new Map();
     for (const call of r.calls) { if (!module || call.module === module) byModule.set(call.module, [...(byModule.get(call.module) || []), call]); }
     const calls = !r.calls.length ? '<p class="ev-intro">The run records no model call.</p>' : [...byModule].map(([code, list]) => `<details class="ev-call" data-group><summary>${esc(deps.moduleTitle(code))}<span class="ev-c">${count(list.length, 'call', 'calls')}</span><span class="ev-ch">${icon('chevron-down')}</span></summary>${tableMarkup({headers: ['Attempt', 'Started', 'HTTP status', 'Error', 'Settled (USD)'], rows: list.map(c => ({cells: [c.attempt, c.started, c.http_status, c.error_class, c.settled_usd].map(shownOrNot)}))}, `Model calls of ${deps.moduleTitle(code)}`, deps.moduleTitle(code))}</details>`).join('') || empty('Model calls', 'No model call is listed for this selection.');
@@ -254,7 +255,7 @@
     const {context} = input.run;
     const chips = [['all', null, 'All'], ...input.modules.map(m => [m.id, m.id, input.deps.moduleTitle(m.id)])].map(([id, code, label]) => `<a class="ev-fc" id="ev-mod-${esc(id)}" href="${esc(href(route.tab, code, context))}"${(code || null) === (route.module || null) ? ' aria-current="true"' : ''}>${esc(label)}</a>`).join('');
     const off = route.tab === 'summary';
-    return `<section class="ev-card ev-fbar" aria-label="Filter evidence"><label class="ev-search"><span class="sr-only">Search this tab</span>${icon('search')}<input type="search" id="ev-q" placeholder="${off ? 'Choose a tab to search it' : 'Search this tab'}" autocomplete="off"${off ? ' disabled' : ''}></label><p class="ev-match" role="status" hidden></p><nav class="ev-fchips" aria-label="Module">${chips}</nav></section>`;
+    return `<section class="ev-card ev-fbar" aria-label="Filter evidence"><label class="ev-search"><span class="sr-only">Search this tab</span>${icon('search')}<input type="search" id="ev-q" placeholder="${off ? 'Choose a tab to search it' : 'Search this tab'}" autocomplete="off"${off ? ' disabled' : ''}></label><p class="ev-match" role="status"></p><nav class="ev-fchips" aria-label="Module">${chips}</nav></section>`;
   }
   function tabs(input, route, counts) {
     const {context} = input.run;
@@ -295,32 +296,45 @@
 
   // ---- the page: the rows of the open view, search in place, clicks ----
   let current = {rows: [], chips: {}, limit: PAGE};
-  // Which rows a query shows: the first `limit` that match, in order. `remaining` is how many matches are held back.
-  function visibleFlags(hays, query, limit) {
-    const q = String(query).trim().toLowerCase();
-    let matches = 0;
-    const shown = hays.map(h => {
-      if (q && !h.includes(q)) return false;
-      matches += 1;
-      return matches <= limit;
+  const squash = text => String(text).toLowerCase().replace(/\s+/g, ' ').trim();
+  // One level of matching. An item is the smallest listed unit and matches when its own text contains the query. A table is shown when one of its
+  // rows matches (only those rows) or when its head (caption, module name, headers) matches (every row, counted once). A match never spans two rows.
+  // `desc` = {tables: [{head, rows: [text]}], items: [text]}. Items beyond `limit` are held back (trace rows) and counted in `remaining`.
+  function searchPlan(desc, query, limit = Infinity) {
+    const q = squash(query);
+    if (!q) return {empty: true, matches: 0, remaining: 0, items: desc.items.map(() => true), tables: desc.tables.map(t => ({show: true, rows: t.rows.map(() => true)}))};
+    let found = 0;
+    const items = desc.items.map(text => { if (!squash(text).includes(q)) return false; found += 1; return found <= limit; });
+    const remaining = Math.max(0, found - limit);
+    let matches = found;
+    const tables = desc.tables.map(table => {
+      if (squash(table.head).includes(q)) { matches += 1; return {show: true, rows: table.rows.map(() => true)}; }
+      const rows = table.rows.map(row => squash(row).includes(q));
+      const n = rows.filter(Boolean).length;
+      matches += n;
+      return {show: n > 0, rows};
     });
-    return {shown, matches, remaining: Math.max(0, matches - limit)};
+    return {empty: false, matches, remaining, items, tables};
   }
   function applyFilter(root) {
     const panel = root.querySelector('.ev-panel'), input = root.querySelector('#ev-q'), query = input ? input.value : '';
     if (!panel) return;
-    const rows = [...panel.querySelectorAll('[data-hay],[data-find]')], trace = panel.querySelector('.ev-trow') !== null;
-    const flags = visibleFlags(rows.map(row => row.dataset.hay ?? row.dataset.find), query, trace ? current.limit : Infinity);
-    rows.forEach((row, at) => { row.hidden = !flags.shown[at]; });
-    panel.querySelectorAll('[data-group]').forEach(group => { group.hidden = group.querySelector('[data-hay],[data-find]') !== null && group.querySelector('[data-hay]:not([hidden]),[data-find]:not([hidden])') === null; });
+    const tables = [...panel.querySelectorAll('.ev-tbl')].map(el => ({el, rows: [...el.querySelectorAll('tbody tr')]}));
+    const items = [...panel.querySelectorAll('[data-hay],[data-find]')].filter(el => !el.closest('.ev-tbl'));
+    const text = el => el.dataset.hay ?? el.dataset.find;
+    const trace = panel.querySelector('.ev-trow') !== null;
+    const plan = searchPlan({tables: tables.map(t => ({head: t.el.dataset.head, rows: t.rows.map(text)})), items: items.map(text)}, query, trace ? current.limit : Infinity);
+    items.forEach((el, at) => { el.hidden = !plan.items[at]; });
+    tables.forEach((t, at) => { t.el.hidden = !plan.tables[at].show; t.rows.forEach((tr, k) => { tr.hidden = !plan.tables[at].rows[k]; }); });
+    const visible = ':is(.ev-tbl,[data-hay],[data-find]):not([hidden])';
+    panel.querySelectorAll('[data-group]:not(.ev-tbl)').forEach(group => { group.hidden = group.querySelector(':is(.ev-tbl,[data-hay],[data-find])') !== null && group.querySelector(visible) === null; });
     const more = panel.querySelector('[data-more]');
-    if (more) { more.hidden = flags.remaining === 0; more.textContent = `Show more (${flags.remaining} remaining)`; }
+    if (more) { more.hidden = plan.remaining === 0; more.textContent = `Show more (${plan.remaining} remaining)`; }
     const none = panel.querySelector('.ev-nomatch');
-    if (none) none.hidden = rows.length === 0 || flags.matches > 0;
+    if (none) none.hidden = plan.empty || plan.matches > 0 || (items.length === 0 && tables.length === 0);
     // The tab badge is the count tabCounts drew and is never rewritten; the matches of a query are their own text beside the search box.
-    const counted = [...panel.querySelectorAll('[data-hay]')], matching = visibleFlags(counted.map(row => row.dataset.hay), query, Infinity).matches;
     const label = root.querySelector('.ev-match');
-    if (label) { label.hidden = !query.trim(); label.textContent = `${matching} matching`; }
+    if (label) label.textContent = plan.empty ? '' : `${plan.matches} matching`;
   }
   function copyHash(button) {
     const text = button.dataset.copy;
@@ -355,7 +369,7 @@
     applyFilter(input.closest('.ev'));
   }
 
-  const api = {TABS, parseHash, href, tableView, classify, traceRows, traceBody, view, visibleFlags, handleClick, handleSearch};
+  const api = {TABS, parseHash, href, tableView, classify, traceRows, traceBody, view, searchPlan, handleClick, handleSearch};
   if (typeof window !== 'undefined') window.Evidence = api;
   if (typeof module !== 'undefined') module.exports = api;
 })();

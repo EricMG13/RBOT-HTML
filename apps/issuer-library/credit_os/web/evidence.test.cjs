@@ -129,7 +129,7 @@ test('the tab badge counts what tabCounts counts: the counted [data-hay] element
     const panel = html.slice(html.indexOf('id="ev-panel"'), html.indexOf('class="ev-card ev-foot"'));
     assert.equal((panel.match(/data-hay="/g) || []).length, badge, tab);
   }
-  assert.ok(view('trace', 'CP-2A').includes('<p class="ev-match" role="status" hidden></p>'), 'matches of a query have their own text');
+  assert.ok(view('trace', 'CP-2A').includes('<p class="ev-match" role="status"></p>'), 'matches of a query have their own text; the status is in the tree, empty, from the start');
 });
 
 test('Run record under a module filter says so when the run records instructions but none for that module', () => {
@@ -268,11 +268,66 @@ test('every interpolated value is escaped', () => {
   assert.ok(html.includes('<strong>bold</strong>') && html.includes('<code>code</code>'));
 });
 
-test('search: the first rows that match are shown, up to the limit, and the rest are counted', () => {
-  const hays = ['alpha one', 'beta', 'alpha two', 'alpha three'];
-  assert.deepEqual(Evidence.visibleFlags(hays, '', 40), {shown: [true, true, true, true], matches: 4, remaining: 0});
-  assert.deepEqual(Evidence.visibleFlags(hays, 'ALPHA', 2), {shown: [true, false, true, false], matches: 3, remaining: 1});
-  assert.deepEqual(Evidence.visibleFlags(hays, 'zzz', 40), {shown: [false, false, false, false], matches: 0, remaining: 0});
+const PLAN = {
+  tables: [{head: 'Downside: Leverage bridge Line FY2024 Source', rows: ['downside net debt 9,100', 'downside cash 1,200']}, {head: 'Downside: Maturities Instrument Amount', rows: ['downside term loan 4,000']}],
+  items: ['downside hash line abc123', 'downside a note about cash'],
+};
+
+test('search plan: a header-only match shows that table with every row and counts once', () => {
+  const plan = Evidence.searchPlan(PLAN, 'fy2024');
+  assert.deepEqual(plan.tables, [{show: true, rows: [true, true]}, {show: false, rows: [false]}]);
+  assert.equal(plan.matches, 1);
+  assert.deepEqual(plan.items, [false, false]);
+});
+
+test('search plan: a match in one row shows that row only, and counts it', () => {
+  const plan = Evidence.searchPlan(PLAN, 'NET   debt');
+  assert.deepEqual(plan.tables, [{show: true, rows: [true, false]}, {show: false, rows: [false]}]);
+  assert.equal(plan.matches, 1);
+});
+
+test('search plan: a query spanning two rows matches nothing', () => {
+  const plan = Evidence.searchPlan(PLAN, 'debt 9,100 downside cash');
+  assert.equal(plan.matches, 0);
+  assert.ok(plan.tables.every(t => !t.show) && plan.items.every(v => !v));
+  assert.equal(plan.empty, false, 'a query was typed: Nothing matches shows');
+});
+
+test('search plan: a match only in an uncounted item (a hash line) counts one; a note counts too', () => {
+  const plan = Evidence.searchPlan(PLAN, 'abc123');
+  assert.deepEqual(plan.items, [true, false]);
+  assert.equal(plan.matches, 1);
+  assert.equal(Evidence.searchPlan(PLAN, 'about cash').matches, 1);
+  assert.equal(Evidence.searchPlan(PLAN, 'cash').matches, 2, 'one table row and one note');
+});
+
+test('search plan: an empty or blank query restores everything with nothing to count', () => {
+  for (const q of ['', '   ']) {
+    const plan = Evidence.searchPlan(PLAN, q);
+    assert.equal(plan.empty, true);
+    assert.equal(plan.matches, 0);
+    assert.deepEqual(plan.tables, [{show: true, rows: [true, true]}, {show: true, rows: [true]}]);
+    assert.deepEqual(plan.items, [true, true]);
+  }
+});
+
+test('search plan: a module name or caption in a table head shows the whole table', () => {
+  assert.deepEqual(Evidence.searchPlan(PLAN, 'maturities').tables, [{show: false, rows: [false, false]}, {show: true, rows: [true]}]);
+});
+
+test('search plan: items beyond the limit are held back and counted as remaining', () => {
+  const plan = Evidence.searchPlan({tables: [], items: ['alpha one', 'beta', 'alpha two', 'alpha three']}, 'ALPHA', 2);
+  assert.deepEqual(plan.items, [true, false, true, false]);
+  assert.equal(plan.matches, 3);
+  assert.equal(plan.remaining, 1);
+});
+
+test('tables carry their head text; the registers table is counted by data-hay with the head as its text', () => {
+  const html = view('registers', 'CP-2A');
+  const wrapper = /<div class="ev-tbl"[^>]*>/.exec(html)[0];
+  assert.ok(/data-head="[^"]*leverage bridge[^"]*"/.test(wrapper) || /data-head="/.test(wrapper), wrapper);
+  assert.ok(wrapper.includes('data-hay="'));
+  assert.ok(!/data-hay="[^"]*9,100/.test(wrapper), 'the wrapper holds its head, not its cells');
 });
 
 test('a run with no evidence record says so', () => {

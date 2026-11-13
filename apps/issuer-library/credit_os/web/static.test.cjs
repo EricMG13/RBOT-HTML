@@ -216,7 +216,7 @@ test('Evidence: the Run record lists the methods changed since the run, escaped;
 
 test('Evidence (fix round 2): a method change leads with its module name; any other module code is named; file paths stay verbatim', () => {
   const html = evidencePage(EVIDENCE, 'record', { methodChanges: ['CP-0: src/deploy_vii/methods/cp0.md changed', 'CP-1A: src/deploy_vii/methods/cp1a.md, docs/x.md changed', 'CP-0: reads CP-1 and src/deploy_vii/methods/CP-1.md'] });
-  const list = /<div class="ev-sub-h">Methods changed since this run<\/div><ul class="ev-mc-list">.*?<\/ul>/s.exec(html)[0];
+  const list = /<div class="ev-sub-h">Methods changed since this run<\/div><ul class="ev-mc-list" data-group>.*?<\/ul>/s.exec(html)[0];
   assert.ok(list.includes('<span class="mono">Source readiness: src/deploy_vii/methods/cp0.md changed</span>'), list);
   assert.ok(list.includes('<span class="mono">Business &amp; governance: src/deploy_vii/methods/cp1a.md, docs/x.md changed</span>'), list);
   assert.ok(list.includes('<span class="mono">Source readiness: reads Financial foundation and src/deploy_vii/methods/CP-1.md</span>'), 'a code in the detail is named; a path is not');
@@ -1256,7 +1256,7 @@ test('Overview nearest dates: the sentence names the cause: a run with no event 
 
 test('narrow pages (W1): every Evidence table and the Overview nearest-dates tables sit in a labelled, focusable scroll region', () => {
   const region = label => `<div class="table-scroll" role="region" aria-label="${label}" tabindex="0"><table`;
-  const evidenceRegion = label => `<div class="ev-tbl" role="region" aria-label="${label}" tabindex="0" data-group><table`;
+  const evidenceRegion = label => `<div class="ev-tbl" role="region" aria-label="${label}" tabindex="0" data-group data-head=`;
   const calc = { id: 'o1', placement: ['view'], sections: [{ heading: 'Calculations', level: 2, line: 1, blocks: [{ type: 'table', line: 2, headers: ['Calc ID', 'Result'], rows: [{ line: 3, cells: ['C-1', '2.1x'] }] }] }] };
   const page = tab => evidenceView({ r: { evidence: EVIDENCE, modules: { 'CP-0': { outputs: ['o1'], default: 'o1' } } } }, { o1: calc })('r', tab, 'CP-0');
   const record = page('record'), calculations = page('calculations');
