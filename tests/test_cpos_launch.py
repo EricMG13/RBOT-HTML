@@ -4025,10 +4025,7 @@ def test_the_cp2g_instruction_asks_for_the_row_and_period_of_every_base_operand(
         "exact first-cell text",
         "exact header text",
         "of one of the CP-1 handoff's tables",
-        (
-            "Name the cell of every operand that has an amount: `row` and `period`, or in a table "
-            "with one row per period"
-        ),
+        "Name the cell of every operand that has an amount by `row` and `period` and nothing else.",
         "positive magnitude",
         "with its sign reversed",
         "is not a cell",
@@ -5886,9 +5883,11 @@ def test_both_forecast_instructions_ask_for_the_scale():
     ):
         for words in (
             (
-                f"`scale` is `1` when {tables} statement tables print USD millions and `1000` "
-                "when they print USD thousands"
+                "`currency` is the three-letter code of the currency "
+                f"{tables} statement tables are printed in (`USD`, `GBP`, `EUR`), and `scale` is "
+                "`1` when they print millions of it and `1000` when they print thousands"
             ),
+            "so every published figure is millions of that currency",
             "Python divides by `scale`",
             "Do not convert an amount yourself",
             'a cell printing 2,620,995 is `"2620995"`',
@@ -5906,10 +5905,10 @@ def test_both_forecast_instructions_ask_for_the_scale():
 def test_both_forecast_instructions_state_what_the_unit_check_enforces():
     for block in (cpos_launch.FORECAST_BLOCK, cpos_launch.LAYER1_FORECAST_BLOCK):
         assert (
-            "State `scale` in every block, as the statements print it (`1000` for thousands, `1` "
-            "for millions), and state every amount in the block in that one unit exactly as "
-            "printed; an amount printed in the other unit is stated as missing, with the reason, "
-            "not converted." in block
+            "State `currency` and `scale` in every block, as the statements print them (`1000` for "
+            "thousands, `1` for millions), and state every amount in the block in that one unit "
+            "exactly as printed; an amount printed in the other unit is stated as missing, with "
+            "the reason, not converted." in block
         )
         assert "or absent" not in block
 
@@ -6258,10 +6257,14 @@ def test_the_shared_text_names_no_confidence_script_and_separates_the_score_from
 
 
 # --- Task E4 (2026-11-12 findings 1, 2, 4): the sent texts name `column` and `interest`
-COLUMN_SENTENCE = (
-    "`row` and `column`, the row being the period exactly as printed and the column the "
-    'measure\'s exact header (`{"amount": "<decimal>", "reason": null, "row": "FY2024", '
-    '"column": "Cash"}`); leave out `period` there.'
+S5_SENTENCE = (
+    "Name the cell of every operand that has an amount by `row` and `period` and nothing else. "
+    "Take a balance from a row under a period column (`FY2024`, `H1 2025`), never from a column "
+    "headed `LTM …` and never from a table with one row per period"
+)
+S5_TAIL = "where CP-1 prints the balance only there, state the operand as missing with that reason."
+S5_TAIL_LAYER1 = (
+    "where you print the balance only there, state the operand as missing with that reason."
 )
 INTEREST_SENTENCE = (
     "`interest` is interest paid in cash in the base period; where CP-1 prints only interest "
@@ -6269,9 +6272,11 @@ INTEREST_SENTENCE = (
     "expense, not cash paid."
 )
 BALANCE_SENTENCE = (
-    "Print a balance (debt, cash, undrawn facilities) at a period's end under that period's "
-    "column as a plain number: the `H1 2025` column holds the 30 June 2025 balance. Put the date "
-    "in the row label or the Source, not in the cell."
+    "Print every balance the forecast needs (total debt, cash, undrawn committed facilities) as "
+    "a row of a table whose columns are those period headers, each a plain number at that "
+    "period's end: the `H1 2025` column holds the 30 June 2025 balance. Put the date in the row "
+    "label or the Source, not in the cell. A column headed `LTM …` holds flows only, never a "
+    "balance."
 )
 
 
@@ -6287,16 +6292,18 @@ def _built_instruction(tmp_path, module, modules):
     return (tmp_path / "out" / prepared.plan.instructions[module].path).read_text()
 
 
-def test_the_cp2g_instruction_sent_states_the_column_key_and_what_interest_is(tmp_path):
+def test_the_cp2g_instruction_sent_states_row_and_period_only_and_what_interest_is(tmp_path):
     text = _built_instruction(tmp_path, "CP-2G", ("CP-1", "CP-2G"))
-    assert COLUMN_SENTENCE in text and INTEREST_SENTENCE in text
+    assert S5_SENTENCE in text and S5_TAIL in text and INTEREST_SENTENCE in text
+    assert '`"column": "Cash"' not in text and "leave out `period` there" not in text
 
 
-def test_the_layer1_forecast_instruction_sent_states_the_column_key_and_what_interest_is(
+def test_the_layer1_forecast_instruction_sent_states_row_and_period_only_and_what_interest_is(
     tmp_path,
 ):
     text = _built_instruction(tmp_path, "CP-1", ("CP-1", "CP-MODEL"))
-    assert COLUMN_SENTENCE in text and INTEREST_SENTENCE in text
+    assert S5_SENTENCE in text and S5_TAIL_LAYER1 in text and INTEREST_SENTENCE in text
+    assert '`"column": "Cash"' not in text and "leave out `period` there" not in text
 
 
 def test_the_period_table_instruction_sent_says_how_to_print_a_balance(tmp_path):
@@ -6339,13 +6346,14 @@ def test_several_operands_naming_both_period_and_column_are_all_named_in_the_rep
 
 def test_the_forecast_instruction_sentences_say_what_python_does():  # whole-branch review L3, L4
     table = cpos_launch.PERIOD_TABLE_BLOCK
-    assert "to date a balance printed under an `LTM Qn YYYY` label; add no figure to it." in table
-    assert "give that exact label a row in this table with its Start and End dates." in table
+    assert "check that the last twelve months are twelve months; add no figure to it." in table
+    assert "LTM Qn YYYY" not in table and "to date a balance" not in table
     assert "only to check" not in table and "change no other table" not in table
-    shown = "history only for a line named under such a header, or in a row labelled with one."
+    shown = "history only for a line named under such a header."
     for block in (cpos_launch.FORECAST_BLOCK, cpos_launch.LAYER1_FORECAST_BLOCK):
         assert shown in block
-        assert "Those tables are in US$ million: at `scale` 1000 do not name them" in block
+        assert "Those tables are in US$ million" not in block
+        assert "`row` and `column`" not in block
     assert "(your `Chart data:` tables and `Net debt data`)" in cpos_launch.LAYER1_FORECAST_BLOCK
     assert "(CP-1's `Chart data:` tables" in cpos_launch.FORECAST_BLOCK
 
@@ -6447,3 +6455,80 @@ def test_the_appendix_as_a_findings_h3_is_accepted_and_as_an_analysis_h2_is_refu
     assert _appendix_handoff_issues(tmp_path / "h3", as_h2=False) == ()
     issues = _appendix_handoff_issues(tmp_path / "h2", as_h2=True)
     assert issues and "exactly these six H2 headings" in issues[0]
+
+
+NET_DEBT_PERIOD_SENTENCE = (
+    "`Period` is `FY2024 / 2024-09-30` for a fiscal year end (fiscal year, space, slash, space, "
+    "the year-end date) and the date alone (`2025-06-30`) for an interim balance sheet: one form "
+    "for every row of the table, each period once, and no other word in the cell"
+)
+UNIT_FORM_SENTENCE = (
+    "Where a table states its unit, write it as the three-letter currency code and `millions` or "
+    "`thousands` (`USD millions`), the same in every statement table; the `Chart data:` tables "
+    "and `Net debt data` keep the unit their own rule gives."
+)
+
+
+def test_the_sent_instructions_prescribe_one_net_debt_period_form_and_the_unit_exemption(tmp_path):
+    text = _built_instruction(tmp_path, "CP-1", ("CP-1", "CP-MODEL"))
+    assert NET_DEBT_PERIOD_SENTENCE in text and UNIT_FORM_SENTENCE in text
+    assert "the balance-sheet date `2024-09-30`, or both as" not in text
+    assert "the same in every statement table. Python uses" not in text
+
+
+def test_the_sent_forecast_instructions_offer_history_only_under_a_period_header_and_say_you(
+    tmp_path,
+):
+    for module, modules in (("CP-2G", ("CP-1", "CP-2G")), ("CP-1", ("CP-1", "CP-MODEL"))):
+        (tmp_path / module).mkdir(exist_ok=True)
+        text = _built_instruction(tmp_path / module, module, modules)
+        assert "history only for a line named under such a header." in text
+        assert "labelled with one" not in text
+    assert "where you print the balance only there" in text
+    assert "where CP-1 prints the balance only there" not in text
+
+
+def test_cp1_is_told_the_net_debt_period_forms_and_to_print_each_line_once():
+    assert NET_DEBT_PERIOD_SENTENCE in cpos_launch.NET_DEBT.rules
+    assert "and no other word in the cell (say `pro forma` or `reported` in the Basis" in (
+        cpos_launch.NET_DEBT.rules
+    )
+    text = cpos_launch.PERIOD_TABLE_BLOCK
+    assert "Print each statement line once, in one table that has a column for every period" in text
+    assert "a line split across two tables cannot be combined" in text
+    assert UNIT_FORM_SENTENCE in text
+
+
+# --- the Net debt data Period is one the pack can order (F1, defect D2.1) -----------------------
+def _net_debt_text(*periods):
+    rows = "\n".join(f"| {p} | 1400 | 275 | 1125 | US$m | Synthetic. |" for p in periods)
+    return (
+        "### Net debt data\n\n"
+        "| Period | Gross debt | Cash | Net debt | Reporting unit | Basis and limitation |\n"
+        "| --- | --- | --- | --- | --- | --- |\n" + rows + "\n"
+    )
+
+
+@pytest.mark.parametrize("period", ["FY2024", "2024-09-30", "FY2024 / 2024-09-30"])
+def test_each_stated_form_of_the_net_debt_period_is_accepted(period):
+    assert cpos_launch._net_debt_issues(_net_debt_text(period)) == ()
+
+
+@pytest.mark.parametrize(
+    ("periods", "cell"),
+    [
+        (("2024-09-30 reported",), "2024-09-30 reported"),
+        (("FY2024 (2024-09-30)",), "FY2024 (2024-09-30)"),
+        (("2024-02-31",), "2024-02-31"),
+        (("FY2024", "2025-06-30"), "2025-06-30"),
+        (("FY2024", "FY2024"), "FY2024"),
+    ],
+)
+def test_a_net_debt_period_the_pack_cannot_order_is_refused_with_the_form_to_write(periods, cell):
+    (issue,) = cpos_launch._net_debt_issues(_net_debt_text(*periods))
+    assert issue == (
+        f"`### Net debt data` Period `{cell}` cannot be ordered: write "
+        "`FY2024 / 2024-09-30` for a fiscal year end or the date alone (`2025-06-30`) for an "
+        "interim balance sheet, one form for the whole table and each period once; put any "
+        "other word in the Basis and limitation cell."
+    )

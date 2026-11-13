@@ -4,6 +4,35 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-13 — Prompt-first redesign of CP-8, forecast inputs and prose check 6 (PRs 84-91)
+Scope: synthetic tests and retained-data comparisons only. No provider was called. No live model has been sent any instruction changed here.
+
+What changed
+- Prose check 6 (PR 85): an ID is a cell of a column headed `ID` or ending ` ID` (ruling E7); 27 lines deleted. Retained: 974 files, 1 wrong refusal removed, 0 added, no ID-shaped value lost.
+- CP-8 (PRs 86, 87, 89): a pack measure with no row is refused; a row may print its own difference; a fact row is read in every cell; value cells must equal the pack's value (no grouping comma), unit and period; Basis items are `Run comparison` or a module handoff of a run in which the module ran; `Method change` is required only when both runs record `preset` (E1). Deleted: the trend word list (E11), the reading of numbers in words, list tolerance and cross-line joining (E3), the Basis file-name blacklist, the phrase ban. `methods/cp8.md` rewritten once (R1-R10), so runs holding a CP-8 handoff show "Earlier methods" (E10).
+- Forecast (PRs 88, 90, 91): the block states `currency`; delivered units read `<currency> millions`; the stated currency must be named in the Financial foundation handoff; a block with `scale` and no `currency` is refused or withheld; a block with neither reads USD millions as before; Net debt data Period is checked at acceptance; the `LTM Qn YYYY` balance path is deleted (397 lines); the instruction names operands by `row` and `period` only.
+
+Evidence (retained data)
+- CP-8: the one retained handoff with a pack (tdg-proof-snapshot-opus-002) gives the same 6 issues throughout (two reworded); page verdicts byte-identical across 974 files; digit reading unchanged across 280,974 lines and a 111,692-case comparison.
+- Forecast: every retained block re-derives byte-identically apart from reworded withheld reasons in one calculation file; all 23 retained Financial foundation handoffs name USD.
+- LTH run 20261112-164724-01: untouched; a relaunch re-derives a calculation file that differs from the delivered one in 25 cells (24 reworded reasons, 1 earlier limit text), so its delivery id would change.
+
+Not demonstrated
+- Any model's first attempt under the new CP-8 forms, the `currency` key, the Net debt Period forms, or balances printed as rows under period columns.
+- A non-USD issuer end to end: Financial foundation's chart tables are captioned `US$m`, so USD may always count as named.
+- 2 of 4 retained Financial foundation handoffs print cash or undrawn only in one-row-per-period tables; under the new instruction those are stated missing unless Financial foundation prints them as rows.
+
+Recorded limits
+- CP-8: a withheld size written in words is refused only when a listed unit word directly follows it; a `Not comparable` row can state a movement as a rate; a row allowed its own difference also passes another withheld difference of the same size; another module's name beside the right code passes in Basis; a fact-row cell such as `30/09/2024` is refused when its number equals a withheld size.
+- Forecast: a handoff naming the stated currency anywhere passes; one row in another currency passes.
+- Deferred: deletion of the `column` path and per-row unit reader, until a proof run shows how balances are printed (E9).
+
+Superseded reviewer probes (E6 and controller rulings of 2026-11-13): `swarm/probe_cp8.py` P3, `g70/p2_gbp_caption.py`, `g50/probe_split_tables.py`, `gaps4_ordinal_neighbour_leak.py`, `gaps4_spelled_fuzz.py`, the `thirty` lines of `counts_change_noun_leak.py`, `c1-review-precise/probe_empty_register_hint.py`, `f1-rereview/p7_token_rule_table.py` (lower-case rows), and the probes pinning the deleted per-cell currency comparison.
+
+Open for the owner (predate this work): billions unit cells read as millions; `£000`/`€000`/`GBP000`/`USD 000` not read as thousands; the pack reads the unit of `Free cash flow (CFO less capex)` as `CFO less capex`; a forecast block naming debt under an `LTM` column is accepted; digits split by markup pass the withheld-size check; with an explicit selection the checker requires no cause though the method text says `Unresolved`.
+
+Ledger: P1 agent=mx-scaffold fix-rounds=0 gates-first-pass=y; C1 agent=mx-feature fix-rounds=0 gates-first-pass=y; C2 agent=mx-feature fix-rounds=1 gates-first-pass=y; C3 agent=mx-feature fix-rounds=1 gates-first-pass=y; F1 agent=mx-feature fix-rounds=1 gates-first-pass=y; F2 agent=mx-feature fix-rounds=1 gates-first-pass=y; F3 agent=mx-feature fix-rounds=0 gates-first-pass=y; Z0 agent=mx-scaffold fix-rounds=0 gates-first-pass=n/a.
+
 ## 2026-11-13 — CP-OS sends different method texts to fifteen modules and the canon appendix section to prose modules (branch `claude/deploy-v-methods`)
 Scope: offline only; no model or provider run. Tests in `tests/test_cpos_launch.py` prove that the built instructions carry the named texts (and no longer the replaced ones) for CP-0, CP-1A, CP-3C, CP-DR, CP-2D, CP-4, CP-4C, CP-5, CP-6, CP-2, CP-1D, CP-2G, CP-2H, CP-3 and CP-2A (CP-1A's skill came via PR #83), and the canon Analytical appendix section for prose modules. No reader check against the September VMO2 reference was made, so under AGENTS.md this is not a presentation acceptance. Sources, hashes and named edits: `docs/reuse/selected-methods/manifest.json`; per-module source revisions: METHODOLOGY-REVIEW.md, "Method selections of 2026-11-13".
 Manifest: all 28 `sha256` values of the method files this branch changed under `docs/reuse/selected-methods/` (manifest.json itself not counted) were computed and equal the archived files. Eleven entries whose archived file is an edited copy (cp-1d, cp-2, cp-2g, cp-dr, cp-3c, cp-2d, cp-4, cp-4c entries and the CP-2A stress copy) no longer carry `exact_copy_found_at`: it is null and `edited_copy_of` names the source before the named edits; every remaining `exact_copy_found_at` path (130) was checked byte-equal to its archived file. `companions_note`, METHODOLOGY-REVIEW.md and the launcher comment say each file's source is the one its manifest entry names, not that all companions are cp-os copies.
@@ -938,40 +967,3 @@ name or other." Display only (`apps/issuer-library/credit_os/web/`); routes, hre
 - Not verified: Windows and Edge, phone widths, a screen reader; live Run activity data; a Forecast
   model with step ids; runbook names on a rendered page (string-level test only); any issuer other
   than TDG.
-
-## 2026-11-10 — Context form adopted (branch `claude/optimistic-johnson-bmnwip`, after main `4ce88c2`)
-
-Owner: "Approved". The proposal below replaced `docs/templates/context-form.html` and follows main's
-ruling that CP-1C takes its peers from CP-DR by default (`pathway_modules`). Design note section 7
-has the detail. Checks are offline (headless Chromium 1.63, the Python reader, the inbox's own
-functions); no provider call and no analytical run.
-
-- **Same output as before.** The original form (`483a555`) and the adopted one give byte-identical
-  `context.json` for the three fixture contexts. `cp_dr_public` is the default in both.
-- **The research module joins.** With the default peer source, Relative Value and Distressed list
-  CP-DR in the launcher's order. "Not available" for the peers' files makes CP-1C a Gap, and choosing
-  your own figures drops CP-DR.
-- **End to end again.** Three downloads load in `load_context` and pass `inbox.drops.check`, and
-  round-trip byte for byte. Every stage advanced by click and by tap at 390 px, and Start over is
-  clean.
-- **Inbox copies.** Copies written by `write_templates` as `context-form.html` lock the pathway,
-  load the built library's fonts and log nothing.
-- **Tests.**
-  - `tests/test_library_page_browser.py` `FORM_PROBE`: the old probe was seen failing on the adopted
-    form (`#s1-pathway` is gone). Rewritten, the file passes: 20 passed.
-  - New `tests/test_context_form.py`: 22 passed. Each of nine one-line changes to the form's copied
-    tables made its test fail, among them the Distressed order main had already changed.
-  - `test_issuer_library_packaging.py`: 9 passed. The watcher's form tests: 2 passed.
-  - `test_inbox_drops.py`: 55 passed, 3 failed. The three are permission tests that fail here
-    because this sandbox runs as root, and they fail the same without this change.
-  - Quality gate exit 0 (176 changed lines in scope, after one long line in the probe was split).
-- **Research cutoff written (owner: "Your recommendation").**
-  - New browser test `test_the_research_cutoff_follows_the_as_of_date_and_is_written`, seen
-    failing on the form before the change: the cutoff came out blank.
-  - Against the original form, the three fixture contexts differ only in `run.cutoff`. A blank one
-    becomes the as-of date (`2026-10-31`); an explicit `2025-12-31` is kept.
-  - The new downloads load and are accepted by the inbox. Each has
-    `effective_cutoff(as_of, cutoff) == effective_cutoff(as_of, "")`, so the code reads them as it
-    read a blank cutoff.
-- **Not verified:** Firefox, Safari and real issuer folders. Whether CP-DR finds peers in a folder's
-  filings: no live run. Whether the readiness forecast matches live outcomes.
