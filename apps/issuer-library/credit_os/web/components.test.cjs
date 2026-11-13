@@ -662,9 +662,16 @@ test('statusChecklist: a cell holding an identifier leaves a link to Evidence in
 test('sidedBoard: two columns from the cell\'s own side word, a count per side, entries in the table\'s order, a qualifier as a tag', () => {
   const t = keyTables('CP-6', 'sided')[0], ctx = pageCtx('CP-6'), html = C.sidedBoard(keyBlock(t), ctx);
   assert.ok(html.includes('<p class="sd-hs sd-s0"><i class="sd-dot" aria-hidden="true"></i>Bull<b class="sd-n">3</b></p>') && html.includes('<p class="sd-hs sd-s1"><i class="sd-dot" aria-hidden="true"></i>Bear<b class="sd-n">5</b></p>'));
-  const lines = [...html.matchAll(/<div class="sd-line sd-s(\d)">.*?<span class="sd-side"><i class="sd-dot" aria-hidden="true"><\/i>(\w+)<\/span>(?:<span class="tag q-tag">([^<]*)<\/span>)?/g)].map(m => [m[1], m[2], m[3]]);
+  const lines = [...html.matchAll(/<div class="sd-line sd-s(\d)">.*?<span class="sr-only">(\w+)<\/span>(?:<span class="tag q-tag">([^<]*)<\/span>)?/g)].map(m => [m[1], m[2], m[3]]);
   assert.deepEqual(lines, [['0', 'Bull', undefined], ['0', 'Bull', undefined], ['0', 'Bull', undefined], ['1', 'Bear', undefined], ['1', 'Bear', undefined], ['1', 'Bear', undefined], ['1', 'Bear', undefined], ['1', 'Bear', 'weakly']]);
-  assert.ok(html.includes('<p class="sd-fig">USD 526.39 million / 2.36x</p>') && html.includes('<p class="sd-name">Junior minus senior running yield</p>') && html.includes('<dt>Chair reading</dt><dd>Junior pickup unproven</dd>'));
+  assert.ok(html.includes('<p class="sd-fig">USD 526.39 million / 2.36x</p>') && html.includes('<p class="sd-name">Junior minus senior running yield</p>') && html.includes('<p class="sd-read">Junior pickup unproven</p>'));
+  assert.equal(countOf(html, />Chair reading</g), 1, 'B4: a header every card shares is said once, by the board');
+  assert.ok(!html.includes('<dt>Chair reading</dt>'));
+  // B4: no cell value disappears: each side word is still in the output once per row (heading once, each card as screen-reader text), as often as the table has it.
+  for (const [word, n] of [['Bull', 3], ['Bear', 5]]) assert.equal(countOf(html, new RegExp(`>${word}<`, 'g')), n + 1, word);
+  const block = keyBlock(t), shown = block.headers.map((h, at) => [h, at]).filter(([h]) => /^(?:decision driver|figure|chair reading)$/i.test(h.trim()));
+  assert.ok(shown.length >= 3, JSON.stringify(block.headers));
+  for (const row of block.rows) for (const [, at] of shown) assert.ok(html.includes(row.cells[at].replace(/&/g, '&amp;')), row.cells[at]);
   assert.ok(!html.includes('Bear (weakly)'), 'the cell is the word and its tag');
 });
 
@@ -1420,4 +1427,26 @@ test('B1: a slash in a hidden-column reason is held back only for a path (two or
   for (const reason of ['Not supplied: see handoffs/CP-1/output.md', 'Not supplied: see docs/file.pdf']) {
     assert.ok(!drawn(reason).includes(reason.slice(-9)) && drawn(reason).includes('class="in-ev"'), reason);
   }
+});
+
+test('B5: a timeline with one extra column says its header once above the list; every event keeps its value (no cell value disappears)', () => {
+  const rows = [['2025-01-10', 'Maturity', 'Raises refinancing risk'], ['2025-02-10', 'Call date', 'Neutral for liquidity'], ['2025-03-10', 'Coupon', 'Raises refinancing risk']].map((cells, i) => ({ line: i + 1, cells }));
+  const html = C.datedTimeline({ headers: ['Date', 'Event', 'Credit relevance summary'], rows }, { stacked: true });
+  assert.equal(countOf(html, /Credit relevance summary/g), 1);
+  assert.ok(html.includes('<span class="shape-cap">Credit relevance summary</span>'));
+  for (const row of rows) for (const cell of row.cells) assert.equal(countOf(html, new RegExp(cell, 'g')), countOf(JSON.stringify(rows.map(r => r.cells)), new RegExp(cell, 'g')), cell);
+  const two = C.datedTimeline({ headers: ['Date', 'Event', 'Why', 'Effect'], rows: rows.map(r => ({ ...r, cells: [...r.cells, 'x'] })) }, { stacked: true });
+  assert.equal(countOf(two, /<dt>Why<\/dt>/g), 3, 'with two extra columns each event keeps its labels');
+});
+
+test('B7: a stated absence in a measure tile is its own line, not a CHANGE tag; the same absence on every tile is said once under the strip; no cell value disappears', () => {
+  const headers = ['Measure', 'FY2024', 'Change'], key = { key: r => `k:${r.line}` };
+  const build = changes => ({ headers, rows: changes.map((change, i) => ({ line: i + 1, cells: [`M${i}`, `USD ${i + 1} million`, change] })) });
+  const same = C.measureTiles(build(['Not calculated: comparator not needed', 'Not calculated: comparator not needed']), key);
+  assert.equal(countOf(same, /Not calculated: comparator not needed/g), 1, 'said once for the strip');
+  assert.ok(same.includes('<p class="tiles-absent">Not calculated: comparator not needed</p>') && !same.includes('tag-k'));
+  const mixed = C.measureTiles(build(['USD 5 million (3%)', 'Not calculated: no prior period']), key);
+  assert.ok(mixed.includes('<span class="tag"><span class="tag-k">Change</span>USD 5 million (3%)</span>'), 'a figure keeps its tag');
+  assert.ok(mixed.includes('<p class="tile-a">Not calculated: no prior period</p>') && countOf(mixed, /tag-k/g) === 1 && !mixed.includes('tiles-absent'));
+  for (const cell of ['USD 5 million (3%)', 'Not calculated: no prior period', 'USD 1 million', 'USD 2 million', '>M0<', '>M1<']) assert.equal(countOf(mixed, new RegExp(cell.replace(/[()]/g, '\\$&'), 'g')), 1, cell);
 });

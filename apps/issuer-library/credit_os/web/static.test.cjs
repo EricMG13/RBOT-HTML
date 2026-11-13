@@ -3873,7 +3873,8 @@ function cssRules(css) {
 
 test('brand colours: a hatched stack segment on a bright fill draws its stripe in that series line value, not white', () => {
   const rules = cssRules(read('screen.css'));
-  for (const [n, fill] of [[1, 2], [2, 3], [3, 4]]) {
+  // B8 (ruling 2026-11-13): rank 2 was --series-2, the status green, so the stack's series are blue, violet, yellow and navy; the stripe of each is its own line value (navy: --blue-100, light on dark, not white).
+  for (const [n, stripe] of [[1, '--series-4-ln'], [2, '--series-3-ln'], [3, '--blue-100']]) {
     for (const prefix of ['.stack-seg', '.stack-key', '.stack-legend']) {
       const sel = prefix === '.stack-seg' ? `.stack-seg.series-${n}.hatch` : `${prefix} .series-${n}.hatch`;
       const found = rules.filter((r) => r.selector.split(',').map((s) => s.trim()).includes(sel));
@@ -3881,7 +3882,7 @@ test('brand colours: a hatched stack segment on a bright fill draws its stripe i
       // The same selector text has the same specificity, so the last rule that sets the stripe is the one that draws it.
       const winner = found.filter((r) => /(?:^|;)\s*background(?:-image)?\s*:/.test(r.body)).at(-1);
       assert.ok(winner, `${sel} sets no stripe`);
-      assert.ok(winner.body.includes(`var(--series-${fill}-ln)`), `${sel} stripe is not --series-${fill}-ln`);
+      assert.ok(winner.body.includes(`var(${stripe})`), `${sel} stripe is not ${stripe}`);
       assert.ok(!/rgba?\(\s*255\s*,\s*255\s*,\s*255|#fff/i.test(winner.body), `${sel} draws a white stripe`);
     }
   }
@@ -5130,4 +5131,24 @@ test('B3: a search hit on a table the module page does not hold routes to the Ev
   assert.equal(page.evidenceHit(outId('CP-1'), 'Findings'), null, 'a section no tab holds keeps the module route');
   assert.equal(require('./evidence.js').parseHash('#W-Evidence/sources?c=run-a&m=CP-1&r=22', ['CP-1']).row, '22');
   assert.equal(require('./evidence.js').parseHash('#W-Evidence/sources?r=x', []).row, undefined);
+});
+
+test('B8: no debt-stack series is the status green; the four fills are blue, violet, yellow and navy', () => {
+  const rules = cssRules(read('screen.css').replace(/\/\*[^]*?\*\//g, ''));
+  const fillOf = n => rules.filter(r => r.selector.split(',').map(s => s.trim()).includes(`.stack-seg.series-${n}`) && /(?:^|;)\s*background\s*:/.test(r.body)).at(-1)?.body.match(/background\s*:\s*([^;]+)/)[1].trim();
+  assert.deepEqual([fillOf(1), fillOf(2), fillOf(3)], ['var(--series-4)', 'var(--series-3)', 'var(--navy)']);
+  for (const n of [1, 2, 3]) assert.ok(!/series-2|--green/.test(fillOf(n)), `series ${n} is not a green`);
+});
+
+test('B6: a Forecast stack says its four field labels once in a header row over the aligned values; each row keeps its labels for a narrow card and assistive technology, and no value disappears', () => {
+  const page = runPage(d => withStructure(d), [], m => m, { record: steps(['CP-1']), runFields: { asOf: '2025-03-31' } });
+  const stack = cardOf(page.forecastCharts(RUN), 'Debt stack');
+  const head = /<div class="stack-head" aria-hidden="true">(.*?)<\/div>/.exec(stack);
+  assert.ok(head && countOf(stack, /class="stack-head"/g) === 1, 'one header row');
+  assert.deepEqual([...head[1].matchAll(/<span>([^<]*)<\/span>/g)].map(m => m[1]), ['Rank', 'Secured', 'Amount', 'Cumulative leverage']);
+  const rows = countOf(stack, /<dl class="stack-facts">/g);
+  assert.ok(rows >= 1 && countOf(stack, /<dt>Rank<\/dt>/g) === rows, 'every row still carries its labels');
+  for (const value of ['1,200', '2.4']) assert.ok(stack.includes(`<dd>${value}</dd>`), value);
+  const css = read('screen.css');
+  assert.ok(/@container \(min-width:560px\)\{[^]*\.fc-card \.stack-key \.stack-facts dt\{position:absolute/.test(css), 'the per-row labels are hidden only when the header stands over them');
 });

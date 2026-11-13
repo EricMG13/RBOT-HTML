@@ -338,9 +338,9 @@
 
   // C3: one metric tile. `value` is the cell as it stands; a cell longer than 24 characters is text, so its tile is wide and the cell is not set large.
   const WIDE_AT = 24;
-  function tile({label, value, raw, below = '', notes = [], tags = [], caption = '', info = ''}) {
+  function tile({label, value, raw, below = '', notes = [], tags = [], absences = [], caption = '', info = ''}) {
     const wide = String(raw).trim().length > WIDE_AT;
-    return `<div class="${wide ? 'tile wide' : 'tile'}"><div class="tile-h"><p class="tile-k">${label}</p>${info}</div><p class="tile-v">${value}</p>${below ? `<p class="tile-b">${below}</p>` : ''}${notes.map(note => `<p class="tile-n">${note}</p>`).join('')}${tags.join('')}${caption ? `<p class="tile-c">${caption}</p>` : ''}</div>`;
+    return `<div class="${wide ? 'tile wide' : 'tile'}"><div class="tile-h"><p class="tile-k">${label}</p>${info}</div><p class="tile-v">${value}</p>${below ? `<p class="tile-b">${below}</p>` : ''}${notes.map(note => `<p class="tile-n">${note}</p>`).join('')}${tags.join('')}${absences.map(html => `<p class="tile-a">${html}</p>`).join('')}${caption ? `<p class="tile-c">${caption}</p>` : ''}</div>`;
   }
   const tag = (label, html) => `<span class="tag"><span class="tag-k">${escapeHtml(label)}</span>${html}</span>`;
   // C24: a definition in a tooltip on an info icon; it also prints, since a tooltip does not.
@@ -554,12 +554,16 @@
       });
     return cells.length ? `<div class="strip" role="group" aria-label="Figures the bottom line cites, ${escapeHtml(latest.label)}">${cells.join('')}</div>` : '';
   }
+  const TILE_ABSENCE = /^(?:not (?:supplied|calculated)\b|none identified\b)/i;
   function measureTiles(block, ctx) {
     const cols = visibleColumns(block, 'measure', ctx), labelCol = cols[0];
     const consequence = cols.find(col => col.kind === 'consequence'), valueCols = cols.slice(1).filter(col => col.kind === 'period');
     const main = valueCols.length ? periodOrder(valueCols) : {latest: cols.slice(1).find(col => col !== consequence), earlier: []};
     if (!labelCol || !main.latest || !block.rows.length) return recordCards(block, ctx);
     const tagCols = cols.slice(1).filter(col => col !== main.latest && !main.earlier.includes(col) && col !== consequence);
+    // A stated absence ("Not calculated: ...") is a sentence, not a value: a tile draws it as its own absence line, no tag; when every tile states the same one, the strip says it once beneath.
+    const absent = (row, col) => TILE_ABSENCE.test(plain(cellText(row, col.at)).trim()) && fieldHtml(cellText(row, col.at), ctx) !== '';
+    const common = tagCols.filter(col => block.rows.every(row => absent(row, col) && cellText(row, col.at) === cellText(block.rows[0], col.at)));
     const tiles = block.rows.map(row => {
       const raw = cellText(row, main.latest.at), below = [], notes = [];
       for (const col of main.earlier) {
@@ -567,10 +571,11 @@
         if (shown.below) below.push(shown.below); else if (shown.note) notes.push(shown.note);
       }
       return tile({label: fieldHtml(cellText(row, labelCol.at), ctx), value: valueHtml(raw, ctx), raw, below: below.join(' · '), notes: notes.concat(extrasOf(block, row, ctx)),
-        tags: tagCols.map(col => [col, fieldHtml(cellText(row, col.at), ctx)]).filter(([, html]) => html !== '').map(([col, html]) => tag(col.label, html)),
+        tags: tagCols.filter(col => !absent(row, col)).map(col => [col, fieldHtml(cellText(row, col.at), ctx)]).filter(([, html]) => html !== '').map(([col, html]) => tag(col.label, html)),
+        absences: tagCols.filter(col => absent(row, col) && !common.includes(col)).map(col => fieldHtml(cellText(row, col.at), ctx)),
         caption: consequence ? fieldHtml(cellText(row, consequence.at), ctx) : ''});
     }).join('');
-    return shapeBlock('shape-measure', ctx, '', shapeBar('', traceOfBlock(ctx, block)) + `<div class="tiles tiles-4">${tiles}</div>`);
+    return shapeBlock('shape-measure', ctx, '', shapeBar('', traceOfBlock(ctx, block)) + `<div class="tiles tiles-4">${tiles}</div>` + common.map(col => `<p class="tiles-absent">${fieldHtml(cellText(block.rows[0], col.at), ctx)}</p>`).join(''));
   }
 
   // ---- change: C19, before and after
@@ -676,16 +681,21 @@
     const place = entry => (sides[0]?.key === entry.key ? 0 : sides[1]?.key === entry.key ? 1 : 2);
     // Each side's heading is the first thing in its own column, so the page reads one side, then the other.
     const heading = k => (sides[k] ? `<p class="sd-hs sd-s${k}"><i class="sd-dot" aria-hidden="true"></i>${sides[k].first.wordHtml}<b class="sd-n">${sides[k].n}</b></p>` : '');
+    const caption = rest.length === 1 && entries.some(entry => fieldHtml(cellText(entry.row, rest[0].at), ctx) !== '') ? rest[0].label : '';
     const line = entry => {
       const at = place(entry), title = cellText(entry.row, labelCol.at), figure = figCol ? fieldHtml(cellText(entry.row, figCol.at), ctx) : '';
-      const side = entry.wordHtml === '' && entry.qualifier === '' ? '' : `<span class="sd-side"><i class="sd-dot" aria-hidden="true"></i>${entry.wordHtml}</span>${qualifierTag(entry.qualifier, ctx)}`;
-      const card = `<article class="sd-entry"><div class="sd-top">${side || '<span></span>'}${traceFor(ctx, entry.row, rowLabelOf(block, ctx, entry.row, title))}</div>${figure ? `<p class="sd-fig">${figure}</p>` : ''}<p class="sd-name">${fieldHtml(title, ctx)}</p>${fieldList(entry.row, rest, ctx)}${extraList(block, entry.row, ctx)}</article>`;
+      // A card in a column titled with its side word does not draw the word again (screen readers keep it); a card on neither side draws it.
+      const word = entry.wordHtml === '' ? '' : at === 2 ? `<span class="sd-side"><i class="sd-dot" aria-hidden="true"></i>${entry.wordHtml}</span>` : `<span class="sr-only">${entry.wordHtml}</span>`;
+      const side = word === '' && entry.qualifier === '' ? '' : `${word}${qualifierTag(entry.qualifier, ctx)}`;
+      // With one more field, its header is said once by the board; with several, each card keeps its labels.
+      const fields = caption ? [rest[0]].map(col => fieldHtml(cellText(entry.row, col.at), ctx)).filter(html => html !== '').map(html => `<p class="sd-read">${html}</p>`).join('') : fieldList(entry.row, rest, ctx);
+      const card = `<article class="sd-entry"><div class="sd-top">${side || '<span></span>'}${traceFor(ctx, entry.row, rowLabelOf(block, ctx, entry.row, title))}</div>${figure ? `<p class="sd-fig">${figure}</p>` : ''}<p class="sd-name">${fieldHtml(title, ctx)}</p>${fields}${extraList(block, entry.row, ctx)}</article>`;
       return `<div class="sd-line sd-s${at}">${card}</div>`;
     };
     // Each side is its own column, its entries from the top in the table's order; a row on neither side stands full width beneath.
     const column = k => `<div class="sd-col sd-s${k}">${heading(k)}${entries.filter(entry => place(entry) === k).map(line).join('')}</div>`;
     const columns = sides.length ? `<div class="sd-cols">${column(0)}${column(1)}</div>` : '';
-    return `<div class="sd-board" data-block role="group"${ctx.caption ? ` aria-label="${escapeHtml(ctx.caption)}"` : ''}>${columns}${entries.filter(entry => place(entry) === 2).map(line).join('')}</div>`;
+    return `<div class="sd-board" data-block role="group"${ctx.caption ? ` aria-label="${escapeHtml(ctx.caption)}"` : ''}>${caption ? `<p class="sd-cap">${escapeHtml(caption)}</p>` : ''}${columns}${entries.filter(entry => place(entry) === 2).map(line).join('')}</div>`;
   }
 
   // The module name of a row is the handoff's own text for what the row is about: "Source readiness (CP-0)" is drawn as written, though a lone "(CP-0)" would be a reference.
@@ -941,16 +951,18 @@
     // `ctx.slot(row, n)` is markup the page adds under an entry (the library's run history puts a state mark, a module dot strip and a link there), `ctx.current(row, n)` marks the entry
     // the reader is on, and `ctx.unit` is the [singular, plural] the count names (default event). The entries stay the component's own.
     const unit = ctx.unit ?? ['event', 'events'];
+    // One more column: its header is said once above the list, and each event carries the value alone.
+    const lone = rest.length === 1 && block.rows.some(row => fieldHtml(cellText(row, rest[0].at), ctx) !== '') ? rest[0] : null;
     const items = block.rows.map((row, n) => {
       const when = cellText(row, dateCol.at), title = cellText(row, eventCol.at), word = catCol ? cellText(row, catCol.at) : '', wordHtml = word === '' ? '' : fieldHtml(word, ctx);
-      const mark = icon(wordHtml === '' ? 'calendar-days' : categoryIcon(plain(word))), more = fieldList(row, rest, ctx) + extraList(block, row, ctx);
+      const mark = icon(wordHtml === '' ? 'calendar-days' : categoryIcon(plain(word))), more = (lone ? [fieldHtml(cellText(row, lone.at), ctx)].filter(html => html !== '').map(html => `<p class="rec-x">${html}</p>`).join('') : fieldList(row, rest, ctx)) + extraList(block, row, ctx);
       const kind = wordHtml === '' ? '' : `<span class="tl-cat">${mark}${wordHtml}</span>`;
       return {when, html: `<li class="tl-i"${ctx.current?.(row, n) ? ' aria-current="true"' : ''}><div class="tl-d">${fieldHtml(when, ctx)}</div><div class="tl-row"><span class="tl-dot" aria-hidden="true">${mark}</span></div><div class="tl-b"><p class="tl-t">${fieldHtml(title, ctx)}</p>${kind}${more ? `<div class="tl-more">${more}</div>` : ''}${ctx.slot?.(row, n) ?? ''}${traceFor(ctx, row, rowLabelOf(block, ctx, row, title))}</div></li>`};
     });
     const years = items.map(item => ISO_DATE.exec(item.when)?.[1]);
     const vertical = Boolean(ctx.stacked) || items.length > HORIZONTAL_MAX, grouped = vertical && years.every(Boolean) && new Set(years).size > 1;
     const list = items.map((item, n) => (grouped && years[n] !== years[n - 1] ? `<li class="tl-yr" data-tick>${years[n]}</li>` : '') + item.html).join('');
-    const bar = shapeBar(`<span class="eyebrow"><span data-count>${items.length}</span> ${items.length === 1 ? unit[0] : unit[1]}</span>`, '');
+    const bar = shapeBar(`<span class="eyebrow"><span data-count>${items.length}</span> ${items.length === 1 ? unit[0] : unit[1]}</span>`, lone ? `<span class="shape-cap">${escapeHtml(lone.label)}</span>` : '');
     return shapeBlock('shape-dated', ctx, '', `${bar}<ol class="tl ${vertical ? 'tl-v' : 'tl-h'}">${list}</ol>`);
   }
 

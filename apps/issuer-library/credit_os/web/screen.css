@@ -748,18 +748,18 @@ details.fold[open]>:last-child,details.audit[open]>:last-child{margin-bottom:14p
 .source-location .inspector-card p:first-child{font-weight:600;color:var(--text-primary)}
 .source-location .inspector-card a{margin-top:8px;font-size:13px}
 .source-location .inspector-card .small{margin-top:8px;color:var(--text-quaternary)}
-/* Debt stack: one series per ranking and security pair (blue, bright green, yellow, violet; no amber or red here); an unstated ranking is neutral with an outline. */
-.stack-seg.series-1,.stack-key .series-1,.stack-legend .series-1{background:var(--series-2)}
+/* Debt stack: one series per ranking and security pair (blue, violet, yellow, navy: no status green, amber or red, and neighbours differ in lightness); an unstated ranking is neutral with an outline. */
+.stack-seg.series-1,.stack-key .series-1,.stack-legend .series-1{background:var(--series-4)}
 .stack-seg.series-2,.stack-key .series-2,.stack-legend .series-2{background:var(--series-3)}
-.stack-seg.series-3,.stack-key .series-3,.stack-legend .series-3{background:var(--series-4)}
+.stack-seg.series-3,.stack-key .series-3,.stack-legend .series-3{background:var(--navy)}
 .stack-seg.stack-neutral,.stack-key .stack-neutral,.stack-legend .stack-neutral{background:var(--rule);box-shadow:inset 0 0 0 1px var(--muted)}
 .stack-legend i{height:12px;width:12px;border-radius:2px}
 .vector-chart.bridge-wide{max-width:none;overflow-x:auto}
 /* Eight styles for the debt stack: from the fifth distinct pair the same fill carries a hatch. */
 .stack-seg.hatch,.stack-key .hatch,.stack-legend .hatch{background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.6) 0 3px,transparent 3px 6px)}
-.stack-seg.series-1.hatch,.stack-key .series-1.hatch,.stack-legend .series-1.hatch{background-image:repeating-linear-gradient(45deg,var(--series-2-ln) 0 2px,transparent 2px 6px)}
+.stack-seg.series-1.hatch,.stack-key .series-1.hatch,.stack-legend .series-1.hatch{background-image:repeating-linear-gradient(45deg,var(--series-4-ln) 0 2px,transparent 2px 6px)}
 .stack-seg.series-2.hatch,.stack-key .series-2.hatch,.stack-legend .series-2.hatch{background-image:repeating-linear-gradient(45deg,var(--series-3-ln) 0 2px,transparent 2px 6px)}
-.stack-seg.series-3.hatch,.stack-key .series-3.hatch,.stack-legend .series-3.hatch{background-image:repeating-linear-gradient(45deg,var(--series-4-ln) 0 2px,transparent 2px 6px)}
+.stack-seg.series-3.hatch,.stack-key .series-3.hatch,.stack-legend .series-3.hatch{background-image:repeating-linear-gradient(45deg,var(--blue-100) 0 2px,transparent 2px 6px)}
 /* Run activity (brand application Task 5): run cards with module progress, a table of waiting runs, counts and a centred empty state. Red Hat faces as before; spend is not shown. */
 .run-vh{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .run-activity-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin:0 0 20px}
@@ -1368,6 +1368,8 @@ td .basis-link{margin-left:4px}
 .sd-side{display:inline-flex;align-items:center;gap:6px;font:600 12px/1.4 'Red Hat Text',sans-serif;color:var(--text-secondary)}
 .q-tag{margin-top:0}
 .sd-fig{margin:6px 0 0;font:700 24px/1.15 'Red Hat Display',sans-serif;letter-spacing:-.015em;font-variant-numeric:tabular-nums;color:var(--text-primary);overflow-wrap:anywhere}
+.sd-cap{margin:0 0 10px;font:600 11px/16px 'Red Hat Text',sans-serif;letter-spacing:.04em;text-transform:uppercase;color:var(--text-tertiary)}
+.sd-read{margin:6px 0 0;font:400 13px/1.5 'Red Hat Text',sans-serif;color:var(--text-secondary);overflow-wrap:anywhere}
 .sd-name{margin:5px 0 0;font:600 13px/1.4 'Red Hat Text',sans-serif;color:var(--text-primary);overflow-wrap:anywhere}
 @media(max-width:767px){.sd-board{padding:16px}.sd-col>.sd-hs{display:none}.sd-cols{display:flex;flex-direction:column;gap:10px}}
 .ms-tiles{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));align-items:start}
@@ -1477,6 +1479,9 @@ details[open]>summary .ms-ch,details[open]>summary .qa-ch,details[open]>summary 
 .tl-dot .i{width:16px;height:16px}
 .tl-b{grid-column:2;grid-row:2;display:grid;justify-items:start;gap:6px;min-width:0}
 .tl-t{margin:0;font:600 13px/1.4 'Red Hat Text',sans-serif;color:var(--text-primary);overflow-wrap:anywhere;min-width:0}
+.shape-cap{font:600 11px/16px 'Red Hat Text',sans-serif;letter-spacing:.04em;text-transform:uppercase;color:var(--text-tertiary)}
+.tile-a{margin:8px 0 0;font:400 12px/1.45 'Red Hat Text',sans-serif;color:var(--muted);overflow-wrap:anywhere}
+.tiles-absent{margin:8px 0 0;font:400 12px/1.45 'Red Hat Text',sans-serif;color:var(--muted);overflow-wrap:anywhere}
 .tl-cat{display:inline-flex;align-items:center;gap:5px;max-width:100%;padding:2px 9px 2px 6px;border:1px solid var(--rule);border-radius:999px;background:var(--quiet);font:600 11px/1.4 'Red Hat Text',sans-serif;color:var(--text-secondary)}
 .tl-cat .i{width:13px;height:13px;color:var(--blue-700);flex:none}
 .tl-more{min-width:0;max-width:100%;width:100%}.tl-more .rec-fields{margin:0;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:6px 20px}
@@ -1711,6 +1716,17 @@ details[open]>summary .ms-ch,details[open]>summary .qa-ch,details[open]>summary 
 .chg-to{display:inline-flex;vertical-align:middle;margin:0 8px;color:var(--text-quaternary)}
 .chg-to .i{width:18px;height:18px}
 div.chart-open{cursor:default}
+.fc-card .stack-tbl{container-type:inline-size;min-width:0}
+.fc-card .stack-head{display:none}
+@container (min-width:560px){
+.fc-card .stack-head{display:grid;grid-template-columns:22px minmax(0,2fr) repeat(4,minmax(0,1fr));gap:0 14px;padding:0 0 4px;border-bottom:1px solid var(--rule);font:600 var(--fs-label)/1.3 'Red Hat Text',sans-serif;letter-spacing:.04em;text-transform:uppercase;color:var(--text-tertiary)}
+.fc-card .stack-head span:first-child{grid-column:3}
+.fc-card .stack-key li{display:grid;grid-template-columns:22px minmax(0,2fr) repeat(4,minmax(0,1fr));gap:0 14px;align-items:baseline}
+.fc-card .stack-key li>span:not(.stack-name){display:contents}
+.fc-card .stack-key .stack-facts{display:contents}
+.fc-card .stack-key .stack-facts div{align-self:baseline}
+.fc-card .stack-key .stack-facts dt{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+}
 .fc-card .stack-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:4px 14px;margin:4px 0 0}
 .fc-card .stack-facts div{min-width:0}
 .fc-card .stack-facts dt{color:var(--text-quaternary);font:500 var(--fs-label)/1.3 'Red Hat Text',sans-serif}
