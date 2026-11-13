@@ -114,6 +114,28 @@ WRAPPERS = {
         f'{_PYTHON} -m deploy_workflow.run_start --root "%ROOT%" --host "%HOSTADDR%" --port 8765',
         "exit /b %errorlevel%",
     ],
+    "Start signal.cmd": [
+        "@echo off",
+        "setlocal",
+        "rem Serve the Signal feed: stories from the approved news, regulator and ratings feeds.",
+        "rem Folder: the first argument, else FINAL_WORKFLOW_WORKSPACE.",
+        "rem Address: the second argument, else 127.0.0.1 (this machine only). Pass this machine's",
+        "rem own address to serve colleagues; 0.0.0.0 is refused. It makes no model call and needs",
+        "rem no provider key.",
+        *_ROOT_ARGUMENT,
+        'set "HOSTADDR=%~2"',
+        'if not defined HOSTADDR set "HOSTADDR=127.0.0.1"',
+        "if not defined ROOT (",
+        "  echo Usage: Start signal.cmd ^<shared folder^> [address]",
+        "  echo Or set FINAL_WORKFLOW_WORKSPACE to the shared folder.",
+        "  exit /b 1",
+        ")",
+        (
+            f'{_PYTHON} -m deploy_workflow.signal --root "%ROOT%" serve --host "%HOSTADDR%"'
+            " --port 8766"
+        ),
+        "exit /b %errorlevel%",
+    ],
 }
 
 
@@ -145,7 +167,9 @@ def bundle(target: Path, architecture: str | None) -> None:
     if (engine / "src").exists():
         shutil.rmtree(engine / "src")
     shutil.copytree(
-        ROOT / "src", engine / "src", ignore=shutil.ignore_patterns("__pycache__", "*.pyc")
+        ROOT / "src",
+        engine / "src",
+        ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.test.cjs"),
     )
     # The launcher reads each module's method from these, relative to the engine folder.
     for name in ["docs/reuse/selected-methods", "prompts"]:
