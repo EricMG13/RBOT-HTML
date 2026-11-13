@@ -1,0 +1,166 @@
+diff --git a/VERIFICATION.md b/VERIFICATION.md
+index 3e0ec7d..08ba5b4 100644
+--- a/VERIFICATION.md
++++ b/VERIFICATION.md
+@@ -4,6 +4,14 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
+ engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
+ `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
+ 
++## 2026-11-14 — CP-1 follow-ups: a spaced prefixed currency symbol keeps the gap option; the library list marks adjusted leverage (branch `claude/cp1-spaced-prefix-advice`)
++Scope: OFFLINE only; tests on synthetic handoffs and catalogue rows; no model run, no browser.
++- Unit advice (`5a1ab8c`): on a USD issuer `C $m`, `A $m` and `HK $ thousands` in a CP-1 money table were told to restate under `US$m` with no gap option; they now get "use `US$m` if the figure is in the statement currency in millions, else write `Not supplied: reported in <unit>`". Test first (three cases red), reviewer probe `probe_adv7_spaced_prefix_told_to_restate.py` exit 0; `$m` on USD and `£m` on GBP keep the definite advice.
++- Library list view (`1882de8`): a leverage, net leverage or cover figure on adjusted EBITDA shows `adj.` beside the number, full name in the title; a figure with no label renders as before (string pinned). Fidelity check: `static.test.cjs` only.
++- Ruling record corrected: the library's filters and sort rank an adjusted multiple beside reported ones (it had said they did not). Whether that stays is the owner's open question.
++- Gates: `uv run pytest tests/test_cpos_cp1_check.py tests/test_cpos_launch.py tests/test_library_index.py tests/test_credit_os_catalogue.py tests/test_credit_os_store.py -q -m "not browser"` 1379 passed, 1 skipped (paid), exit 0; the node suite `checks.yml` lists, 565 passed, exit 0; `uv run python tools/quality_gate.py` exit 0, 0 findings.
++Not verified: the marker in a browser (the leverage columns are narrow, it may wrap under the number); `US $m` on a USD issuer has no test of its own; any model run; browser-marked tests and the full suite.
++
+ ## 2026-11-13 — CP-1 runs the Deploy V method, adapted; its figures are checked in code at acceptance (branch `claude/cp1-deploy-v-method`, ruling `docs/rulings/2026-11-13-cp1-deploy-v-method-and-acceptance-check.md`)
+ Scope: OFFLINE only. Tests, reviewer probes (`.superpowers/sdd/cp1-method/probes/`) and the check run over two retained TDG CP-1 handoffs; no provider or model call, and no handoff written under this method exists. Built, not accepted: Forecast, charts, Overview and Changes read CP-1's tables, so a paid run (the owner's separate action) is needed before acceptance.
+ - Method: caos-databricks `dfff264` CP-1 skill, runbook and step file archived byte for byte (`8b9905f`), then named edits (manifest `edit` strings): workbook step and routing removed, step 13's analytical rules restated, project conventions for missing values, gaps and headings, fixed rows for the operands the check reads, debt at carrying value, reported EBITDA primary. `STEP_CONTRACTS` no longer sent. Sent files 78,387 -> about 29,000 characters; every pathway within its unchanged `INSTRUCTION_BUDGET` ceiling (tightest: short_snapshot 157,043 of 157,500).
+diff --git a/apps/issuer-library/credit_os/web/screen.css b/apps/issuer-library/credit_os/web/screen.css
+index b124016..60e11e3 100644
+--- a/apps/issuer-library/credit_os/web/screen.css
++++ b/apps/issuer-library/credit_os/web/screen.css
+@@ -124,6 +124,7 @@ main{min-width:0;min-height:0;display:flex;flex-direction:column}#module-head{pa
+ .library-table th button{font:inherit;color:inherit;padding:0}
+ .library-table tr.selected>td{background:var(--blue-50)}
+ .library-table td.missing{color:var(--text-quaternary)}
++.library-table .metric-adj{font-size:var(--fs-label);color:var(--text-quaternary);white-space:nowrap}
+ .library-run-name{display:block;padding:0;text-align:left;font:600 var(--fs-body)/20px 'Red Hat Text',sans-serif;color:var(--text-primary)}
+ .library-table td.run-when{overflow-wrap:anywhere}
+ .library-table th:nth-child(1){width:18.3%}.library-table th:nth-child(2){width:19.2%}.library-table th:nth-child(3){width:8.3%}.library-table th:nth-child(4){width:9.2%}.library-table th:nth-child(5){width:6.9%}.library-table th:nth-child(6){width:8.6%}.library-table th:nth-child(7){width:7%}.library-table th:nth-child(8){width:5.5%}.library-table th:nth-child(9){width:9.3%}.library-table th:nth-child(10){width:7.7%}
+diff --git a/apps/issuer-library/credit_os/web/static.test.cjs b/apps/issuer-library/credit_os/web/static.test.cjs
+index 3bf060e..39a559a 100644
+--- a/apps/issuer-library/credit_os/web/static.test.cjs
++++ b/apps/issuer-library/credit_os/web/static.test.cjs
+@@ -2131,6 +2131,19 @@ test('screen.css (decision 5): a module-page table box shows a scroll shadow, ma
+   assert.ok(/\.passage-code\{[^}]*white-space:pre/.test(css));
+ });
+ 
++test('library: a leverage figure on adjusted EBITDA carries a visible adj. marker in its list cell; an unlabelled one is drawn as before', () => {
++  const { libraryRow } = runPage();
++  const base = { id: 'run-z', name: 'Zed', issuer: 'ZED', title: 'Credit Snapshot', sector: 'Telecoms', date: '2024-09-30', period: 'FY-2024', completion: null, artifacts: [], ratings: [] };
++  const plain = { value: '5.96', unit: 'x', basis: 'C9', period: 'FY2024' };
++  const cellOf = (metrics, n) => [...libraryRow({ ...base, metrics }, false, false).matchAll(/<td([^>]*)>(.*?)<\/td>/g)][n][0];
++  const labelled = cellOf({ leverage: { ...plain, label: 'Total debt / adjusted EBITDA' }, net_leverage: plain, coverage: null }, 4);
++  assert.equal(labelled, '<td title="Total debt / adjusted EBITDA · FY2024">5.96\u00d7 <small class="metric-adj">adj.</small></td>');
++  assert.ok(/>[^<]*<small class="metric-adj">adj\.<\/small><\/td>$/.test(labelled), 'the marker is visible text inside the cell, not only an attribute');
++  assert.equal(cellOf({ leverage: plain, net_leverage: plain, coverage: null }, 4), '<td title="FY2024">5.96\u00d7</td>');
++  assert.equal(cellOf({ leverage: plain, net_leverage: { ...plain, label: 'Net <debt> / adjusted EBITDA' }, coverage: null }, 5), '<td title="Net &lt;debt&gt; / adjusted EBITDA · FY2024">5.96\u00d7 <small class="metric-adj">adj.</small></td>');
++  assert.ok(read('screen.css').includes('.library-table .metric-adj{'));
++});
++
+ test('library: a row is one item per column; what left the row is the cell title or the selected-run panel', () => {
+   const { libraryRow } = runPage();
+   const metric = (value, basis) => ({ value, unit: 'x', basis, period: 'FY2024' });
+diff --git a/apps/issuer-library/credit_os/web/views.js b/apps/issuer-library/credit_os/web/views.js
+index a4e0a09..5245b24 100644
+--- a/apps/issuer-library/credit_os/web/views.js
++++ b/apps/issuer-library/credit_os/web/views.js
+@@ -1423,7 +1423,7 @@ function libraryCoverage({runs,coverage,unscreened}) {
+ // A ratio's basis is Evidence's, not the library's (library redesign, Task 11): the cell title is the period the figure is for.
+ const libraryMetricCell=(run,key)=>{
+   const metric=run.metrics[key];
+-  return `<td${metric?'':' class="missing"'} title="${esc(metric?(metric.label?metric.label+' · ':'')+(metric.period||'Period not recorded'):'Not available')}">${esc(libraryMetric(metric))}</td>`;
++  return `<td${metric?'':' class="missing"'} title="${esc(metric?(metric.label?metric.label+' · ':'')+(metric.period||'Period not recorded'):'Not available')}">${esc(libraryMetric(metric))}${metric&&metric.label?' <small class="metric-adj">adj.</small>':''}</td>`;
+ };
+ const libraryRatingText=r=>[r.agency||'Agency not recorded',RATING_SCOPES[r.scope]||'Scope not recorded',libraryDate(r.date)].join(' · ');
+ function libraryRatingCell(run) {
+diff --git a/docs/rulings/2026-11-13-cp1-deploy-v-method-and-acceptance-check.md b/docs/rulings/2026-11-13-cp1-deploy-v-method-and-acceptance-check.md
+index 1eb9159..ccf5c81 100644
+--- a/docs/rulings/2026-11-13-cp1-deploy-v-method-and-acceptance-check.md
++++ b/docs/rulings/2026-11-13-cp1-deploy-v-method-and-acceptance-check.md
+@@ -85,8 +85,15 @@ written "to stop the model from self validation and calculation"; CP-OS runs non
+   the six fixed metric rows passes when the charts are gaps.
+ - Adjusted-only, the controller's defaults: periods are not mixed (if reported EBITDA is stated
+   for any period, the reported headers are used and a period with only adjusted EBITDA is a gap
+-  in the chart); adjusted leverage is not added to the library's leverage screening filters; a
+-  reporting currency entered at run start that differs from the statements is not flagged.
++  in the chart); a reporting currency entered at run start that differs from the statements is
++  not flagged.
++- Library, as the code stands (corrected 2026-11-14; an earlier version of this record said
++  adjusted leverage was kept out of the screening filters, which was wrong). An adjusted-only
++  run's leverage, net leverage and interest cover are stored under the same metric keys as a
++  reported run's, with the adjusted name as `label`. The library's range filters and sort read
++  the number only, so an adjusted multiple is filtered and ranked beside reported ones. The run
++  card names the adjusted measure and the list view marks the figure `adj.` (full name on hover).
++  Open for the owner: whether adjusted figures stay in the leverage filters and sort.
+ - On the Changes page a run on reported EBITDA against a run on adjusted EBITDA is "not
+   comparable", with both labels in the reason; no difference is printed.
+ - Instruction size. The method text CP-1 is sent was shortened by 5,851 characters (duplicate
+@@ -133,8 +140,7 @@ written "to stop the model from self validation and calculation"; CP-OS runs non
+   not read; a register header one letter off hides the register's other issues until the next
+   write; an `LTM` statement column is refused and nothing says it belongs in the derived-period
+   table; the Changes page cannot read free cash flow from the statement tables' `Unit` column;
+-  a unit with a space inside a prefixed symbol (`C $m`) is told to restate under the money unit
+-  with no gap option; a unit such as `US$m (thousands)` is told to move the note to Basis, which
++  a unit such as `US$m (thousands)` is told to move the note to Basis, which
+   keeps a thousands figure under a millions unit (predates this change);
+   two `calculate` tests are weaker than they should be (one accepts either an error or a null;
+   one uses `sum` as its oracle); the money-unit pattern is written in both delivery and the
+diff --git a/src/deploy_workflow/owners/cpos_launch.py b/src/deploy_workflow/owners/cpos_launch.py
+index db0b414..1d1ff1e 100644
+--- a/src/deploy_workflow/owners/cpos_launch.py
++++ b/src/deploy_workflow/owners/cpos_launch.py
+@@ -1507,15 +1507,17 @@ def _millions_of(unit: str, codes: Collection[str]) -> bool:
+     return bool(re.fullmatch(rf"{token}\s*{_MILLIONS}|{_MILLIONS}\s+{token}", unit.strip()))
+ 
+ 
+-_PREFIXED = re.compile(rf"[A-Za-z][{''.join(_SYMBOL_CODE)}]")
++_PREFIXED = re.compile(rf"[A-Za-z]\s*[{''.join(_SYMBOL_CODE)}]")
++_PREFIXED_RUN = re.compile(rf"[A-Za-z]+\s*[{''.join(_SYMBOL_CODE)}]")
+ 
+ 
+ def _unidentified_symbols(unit: str) -> tuple[bool, str]:
+-    """Whether `unit` has a currency symbol with a letter right before it (`C$`, `A$`, `CN\u00a5`):
+-    the symbol alone does not say which currency it is. `US$` is the launcher's own spelling of
+-    USD, so it is not one. Also returns `unit` with those prefixed symbols removed."""
++    """Whether `unit` has a currency symbol with a letter right before it, spaced or not (`C$`,
++    `C $`, `A$`, `CN\u00a5`): the symbol alone does not say which currency it is. `US$` is the
++    launcher's own spelling of USD, so it is not one. Also returns `unit` with those prefixed
++    symbols removed."""
+     text = unit.replace("US$", "USD")
+-    return bool(_PREFIXED.search(text)), re.sub(rf"[A-Za-z]+[{''.join(_SYMBOL_CODE)}]", "", text)
++    return bool(_PREFIXED.search(text)), _PREFIXED_RUN.sub("", text)
+ 
+ 
+ def _money_advice(money: str, unit: str) -> str:
+diff --git a/tests/test_cpos_cp1_check.py b/tests/test_cpos_cp1_check.py
+index 1647e38..442d529 100644
+--- a/tests/test_cpos_cp1_check.py
++++ b/tests/test_cpos_cp1_check.py
+@@ -1958,6 +1958,9 @@ def test_another_currency_at_another_scale_keeps_only_the_gap_advice(unit):
+         ("USD", "NZ$m"),
+         ("USD", "R$m"),
+         ("USD", "C$ thousands"),
++        ("USD", "C $m"),
++        ("USD", "A $m"),
++        ("USD", "HK $ thousands"),
+         ("JPY", "CN\u00a5m"),
+     ],
+ )
+@@ -1973,6 +1976,24 @@ def test_a_letter_prefixed_symbol_is_not_the_statement_currency_and_keeps_the_ga
+     assert "restate" not in issue
+ 
+ 
++@pytest.mark.parametrize(("code", "unit"), [("USD", "$m"), ("GBP", "\u00a3m"), ("USD", "1$m")])
++def test_a_bare_symbol_is_still_told_the_definite_advice_with_no_gap_option(code, unit):
++    money_unit = money(code)
++    text = complete(relabel(build(), code), money_unit).replace(
++        f"| 12,000 | 3.1 | {money_unit} |", f"| 12,000 | 3.1 | {unit} |"
++    )
++    (issue,) = chart_issues(text, _spec("Chart data: debt stack"), money=money_unit)
++    if unit == "1$m":
++        named(
++            issue,
++            f"restate the figure in millions of the statement currency and write `{money_unit}`",
++        )
++        assert "Not supplied" not in issue
++        return
++    named(issue, f"use `{money_unit}`.")
++    assert "Not supplied" not in issue and "if the figure" not in issue
++
++
+ def test_a_prefixed_dollar_on_an_aud_issuer_is_not_told_only_to_write_a_gap():
+     text = complete(relabel(build(), "AUD"), "AUDm").replace(
+         "| 12,000 | 3.1 | AUDm |", "| 12,000 | 3.1 | A$m |"
