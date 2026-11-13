@@ -1663,6 +1663,73 @@ def with_chart_in_findings(text: str) -> str:
     return text.replace(marker, MATURITIES + marker, 1)
 
 
+# Synthetic: a status table as a module writes it, with long cells in the label and the state.
+CK_LABEL = (
+    "Environmental liability balances are in audited financial notes. Climate, emissions target, "
+    "labour and risk narrative are management disclosures; separate emissions assurance not "
+    "supplied."
+)
+CK_STATE = (
+    "Completed with Limitations — operating exposure identified; asset-level transition costs "
+    "and sustainability-linked terms not established"
+)
+CK_SOURCE = "Annual report, pages 13–13; annual report, pages 18–26; annual report, pages 160–161"
+CK_FLAG = (
+    "No evidenced misrepresentation established. “Science-aligned” target and relatively low "
+    "emissions are management characterizations, not independent assurance or creditor protection."
+)
+LONG_STATE = (
+    "\n### Synthetic: source reliability status\n\n"
+    "| Source | Reliability (audited/assured vs self-reported) | Greenwashing Flag |"
+    " Module Status |\n"
+    "| --- | --- | --- | --- |\n"
+    f"| {CK_SOURCE} | {CK_LABEL} | {CK_FLAG} | {CK_STATE} |\n"
+)
+CK_MEASURE = (
+    "(() => { const box = q => document.querySelector('.ck-head ' + q).getBoundingClientRect();"
+    " const head = document.querySelector('.ck-head').getBoundingClientRect();"
+    " const trace = document.querySelector('.ck-head button');"
+    " const parts = ['.ck-label', '.state'].map(q => box(q));"
+    " if (trace) parts.push(trace.getBoundingClientRect());"
+    " const overlap = parts.some((a, i) => parts.some((b, j) => i < j && a.width && b.width"
+    " && a.top < b.bottom && b.top < a.bottom"
+    " && a.left < b.right - 0.5 && b.left < a.right - 0.5));"
+    " const de = document.documentElement;"
+    " return { head: head.width, label: box('.ck-label').width, state: box('.state').width,"
+    " labelBottom: box('.ck-label').bottom, stateTop: box('.state').top, overlap,"
+    " fits: de.scrollWidth <= de.clientWidth,"
+    " labelText: document.querySelector('.ck-head .ck-label').textContent,"
+    " stateText: document.querySelector('.ck-head .state-w').textContent }; })()"
+)
+
+
+@pytest.mark.parametrize("width", [1440, 420])
+def test_a_status_row_with_a_long_state_keeps_its_label_readable(tmp_path, width):
+    page = synthetic_workspace(tmp_path, with_status_in_findings)
+    seen = cdp_measure(
+        page,
+        f"#CP-2?c={NEW_FORMAT_RUN}",
+        CK_MEASURE,
+        ".ck-head",
+        {"width": width},
+    )
+    assert seen["labelText"] == CK_LABEL and seen["stateText"] == CK_STATE, seen
+    assert seen["overlap"] is False and seen["fits"] is True, seen
+    if width == 1440:
+        assert seen["label"] >= 300, seen
+        assert seen["state"] <= seen["head"] / 2 + 1, seen
+    else:
+        assert seen["label"] >= 250, seen
+        assert seen["stateTop"] >= seen["labelBottom"], seen
+
+
+def with_status_in_findings(text: str) -> str:
+    """The synthetic CP-2 handoff with one status table under its Findings part."""
+    marker = "\n## Calculations"
+    assert marker in text
+    return text.replace(marker, LONG_STATE + marker, 1)
+
+
 def test_the_earlier_format_module_page_takes_the_redesign_layout(tmp_path):
     seen = read_module_page(nine_part_library(tmp_path), "#CP-1/head?c=run-a")
     delivery = next((tmp_path / "runs/run-a/deliveries").iterdir()).name
