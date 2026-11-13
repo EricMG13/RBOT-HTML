@@ -26,7 +26,7 @@ Status: **Done** (in a PR), **Needed** (the screen is wrong or incomplete withou
 | 7 | Ten modules stop writing registers nobody reads | Modules | The cut sections disappear; confirm no empty headings or dead links remain | Check | T4 session report |
 | 8 | Handoffs are shorter | Evidence | "Original Markdown" links and `handoffs.zip` carry the shorter handoffs; data on the page is identical | Check | T4 session report |
 | 9 | CP-OS refuses a handoff missing an in-scope register | Run-start progress | A refusal reason the analyst can read, if refusals are shown there | Check | T4 |
-| 9a | The cut tells Rates, FX & hedging not to write any ESG table (T2G.1 to T2G.8) | Modules (ESG part), run-start catalogue | PR 100's ESG part would be empty on new runs and the catalogue sentence false; keep the ESG tables the page draws, or remove the part | Decide | Review of PRs 107 and 108 |
+| 9a | The cut tells Rates, FX & hedging not to write any ESG table (T2G.1 to T2G.8) | Modules (ESG part), run-start catalogue | PR 100's ESG part would be empty on new runs and the catalogue sentence false; owner, 2026-11-13: "Yes, keep ESG tables"; T4 is removing T2G.1 to T2G.8 from its cut list | Needed (T4 fix in progress) | Review of PRs 107 and 108 |
 | 9b | Evidence validation no longer writes its issue log or audit tables | Modules (Evidence validation), Evidence | Confirm its findings still reach the reader through its passages and Gaps | Check | Review of PRs 107 and 108 |
 
 ## From CP-DR online lookup (T5, in progress)
