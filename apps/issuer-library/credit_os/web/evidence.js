@@ -63,7 +63,8 @@
       return {section, chain, role: shapes.sectionRole(chain, placement?.[at])};
     });
   }
-  const knownFiles = ev => [...ev.sources, ...ev.unused, ...(ev.unrecorded || [])].map(f => f.name).filter(Boolean);
+  // A run with no evidence record has no known files (view() names that state itself); the gap count does not read them.
+  const knownFiles = ev => !ev ? [] : [...ev.sources, ...ev.unused, ...(ev.unrecorded || [])].map(f => f.name).filter(Boolean);
   // One module's content: trace statements, calculation, gap and register entries, finding tables as written, method notes.
   function moduleContent(mod, input) {
     const known = knownFiles(input.run.evidence);
@@ -109,6 +110,10 @@
   const rowTotal = entries => entries.reduce((n, entry) => n + entry.tables.reduce((k, t) => k + t.rows.length, 0), 0);
   const tableTotal = c => c.regs.reduce((n, e) => n + e.tables.length, 0) + c.written.length;
   const selected = (all, module) => (module ? all.filter(c => c.id === module) : all);
+  // The number of gap items the Gaps tab lists for a scope: the whole run, or one module (the tab's module filter), over every saved output of each module. The tab's badge, the summary and
+  // every findings page's gap signal are this one count.
+  const gapRows = all => all.reduce((n, c) => n + rowTotal(c.gaps), 0);
+  const gapCount = (input, module = null) => gapRows(selected(contents(input), module));
 
   // ---- small markup helpers ----
   const hay = (...parts) => esc(parts.map(part => plain(part ?? '')).join(' ').toLowerCase());
@@ -263,7 +268,7 @@
       trace: all.reduce((n, c) => n + c.trace.length, 0),
       sources: ev.sources.filter(f => !module || f.readBy.includes(module)).length,
       calculations: all.reduce((n, c) => n + rowTotal(c.calcs) + c.calcNotes.length, 0),
-      gaps: all.reduce((n, c) => n + rowTotal(c.gaps), 0),
+      gaps: gapRows(all),
       registers: all.reduce((n, c) => n + tableTotal(c) + c.regNotes.length, 0),
       record: input.run.steps.filter(s => !module || s.module === module).length,
     };
@@ -385,7 +390,7 @@
     applyFilter(input.closest('.ev'));
   }
 
-  const api = {TABS, parseHash, href, tableView, classify, gapTotal, ledgerTotal, traceRows, traceBody, view, searchPlan, handleClick, handleSearch};
+  const api = {TABS, parseHash, href, tableView, classify, gapTotal, gapCount, ledgerTotal, traceRows, traceBody, view, searchPlan, handleClick, handleSearch};
   if (typeof window !== 'undefined') window.Evidence = api;
   if (typeof module !== 'undefined') module.exports = api;
 })();

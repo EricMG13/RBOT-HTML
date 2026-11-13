@@ -122,15 +122,24 @@
     const reader = readerText();
     const {body} = reader.paragraphBody(entry.text);
     const figures = reader.figureSpans(body);
-    const show = (from, to) => reader.figuredHtml(body, figures, from, to, (i, text) => (figure && figure(entry.line, i, text)) || escapeHtml(text));
+    const marks = [...body.matchAll(/\*\*/g)].map(m => m.index);
+    const button = (i, text) => (figure && figure(entry.line, i, text)) || escapeHtml(text);
+    // A stretch cut inside **bold** is drawn with the open mark closed at the cut (and reopened at the start of the next stretch): the only characters added are those marks.
+    const show = (from, to) => {
+      const inside = marks.filter(m => m >= from && m + 2 <= to);
+      if (inside.length % 2 === 0) return reader.figuredHtml(body, figures, from, to, button);
+      const lead = marks.indexOf(inside[0]) % 2 === 1 ? '**' : '', tail = lead ? '' : '**';  // the odd mark is a closer (the stretch starts in bold) or an opener (it ends in bold)
+      const framed = `${body.slice(0, from)}${lead}${body.slice(from, to)}${tail}`;
+      return reader.figuredHtml(framed, figures.map(f => (f.start >= from ? {...f, start: f.start + lead.length, end: f.end + lead.length} : f)), from, to + lead.length + tail.length, button);
+    };
     return {body, show};
   }
   const paragraphs = (texts, figure) => texts.map(entry => ({entry, ...prose(entry, figure)})).filter(p => p.body.trim() !== '');
   const traceOf = (trace, entry) => (trace ? trace(entry.line) : '');
   // A sentence ends at ". " before a capital letter or at the end of the text; the first one is whole, never cut.
   function firstSentence(body) {
-    const end = /\.\s+(?=[A-Z])/.exec(body);
-    return end ? {lead: [0, end.index + 1], rest: [end.index + end[0].length, body.length]} : {lead: [0, body.length], rest: [body.length, body.length]};
+    const end = /\.(?:\*\*)?\s+(?=[A-Z])/.exec(body), close = end && end[0].startsWith('.**') ? 2 : 0;  // a closing ** right after the full stop belongs to the sentence
+    return end ? {lead: [0, end.index + 1 + close], rest: [end.index + end[0].length, body.length]} : {lead: [0, body.length], rest: [body.length, body.length]};
   }
 
   const LONG_LEAD = 140;
@@ -495,13 +504,16 @@
   // is a whole phrase of `text` (case aside), in the table's own order and at most four; none matches, no strip. Each cell is the label (a link to the module that holds the
   // table: `link` is {href, title}), the latest period's cell as written, the earlier periods' numeric cells beneath, and the row's trace control. Nothing is picked by position.
   const STRIP_MAX = 4;
-  const phraseIn = (phrase, text) => phrase !== '' && new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegex(phrase)}(?![\\p{L}\\p{N}])`, 'iu').test(text);
+  const phrasesIn = (phrase, text) => (phrase === '' ? [] : [...text.matchAll(new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegex(phrase)}(?![\\p{L}\\p{N}])`, 'giu'))].map(m => [m.index, m.index + m[0].length]));
   function metricStrip(block, ctx, text, link) {
     const cols = visibleColumns(block, 'metric', ctx), labelCol = cols[0], periodCols = cols.slice(1).filter(col => col.kind === 'period');
     if (!labelCol || !periodCols.length || !block.rows.length) return '';
     const {latest, earlier} = periodOrder(periodCols), reader = readerText();
-    const cells = block.rows
-      .filter(row => fieldHtml(cellText(row, labelCol.at), ctx) !== '' && phraseIn(reader.plainText(cellText(row, labelCol.at)).trim(), reader.plainText(text)))
+    const plainText = reader.plainText(text);
+    const named = block.rows.filter(row => fieldHtml(cellText(row, labelCol.at), ctx) !== '').map(row => ({row, spans: phrasesIn(reader.plainText(cellText(row, labelCol.at)).trim(), plainText)})).filter(item => item.spans.length);
+    // A label found only inside the span of a longer label the text names ("EBITDA" in "EBITDA margin") is not cited on its own; one that also stands alone elsewhere stays.
+    const inside = (span, other) => other.spans.some(o => o[0] <= span[0] && span[1] <= o[1] && o[1] - o[0] > span[1] - span[0]);
+    const cells = named.filter(item => item.spans.some(span => !named.some(other => other !== item && inside(span, other)))).map(item => item.row)
       .slice(0, STRIP_MAX).map(row => {
         const label = cellText(row, labelCol.at);
         const below = earlier.map(col => [col, cellText(row, col.at)]).filter(([, value]) => value !== '' && startsWithNumber(value)).map(([col, value]) => `${escapeHtml(col.label)} ${fieldHtml(value, ctx)}`).join(' · ');
@@ -630,13 +642,16 @@
     const pair = OPPOSING_SIDES.find(([a, b]) => tally.has(a) && tally.has(b)), sides = pair ? pair.map(key => tally.get(key)) : [...tally.values()].slice(0, 2);
     const place = entry => (sides[0]?.key === entry.key ? 0 : sides[1]?.key === entry.key ? 1 : 2);
     const head = sides.length ? `<div class="sd-h">${sides.map((side, k) => `<p class="sd-hs sd-s${k}"><i class="sd-dot" aria-hidden="true"></i>${side.first.wordHtml}<b class="sd-n">${side.n}</b></p>`).join('<span></span>')}</div>` : '';
-    const lines = entries.map(entry => {
+    const line = entry => {
       const at = place(entry), title = cellText(entry.row, labelCol.at), figure = figCol ? fieldHtml(cellText(entry.row, figCol.at), ctx) : '';
       const side = entry.wordHtml === '' && entry.qualifier === '' ? '' : `<span class="sd-side"><i class="sd-dot" aria-hidden="true"></i>${entry.wordHtml}</span>${qualifierTag(entry.qualifier, ctx)}`;
       const card = `<article class="sd-entry"><div class="sd-top">${side || '<span></span>'}${traceFor(ctx, entry.row, rowLabelOf(block, ctx, entry.row, title))}</div>${figure ? `<p class="sd-fig">${figure}</p>` : ''}<p class="sd-name">${fieldHtml(title, ctx)}</p>${fieldList(entry.row, rest, ctx)}${extraList(block, entry.row, ctx)}</article>`;
-      return `<div class="sd-line sd-s${at}">${at === 2 ? '' : '<i class="sd-node" aria-hidden="true"></i>'}${card}</div>`;
-    }).join('');
-    return `<div class="sd-board" data-block role="group"${ctx.caption ? ` aria-label="${escapeHtml(ctx.caption)}"` : ''}>${head}${lines}</div>`;
+      return `<div class="sd-line sd-s${at}">${card}</div>`;
+    };
+    // Each side is its own column, its entries from the top in the table's order; a row on neither side stands full width beneath.
+    const column = k => `<div class="sd-col sd-s${k}">${entries.filter(entry => place(entry) === k).map(line).join('')}</div>`;
+    const columns = sides.length ? `<div class="sd-cols">${column(0)}${column(1)}</div>` : '';
+    return `<div class="sd-board" data-block role="group"${ctx.caption ? ` aria-label="${escapeHtml(ctx.caption)}"` : ''}>${head}${columns}${entries.filter(entry => place(entry) === 2).map(line).join('')}</div>`;
   }
 
   // The module name of a row is the handoff's own text for what the row is about: "Source readiness (CP-0)" is drawn as written, though a lone "(CP-0)" would be a reference.
@@ -671,21 +686,25 @@
     return listGroup('ms-tiles', ctx, tiles.join(''));
   }
 
-  // C20 on the Overview: one native-accordion tile per module, grouped as the module rail groups them. `groups` is [{title, items}]; an item is {title, href, state, texts, trace, figure}
+  // C20 on the Overview: one native-accordion tile per module, in the order the module rail groups them. `groups` is [{title, items}]; an item is {title, href, state, texts, trace, figure}
   // (its Bottom line paragraphs) or {title, href, choose: {count, href}} (saved outputs and none chosen). The collapsed tile shows the module's declared state (word and icon) and the
   // first sentence of its Bottom line; open, it shows the whole Bottom line and the link to the module. Every tile shares one `name`, so the browser keeps one open at a time.
   const NO_BOTTOM_LINE = 'No bottom line in this handoff.';
-  function moduleTile(item) {
-    const state = item.state ? stateBadge(item.state, {}) : '';
-    if (item.choose) return `<div class="mt mt-plain"><p class="mt-top"><span class="mt-name">${escapeHtml(item.title)}</span></p><p class="mt-lead">${item.choose.count} saved outputs, none chosen. <a class="in-ev" href="${escapeHtml(item.choose.href)}">Choose one</a></p></div>`;
+  const NOT_ASSESSABLE_MARK = '<span class="badge badge-gray">Not assessable</span>';
+  function moduleTile(item, group) {
+    // One line under the title for the marks (the module rail's Not assessable mark, the declared state): they never wrap and never sit beside the title.
+    const marks = `${item.blocked ? NOT_ASSESSABLE_MARK : ''}${item.state ? stateBadge(item.state, {}) : ''}`, state = marks ? `<span class="mt-state">${marks}</span>` : '';
+    const eyebrow = `<span class="eyebrow mt-group">${escapeHtml(group)}</span>`;
+    if (item.choose) return `<div class="mt mt-plain">${eyebrow}<p class="mt-top"><span class="mt-name">${escapeHtml(item.title)}</span></p><p class="mt-lead">${item.choose.count} saved outputs, none chosen. <a class="in-ev" href="${escapeHtml(item.choose.href)}">Choose one</a></p></div>`;
     const [first] = paragraphs(item.texts || [], null);
     const lead = first ? first.show(...firstSentence(first.body).lead) : NO_BOTTOM_LINE;
     const body = paragraphs(item.texts || [], item.figure).map(p => `<p class="mt-p">${p.show(0, p.body.length)}${traceOf(item.trace, p.entry)}</p>`).join('');
-    return `<details class="mt" name="overview-modules"><summary class="mt-head"><span class="mt-top"><span class="mt-name">${escapeHtml(item.title)}</span>${state}<span class="mt-ch" aria-hidden="true">${icon('chevron-down')}</span></span><span class="mt-lead">${lead}</span></summary><div class="mt-body">${body}<a class="mt-open" href="${escapeHtml(item.href)}" aria-label="${escapeHtml(`Open ${item.title}`)}">Open module${icon('arrow-right')}</a></div></details>`;
+    return `<details class="mt" name="overview-modules"><summary class="mt-head">${eyebrow}<span class="mt-top"><span class="mt-name">${escapeHtml(item.title)}</span><span class="mt-ch" aria-hidden="true">${icon('chevron-down')}</span></span>${state}<span class="mt-lead">${lead}</span></summary><div class="mt-body">${body}<a class="mt-open" href="${escapeHtml(item.href)}" aria-label="${escapeHtml(`Open module: ${item.title}`)}">Open module${icon('arrow-right')}</a></div></details>`;
   }
+  // One continuous grid in the catalogue's order; each tile names its group in a small eyebrow, so no heading stands between rows.
   function moduleTiles(groups) {
-    const shown = groups.filter(group => group.items.length);
-    return shown.length ? shown.map(group => `<section class="mt-group"><h3 class="eyebrow">${escapeHtml(group.title)}</h3><div class="mt-grid">${group.items.map(moduleTile).join('')}</div></section>`).join('') : '';
+    const tiles = groups.flatMap(group => group.items.map(item => moduleTile(item, group.title)));
+    return tiles.length ? `<div class="mt-grid">${tiles.join('')}</div>` : '';
   }
   // Where a block on the Overview comes from: a link to the module page that holds it.
   const attribution = ({title, href}) => `<p class="from"><a href="${escapeHtml(href)}">From ${escapeHtml(title)}${icon('arrow-right')}</a></p>`;
@@ -811,6 +830,8 @@
   }
   const absenceOf = (block, cols, ctx) => { const found = statedReasons(block, cols, ctx); return found.pure && found.found > 0 ? found : null; };
   const stateTools = (block, ctx, held) => `<div class="es-trace">${traceOfBlock(ctx, block)}</div>${held ? evidenceLink(ctx) : ''}`;
+  // A dated table holds a dated event when some row's date cell states a date rather than an absence ("Not supplied: ...", "None identified ...") or nothing.
+  const hasDatedEvent = block => block.rows.some(row => { const when = cellText(row, 0); return when !== '' && !STATED_ABSENCE.test(plain(when).trim()); });
   const absentBlock = (block, ctx, absent) => emptyState(NOT_ESTABLISHED, absent.reasons, stateTools(block, ctx, absent.held));
   // A drawing whose table states none (a chart the module could not draw): the empty state with the table's stated reasons, the same path as a lane or a map.
   const gapState = (block, ctx) => { const found = statedReasons(block, visibleColumns(block, 'records', ctx), ctx); return emptyState(NOT_ESTABLISHED, found.reasons, stateTools(block, ctx, found.held)); };
@@ -1035,7 +1056,7 @@
     return `<nav class="sec-rail" aria-label="On this page"><p class="eyebrow">On this page</p>${items.map(link).join('')}</nav>`;
   }
 
-  const Components = {icon, traceButton, traceRow, headerChips, placePill, toast, toastHost, tipAttributes, verdictPanel, findingsFeed, callout, limitationsBlock, recordCards, findingCell, render, casesBlock, caseRowsBlock, rankedLadder, statementCard, metricTiles, measureTiles, changeCards, statusChecklist, sidedBoard, moduleStateTiles, metricStrip, moduleTiles, attribution, qaAccordion, factList, riskMatrix, watchList, datedTimeline, pathwayFlow, emptyState, gapState, loopNote, mapLayers, pathwayDiagram, foldsForPrint, paragraphText, handleClick, sectionRail, ICON_PATHS};
+  const Components = {icon, traceButton, traceRow, headerChips, placePill, toast, toastHost, tipAttributes, verdictPanel, findingsFeed, callout, limitationsBlock, recordCards, findingCell, render, casesBlock, caseRowsBlock, rankedLadder, statementCard, metricTiles, measureTiles, changeCards, statusChecklist, sidedBoard, moduleStateTiles, hasDatedEvent, metricStrip, moduleTiles, attribution, qaAccordion, factList, riskMatrix, watchList, datedTimeline, pathwayFlow, emptyState, gapState, loopNote, mapLayers, pathwayDiagram, foldsForPrint, paragraphText, handleClick, sectionRail, ICON_PATHS};
   if (typeof window !== 'undefined') window.Components = Components;
   if (typeof document !== 'undefined' && document.body) toastHost();
   if (typeof module !== 'undefined') module.exports = Components;

@@ -672,10 +672,12 @@ test('sidedBoard: "Bear (weakly)" is placed right with the tag "weakly"; a side 
   const rows = [['Cover', '3.6x', 'Bull', 'a'], ['Leverage', '8.7x', 'Bear (weakly)', 'b'], ['Yield', '1.1 pp', 'Bear', 'c'], ['Liquidity', '2.3x', 'Bull', 'd'], ['Mix', '9%', 'Neutral (unclear)', 'e'], ['Pending', '1x', '', 'f']].map((cells, i) => ({ line: i + 1, cells }));
   const html = C.sidedBoard({ headers: ['Driver', 'Figure', 'Side it supports', 'Reading'], rows }, { key: r => `k:${r.line}` });
   const line = n => html.split('<div class="sd-line').slice(1)[n];
-  assert.ok(line(1).startsWith(' sd-s1">') && line(1).includes('<span class="tag q-tag">weakly</span>') && line(1).includes('>Bear</span>') && line(1).includes('Leverage'));
+  // Document order is now column by column (left side, right side, then the rows on neither): Cover, Liquidity | Leverage, Yield | Mix, Pending.
+  assert.ok(line(2).startsWith(' sd-s1">') && line(2).includes('<span class="tag q-tag">weakly</span>') && line(2).includes('>Bear</span>') && line(2).includes('Leverage'));
   assert.ok(line(4).startsWith(' sd-s2">') && line(4).includes('Neutral') && line(4).includes('<span class="tag q-tag">unclear</span>') && line(4).includes('Mix'));
   assert.ok(line(5).startsWith(' sd-s2">') && line(5).includes('Pending') && !line(5).includes('sd-side'), 'an empty side cell: the row is drawn beneath with no side word');
-  assert.ok(!html.includes('sd-node') || countOf(html, /<i class="sd-node"/g) === 4, 'only the two columns have spine nodes');
+  assert.ok(!html.includes('sd-node'), 'no spine node tied to a row position');
+  assert.deepEqual([...html.matchAll(/<div class="sd-col sd-s(\d)">(.*?)<\/div><\/div>(?=<div class="sd-col|<\/div>)/gs)].map(m => [m[1], [...m[2].matchAll(/<p class="sd-name">([^<]*)</g)].map(n => n[1])]), [['0', ['Cover', 'Liquidity']], ['1', ['Leverage', 'Yield']]], 'two independent columns, each from the top in written order');
 });
 
 test('moduleStateTiles: a repeated state is one tile (icon, word, count, the modules in a details); a state seen once stays a full tile with its module name as the title', () => {
@@ -960,12 +962,12 @@ test('fix 5: sided columns are a recognised opposing pair when both words are pr
   const cols = html => [...html.matchAll(/<div class="sd-line sd-s(\d)">/g)].map(m => m[1]).join('');
   const heads = html => [...html.matchAll(/<p class="sd-hs sd-s\d"><i[^>]*><\/i>([^<]*)<b class="sd-n">(\d+)/g)].map(m => `${m[1]}:${m[2]}`);
   let html = board(['Bull', 'Neutral', 'Neutral', 'Bear']);
-  assert.deepEqual(heads(html), ['Bull:1', 'Bear:1']); assert.equal(cols(html), '0221');
+  assert.deepEqual(heads(html), ['Bull:1', 'Bear:1']); assert.equal(cols(html), '0122');
   html = board(['Bear', 'Bear', 'Bull']);
-  assert.deepEqual(heads(html), ['Bull:1', 'Bear:2'], 'left is the first of the pair as listed'); assert.equal(cols(html), '110');
+  assert.deepEqual(heads(html), ['Bull:1', 'Bear:2'], 'left is the first of the pair as listed'); assert.equal(cols(html), '011');
   for (const [a, b] of [['Support', 'Contradict'], ['Supports', 'Contradicts'], ['For', 'Against'], ['Positive', 'Negative'], ['Upside', 'Downside']]) {
     html = board([b, 'Other', 'Other', a]);
-    assert.deepEqual(heads(html), [`${a}:1`, `${b}:1`], `${a} / ${b}`); assert.equal(cols(html), '1220');
+    assert.deepEqual(heads(html), [`${a}:1`, `${b}:1`], `${a} / ${b}`); assert.equal(cols(html), '0122');
   }
   html = board(['Neutral', 'Bear', 'Bear', 'Other', 'Other', 'Other']);
   assert.deepEqual(heads(html), ['Neutral:1', 'Bear:2'], 'no pair: the first two distinct words in written order'); assert.equal(cols(html), '011222');
@@ -1116,22 +1118,54 @@ test('metricStrip: cells with markup characters are escaped; a label held back f
 });
 
 const TILE_TEXTS = [T('Creditors are covered, but only just. Cover is thin.\nBasis: A.pdf, page 4', 5), T('A second paragraph.\nBasis: B.pdf', 7)];
-test('moduleTiles: one details per module, all sharing one name so only one is open; title, state word with its icon, first sentence, then the whole Bottom line and the link when open', () => {
+test('moduleTiles: one details per module in one grid, all sharing one name so only one is open; the group is an eyebrow inside the tile, the state word and its icon on their own line under the title, then the first sentence; open, the whole Bottom line and the link', () => {
   const html = C.moduleTiles([{ title: 'Business and evidence', items: [
-    { title: 'Source readiness', href: '#CP-0/x', state: 'Restricted', texts: TILE_TEXTS, trace: mark },
+    { title: 'Source readiness', href: '#CP-0/x', state: 'Restricted', blocked: true, texts: TILE_TEXTS, trace: mark },
     { title: 'Financial foundation', href: '#CP-1/x', state: null, texts: [T('One sentence only.', 9)], trace: mark },
-  ] }, { title: 'Empty group', items: [] }]);
-  assert.equal((html.match(/<details class="mt" name="overview-modules">/g) || []).length, 2);
-  assert.ok(!html.includes('Empty group'), 'a group with no module has no heading');
+  ] }, { title: 'Empty group', items: [] }, { title: 'Outlook', items: [{ title: 'Downside', href: '#CP-2/x', state: null, texts: [T('Down.', 1)] }] }]);
+  assert.equal((html.match(/<details class="mt" name="overview-modules">/g) || []).length, 3);
+  assert.equal((html.match(/<div class="mt-grid">/g) || []).length, 1, 'one continuous grid, no heading between rows');
+  assert.ok(!html.includes('Empty group') && !/<h[1-6]/.test(html));
+  assert.deepEqual([...html.matchAll(/<span class="eyebrow mt-group">([^<]*)<\/span>/g)].map(m => m[1]), ['Business and evidence', 'Business and evidence', 'Outlook']);
   const first = html.slice(0, html.indexOf('Financial foundation'));
-  assert.ok(first.includes('<h3 class="eyebrow">Business and evidence</h3>'));
-  assert.ok(first.includes('<span class="state warn">') && first.includes('<span class="state-w">Restricted</span>') && first.includes('<svg'), 'the word is always shown with its icon');
+  assert.ok(first.includes('</span></span><span class="mt-state"><span class="badge badge-gray">Not assessable</span><span class="state warn">'), 'the marks follow the title row, in their own line: the rail\'s Not assessable mark, then the declared state');
+  assert.ok(first.includes('<span class="state-w">Restricted</span>') && first.includes('<svg'), 'the word is always shown with its icon');
+  assert.ok(first.indexOf('mt-state') < first.indexOf('mt-lead'));
   assert.ok(first.includes('<span class="mt-lead">Creditors are covered, but only just.</span>'), first);
   assert.ok(first.includes('<p class="mt-p">Creditors are covered, but only just. Cover is thin.') && first.includes('<p class="mt-p">A second paragraph.'), 'open, the whole Bottom line');
   assert.equal((first.match(/class="basis-link"/g) || []).length, 2);
-  assert.ok(first.includes('<a class="mt-open" href="#CP-0/x" aria-label="Open Source readiness">Open module'));
-  assert.ok(!html.slice(html.indexOf('Financial foundation')).includes('class="state'), 'a missing state draws no badge');
+  assert.ok(first.includes('<a class="mt-open" href="#CP-0/x" aria-label="Open module: Source readiness">Open module'), 'the accessible name contains the visible text');
+  assert.ok(!html.slice(html.indexOf('Financial foundation')).includes('mt-state'), 'no mark and no state: no marks line');
   noMarkdown(html);
+});
+
+test('moduleTiles: a first sentence that ends inside bold closes the mark at the cut; no raw ** reaches the tile', () => {
+  const html = C.moduleTiles([{ title: 'G', items: [{ title: 'M', href: '#M', texts: [T('Leverage is **5.5x. The covenant** is loose.', 1)] }] }]);
+  assert.ok(html.includes('<span class="mt-lead">Leverage is <strong>5.5x.</strong></span>') && !html.includes('**'), html);
+});
+
+test('firstSentence marks: a stretch cut inside bold has its open mark closed at the cut and reopened after it, adding nothing else', () => {
+  const html = C.verdictPanel([T('Leverage is **5.5x. The covenant** is loose.', 1)], mark);
+  assert.ok(html.includes('<p class="verdict-lead">Leverage is <strong>5.5x.</strong></p>') && html.includes('<p class="verdict-body"><strong>The covenant</strong> is loose.</p>'), html);
+  const feed = C.findingsFeed([T('- **Leverage is high. It rises.** The rest follows.', 1)], mark);
+  assert.ok(feed.includes('<div class="feed-title">Leverage is high. It rises.</div>') && feed.includes('<p class="feed-body">The rest follows.</p>') && !feed.includes('**'), 'a bold lead is the title');
+  const plain = C.findingsFeed([T('- Leverage is **5.5x. The covenant** is loose.', 1)], mark);
+  assert.ok(plain.includes('<div class="feed-title">Leverage is <strong>5.5x.</strong></div>') && plain.includes('<p class="feed-body"><strong>The covenant</strong> is loose.</p>'), plain);
+  assert.ok(C.moduleTiles([{ title: 'G', items: [{ title: 'M', href: '#M', texts: [T('**Hold the position.** Leverage is high.', 1)] }] }]).includes('<span class="mt-lead"><strong>Hold the position.</strong></span>'), 'a closing ** after the full stop belongs to the sentence');
+});
+
+test('hasDatedEvent: a date cell that states a date counts; an absence statement or an empty cell does not', () => {
+  const block = rows => ({ headers: ['Event date', 'Event'], rows: rows.map((d, i) => ({ line: i + 1, cells: [d, 'x'] })) });
+  assert.equal(C.hasDatedEvent(block(['Not supplied: no date', 'None identified in the file', ''])), false);
+  assert.equal(C.hasDatedEvent(block(['Not supplied: no date', '2025-07-11'])), true);
+});
+
+test('metricStrip: a label found only inside a longer cited label is dropped; one that also stands alone elsewhere stays', () => {
+  const block = { headers: ['Metric', 'FY2024'], rows: [['EBITDA', '1'], ['EBITDA margin', '2'], ['Leverage', '3'], ['Net leverage', '4']].map((cells, i) => ({ line: i + 1, cells })) };
+  const draw = text => stripLabels(C.metricStrip(block, stripCtx, text, stripLink));
+  assert.deepEqual(draw('Net leverage of 6.01x and an EBITDA margin of 30.0% decide it.'), ['EBITDA margin', 'Net leverage']);
+  assert.deepEqual(draw('Net leverage is 6.01x. Leverage on a gross basis is 7.2x.'), ['Leverage', 'Net leverage'], 'Leverage is also cited on its own');
+  assert.deepEqual(draw('EBITDA is flat; EBITDA margin is 30%.'), ['EBITDA', 'EBITDA margin']);
 });
 
 test('moduleTiles: no Bottom line says so; saved outputs with none chosen is a plain tile with the way to choose; text is escaped', () => {

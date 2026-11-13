@@ -723,8 +723,6 @@ const registerSection=(id,section)=>{
   return `<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,newFormatTag(section))}${promotedTables(section).map(block=>table(block,section)).join('')}</div>`;
 };
 const passageTexts=section=>(section?section.blocks.filter(block=>block.type==='text').map(block=>({text:block.text,line:block.line})):[]);
-// The gaps the module records: the rows the Evidence Gaps tab lists for it (its Gaps sections' tables and its comparison ledgers), counted as that page counts them.
-const recordedGaps=id=>window.Evidence.gapTotal(data[id].sections,data[id].placement);
 const tableRows=section=>section.blocks.filter(block=>block.type==='table').reduce((rows,block)=>rows+block.rows.length,0);
 // The line of the first section that holds one of a drawing's tables: where in the handoff the drawing stood.
 const drawingLine=(id,drawings)=>Math.min(...(drawings||[]).map(drawing=>drawingSection(id,drawing.table)?.line??Infinity));
@@ -758,7 +756,7 @@ function newFormatParts(id) {
     const rows=promotedTables(section).reduce((n,block)=>n+block.rows.length,0);
     parts.push([`s-${section.line}`,plain(section.heading.replace(METHOD_CODE,'')),`<section class="part part-register">${registerSection(id,section)}</section>`,rows]);
   }
-  const limits=window.Components.limitationsBlock(texts.limits,recordedGaps(id),window.Evidence.href('gaps',out.module,out.run),controls('limits').trace,controls('limits').figure);
+  const limits=window.Components.limitationsBlock(texts.limits,gapSignal(out.run,out.module),window.Evidence.href('gaps',out.module,out.run),controls('limits').trace,controls('limits').figure);
   if(limits)parts.push(['limitations','Limitations',`<section class="part" id="limitations"><div class="rd-card"><h4 class="rd-h">Limitations</h4>${limits}</div></section>`,texts.limits.length]);
   return parts;
 }
@@ -1407,9 +1405,9 @@ function leadPassage(lead,key) {
   const texts=passageTexts(lead.passages[key]);
   return {texts,...passageControls(texts,bodyContext(lead.id,false))};
 }
-// The tables a module page draws, run order then handoff order: those of a finding section, and of a registers section only when their shape is promoted.
+// The tables a module page draws, run order then handoff order: those of a finding section, and of a registers section only when their shape is promoted. A blocked module's tables feed nothing on the Overview.
 function overviewTables(entries) {
-  return entries.filter(entry=>entry.out&&isNewFormat(entry.out.sections)).flatMap(entry=>{
+  return entries.filter(entry=>entry.out&&isNewFormat(entry.out.sections)&&!notAssessable(entry)).flatMap(entry=>{
     const {rest,registers}=newFormatSplit(entry.id);
     const own=section=>(registers.includes(section)?promotedTables(section):section.blocks.filter(block=>block.type==='table'&&block.rows.length>0)).map(block=>({entry,section,block,shape:window.Shapes.tableShape(block)}));
     return [...rest,...registers].sort((a,b)=>a.line-b.line).flatMap(own);
@@ -1434,33 +1432,33 @@ function overviewBoard(tables) {
   const board=sided?tableRenderer(sided.entry.id)(sided.block,sided.section):'';
   return board?`<section class="overview-part" id="overview-decides" aria-labelledby="overview-decides-h">${ovHead('overview-decides-h','What decides it',fromModule(sided.entry.module))}${board}</section>`:'';
 }
-// C15: the lead module's own events (each lane as the dated timeline), else the run's first dated table of a promoted shape; attributed to the module that holds it.
+// C15: the lead module's events when they hold at least one dated event, else the run's first dated table (of a module that is not blocked) that does; attributed to the module that
+// holds it. A lane or table that only states an absence is left to the module page and Evidence: with nothing dated, the block is omitted.
 function overviewWatch(lead,tables) {
   const lanes=isNewFormat(lead.out.sections)?(lead.out.events||[]):[];
-  const drawn=lanes.map(lane=>({name:lane.lane,html:tableRenderer(lead.id)(fixtureTable(lead.id,lane.table),drawingSection(lead.id,lane.table),{stacked:true})})).filter(item=>item.html);
-  let module=lead.module,items=drawn;
+  const drawn=lanes.map(lane=>({name:lane.lane,block:fixtureTable(lead.id,lane.table),section:drawingSection(lead.id,lane.table)})).filter(item=>window.Components.hasDatedEvent(item.block));
+  let module=lead.module,id=lead.id,items=drawn;
   if(!items.length) {
-    const dated=tables.find(table=>table.shape==='dated');
-    items=dated?[{name:'',html:tableRenderer(dated.entry.id)(dated.block,dated.section,{stacked:true})}].filter(item=>item.html):[];
-    module=dated?.entry.module;
+    const dated=tables.find(table=>table.shape==='dated'&&window.Components.hasDatedEvent(table.block));
+    items=dated?[{name:'',block:dated.block,section:dated.section}]:[];
+    module=dated?.entry.module;id=dated?.entry.id;
   }
-  if(!items.length)return '';
-  const cards=items.map(item=>`<div class="tl-card">${items.length>1&&item.name?`<h3 class="tl-name">${esc(item.name)}</h3>`:''}${item.html}</div>`).join('');
-  return `<section class="overview-part" id="overview-watch" aria-labelledby="overview-watch-h">${ovHead('overview-watch-h','What to watch',fromModule(module))}${cards}</section>`;
+  const cards=items.map(item=>({name:item.name,html:tableRenderer(id)(item.block,item.section,{stacked:true})})).filter(card=>card.html).map(card=>`<div class="tl-card">${items.length>1&&card.name?`<h3 class="tl-name">${esc(card.name)}</h3>`:''}${card.html}</div>`).join('');
+  return cards?`<section class="overview-part" id="overview-watch" aria-labelledby="overview-watch-h">${ovHead('overview-watch-h','What to watch',fromModule(module))}${cards}</section>`:'';
 }
 // C20: one tile per module of the run, in the catalogue's order and groups. A module with saved outputs and none chosen is a plain tile with the way to choose.
 function overviewModules(context) {
   const groups=runGroups(context).map(([title,items])=>({title,items:items.map(({module,id,out,choices})=>{
     const base={title:moduleNames[module],href:moduleHref(module)};
     if(!id)return {...base,choose:{count:choices,href:`#${encodeURIComponent(module)}?${new URLSearchParams({c:context})}`}};
-    return {...base,state:out.state?.declared??null,...leadPassage({id,passages:readerPassages(out.sections)},'bottom')};
+    return {...base,state:out.state?.declared??null,blocked:blocked(out.sections,out.state),...leadPassage({id,passages:readerPassages(out.sections)},'bottom')};
   })}));
   const tiles=window.Components.moduleTiles(groups);
   return tiles?`<section class="overview-part" id="overview-modules" aria-labelledby="overview-modules-h">${ovHead('overview-modules-h','By module','<p class="ov-sub">Open one to read its whole bottom line</p>')}${tiles}</section>`:'';
 }
 // The lead's Limitations and, beside them, the number of gaps the run's handoffs record, with the way to them in Evidence (the count is of listed items).
 function overviewLimitations(lead,entries,context) {
-  const limits=leadPassage(lead,'limits'),gaps=entries.filter(entry=>entry.id).reduce((total,entry)=>total+recordedGaps(entry.id),0);
+  const limits=leadPassage(lead,'limits'),gaps=gapSignal(context);
   const html=window.Components.limitationsBlock(limits.texts,gaps,window.Evidence.href('gaps',null,context),limits.trace,limits.figure);
   return html?`<section class="overview-part" id="overview-limitations" aria-labelledby="overview-limitations-h"><div class="rd-card"><h2 class="rd-h" id="overview-limitations-h">Limitations</h2>${html}</div></section>`:'';
 }
@@ -1560,17 +1558,21 @@ const hashLabel=name=>{
 };
 // A module code in a method-change line ("CP-0: src/…/cp0.md changed") is named; a code inside a file path (…/CP-1.md) is part of the path and stays.
 const CODE_NOT_IN_PATH=/(?<![\w/.-])CP-[A-Z0-9]+(?![\w-]|\.md)/g;
-function evidenceView(context) {
+// What the Evidence page and every gap signal read: the run and each module's saved outputs, all of them.
+function evidenceInput(context) {
   const run=contexts[context];
   // A hash row named like a stored source file keeps that name; any other module-named file is labelled by its module.
   const stored=new Set([...(run?.evidence?.sources||[]),...(run?.evidence?.unused||[]),...(run?.evidence?.unrecorded||[])].map(f=>f.name));
   const modules=Object.entries(run?.modules||{}).map(([id,entry])=>({id,outputs:entry.outputs.map(output=>data[output]).filter(Boolean).map(output=>({id:output.id,sections:output.sections,placement:output.placement}))}));
-  return window.Evidence.view({
+  return {
     run:{context,code:run?.run,evidence:run?.evidence,methodChanges:run?.methodChanges||[],steps:run?.record?.steps||[]},
     modules,chips:window.CREDIT_OS_DATA?.chips||{},
     deps:{moduleTitle,hashLabel:name=>stored.has(name)?name:hashLabel(name),methodChange:line=>line.replace(CODE_NOT_IN_PATH,moduleTitle)}
-  },{tab:current?.tab,module:current?.evidenceModule});
+  };
 }
+const evidenceView=context=>window.Evidence.view(evidenceInput(context),{tab:current?.tab,module:current?.evidenceModule});
+// The gap signal of a findings page: the count the Evidence Gaps tab shows for the same scope (the run, or one module), from the same function.
+const gapSignal=(context,module=null)=>window.Evidence.gapCount(evidenceInput(context),module);
 // ---- Changes (decision M8 of the 2026-11-11 module-presets ruling): changes.js draws the run's comparison pack and CP-8's handoff. Nothing is worked out here:
 // this gathers what the library holds, the runs of this issuer and pathway (earliest first) with their quoted figures, packs and lead-module bottom lines.
 function changesView(context) {

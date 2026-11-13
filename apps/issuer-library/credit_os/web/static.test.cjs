@@ -1089,7 +1089,8 @@ test('Overview lead: CP-6 absent, so CP-2 leads, as before: its Bottom line is t
 test('Overview tiles: every module of the run in the catalogue\'s order and groups, the lead among them; first sentence while closed, the whole Bottom line and the link when open', () => {
   const html = fixturePage().runReport(RUN), tiles = part(html, 'overview-modules');
   assert.deepEqual(tileHrefs(tiles), ['CP-0', 'CP-1', 'CP-1A', 'CP-2', 'CP-2D']);
-  assert.deepEqual([...tiles.matchAll(/<h3 class="eyebrow">([^<]*)<\/h3>/g)].map(m => m[1]), ['Business and evidence', 'Financial performance', 'Names added by the test']);
+  assert.deepEqual([...tiles.matchAll(/<span class="eyebrow mt-group">([^<]*)<\/span>/g)].map(m => m[1]), ['Business and evidence', 'Financial performance', 'Names added by the test', 'Names added by the test', 'Names added by the test'], 'the group names each tile, in one grid');
+  assert.equal(countOf(tiles, /<div class="mt-grid">/g), 1);
   assert.ok(readText(tileOf(tiles, 'CP-0')).includes('The two documents read are enough for a credit snapshot, but no covenant package was read, so creditor protections cannot be confirmed from the file set.'));
   assert.ok(readText(tileOf(tiles, 'CP-1A')).includes("Northbridge is a single-segment services group whose creditors depend on one operating company, so debt service rests on that company's cash generation."));
   const lead = tileOf(tiles, 'CP-2');
@@ -1098,7 +1099,8 @@ test('Overview tiles: every module of the run in the catalogue\'s order and grou
   assert.ok(!tiles.includes('class="state'), 'no module declares a state here, so no badge');
   const blocked = tileOf(tiles, 'CP-2D');
   assert.ok(readText(blocked).includes('Not assessable: the documents read give no monthly cash forecast and no revolver drawing terms, so cash cover of the maturities cannot be tested.'));
-  assert.ok(!html.includes('Not assessable</span>'), 'no Not assessable badge: the badge is the declared state');
+  assert.ok(blocked.includes('<span class="mt-state"><span class="badge badge-gray">Not assessable</span></span>'), 'the mark the module rail shows for a blocked module');
+  assert.equal(countOf(html, /Not assessable<\/span>/g), 1, 'only the blocked module is marked');
 });
 
 test('Overview tiles: a tile opens one at a time (every tile is a details of the one name), keeps its state in the DOM, and no script is involved', () => {
@@ -1297,13 +1299,52 @@ test('Overview watch: a lead with no events takes the run\'s first dated table o
   assert.ok(!fixturePage().runReport(RUN).includes('overview-watch'), 'another module\'s lane is not the lead\'s');
 });
 
-test('Overview watch: a lane that states no event draws the empty state with the handoff\'s own reason, not a timeline', () => {
-  const sections = realSections(); const lane = sections['CP-6'].find(s => s.heading === 'Events: Decision and watch');
-  lane.blocks = [table(41, ['Event date', 'Date precision', 'Published', 'Event', 'Status', 'Source', 'Credit relevance'], [[42, 'Not supplied: no decision date is stated in any supplied source', 'Not supplied: no dated event', 'Not supplied: no dated event', 'Not supplied: owned by other lanes', 'Not supplied: no dated event', 'Not supplied: no dated event', 'Not supplied: the watch conditions are undated triggers']])];
-  const html = runPage(() => { const d = overviewData(sections); d[outId('CP-6')].events = [{ lane: 'Decision and watch', table: 41, gap: 'no dated decision event is stated' }]; return d; }, [], m => m, { record: steps(['CP-1', 'CP-6']), runFields: { asOf: '2025-03-31' }, names: { 'CP-1': 'Financial foundation', 'CP-6': 'Committee decision' } }).runReport(RUN);
-  const watch = part(html, 'overview-watch');
-  assert.ok(watch.includes('class="empty-state"') && watch.includes('Not established for this run') && !watch.includes('class="tl '), watch);
-  for (const reason of ['Not supplied: no decision date is stated in any supplied source', 'Not supplied: the watch conditions are undated triggers']) assert.ok(readText(watch).includes(reason), reason);
+const absentLane = sections => { const lane = sections['CP-6'].find(s => s.heading === 'Events: Decision and watch'); lane.blocks = [table(41, ['Event date', 'Date precision', 'Published', 'Event', 'Status', 'Source', 'Credit relevance'], [[42, 'Not supplied: no decision date is stated in any supplied source', 'Not supplied: no dated event', 'Not supplied: no dated event', 'Not supplied: owned by other lanes', 'Not supplied: no dated event', 'Not supplied: no dated event', 'Not supplied: the watch conditions are undated triggers']])]; return sections; };
+const realNamed = { record: steps(['CP-1', 'CP-6']), runFields: { asOf: '2025-03-31' }, names: { 'CP-1': 'Financial foundation', 'CP-6': 'Committee decision' } };
+test('Overview watch: a lead lane that only states an absence is left to the module page: no panel, no empty state, and the callout stands alone in its column', () => {
+  const html = runPage(() => { const d = overviewData(absentLane(realSections())); d[outId('CP-6')].events = [{ lane: 'Decision and watch', table: 41, gap: 'no dated decision event is stated' }]; return d; }, [], m => m, realNamed).runReport(RUN);
+  assert.ok(!html.includes('overview-watch') && !html.includes('empty-state') && !html.includes('Not supplied') && !html.includes('What to watch'));
+  assert.ok(/<div class="c10 ov-side"><div class="callout">.*<\/div><\/div><\/section>/s.test(part(html, 'overview-why') + '</section>'), part(html, 'overview-why'));
+});
+
+test('Overview watch: when the lead\'s lane is only an absence, the run\'s first dated table of a module that is not blocked is drawn, attributed to it', () => {
+  const register = sec('Event risk register', 3, 50, 'view', [table(51, EVENT_HEAD, [[52, '2026-01-15', 'Rating review', 'Corporate', 'Could move the spread.', `${FIG}, page 9`]])]);
+  const page = overviewData(absentLane(realSections()));
+  page[outId('CP-6')].events = [{ lane: 'Decision and watch', table: 41, gap: 'no dated decision event is stated' }];
+  page[outId('CP-1')].sections.splice(3, 0, register);
+  const html = runPage(() => page, [], m => m, realNamed).runReport(RUN), watch = part(html, 'overview-watch');
+  assert.ok(/<p class="from"><a href="#CP-1\/[^"]*">From Financial foundation/.test(watch) && watch.includes('Rating review') && !watch.includes('empty-state'));
+});
+
+test('Overview: a blocked module\'s tables feed neither What decides it nor What to watch (nor the strip); a usable module\'s still do', () => {
+  const blockedBottom = 'Not assessable: no input was supplied.';
+  const withBlocked = (code) => { const d = overviewData(realSections()); d[outId(code)].sections = d[outId(code)].sections.map(x => (x.heading === 'Bottom line' ? { ...x, blocks: [text(3, code === 'CP-6' ? 'Hold the position. Net leverage and interest cover decide it.' : blockedBottom)] } : x)); d[outId('CP-6')].events = []; return d; };
+  // CP-1 blocked: its metric table gives no strip; CP-6 leads and keeps its own board.
+  const noStrip = runPage(() => withBlocked('CP-1'), [], m => m, realNamed).runReport(RUN);
+  assert.ok(!noStrip.includes('class="strip') && noStrip.includes('overview-decides'));
+  assert.ok(tileOf(noStrip, 'CP-1').includes('Not assessable</span>'));
+  // A blocked module holding the only dated table and the only sided table.
+  const sections = realSections({ events: false, sided: false });
+  const register = sec('Event risk register', 3, 50, 'view', [table(51, EVENT_HEAD, [[52, '2026-01-15', 'Rating review', 'Corporate', 'Could move the spread.', `${FIG}, page 9`]])]);
+  const page = overviewData({ ...sections, 'CP-1': [...sections['CP-1'].slice(0, 3), register, sec('Decision', 3, 60, 'view', [table(61, ['Decision driver', 'Figure', 'Side it supports', 'Chair reading'], [[62, 'Cover', '2x', 'Bull', 'ok']])]), ...sections['CP-1'].slice(3)] });
+  page[outId('CP-1')].sections = page[outId('CP-1')].sections.map(x => (x.heading === 'Bottom line' ? { ...x, blocks: [text(3, blockedBottom)] } : x));
+  const html = runPage(() => page, [], m => m, realNamed).runReport(RUN);
+  assert.ok(!html.includes('overview-watch') && !html.includes('overview-decides') && !html.includes('Rating review'));
+});
+
+test('Overview gap signal: the count is what the Evidence Gaps tab lists for the run (every saved output of every module), and a module page counts its own module the same way', () => {
+  const other = `${RUN}/deliveries/d2/CP-1.md`, gapSec = rows => [sec('Gaps', 2, 90, 'audit', [table(91, ['Gap', 'Severity'], rows.map((r, i) => [92 + i, r, 'Low']))])];
+  const page = runPage(() => { const d = overviewData(realSections()); d[outId('CP-6')].events = []; d[outId('CP-1')].sections.splice(2, 0, sec('Limitations', 3, 80, 'view', [text(81, '- A limit.')])); d[other] = runOutput('CP-1', { source: 'deliveries/d2/CP-1.md', sections: gapSec(['Gap A', 'Gap B']), state: { established: true, declared: null }, summary: null, words: {} }); d[other].placement = d[other].sections.map(sx => sx.where); return d; }, [], m => ({ ...m, 'CP-1': { outputs: [outId('CP-1'), other], default: outId('CP-1') } }), realNamed);
+  const shown = html => Number(/<div class="gapsig-n" data-count>(\d+)<\/div>/.exec(html)?.[1]);
+  assert.equal(shown(page.runReport(RUN)), 5, 'CP-1 default 1 + CP-1 second output 2 + CP-6 2');
+  assert.equal(shown(page.moduleReport(outId('CP-1'))), 3, 'the module page counts what Evidence lists with the module filter: both CP-1 outputs');
+  assert.equal(shown(page.moduleReport(outId('CP-6'))), 2);
+});
+
+test('Overview verdict: a lead sentence over 140 characters is the is-long (text size) headline, not display size', () => {
+  const long = 'Watchlist is the action bias that survives the challenge: cash generation and the maturity profile make near-term default remote, but creditors cannot yet tell whether any tranche is paid for an owner policy that recycles earnings. More follows.';
+  const html = realHtml({ bottom: long });
+  assert.ok(html.includes('<p class="verdict-lead is-long">') && /\.verdict-lead\.is-long\{/.test(read('screen.css')));
 });
 
 test('Overview: every sentence of the lead\'s Bottom line, Key findings, What-would-change and Limitations is on the page, in the handoff\'s own characters', () => {
