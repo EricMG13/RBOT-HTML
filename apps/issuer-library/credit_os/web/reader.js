@@ -344,10 +344,10 @@ const paragraphLabel = body => `Basis for paragraph: ${plainText(body).split(/\s
 // One prose paragraph's inline HTML. New format (decision 7): the Basis line is never printed; each figure of a paragraph that has Basis items or
 // chips is a button wrapping the figure's exact text; a paragraph with no figure gets one quiet Basis button at its end. Earlier format
 // (decision 14, H7): the wording stays, its trailing citations sit behind one Basis button; an earlier paragraph with no citation and no chip in the build gets none (decision 7: nothing when neither).
-// `chips` is how many chips the build holds for the paragraph's key.
-function paragraphView(text, key, {earlier = false, chips = 0} = {}) {
+// `chips` is how many chips the build holds for the paragraph's key; `held` is false when the page's evidence map has no item for the key, and then no control is drawn (it would do nothing).
+function paragraphView(text, key, {earlier = false, chips = 0, held = true} = {}) {
   const {item, body, items} = paragraphBody(text, earlier);
-  const referenced = items.length > 0 || chips > 0;
+  const referenced = held && (items.length > 0 || chips > 0);
   const figures = !earlier && referenced ? figureSpans(body) : [];
   let html = figuredHtml(body, figures, 0, body.length, (i, figure) => figureButton(key, items, i, figure));
   if (referenced && !figures.length) html += ` ${basisButton(key, items, paragraphLabel(body))}`;
@@ -358,7 +358,7 @@ function paragraphView(text, key, {earlier = false, chips = 0} = {}) {
 // `figure(line, index, text)` a figure's button; both are empty for a paragraph with no Basis item and no chip. `texts` are {text, line}; `ctx` is {id, chips(key)}.
 function passageControls(texts, ctx) {
   const held = new Map(texts.map(entry => [entry.line, entry.text]));
-  const referenced = line => { const items = splitBasis(held.get(line)).items; return items.length > 0 || ctx.chips(`${ctx.id}:${line}`) > 0 ? items : null; };
+  const referenced = line => { if (ctx.has && !ctx.has(`${ctx.id}:${line}`)) return null; const items = splitBasis(held.get(line)).items; return items.length > 0 || ctx.chips(`${ctx.id}:${line}`) > 0 ? items : null; };
   return {
     trace: line => { const items = referenced(line); return items ? basisButton(`${ctx.id}:${line}`, items, paragraphLabel(paragraphBody(held.get(line)).body)) : ''; },
     figure: (line, i, text) => { const items = referenced(line); return items ? figureButton(`${ctx.id}:${line}`, items, i, text) : ''; },
@@ -426,7 +426,7 @@ function sectionBodyHtml(section, ctx) {
       continue;
     }
     const key = `${ctx.id}:${block.line}`;
-    const {item, html: inner} = paragraphView(block.text, key, {chips: ctx.chips(key)});
+    const {item, html: inner} = paragraphView(block.text, key, {chips: ctx.chips(key), held: ctx.has ? ctx.has(key) : true});
     if (item && !open) html += '<ul class="passage-list">';
     if (!item) close();
     open = item;

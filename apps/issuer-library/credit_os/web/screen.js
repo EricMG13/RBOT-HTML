@@ -239,7 +239,8 @@ function sectionView(id,section) {
   let visual=band+(id===pins['CP-1A']&&section==='business'?businessVisual():id===pins['CP-1']&&section==='cash'?trendChart(id,'Net cash provided by operating activities'):id===pins['CP-2']&&section==='outlook'?downside():'');
   visual+=galleryVisual(id,section)+readerCharts(id,section);
   if(section==='audit')visual+=`<div class="audit-intro"><h2>Original output & technical audit</h2><p>The retained output is available alongside its designed presentation. Analytical acceptance has not been verified by this library.</p><a href="${esc(data[id].href)}" download>Download original handoff</a><p class="hash">SHA-256 ${data[id].sha256}</p></div>`;
-  return visual+sectionsMarkup(id,sectionData(id,section),true);
+  const hidden=hiddenSections(id); // rule 7: a section written for another module is drawn nowhere, an Evidence & audit item included
+  return visual+sectionsMarkup(id,sectionData(id,section).filter(held=>!hidden.has(held)),true);
 }
 function renderSearch(query) {
   if(!query){$('search-results').replaceChildren();return;}

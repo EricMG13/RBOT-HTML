@@ -373,6 +373,8 @@ function report(overrides = {}, modSections = null) {
     if (b.type === 'table') for (const r of b.rows) evidence.set(`${OUT}:${r.line}`, { module: 'CP-1', line: r.line });
     else evidence.set(`${OUT}:${b.line}`, { module: 'CP-1', line: b.line });
   }
+  // X2: a control is drawn only where the page's evidence map holds its item. The build keys its chips by the handoff's own lines, so the fixture's chip keys are items of the map too.
+  for (const key of Object.keys(CHIPS)) if (!evidence.has(key)) evidence.set(key, { module: 'CP-1', line: Number(key.split(':').pop()) });
   const win = { Components: require('./components.js'), Shapes: require('./shapes.js'), Evidence: require('./evidence.js'), CREDIT_OS_DATA: { chips: CHIPS }, DESIGN_CATALOGUE: { real: [{ id: 'run-a', checklist: null }] }, DESIGN_WORKSPACE: { reports: [] } };
   const sectionData = (id, sid) => out.sections.filter(s => modules[id].sections.find(x => x[0] === sid)[2].some(p => s.heading.startsWith(p)));
   const names = ['window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'aliases', 'isNewFormat', 'readerPassages', 'blocked', 'splitBasis', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml', 'passageControls', 'eventTable', 'eventTimeline'];
@@ -860,9 +862,12 @@ test('R31: sections the store placed audit stay out of every part and in the aud
   const r = report({ sections: extra, charts: [], summary: null }, mods);
   const page = r.moduleReport(OUT), audit = r.reportAudit(OUT);
   assert.ok(r.reportAnalysis(OUT).includes('Real analysis.'));
-  for (const name of ['Front matter', 'Request', 'Alpha register', 'Sources']) assert.ok(audit.includes(name), name);
+  // X1 (re-pointed): the list held Request too (old form: all four names). A section written for another module is listed and drawn nowhere, so Request is gone from it; the others stay.
+  for (const name of ['Front matter', 'Alpha register', 'Sources']) assert.ok(audit.includes(name), name);
+  assert.ok(!audit.includes('Request') && !audit.includes('data-audit="req"'), 'the Request section is not an item of the list');
   assert.ok(!audit.includes('Beta analysis'));
   for (const name of ['Parent text.', 'asked', 'abc']) assert.ok(!page.replace(audit, '').includes(name), name);
+  assert.ok(!page.includes('asked'), 'the Request text is drawn nowhere on the page');
 });
 
 test('R32: Analysis follows the handoff order of the sections it is given', () => {
@@ -5178,4 +5183,30 @@ test('L3: a printed Trace tab lists every statement: the rows past the first pag
   assert.equal((html.match(/class="ev-trow" hidden/g) || []).length, 5, 'five are paged on screen');
   const css = read('screen.css'), print = css.split('@media print{').slice(1).map(block => block.slice(0, block.indexOf('}}') + 1)).join('\n');
   assert.ok(/\.ev-more[^{]*\{[^}]*display:none/.test(print) && /\.ev-trow\[hidden\][^{]*\{[^}]*display:block/.test(print), 'print hides the pager and un-hides the paged rows');
+});
+
+test('X1: opening an Evidence & audit item draws its sections minus the ones written for another module (screen.js sectionView)', () => {
+  const screen = read('screen.js'), src = screen.slice(screen.indexOf('function sectionView('), screen.indexOf('function renderSearch('));
+  const request = { heading: 'Request', blocks: [] }, alpha = { heading: 'Alpha register', blocks: [] };
+  const sectionView = new Function('callBand', 'pins', 'galleryVisual', 'readerCharts', 'sectionsMarkup', 'sectionData', 'hiddenSections', 'data', 'esc', 'eventTable', `${src}; return sectionView;`)(
+    () => '', {}, () => '', () => '', (id, sections) => sections.map(held => held.heading).join('|'), () => [request, alpha], () => new Set([request]), { o: { href: 'h', sha256: 's' } }, v => v);
+  assert.equal(sectionView('o', 'req'), 'Alpha register', 'the hidden section is not drawn');
+  assert.ok(sectionView('o', 'audit').includes('Alpha register') && !sectionView('o', 'audit').includes('Request'), 'nor under the audit item');
+});
+
+test('X2: a chip or trace control whose item is not in the evidence map is not drawn', () => {
+  const r = report(), orphan = `${OUT}:888`, held = `${OUT}:16`;
+  CHIPS[orphan] = [{ kind: 'issuer_page', source: 'K', file: 'K.jsonl', page: 5, page_end: null, quote_found: null }];
+  try {
+    assert.equal(r.chipsMarkup(orphan), '', 'chips and the row control of a key with no item');
+    assert.ok(r.chipsMarkup(held).includes('data-chip='), 'a key with an item keeps them');
+  } finally { delete CHIPS[orphan]; }
+  const reader = require('./reader.js');
+  const text = 'Debt is 6.57x.\nBasis: K.jsonl, page 5';
+  assert.ok(reader.paragraphView(text, held, { held: true }).html.includes('data-paragraph='), 'item present: the control');
+  assert.ok(!reader.paragraphView(text, held, { held: false }).html.includes('data-paragraph='), 'no item: no control');
+  const texts = [{ text, line: 3 }], has = key => key === 'o:3';
+  assert.ok(reader.passageControls(texts, { id: 'o', chips: () => 0, has }).trace(3).includes('data-paragraph="o:3"'));
+  assert.equal(reader.passageControls(texts, { id: 'p', chips: () => 0, has }).trace(3), '', 'a passage paragraph with no item has no trace control');
+  assert.equal(reader.passageControls(texts, { id: 'p', chips: () => 0, has }).figure(3, 0, '6.57x'), '');
 });

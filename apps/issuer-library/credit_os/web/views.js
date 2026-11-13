@@ -523,6 +523,7 @@ const gapCount=n=>`${n} unresolved citation${n===1?'':'s'}`;
 // The "Row" chip comes from the evidence key itself; the others from the chips map, by index (the index counts every chip of the key).
 function chipsMarkup(key,counted=true) {
   const item=evidence.get(key),found=window.CREDIT_OS_DATA?.chips?.[key]||[];
+  if(!item)return ''; // no item behind the key: no chip or trace control that would do nothing
   const row=item?window.Components.traceRow(key,`Table row, line ${item.line}`):'';
   const gaps=found.filter(unresolvedGap).length;
   const count=counted&&gaps?`<button type="button" class="chip-count" data-gaps="${esc(key)}">${gapCount(gaps)}</button>`:'';
@@ -613,7 +614,7 @@ function readingSections(id,sections,base=4) {
     const tag='h'+Math.min(6,base+(section.level-top||0));
     return `<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,tag)}${section.blocks.map(block=>{
       if(block.type==='table')return `${sourceTable(id,section.heading,block,block.headers.map((_,c)=>numericColumn(block,c)),block.headers.map((_,c)=>c),block.rows)}</div>`;
-      return `<p class="analysis-text">${paragraphView(block.text,`${id}:${block.line}`,{earlier:true,chips:bodyContext(id,false).chips(`${id}:${block.line}`)}).html}</p>`;
+      return `<p class="analysis-text">${paragraphView(block.text,`${id}:${block.line}`,{earlier:true,chips:bodyContext(id,false).chips(`${id}:${block.line}`),held:evidence.has(`${id}:${block.line}`)}).html}</p>`;
     }).join('')}</div>`;
   }).join('');
 }
@@ -637,15 +638,16 @@ function reportCalculations(id) {
   return sections.length?fold('calculations','Calculations',`${data[id].words.calculations} words`,readingSections(id,sections)):'';
 }
 function reportLimits(id) {
-  const row=(key,label,html)=>`<p>${html} ${basisButton(key,[],`Basis for row: ${plain(label)}`)}</p>`;
+  const row=(key,label,html)=>`<p>${html}${evidence.has(key)?` ${basisButton(key,[],`Basis for row: ${plain(label)}`)}`:''}</p>`;
   const cards=drawn(id,'limits').map(section=>`<div id="s-${section.line}">${headingView(section.heading,'h4')}${section.blocks.flatMap(block=>block.type==='table'?block.rows.map(r=>row(`${id}:${r.line}`,r.cells[0],`<strong>${rich(r.cells[0])}</strong> ${r.cells.slice(1).map(rich).join(' · ')}`)):[`<p>${paragraphView(block.text,`${id}:${block.line}`,{earlier:true,chips:bodyContext(id,false).chips(`${id}:${block.line}`)}).html}</p>`]).join('')}</div>`);
   return cards.length?`<section class="part" id="limits"><h3>Limits &amp; monitoring</h3><div class="limits">${cards.join('')}</div></section>`:'';
 }
 // The sections no part draws, as a line-numbered list; a section's content is drawn when it is opened (screen.js). An entry is listed when a section it holds
 // is placed audit or consumed; the `audit` entry is always listed, for the original-output block it opens with.
 function reportAudit(id) {
-  const out=data[id],kept=['audit','consumed'];
-  const listed=modules[id].sections.filter(([sectionId])=>sectionId==='audit'||sectionData(id,sectionId).some(section=>kept.includes(out.placement[out.sections.indexOf(section)])));
+  // A section written for another module (rule 7: Request, Next module) is listed and drawn nowhere, on an earlier-format page as on any other.
+  const out=data[id],kept=['audit','consumed'],hidden=hiddenSections(id);
+  const listed=modules[id].sections.filter(([sectionId])=>sectionId==='audit'||sectionData(id,sectionId).some(section=>kept.includes(out.placement[out.sections.indexOf(section)])&&!hidden.has(section)));
   return `<details class="audit" id="audit"><summary>${icon('chevron-right')}<span class="fold-title">Evidence &amp; audit</span> <span class="fold-detail">${plural(out.sections.length,'section')} · unchanged from the handoff</span></summary><ul class="audit-list">${listed.map(([sectionId,label])=>{
     const first=sectionData(id,sectionId)[0];
     return `<li><button type="button" class="audit-open" data-audit="${esc(sectionId)}" aria-expanded="false" aria-controls="audit-${esc(sectionId)}">${esc(label)}${first?`<span>L${first.line}</span>`:''}</button><div class="audit-body" id="audit-${esc(sectionId)}" hidden></div></li>`;
@@ -744,7 +746,8 @@ function reportTimeline(id) {
   return table?`<section class="part" id="timeline">${eventTimeline(id,table,'h3')}</section>`:'';
 }
 // What a paragraph's drawing needs of the page: its output, the chips the build holds for a key, and the table caption without a method code.
-const bodyContext=(id,tables)=>({id,tables,chips:key=>(window.CREDIT_OS_DATA?.chips?.[key]||[]).length,chipList:key=>window.CREDIT_OS_DATA?.chips?.[key]||[],caption:heading=>plain(heading).replace(METHOD_CODE,'')});
+// A control is drawn only where the evidence map holds its item (`has`): a chip or trace control whose item is gone would do nothing when clicked.
+const bodyContext=(id,tables)=>({id,tables,has:key=>evidence.has(key),chips:key=>evidence.has(key)?(window.CREDIT_OS_DATA?.chips?.[key]||[]).length:0,chipList:key=>window.CREDIT_OS_DATA?.chips?.[key]||[],caption:heading=>plain(heading).replace(METHOD_CODE,'')});
 // The handoff's own heading levels: its H2 sections are h3 (the page's h2 is the module), their H3 children h4, capped at h6.
 const newFormatTag=section=>'h'+Math.min(6,3+section.level-2);
 // What every table of a module shares: its identifiers (never drawn on a findings page) and how its case columns pair with its case rows. Built once per output.
