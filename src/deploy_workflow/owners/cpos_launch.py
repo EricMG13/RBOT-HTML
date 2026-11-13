@@ -14,6 +14,7 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import logging
 import os
 import re
 import sys
@@ -107,6 +108,8 @@ from deploy_workflow.prose_checks import (
 )
 from deploy_workflow.run_expectations import Item, edges_for, expectations, guess_kind
 from deploy_workflow.workflow import _put
+
+log = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parents[3]
 HTML_SUFFIXES = frozenset({".htm", ".html"})
@@ -2816,55 +2819,98 @@ def _forecast_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
     return (*_unstated_currency(inputs), *_shock_issues(task, inputs))
 
 
-_LEADING_NUMBER = re.compile(r"^\s*(\d+(?:\.\d+)?)")
+# A Share as cp2g writes one: 0, 1, 0.d to 0.dddd or 1.0 to 1.0000, and nothing numeric after it
+# (so 20%, 0.31606, 1.5000, +0.30 and **0.20** are not read).
+_SHARE_CELL = re.compile(r"^(?:0\.\d{1,4}|1\.0{1,4}|0|1)(?![\d.%])")
+_SCENARIO_MARKER = "<!-- table-id: T2DS.1 -->"
+_MAX_LISTED_SCENARIOS = 8
+
+
+def _t2ds_rows(cp2a: str) -> tuple[list[list[str]], str]:
+    """The rows of table T2DS.1 (header, divider, data) and the reason when there are none."""
+    lines = cp2a.replace("\r\n", "\n").split("\n")
+    marker = [i for i, line in enumerate(lines) if line.strip() == _SCENARIO_MARKER]
+    if len(marker) != 1:
+        return [], f"the marker of table T2DS.1 appears {len(marker)} times"
+    rest = iter(lines[marker[0] + 1 :])
+    rows: list[list[str]] = []
+    for line in rest:
+        if line.startswith("|"):
+            rows.append([cell.strip() for cell in line.strip().strip("|").split("|")])
+        elif rows or line.strip():
+            break  # blank lines before the table are skipped; the table ends at the first other
+    return rows, "" if len(rows) > 2 else "table T2DS.1 has no data rows"
+
+
+def _t2ds_columns(header: list[str]) -> tuple[int, int] | None:
+    cells = [cell.lower() for cell in header]
+    found = [[i for i, cell in enumerate(cells) if name in cell] for name in _SCENARIO_COLUMNS]
+    if any(len(each) != 1 for each in found) or found[0] == found[1]:
+        return None
+    return found[0][0], found[1][0]
+
+
+_SCENARIO_COLUMNS = ("ebitda decline", "interest increase")
+
+
+def _t2ds_pairs(rows: list[list[str]], columns: tuple[int, int]) -> list[tuple[str, str]] | str:
+    """Every data row's two Shares, or the reason a row does not give them."""
+    pairs = []
+    for row in rows[2:]:  # the header and its divider are not scenarios
+        read = [_SHARE_CELL.match(row[i]) if i < len(row) else None for i in columns]
+        if read[0] is None or read[1] is None:
+            return f"a scenario row has a cell that does not open with a Share: {row}"
+        pairs.append((read[0].group(0), read[1].group(0)))
+    return pairs
 
 
 def _cp2a_scenarios(cp2a: str) -> tuple[tuple[str, str], ...]:
     """The (EBITDA decline, cash-interest increase) pairs of CP-2A's table T2DS.1, each as the
-    leading number its cell prints; empty when the table, either column or every row cannot be
-    read."""
-    lines = cp2a.replace("\r\n", "\n").split("\n")
-    marker = [i for i, line in enumerate(lines) if line.strip() == "<!-- table-id: T2DS.1 -->"]
-    if len(marker) != 1:
+    Share its cell opens with. Empty (the check does not run) unless Python read the whole table
+    without doubt: one marker, one cell for each column, every data row long enough and both its
+    cells opening with a Share, and at least one row that is not the zero control. Documented
+    fail-open: a repair round costs a paid call, so a block is sent back only for a table Python
+    read completely; the reason is logged at INFO."""
+    rows, why = _t2ds_rows(cp2a)
+    columns = _t2ds_columns(rows[0]) if not why else None
+    if not why and columns is None:
+        why = "the header lacks exactly one EBITDA decline cell and one interest increase cell"
+    pairs = _t2ds_pairs(rows, columns) if columns else []
+    if isinstance(pairs, str):
+        why, pairs = pairs, []
+    if not why and all(Decimal(s) == 0 and Decimal(k) == 0 for s, k in pairs):
+        why = "no scenario row is other than the zero control"
+    if why:
+        log.info("CP-2A scenarios not checked against downside_shock: %s", why)
         return ()
-    rows = []
-    for line in lines[marker[0] + 1 :]:
-        if not line.startswith("|"):
-            break
-        rows.append([cell.strip() for cell in line.strip().strip("|").split("|")])
-    header = [cell.lower() for cell in rows[0]] if rows else []
-    decline = next((i for i, cell in enumerate(header) if "ebitda decline" in cell), None)
-    increase = next((i for i, cell in enumerate(header) if "interest increase" in cell), None)
-    if decline is None or increase is None:
-        return ()
-    pairs = []
-    for row in rows[2:]:  # the header and its divider are not scenarios
-        if len(row) > max(decline, increase):
-            s, k = (_LEADING_NUMBER.match(row[i]) for i in (decline, increase))
-            if s and k:
-                pairs.append((s.group(1), k.group(1)))
     return tuple(pairs)
 
 
 def _shock_issues(task: HandoffTask, inputs: cpos_forecast.ForecastInputs) -> tuple[str, ...]:
     """The block's `downside_shock` must be one of CP-2A's stated scenarios (owner ruling
-    2026-11-13). Documented fail-open: when CP-2A is not sent, or its T2DS.1 table, a column or
-    every row cannot be read, nothing is checked and the block is not sent back, because a repair
-    round costs a paid call and Python could not read the table that would justify it. This
-    module has no log or record of its own for such a skip; none is invented here."""
+    2026-11-13). Documented fail-open, logged at INFO with its reason (`_cp2a_scenarios`): when
+    CP-2A is not sent, or Python did not read the whole of its T2DS.1 table, nothing is checked
+    and the block is not sent back."""
     stated = inputs.downside_shock
-    if stated is None or "CP-2A" not in task.handoffs:
+    if stated is None:
+        return ()
+    if "CP-2A" not in task.handoffs:
+        log.info("CP-2A scenarios not checked against downside_shock: CP-2A is not sent")
         return ()
     scenarios = _cp2a_scenarios(task.handoffs["CP-2A"].decode("utf-8"))
     pair = (Decimal(stated.ebitda_decline), Decimal(stated.rate_increase))
     if not scenarios or pair in {(Decimal(s), Decimal(k)) for s, k in scenarios}:
         return ()
-    listed = "; ".join(f"{s} / {k}" for s, k in scenarios)
+    shown = scenarios[:_MAX_LISTED_SCENARIOS]
+    listed = "; ".join(f"{s} / {k}" for s, k in shown)
+    if len(scenarios) > len(shown):
+        listed += f"; and {len(scenarios) - len(shown)} more"
     issue = (
         f"Forecast inputs: `downside_shock` ({stated.ebitda_decline} / {stated.rate_increase}) "
         "is not a CP-2A scenario. It must copy one CP-2A scenario unchanged: `rate_increase` is "
         "that scenario's proportional increase in cash interest (0 to 1), never a yield change. "
-        f"CP-2A's table T2DS.1 states (EBITDA decline / cash-interest increase): {listed}."
+        f"CP-2A's table T2DS.1 states (EBITDA decline / cash-interest increase): {listed}. "
+        "If you cannot copy one of them, set `downside_shock` to null."
     )
     return (issue,)
 

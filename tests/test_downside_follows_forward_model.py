@@ -6,6 +6,7 @@ keys below are hand-written from that run's own CP-2G figures (CP-2G.md C05) and
 
 import hashlib
 import json
+import logging
 import re
 import sys
 import types
@@ -183,13 +184,8 @@ def test_the_instruction_says_the_shock_is_one_cp2a_row_and_a_proportional_inter
 
 # --- 4. the launcher's check ----------------------------------------------------------------
 
-SOL_001_T2DS = b"""<!-- table-id: T2DS.1 -->
-| Scenario | EBITDA decline fraction s | Cash-interest increase fraction k | Note |
-|---|---|---|---|
-| s00 \xe2\x80\x94 control | 0 | 0 | none |
-| s01 \xe2\x80\x94 operating warning | 0.20 | 0.025 (2.5% increase) | none |
-| s02 \xe2\x80\x94 cash-conversion break | 0.45 | 0.05 | none |
-"""
+# The real form: a blank line between the marker and the table.
+SOL_001_T2DS = (FIXTURE / "CP-2A-T2DS.1-sol-001.md").read_bytes()
 
 
 def task_with(cp2a: bytes | None):
@@ -215,13 +211,6 @@ def test_the_stated_scenario_is_accepted_whatever_its_trailing_zeros():
     assert issues(block_with(downside_shock=shock("0.4000", "0.30")), T2DS) == ()
 
 
-def test_the_other_real_table_form_is_read_too():
-    ok = block_with(downside_shock=shock("0.2", "0.025"))
-    assert issues(ok, SOL_001_T2DS) == ()
-    (issue,) = issues(block_with(downside_shock=shock("0.2", "0.3")), SOL_001_T2DS)
-    assert "0.20 / 0.025" in issue or "0.2 / 0.025" in issue
-
-
 @pytest.mark.parametrize(
     "cp2a",
     [
@@ -241,3 +230,72 @@ def test_a_table_python_cannot_read_never_sends_the_block_back(cp2a):
 
 def test_no_shock_needs_no_scenario():
     assert issues(block_with(downside_shock=None), T2DS) == ()
+
+
+def table(*rows: str, header="EBITDA decline s | Cash-interest increase k", blank="") -> bytes:
+    columns = header.count("|") + 2
+    text = f"<!-- table-id: T2DS.1 -->\n{blank}| Scenario | {header} |\n|{'---|' * columns}\n"
+    return (text + "".join(f"| {row} |\n" for row in rows)).encode()
+
+
+CORRECT = block_with(downside_shock=shock("0.2", "0.3"))
+
+READABLE_FORMS = {
+    "percent only": table("s00 | 0% | 0%", "s01 | 20% | 30%"),
+    "bare percent numbers": table(
+        "s00 | 0 | 0", "s01 | 20 | 30", header="EBITDA decline (%) | Cash-interest increase (%)"
+    ),
+    "percent then fraction": table("s00 | 0 | 0", "s01 | 20% (0.2000) | 30% (0.3000)"),
+    "five decimals": table("s00 | 0 | 0", "s01 | 0.2000 | 0.31606"),
+    "above one": table("s00 | 0 | 0", "s01 | 0.2000 | 1.5000 fraction; 150%"),
+    "anchor column first": table(
+        "s01 | 0.2000 | 0.3160621762 anchor | 0.3000",
+        header="EBITDA decline s | Interest increase anchor | Cash-interest increase k",
+    ),
+    "narrative header": table(
+        "s01 | two shocks | 0.2000 | 0.3000",
+        header="Why: EBITDA decline with interest increase | EBITDA decline s | Cash-interest "
+        "increase k",
+    ),
+    "bold": table("s00 | 0 | 0", "s01 | **0.20** | **0.30**"),
+    "signed": table("s00 | 0 | 0", "s01 | 0.20 | +0.30 (+30%)", "s02 | 0.40 | +0.30 (+30%)"),
+    "control only": table("s00 | 0 | 0", "s01 | 20% | 30%"),
+}
+
+
+@pytest.mark.parametrize("cp2a", READABLE_FORMS.values(), ids=READABLE_FORMS.keys())
+def test_a_table_that_is_not_wholly_read_never_sends_back_a_correct_block(cp2a):
+    assert issues(CORRECT, cp2a) == ()
+    assert issues(block_with(downside_shock=shock("0", "0")), cp2a) == ()
+
+
+def test_the_real_sol_001_table_with_its_blank_line_is_read():
+    assert issues(block_with(downside_shock=shock("0.20", "0.025")), SOL_001_T2DS) == ()
+    (issue,) = issues(block_with(downside_shock=shock("0.2", "0.0015")), SOL_001_T2DS)
+    assert "0.20 / 0.025" in issue
+
+
+def test_the_real_sol_high_table_accepts_its_rows_and_rejects_the_yield_change():
+    assert len(issues(BLOCK, T2DS)) == 1  # 0.2 / 0.0184
+    assert issues(CORRECT, T2DS) == ()
+    assert issues(block_with(downside_shock=shock("0.4", "0.3")), T2DS) == ()
+
+
+def test_the_issue_names_the_null_way_out():
+    (issue,) = issues(BLOCK, T2DS)
+    assert "set `downside_shock` to null" in issue
+    assert "null when no shock was supplied" in cpos_launch.FORECAST_BLOCK
+
+
+def test_at_most_eight_pairs_are_listed():
+    rows = [f"s{n:02d} | 0.{n:02d} | 0.0{n % 10}" for n in range(1, 21)]
+    (issue,) = issues(BLOCK, table(*rows))
+    assert issue.count(" / 0.0") == 8 + 1  # eight listed pairs and the block's own
+    assert "and 12 more" in issue
+
+
+def test_a_skipped_check_is_logged_with_its_reason(caplog):
+    with caplog.at_level(logging.INFO, logger=cpos_launch.__name__):
+        assert issues(CORRECT, READABLE_FORMS["percent only"]) == ()
+    (record,) = caplog.records
+    assert "does not open with a Share" in record.getMessage()
