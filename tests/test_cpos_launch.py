@@ -1961,6 +1961,77 @@ def test_cpdr_open_web_limit_is_conditional_on_the_web_search_rules(tmp_path, pr
         assert "search_pack" not in system
 
 
+# ---- Deploy V methods plan, Task 5A (2026-11-13): CP-2D, CP-4 and CP-4C send the caos-databricks
+# versions (vendor/deploy-v, repo HEAD dfff264) with named edits: the `qa_status` map sentence of
+# common rule 10 (all three) and CP-4C's LITE profile text are removed. Each module: one sentence
+# of the new text is in the built instruction, one sentence of the old text and each removed
+# sentence are not.
+def test_cp2d_instruction_carries_the_six_column_months_to_empty_register(tmp_path):
+    text = instruction_text(tmp_path, "CP-2D")
+    assert (
+        "T2E.6: `Calculation`|`Result`|`Formula / Inputs`|`Cash-Burn Basis`|`Status`|`Source Trace`"
+        in text
+    )
+    assert (
+        "where the period is cash-generative (average monthly burn at or below zero) there is no "
+        "runway to exhaust and `Result` is `Not Calculable`" in text
+    )
+    assert (
+        "T2E.5: `Bridge Item`|`Amount`|`Currency and Scale`|`Source / Calculation`|`Status`"
+        "|`Credit Comment`|`Source Trace`" in text
+    )
+    assert "T2E.6: Months to Empty result (numeric) + calculation basis narrative" not in text
+    assert "`qa_status` follows the run's own status" not in text  # the named edit
+
+
+def test_cp4_instruction_asks_for_the_reason_form_of_the_placeholder(tmp_path):
+    text = instruction_text(tmp_path, "CP-4")
+    assert (
+        "write `[Insufficient Information] — ` and name the missing document (for example "
+        "`[Insufficient Information] — intercreditor agreement not in the source set`), never "
+        "the bare placeholder" in text
+    )
+    assert "`[Insufficient Information]` where the document is not provided." not in text
+    assert "`qa_status` follows the run's own status" not in text  # the named edit
+
+
+def test_cp4c_instruction_answers_no_distress_gate_with_not_applicable(tmp_path):
+    text = instruction_text(tmp_path, "CP-4C")
+    assert (
+        "Without a documented distress gate the module builds no restructuring scenario and "
+        "returns `Not Applicable` (Phase 1), which is a complete answer; only an unresolved "
+        "scope holds the run." in text
+    )
+    assert "requires a validated handoff from CP-0, CP-1, CP-2A, CP-2G and CP-4" in text
+    assert "Optional upstream, used when present: CP-2A, CP-2G, CP-4." not in text
+    for gone in (  # the named edits: caos-only profile text and the qa_status map
+        "LITE_CREDIT_22",
+        "UPGRADE",
+        "`qa_status` follows the run's own status",
+    ):
+        assert gone not in text, gone
+
+
+def test_a_handoff_in_the_new_register_shapes_passes_the_chart_checks():
+    """Nothing in the CP-OS checker reads T2E.5, `Months to Empty` or a CP-4C `Not Applicable`
+    answer: `chart_issues` reads only the `### Chart data:` tables. A cash-generative CP-2D and a
+    CP-4C with no distress gate state every chart amount as `Not supplied: <reason>`."""
+    gap = "Not supplied: the period is cash-generative, there is no runway"
+    text = "### Chart data: liquidity bridge\n\n" + synthetic_table(
+        ALLOCATION_HEAD,
+        f"| Opening liquidity | {gap} | US$m | S. |",
+        f"| Closing liquidity | {gap} | US$m | S. |",
+    )
+    bridge = next(t for t in cpos_launch.OWNER_TABLES["CP-2D"])
+    assert cpos_launch.chart_issues(text, bridge) == ()
+    na = "Not supplied: no documented distress gate, CP-4C returned Not Applicable"
+    recovery = f"### {RECOVERY}\n\n" + synthetic_table(
+        RECOVERY_HEAD, f"| {na} | {na} | {na} | {na} | {na} | US$m | S. |"
+    )
+    spec = next(t for t in cpos_launch.OWNER_TABLES["CP-4C"] if t.heading == RECOVERY)
+    assert cpos_launch.chart_issues(recovery, spec) == ()
+
+
 def test_cp1b_runs_the_deploy_v_method_not_the_structured_runtime_step():
     """Live runs 2026-11-09 and 2026-11-10: CP-1B blocked both times for want of a `read_inputs`
     view with `pairs`, which only the older structured runtime gives."""
@@ -2045,6 +2116,9 @@ def test_every_module_is_told_what_stands_for_acceptance_scripts_and_questions(t
 # methods" when the text after METHOD_MARK differs, so the shared-text change must leave every
 # one of these as it was. CP-8 alone changed on main after that commit (36a4c52, 184bfbb, 1e46c49:
 # src/deploy_vii/methods/cp8.md, the withheld-difference rules); its pin is the merged text.
+# CP-2D, CP-4 and CP-4C changed on 2026-11-13 (Deploy V methods plan, Task 5A): they now send the
+# caos-databricks versions with named edits, so runs made before it are correctly marked "Earlier
+# methods" for these three modules.
 # CP-3C changed on 2026-11-13 (Deploy V methods plan, Task 2): it now sends Deploy V's skill, so
 # runs made before it are correctly marked "Earlier methods" for CP-3C.
 # CP-0 changed on 2026-11-13 (Deploy V methods plan, Task 3): it now sends Deploy V's skill, so
@@ -2063,15 +2137,15 @@ METHOD_TEXT_SHA256_AT_1B41E65 = {
     "CP-1D": "50cc8ec34ed140f22859fd384eb7f16d81acc3404728b0493f642d5ba4daf4b1",
     "CP-2": "3b25a0a608a42902589a6b3151bde2bf6de7c81437088b8f2170af55e8cdb4f4",
     "CP-2A": "a594a8e8c7427f063274fc48961fbe2603b3bc0e032ff345222579fe57ef4c50",
-    "CP-2D": "2f977243550b0c76f1cccf41d7d11e66061280e8743d2fe5454a9cacdf9b9d1a",
+    "CP-2D": "9517dfb7f02f3807a7eeb47576673c7c1ae641896f4dc8d66d6c783fd37eaaab",
     "CP-2E": "4d730920f241c7f7d762a7606890aa2f0b567e1b85372ab3ff659a462ab5d4a7",
     "CP-2G": "6d15e5eee90a18410466fad2d60efb05740f7eb0972595ceae8116ba1f0db76f",
     "CP-2H": "e98d0b0c5c84059ef7f10e595c270c4532cf29246c612bb0f108809010c3e3a8",
     "CP-3": "144798da83e3aab842f8a2e187008a95ecc5c7b387f9e5bc1b31b92ffdf20f1c",
     "CP-3C": "c88298f0bb03b0cc7a4975f1eb523f5a8771ebe4e4e4ac2b24168acf343a0c43",
     "CP-3D": "e43f2d5d73d7e15e24d53e302d84d8eca543e14848656dc3a3dc7fb85fde25f8",
-    "CP-4": "fb2e764ed645f3d65112aebe8db12feb215763ffdaca25e6d70a627250d1c6bc",
-    "CP-4C": "2e70ce4fd894deba7bc2a6234953689f898d73c0ac093336806d70fd16815d8e",
+    "CP-4": "751ffda78611cf04e029a7cb56d04f80b67edbd28a9a2b00f68c2d3f3530d331",
+    "CP-4C": "715cadfe93e767be2d5320ca16da0319e056478119834964c8684e6fbb0c7fbf",
     "CP-5": "a0b02519822dbd84ba928f026b0e3aa8a7a82ba71604059e9f7ceec9f395bb90",
     "CP-6": "32fdd06787a47c6351924f1371b90a8b6937c11fbfcb04404eb6590de0ec3b0b",
     "CP-8": "560e6026abc340b8240a2fb4397f43a52ccb9386c5810ae1cc3b74e063e45075",

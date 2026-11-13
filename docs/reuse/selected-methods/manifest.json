@@ -154,37 +154,39 @@
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-4-legal-covenant-interpreter/SKILL.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-4-legal-covenant-interpreter/SKILL.md",
-      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-4-legal-covenant-interpreter/SKILL.md",
-      "sha256": "8a3b12f3f37359463434177759febac1ffcf0f8c484aa0508eb7119f7b6548b2",
-      "use": "unchanged selected legal interpretation methodology; historical evidence, not inherited authority"
+      "exact_copy_found_at": "/Users/ericguei/Documents/caos-databricks/vendor/deploy-v/skills/cp-4-legal-covenant-interpreter/SKILL.md",
+      "sha256": "f9387cf2e5afc0f934f3fa909de7e46c2ea5cb85b94972f2d86535d6204c4025",
+      "use": "unchanged selected legal interpretation methodology; historical evidence, not inherited authority",
+      "source_sha256": "40ebb2613562b4fc36d7880aa5ed04a88bbc4648ee9bc157f41f61d77150f6f7",
+      "edit": "qa_status map sentence removed from common rule 10 (host overrides qa_status; canon D1 map not supplied here); wording from caos-databricks vendor/deploy-v (last changed 2975872f, repo HEAD dfff264); sha256 is this edited file, source_sha256 the byte-for-byte copy"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-4-legal-covenant-interpreter/references/CP-4_RUNBOOK.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-4-legal-covenant-interpreter/references/CP-4_RUNBOOK.md",
-      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-4-legal-covenant-interpreter/references/CP-4_RUNBOOK.md",
-      "sha256": "abe96a72629686818d5697fbf7a9ccedaf90c3f6d80ca8c46fa3dd27b461ad57",
-      "use": "unchanged selected legal interpretation methodology; historical evidence, not inherited authority"
+      "exact_copy_found_at": "/Users/ericguei/Documents/caos-databricks/vendor/deploy-v/skills/cp-4-legal-covenant-interpreter/references/CP-4_RUNBOOK.md",
+      "sha256": "48b376e145791de99190be245973d6f05c730ed1a6573461b55ea2ce51298b0f",
+      "use": "byte-for-byte copy of caos-databricks vendor/deploy-v (last changed 592ee83a, repo HEAD dfff264); historical evidence, not inherited authority"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-4-legal-covenant-interpreter/references/REF_CP-4_STEPS.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-4-legal-covenant-interpreter/references/REF_CP-4_STEPS.md",
-      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-4-legal-covenant-interpreter/references/REF_CP-4_STEPS.md",
-      "sha256": "ef5eb569be59ec30dd3a66c1bcc81c5cc0bcc2e9d2ac3909b04caa23339b6b94",
-      "use": "unchanged selected legal interpretation methodology; historical evidence, not inherited authority"
+      "exact_copy_found_at": "/Users/ericguei/Documents/caos-databricks/vendor/deploy-v/skills/cp-4-legal-covenant-interpreter/references/REF_CP-4_STEPS.md",
+      "sha256": "536165daad72db3cc8541163db77c89b64b797f22374f84c69772bcaa3efc358",
+      "use": "byte-for-byte copy of caos-databricks vendor/deploy-v (last changed 1aeaa27f, repo HEAD dfff264); historical evidence, not inherited authority"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-4-legal-covenant-interpreter/references/CP-4B_RUNBOOK.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-4-legal-covenant-interpreter/references/CP-4B_RUNBOOK.md",
-      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-4-legal-covenant-interpreter/references/CP-4B_RUNBOOK.md",
-      "sha256": "31ed040b5604c63dac454a87206036f9b9a17f160843232d755cff4e48a019c1",
-      "use": "unchanged selected historical methodology; current project transport/authority governs"
+      "exact_copy_found_at": "/Users/ericguei/Documents/caos-databricks/vendor/deploy-v/skills/cp-4-legal-covenant-interpreter/references/CP-4B_RUNBOOK.md",
+      "sha256": "3569763fb8504b08b8cce6d2ffb15ca247f43d44f77d3339de2777bdd0e0344f",
+      "use": "byte-for-byte copy of caos-databricks vendor/deploy-v (last changed 592ee83a, repo HEAD dfff264); historical evidence, not inherited authority"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-4-legal-covenant-interpreter/references/REF_CP-4B_STEPS.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-4-legal-covenant-interpreter/references/REF_CP-4B_STEPS.md",
-      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-4-legal-covenant-interpreter/references/REF_CP-4B_STEPS.md",
-      "sha256": "62c3fc234a4eeab776af3233d5013eb45ce2eebe53d8c612948b00b97cad284e",
-      "use": "unchanged selected historical methodology; current project transport/authority governs"
+      "exact_copy_found_at": "/Users/ericguei/Documents/caos-databricks/vendor/deploy-v/skills/cp-4-legal-covenant-interpreter/references/REF_CP-4B_STEPS.md",
+      "sha256": "8a0cf2ed16693efa1a22b5c9bfbb7d3f697ac0cfe23319bdb784029094d02b64",
+      "use": "byte-for-byte copy of caos-databricks vendor/deploy-v (last changed 592ee83a, repo HEAD dfff264); historical evidence, not inherited authority"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-4-legal-covenant-interpreter/references/CP-4D_SCHEMA_REFERENCE.md",
@@ -196,23 +198,25 @@
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-4-legal-covenant-interpreter/references/CP-4A_RUNBOOK.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-4-legal-covenant-interpreter/references/CP-4A_RUNBOOK.md",
-      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-4-legal-covenant-interpreter/references/CP-4A_RUNBOOK.md",
-      "sha256": "1ca9d2d86d40772d6c4a1df3052af174ab10ee80a27460dfcee0de93a227e5bc",
-      "use": "unchanged selected historical methodology; current project transport/authority governs"
+      "exact_copy_found_at": "/Users/ericguei/Documents/caos-databricks/vendor/deploy-v/skills/cp-4-legal-covenant-interpreter/references/CP-4A_RUNBOOK.md",
+      "sha256": "478017a8aeaa47588a5bcc20ca8820054b7140fa28e41ed194f571040366f385",
+      "use": "byte-for-byte copy of caos-databricks vendor/deploy-v (last changed 1aeaa27f, repo HEAD dfff264); historical evidence, not inherited authority"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-4-legal-covenant-interpreter/references/REF_CP-4A_STEPS.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-4-legal-covenant-interpreter/references/REF_CP-4A_STEPS.md",
-      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-4-legal-covenant-interpreter/references/REF_CP-4A_STEPS.md",
-      "sha256": "30cf03f343a9153aa85d6492e6bad519ab5d639395dae2b686de4b8276764e98",
-      "use": "unchanged selected historical methodology; current project transport/authority governs"
+      "exact_copy_found_at": "/Users/ericguei/Documents/caos-databricks/vendor/deploy-v/skills/cp-4-legal-covenant-interpreter/references/REF_CP-4A_STEPS.md",
+      "sha256": "00763966ffa099f598558a9539ebb094b16d32d669cc9d81e9e7bd0fda2211e2",
+      "use": "byte-for-byte copy of caos-databricks vendor/deploy-v (last changed 1aeaa27f, repo HEAD dfff264); historical evidence, not inherited authority"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-4c-restructuring-fulcrum/SKILL.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-4c-restructuring-fulcrum/SKILL.md",
-      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-4c-restructuring-fulcrum/SKILL.md",
-      "sha256": "9e1a16330a06e98cd22ef7aa97be526c131d962ec3d3ff1ef9a3e42ca9bb311c",
-      "use": "Unchanged historical restructuring method/helper; current project instructions govern scope and transport"
+      "exact_copy_found_at": "/Users/ericguei/Documents/caos-databricks/vendor/deploy-v/skills/cp-4c-restructuring-fulcrum/SKILL.md",
+      "sha256": "fdd6deadfcb1601fb3d1bd0289d752b9f08c85f269c2a4cf51c14b2d8cc4d80a",
+      "use": "Unchanged historical restructuring method/helper; current project instructions govern scope and transport",
+      "source_sha256": "dc1666f10022fc121dd2db19440e8e00cc5e91f5791cef5fbdd83c4c6a856da2",
+      "edit": "qa_status map sentence removed from common rule 10 (host overrides qa_status; canon D1 map not supplied here); LITE-profile sentence removed from Dependencies and the whole `## LITE profile compatibility` section removed (no LITE route, no UPGRADE, no CP-L10 screen substitute here); wording from caos-databricks vendor/deploy-v (last changed 592ee83a, repo HEAD dfff264); sha256 is this edited file, source_sha256 the byte-for-byte copy"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-4c-restructuring-fulcrum/references/REF_CP-4C_STEPS.md",
@@ -455,16 +459,18 @@
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-2d-liquidity-cash-flow-bridge/SKILL.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-2d-liquidity-cash-flow-bridge/SKILL.md",
-      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-2d-liquidity-cash-flow-bridge/SKILL.md",
-      "sha256": "5009ee06f28d739d7ba921299c7d14465b28177ab3fa61372c173028f9c6fd67",
-      "use": "Selected analytical breadth/labels; current project instructions govern transport, no inherited export/approval/completeness rulings."
+      "exact_copy_found_at": "/Users/ericguei/Documents/caos-databricks/vendor/deploy-v/skills/cp-2d-liquidity-cash-flow-bridge/SKILL.md",
+      "sha256": "8a2e0c15b24c7fabe4068c5f6f79ca2951b43129c96c8967901ccf95c5aea111",
+      "use": "Selected analytical breadth/labels; current project instructions govern transport, no inherited export/approval/completeness rulings.",
+      "source_sha256": "38ef402cc68f0844e3832def74a123229aa30132058cd1b4ad6a3439523f53d8",
+      "edit": "qa_status map sentence removed from common rule 10 (host overrides qa_status; canon D1 map not supplied here); wording from caos-databricks vendor/deploy-v (last changed 592ee83a, repo HEAD dfff264); sha256 is this edited file, source_sha256 the byte-for-byte copy"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-2d-liquidity-cash-flow-bridge/references/REF_CP-2D_STEPS.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-2d-liquidity-cash-flow-bridge/references/REF_CP-2D_STEPS.md",
-      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-2d-liquidity-cash-flow-bridge/references/REF_CP-2D_STEPS.md",
-      "sha256": "84bdff527a5575b900fc94d2bf94eb433a508f8c2883ee84f40ca9dcf94ce595",
-      "use": "Selected analytical breadth/labels; current project instructions govern transport, no inherited export/approval/completeness rulings."
+      "exact_copy_found_at": "/Users/ericguei/Documents/caos-databricks/vendor/deploy-v/skills/cp-2d-liquidity-cash-flow-bridge/references/REF_CP-2D_STEPS.md",
+      "sha256": "2e03ebd53839b0744912cc07368ca498b24ffacffd55ee0c31000257c4de7e1b",
+      "use": "byte-for-byte copy of caos-databricks vendor/deploy-v (last changed 592ee83a, repo HEAD dfff264); historical evidence, not inherited authority"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-2d-liquidity-cash-flow-bridge/references/CP-2D_SCHEMA_REFERENCE.md",
