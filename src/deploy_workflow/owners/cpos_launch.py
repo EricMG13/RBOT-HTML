@@ -1801,12 +1801,10 @@ FORECAST_BLOCK = (
     "`row` is the exact first-cell text of the row of one of the CP-1 handoff's tables that you "
     "read the amount from, and `period` the exact header text of that table's column (for "
     'example `"row": "Net sales", "period": "FY2024"`). Name the cell of every operand that has '
-    "an amount: `row` and `period`, or in a table with one row per period (CP-1's `Chart data:` "
-    "tables and `Net debt data`) `row` and `column`, the row being the period exactly as printed "
-    'and the column the measure\'s exact header (`{"amount": "<decimal>", "reason": null, '
-    '"row": "FY2024", "column": "Cash"}`); leave out `period` there. '
-    "Those tables are in US$ million: at `scale` 1000 do not name them; state that operand as "
-    "missing with the reason. "
+    "an amount by `row` and `period` and nothing else. Take a balance from a row under a "
+    "period column (`FY2024`, `H1 2025`), never from a column headed `LTM …` and never from a "
+    "table with one row per period (CP-1's `Chart data:` tables and `Net debt data`); where "
+    "CP-1 prints the balance only there, state the operand as missing with that reason. "
     "`interest` is interest paid in cash in the base period; where CP-1 prints only interest "
     "expense you may name that cell and must say in `scope_limits` that interest is interest "
     "expense, not cash paid. "
@@ -1923,13 +1921,11 @@ LAYER1_FORECAST_BLOCK = (
     f"{', '.join(cp2g.OPERAND_METRIC)}. `row` is the exact first-cell text of the row of one of "
     "your own tables that you read the amount from, and `period` the exact header text of that "
     'table\'s column (for example `"row": "Net sales", "period": "FY2024"`). '
-    "Name the cell of every operand that has an amount: `row` and `period`, or in a table with "
-    "one row per period (your `Chart data:` tables and `Net debt data`) `row` and `column`, "
-    "the row being the period exactly as printed and the column the measure's exact header "
-    '(`{"amount": "<decimal>", "reason": null, "row": "FY2024", "column": "Cash"}`); leave out '
-    "`period` there. "
-    "Those tables are in US$ million: at `scale` 1000 do not name them; state that operand as "
-    "missing with the reason. "
+    "Name the cell of every operand that has an amount by `row` and `period` and nothing else. "
+    "Take a balance from a row under a period column (`FY2024`, `H1 2025`), never from a column "
+    "headed `LTM …` and never from a table with one row per period (your `Chart data:` tables "
+    "and `Net debt data`); where CP-1 prints the balance only there, state the operand as "
+    "missing with that reason. "
     "`interest` is interest paid in cash in the base period; where CP-1 prints only interest "
     "expense you may name that cell and must say in `scope_limits` that interest is interest "
     "expense, not cash paid. "

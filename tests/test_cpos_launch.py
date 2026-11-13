@@ -3477,10 +3477,7 @@ def test_the_cp2g_instruction_asks_for_the_row_and_period_of_every_base_operand(
         "exact first-cell text",
         "exact header text",
         "of one of the CP-1 handoff's tables",
-        (
-            "Name the cell of every operand that has an amount: `row` and `period`, or in a table "
-            "with one row per period"
-        ),
+        "Name the cell of every operand that has an amount by `row` and `period` and nothing else.",
         "positive magnitude",
         "with its sign reversed",
         "is not a cell",
@@ -5705,11 +5702,12 @@ def test_the_shared_text_names_no_confidence_script_and_separates_the_score_from
 
 
 # --- Task E4 (2026-11-12 findings 1, 2, 4): the sent texts name `column` and `interest`
-COLUMN_SENTENCE = (
-    "`row` and `column`, the row being the period exactly as printed and the column the "
-    'measure\'s exact header (`{"amount": "<decimal>", "reason": null, "row": "FY2024", '
-    '"column": "Cash"}`); leave out `period` there.'
+S5_SENTENCE = (
+    "Name the cell of every operand that has an amount by `row` and `period` and nothing else. "
+    "Take a balance from a row under a period column (`FY2024`, `H1 2025`), never from a column "
+    "headed `LTM …` and never from a table with one row per period"
 )
+S5_TAIL = "where CP-1 prints the balance only there, state the operand as missing with that reason."
 INTEREST_SENTENCE = (
     "`interest` is interest paid in cash in the base period; where CP-1 prints only interest "
     "expense you may name that cell and must say in `scope_limits` that interest is interest "
@@ -5736,16 +5734,18 @@ def _built_instruction(tmp_path, module, modules):
     return (tmp_path / "out" / prepared.plan.instructions[module].path).read_text()
 
 
-def test_the_cp2g_instruction_sent_states_the_column_key_and_what_interest_is(tmp_path):
+def test_the_cp2g_instruction_sent_states_row_and_period_only_and_what_interest_is(tmp_path):
     text = _built_instruction(tmp_path, "CP-2G", ("CP-1", "CP-2G"))
-    assert COLUMN_SENTENCE in text and INTEREST_SENTENCE in text
+    assert S5_SENTENCE in text and S5_TAIL in text and INTEREST_SENTENCE in text
+    assert '`"column": "Cash"' not in text and "leave out `period` there" not in text
 
 
-def test_the_layer1_forecast_instruction_sent_states_the_column_key_and_what_interest_is(
+def test_the_layer1_forecast_instruction_sent_states_row_and_period_only_and_what_interest_is(
     tmp_path,
 ):
     text = _built_instruction(tmp_path, "CP-1", ("CP-1", "CP-MODEL"))
-    assert COLUMN_SENTENCE in text and INTEREST_SENTENCE in text
+    assert S5_SENTENCE in text and S5_TAIL in text and INTEREST_SENTENCE in text
+    assert '`"column": "Cash"' not in text and "leave out `period` there" not in text
 
 
 def test_the_period_table_instruction_sent_says_how_to_print_a_balance(tmp_path):
@@ -5794,7 +5794,8 @@ def test_the_forecast_instruction_sentences_say_what_python_does():  # whole-bra
     shown = "history only for a line named under such a header, or in a row labelled with one."
     for block in (cpos_launch.FORECAST_BLOCK, cpos_launch.LAYER1_FORECAST_BLOCK):
         assert shown in block
-        assert "Those tables are in US$ million: at `scale` 1000 do not name them" in block
+        assert "Those tables are in US$ million" not in block
+        assert "`row` and `column`" not in block
     assert "(your `Chart data:` tables and `Net debt data`)" in cpos_launch.LAYER1_FORECAST_BLOCK
     assert "(CP-1's `Chart data:` tables" in cpos_launch.FORECAST_BLOCK
 
