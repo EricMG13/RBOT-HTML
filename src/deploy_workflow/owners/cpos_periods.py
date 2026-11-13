@@ -438,10 +438,8 @@ NOT_DATED = (
 )
 NO_YTD = "the latest reported period is fiscal year {label}; there is no year to date"
 NEEDS = "needs {labels}, which the table holding the named row does not print"
-NO_PF = "no handoff states pro forma adjustments"
-PF_NOT_PLACED = (
-    "the financial foundation states pro forma adjustments on its own basis; "
-    "they are not placed in this column"
+NO_PF = (
+    "pro forma figures are not placed in this column; the financial foundation shows any it states"
 )
 NOT_EXACT = "the figures cannot be added exactly"
 PART_YEAR = "a ratio to part-year earnings is not shown"
@@ -957,11 +955,6 @@ def _before_forecast(
     return kept, tuple(period_label(p) for p in sorted(dropped))
 
 
-def _prints_pro_forma(tables: list[list[list[str]]]) -> bool:
-    """True when a table's header row has a cell naming pro forma figures."""
-    return any("pro forma" in cell.lower() for table in tables if table for cell in table[0])
-
-
 def history(
     tables: list[list[list[str]]],
     operands: cp2g.Operands,
@@ -990,8 +983,7 @@ def history(
     )
     ctx = _Context(found, located, anchor, printed, dates, NOT_NAMED if unnamed else NO_ANCHOR)
     (ytd, pytd, ltm, prior), first, own = _four(ctx)
-    pf_reason = PF_NOT_PLACED if _prints_pro_forma(tables) else NO_PF
-    pf = _why(_column("PF", "PF", "PF LTM", None, _blanket(pf_reason)), pf_reason)
+    pf = _why(_column("PF", "PF", "PF LTM", None, _blanket(NO_PF)), NO_PF)
     quarters, quarter_cut = _group(ctx, "QUARTER", "Quarter", _MAX_QUARTERS)
     years, year_cut = _group(ctx, "FY", "Fiscal year", _MAX_YEARS)
     limits = _limits(found, first, twice, forecast, own)

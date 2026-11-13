@@ -371,18 +371,31 @@ def test_pf_is_unavailable_with_its_reason():
     assert all(v == {"amount": None, "reason": NO_PF} for v in column["values"].values())
 
 
-def test_pf_reason_says_so_when_cp1_prints_a_pro_forma_header():
-    with_pf = [*TABLES, [["Metric", "Pro forma net debt"], ["Net debt", "1"]]]
-    column = history(with_pf, OPERANDS)["columns"][-1]
-    text = (
-        "the financial foundation states pro forma adjustments on its own basis; "
-        "they are not placed in this column"
-    )
-    assert column["reason"] == text
-    assert all(v == {"amount": None, "reason": text} for v in column["values"].values())
-    plain = [*TABLES, [["Metric", "Net debt"], ["Net debt", "1"]]]
-    plain_reason = history(plain, OPERANDS)["columns"][-1]["reason"]
-    assert plain_reason == "no handoff states pro forma adjustments"
+PF_REASON = (
+    "pro forma figures are not placed in this column; the financial foundation shows any it states"
+)
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        [["Metric", "Pro forma net debt"], ["Net debt", "1"]],
+        [["Metric", "PF net debt"], ["Net debt", "1"]],
+        [["Metric", "Pro-forma net debt"], ["Net debt", "1"]],
+        [
+            ["Metric", "Net debt", "Basis and limitation"],
+            ["Net debt", "1", "pro forma for the dividend"],
+        ],
+        [["Metric", "Net debt"], ["Pro forma net debt", "1"]],
+        [["Metric", "Pro forma adjustments: none"], ["Net debt", "1"]],
+        [["Metric", "Net debt"], ["Net debt", "1"]],
+    ],
+    ids=["header", "pf", "hyphen", "body-cell", "row-label", "none", "no-mention"],
+)
+def test_pf_reason_is_true_however_cp1_words_pro_forma(extra):
+    column = history([*TABLES, extra], OPERANDS)["columns"][-1]
+    assert column["reason"] == PF_REASON
+    assert all(v == {"amount": None, "reason": PF_REASON} for v in column["values"].values())
 
 
 FY_ONLY = """| Reported label | FY2024 | FY2023 | Locator |
@@ -1396,8 +1409,10 @@ def test_the_unread_headers_limit_lists_the_headers_of_located_lines_only():
 PINNED_FILES = {  # sha256 of the files before `column` existed: a block without it is unchanged
     "annual.md": "6b2a22771cdc76eb8735645c457db14eea4db57c0ecea10552cabd571bd63ca9",
     # F1 reworded the NEEDS reason (11 cells of this file, nothing else): the pin before it was
-    # c3691af45dd03b055f5a70b512ba359e409c96477b53ea0043b1fb9df825ace4.
-    "calculation.json": "7c4c73bc4084a4e68473b8ae5e348c50b9833073a75dc5fa9256dda5596e02ad",
+    # c3691af45dd03b055f5a70b512ba359e409c96477b53ea0043b1fb9df825ace4. W1 reworded the PF reason
+    # (its cells of this file, nothing else): the pin before it was
+    # 7c4c73bc4084a4e68473b8ae5e348c50b9833073a75dc5fa9256dda5596e02ad.
+    "calculation.json": "a771bf82fda009bf7855a9b5cc152d07570ed28fc67e4aadf0c1886b8fd61618",
     "forecast.md": "fb1471c434a81a15af24362b963077f77c88f83f54cdac2648395a067bea43ea",
     "forecast_exact.json": "0e27b0a291c29ad6c8e72713190adfaf7b955fc9b178db9aea27a1c9cc831303",
     "quarter.md": "2ebd4cd19a8d654820261be9ed74bfecc81da5ebf89b39fbc2d963434a49e74f",
