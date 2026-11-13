@@ -4,6 +4,32 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-13 — CP-DR web lookup: page fetch and SEC EDGAR tools (branch `claude/t5-cpdr-lookup-2e88f4`)
+
+Ruling: `docs/rulings/2026-11-13-cpdr-web-lookup.md`. Scope is **offline only**: no live request, no
+provider call, no paid run. Every test uses hand-written fixtures and fake resolvers, connectors and
+clocks. SEC JSON field names are unverified against real responses. A real run needs the owner to
+set `DEPLOY_WORKFLOW_SEC_USER_AGENT` and is a separate paid action.
+
+- Change: `fetch_page`, `sec_company_search`, `sec_filing_list` and `sec_concept_facts` for CP-DR;
+  an allowlist of 28 domains; pages retained under `<run>/web/` with a status against the research
+  cutoff; fail-closed acceptance checks on CP-DR's handoff; `--web-lookup` and `--web-host`.
+- Commands, each run on 0c61069:
+  - `uv run pytest tests/test_weblookup.py tests/test_web_lookup_tools.py tests/test_web_search_scope.py tests/test_handoff_loop.py -q`: 461 passed, exit=0.
+  - `uv run pytest tests/test_cpos_launch.py -q`: 782 passed, 1 skipped (the paid test), exit=0.
+  - `uv run python tools/quality_gate.py`: 0 findings in 24 changed files, exit=0.
+- Hostile cases covered by tests: redirect off the allowlist; oversized body (refused, not
+  truncated); private and local addresses, also on a redirect hop; a post-cutoff page (later event,
+  rejected in a TDR.6 row); a quote not in the cited page; the User-Agent variable missing (refused,
+  names the variable) and never written anywhere; an injected instruction in page text; a forged
+  `<<<END>>>` delimiter; a PDF answer (refused, nothing retained).
+- Reviews: per-task review and two security reviews with probes. Findings were fixed in follow-up
+  commits: 2b34e1a, 0315d23, 0c61069 (`git log --oneline 82b17f3..HEAD`: 82ef297, 2b34e1a, 669b002,
+  0315d23, 0c61069).
+- No reader check applies: no presentation change.
+- Not verified: live network behaviour; real SEC responses and field names; real model use of the
+  tools and its citations; the full suite; concurrent writers to one run's web folder.
+
 ## 2026-11-13 — Full and lite credit assessments; short credit snapshot deactivated (branch `claude/lite-full-credit-assessment`)
 Scope: offline only; no provider or model call. `credit_snapshot` is titled "Full credit assessment"; the new `lite_credit_assessment` (CP-0, CP-1, CP-1A, CP-2, CP-2A; no CP-MODEL, so no forecast) is offered on the run-start page; `short_snapshot` stays wired, is not offered, and a new run of it is refused at the launcher, the run-start summary and the inbox submit. Ruling: `docs/rulings/2026-11-13-full-and-lite-credit-assessments.md`.
 - Synthetic lite run, no model: `test_the_lite_pathway_runs_end_to_end_to_a_verified_delivery_with_a_synthetic_provider` reaches a verified delivery with all nine report blocks populated and no forecast published (`cp_forecast_published` false, no "Model not published" line, as nothing was requested). A second synthetic lite run plans CP-8 last against a lite prior and delivers the Changes pack, and the library renders a lite run with the Forecast page stating that no forecast was published. These prove the pipeline, not model output.
@@ -944,36 +970,3 @@ Owner: "Yes, run it", then "Merge now apply corrections on next PR". Ruling
   cost saving and the reads CP-3 and CP-5 now get are estimates from retained requests; the
   relaunch refusal for old folders was checked by instruction text (old `CP-0.md` lacks the new
   sentence), not by a launch.
-
-## 2026-11-10 — Names, not codes, on every library screen (branch `claude/names-not-codes`)
-
-Owner: "Remove all cp-IDs and methodology step IDs from user facing screens. Replace with module
-name or other." Display only (`apps/issuer-library/credit_os/web/`); routes, hrefs, download names,
-`data.js` and the retained handoffs are unchanged. Record: `docs/design/2026-11-10-screens-pass.md`,
-"Codes off the screen".
-
-- Change: module codes read as module names everywhere, including Evidence & audit, the Evidence
-  tab, the inspector, chips, the coverage strip, the reports' "Built from" table and each delivered
-  report with its own inspector. `CP-x.md` reads "<name> handoff" and `CP-x_RUNBOOK.md` "<name>
-  runbook". A method step id (`T4.10`, `T1D.1`, `T4.D1`, `T2G.*`, `T2E.3.r01`) becomes the step's
-  title from the same output, or "a method step" / "method steps" when there is none. A column of
-  bare step ids is dropped. Kept as written: register references (`C9`, `G1`, `GAP-001`), a bare
-  `T<n>` ("T2 Biosystems", "Tier 2 (T2)"), and the quoted issuer source excerpt.
-- Answer key (scratch crawler, not shipped): every in-app route plus the delivered reports. Text,
-  option text, title, aria-label, alt and placeholder; one inspector per page. Before: 22,649
-  module-code and 1,914 step-id hits over 349 routes of the four retained TDG runs. After
-  (`54d7763`): `counted 0`. After merging main (`715f6f5`): `counted 0` over 186 routes and three
-  runs. Main's methodology change now excludes `cpos-tdg-sol-medium-all-001` from the library ("not
-  on the current methodology").
-- Tests written first and seen failing (15 static, 3 browser). On the merged tree: `node --test`
-  static + calendar 125 pass; `tests/test_library_page_browser.py` 21 passed; CI fast pytest list
-  1471 passed, 7 deselected; quality gate 0 findings. All exit 0.
-- Review: task review and fix round (mx-precise), whole-branch review (mx-architect), one fix
-  wave and its re-review; implementation by mx-feature. Parked as latent, no retained instance:
-  - step titles taken from any short second cell;
-  - a step id cited beside another module's code takes this output's title;
-  - the `;` joiner merging two untitled clauses;
-  - `CP-0-A.md`-style names in the app.
-- Not verified: Windows and Edge, phone widths, a screen reader; live Run activity data; a Forecast
-  model with step ids; runbook names on a rendered page (string-level test only); any issuer other
-  than TDG.
