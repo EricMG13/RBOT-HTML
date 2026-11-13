@@ -220,12 +220,18 @@ def _feed(req: _Req) -> _Reply:
     except feedview.ViewError as error:
         raise _refuse(400, str(error)) from None
     cards = [dataclasses.asdict(card) for card in page.cards]
-    return _Reply(200, {"cards": cards, "next_before": page.next_before})
+    return _Reply(200, {"cards": cards, "next_before": page.next_before, "newest": page.newest})
+
+
+MAX_AFTER_DIGITS = len(str(feedview.MAX_ID))
 
 
 def _feed_new(req: _Req) -> _Reply:
+    after = req.param("after")
+    if not (after.isascii() and after.isdecimal() and len(after) <= MAX_AFTER_DIGITS):
+        raise _refuse(400, f"invalid after {after!r}")
     try:
-        count = feedview.new_count(req.db, req.person.name, req.param("view"), req.param("since"))
+        count = feedview.new_count(req.db, req.person.name, req.param("view"), int(after))
     except feedview.ViewError as error:
         raise _refuse(400, str(error)) from None
     return _Reply(200, {"count": count})
@@ -597,11 +603,15 @@ def serve(root: Path, host: str, port: int, *, tick: float = 60.0) -> int:
     if not 0 <= port <= 65535:
         print("--port must be from 0 to 65535", file=sys.stderr)
         return 2
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     loop = Loop(root)
     try:
         server = make_server(root, host, port, loop=loop)
-    except (ValueError, StartError, OSError, OverflowError) as error:  # wildcard, files, address
+    except (ValueError, StartError) as error:  # wildcard address, missing page file
         print(error, file=sys.stderr)
+        return 2
+    except (OSError, OverflowError) as error:  # the address cannot be bound
+        print(f"cannot listen on {host}:{port}: {error}", file=sys.stderr)
         return 2
     try:
         store.open_db(root).close()  # a store that cannot be opened fails here, not per request

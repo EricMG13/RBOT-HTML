@@ -288,6 +288,12 @@ list. Limits: the display name a reader types is not a login; there are no AI su
 yet, only newest first; topics are created from the command line; a connection is cut after 120
 seconds and one address may hold at most 16 connections.
 
+More limits. The root folder must be on a local disk: the database's WAL mode does not work on a
+network share. A mistyped root folder is created rather than refused. Saves and follows belong to the
+exact display name typed, capitals included. The new-story pill counts stories in the view (by story
+number, so a story stored during the page's own load is still counted) and ignores the active kind
+filter and search. Signal has no link back to the run start page.
+
 Only approved sources are fetched. Design: `docs/superpowers/specs/2026-11-13-signal-design.md`.
 Candidate sources: `docs/signal/sources.json` (85 checked on 2026-11-13, 60 meet tier A (fetched and parsed with dated items); none
 is approved until the owner approves it).

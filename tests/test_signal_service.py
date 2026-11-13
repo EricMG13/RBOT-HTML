@@ -247,7 +247,7 @@ def test_me_without_a_name_and_status_need_no_name(svc):
 def test_every_other_api_route_needs_a_name(svc):
     for method, path in (
         ("GET", "/api/feed?view=latest"),
-        ("GET", "/api/feed/new?view=latest&since=2026-11-13T00:00:00%2B00:00"),
+        ("GET", "/api/feed/new?view=latest&after=0"),
         ("POST", "/api/stories/5/save"),
         ("DELETE", "/api/stories/5/save"),
         ("GET", "/api/topics"),
@@ -284,14 +284,22 @@ def test_feed_parameters(svc, cookie):
     ].startswith("Wire")
 
 
+def test_feed_carries_the_newest_story_id(svc, cookie):
+    assert svc.call("GET", "/api/feed?view=latest", cookie=cookie)[2]["newest"] == 36
+
+
 def test_new_count(svc, cookie):
-    since = urllib.parse.quote("2026-11-13T09:00:00+00:00")
-    assert svc.call("GET", f"/api/feed/new?view=latest&since={since}", cookie=cookie)[2] == {
-        "count": 36
-    }
+    assert svc.call("GET", "/api/feed/new?view=latest&after=0", cookie=cookie)[2] == {"count": 36}
+    assert svc.call("GET", "/api/feed/new?view=latest&after=36", cookie=cookie)[2] == {"count": 0}
     assert svc.call("GET", "/api/feed/new?view=latest", cookie=cookie)[0] == 400
-    assert svc.call("GET", f"/api/feed/new?since={since}", cookie=cookie)[0] == 400
-    assert svc.call("GET", "/api/feed/new?view=latest&since=yesterday", cookie=cookie)[0] == 400
+    assert svc.call("GET", "/api/feed/new?after=0", cookie=cookie)[0] == 400
+    assert svc.call("GET", "/api/feed/new?view=latest&after=x", cookie=cookie)[0] == 400
+    assert svc.call("GET", "/api/feed/new?view=latest&after=-1", cookie=cookie)[0] == 400
+    assert svc.call("GET", f"/api/feed/new?view=latest&after={'9' * 20}", cookie=cookie)[0] == 400
+    assert (
+        svc.call("GET", "/api/feed/new?view=latest&since=2026-11-13T09:00:00Z", cookie=cookie)[0]
+        == 400
+    )
 
 
 def test_save_and_follow_round_trip(svc, cookie):
@@ -442,6 +450,16 @@ def test_a_wildcard_host_is_refused_at_start(tmp_path):
 
 def test_wildcard_host_is_refused():
     assert main(["--root", "x", "serve", "--host", "0.0.0.0"]) == 2
+
+
+def test_a_taken_port_names_the_address_and_exits_2(tmp_path, capsys):
+    with socket.socket() as taken:
+        taken.bind(("127.0.0.1", 0))
+        taken.listen()
+        port = taken.getsockname()[1]
+        assert service.serve(tmp_path, "127.0.0.1", port) == 2
+    message = capsys.readouterr().err.strip()
+    assert message.startswith(f"cannot listen on 127.0.0.1:{port}: ") and "\n" not in message
 
 
 def _raw(svc: Live, data: bytes) -> socket.socket:

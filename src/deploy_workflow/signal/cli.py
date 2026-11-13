@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from deploy_workflow.signal.fetch import FetchRefused, check_address
+from deploy_workflow.signal.identity import IdentityError, clean_name
 from deploy_workflow.signal.ingest import health, run_due
 from deploy_workflow.signal.service import serve
 from deploy_workflow.signal.store import (
@@ -129,7 +130,7 @@ def _dispatch(args: argparse.Namespace) -> None:
     db = open_db(args.root)
     try:
         if args.command == "users":
-            add_user(db, args.name, args.role)
+            add_user(db, clean_name(args.name), args.role)
         elif args.command == "sources":
             if args.action == "propose":
                 check_address(args.url)
@@ -159,7 +160,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return serve(args.root, args.host, args.port)
     try:
         _dispatch(args)
-    except (StoreError, FetchRefused) as error:
+    except (StoreError, FetchRefused, IdentityError) as error:
         print(f"error: {error}")
         return 2
     return 0

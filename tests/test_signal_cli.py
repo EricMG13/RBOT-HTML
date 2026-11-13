@@ -7,7 +7,8 @@ from test_signal_feeds import RSS
 from deploy_workflow.signal.cli import main
 from deploy_workflow.signal.feeds import Entry
 from deploy_workflow.signal.fetch import Fetched, FetchRefused
-from deploy_workflow.signal.store import add_story, open_db, propose_source
+from deploy_workflow.signal.identity import clean_name
+from deploy_workflow.signal.store import add_story, open_db, propose_source, role_of
 
 
 def run(tmp_path, *args):
@@ -159,7 +160,23 @@ def test_approving_an_unknown_source_exits_2_with_one_line(tmp_path):
 
 def test_adding_a_user_with_an_empty_name_exits_2(tmp_path):
     code, out = run(tmp_path, "users", "add", "", "--role", "reader")
-    assert code == 2 and out.splitlines() == ["error: name must not be empty"]
+    assert code == 2 and out.splitlines() == ["error: display name is empty"]
+
+
+def test_users_add_stores_the_name_the_page_looks_up(tmp_path):
+    messy = "  B.   Novak "
+    assert run(tmp_path, "users", "add", messy, "--role", "writer")[0] == 0
+    db = open_db(tmp_path)
+    try:
+        assert role_of(db, clean_name(messy)) == "writer"
+        assert [row["name"] for row in db.execute("SELECT name FROM users")] == ["B. Novak"]
+    finally:
+        db.close()
+
+
+def test_users_add_refuses_a_name_that_cleans_to_nothing_in_one_line(tmp_path):
+    code, out = run(tmp_path, "users", "add", "\u200b \t", "--role", "reader")
+    assert code == 2 and out.splitlines() == ["error: display name is empty"]
 
 
 def test_topics_add_and_list(tmp_path):

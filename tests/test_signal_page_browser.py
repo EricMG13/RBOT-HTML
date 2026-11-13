@@ -30,7 +30,7 @@ from test_signal_service import Live
 
 from deploy_workflow.signal.feeds import Entry
 from deploy_workflow.signal.service import make_server
-from deploy_workflow.signal.store import add_story, propose_source, set_source_state
+from deploy_workflow.signal.store import add_story, open_db, propose_source, set_source_state
 
 pytestmark = pytest.mark.browser
 
@@ -482,6 +482,54 @@ def test_a_stopped_service_shows_the_error_band_and_keeps_the_cards(
     # The refused connection is the browser's own network message; nothing else may be reported.
     assert run.console and all(line["source"] == "network" for line in run.console), run.console
     run.assert_same_origin()
+
+
+def test_the_new_story_pill_counts_a_story_stored_after_the_load_and_loads_it(
+    chrome_path: str, plain_site: Live, tmp_path: Path
+) -> None:
+    pill = "document.getElementById('new-pill')"
+
+    def store_a_story() -> None:
+        db = open_db(tmp_path / "plain")
+        try:
+            entry = Entry(
+                "Fresh arrival", "https://a.org/fresh", LAST + timedelta(minutes=5), "New"
+            )
+            # fetched_at earlier than the page load: only the story id can tell it is new
+            assert add_story(db, 1, entry, FETCHED) == "new"
+        finally:
+            db.close()
+
+    run = drive(
+        chrome_path,
+        plain_site,
+        [
+            *ENTER_NAME,
+            *view("latest", "Latest", 30),
+            look("pillBefore", f"{pill}.hidden"),
+            {"stop": True},
+            {"eval": "document.dispatchEvent(new Event('visibilitychange'))", "as": "polled"},
+            wait(f"!{pill}.hidden"),
+            look("pillText", f"{pill}.textContent"),
+            {"click": "#new-pill"},
+            wait(f"{pill}.hidden && {TITLES}[0] === 'Fresh arrival' && {BUSY_DONE}"),
+            look(
+                "after",
+                "({first: " + TITLES + "[0], pillHidden: " + pill + ".hidden,"
+                " focusIsFirstCard:"
+                " document.activeElement === document.querySelector('#cards article')})",
+            ),
+        ],
+        on_stop=store_a_story,
+    )
+    assert run.values["pillBefore"] is True
+    assert run.values["pillText"] == "1 new story"
+    assert run.values["after"] == {
+        "first": "Fresh arrival",
+        "pillHidden": True,
+        "focusIsFirstCard": True,
+    }
+    run.assert_quiet()
 
 
 def test_a_plain_visit_logs_nothing(chrome_path: str, site: Live, tmp_path: Path) -> None:

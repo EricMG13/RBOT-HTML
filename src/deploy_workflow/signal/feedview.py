@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from typing import NotRequired, TypedDict, Unpack
@@ -36,6 +38,7 @@ class Card:
 class Page:
     cards: tuple[Card, ...]
     next_before: str | None
+    newest: int  # highest story id in the whole store when the page was read; 0 if empty
 
 
 class Filters(TypedDict):
@@ -81,6 +84,28 @@ def _instant(text: str, what: str) -> str:
         return _utc_text(parsed)
     except OverflowError as exc:  # a year-1 or year-9999 time with an offset leaves the UTC range
         raise ViewError(f"{what} {text!r} is out of range") from exc
+
+
+def _after(after: object) -> int:
+    """A story id cursor: an int from 0 to MAX_ID, else ViewError."""
+    if isinstance(after, bool) or not isinstance(after, int) or not 0 <= after <= MAX_ID:
+        raise ViewError(f"invalid after {after!r}")
+    return after
+
+
+@contextmanager
+def _snapshot(db: sqlite3.Connection) -> Iterator[None]:
+    """One read transaction, so every read inside it sees the same committed state."""
+    db.execute("BEGIN")
+    try:
+        yield
+    finally:
+        if db.in_transaction:
+            db.execute("ROLLBACK")
+
+
+def _newest(db: sqlite3.Connection) -> int:
+    return int(db.execute("SELECT COALESCE(MAX(id), 0) FROM stories").fetchone()[0])
 
 
 def _view_clause(
@@ -145,6 +170,11 @@ def feed(
     **filters: Unpack[Filters],
 ) -> Page:
     """One page of stories, newest first. Raises ViewError for an invalid request."""
+    with _snapshot(db):
+        return _read_page(db, user_name, view, filters)
+
+
+def _read_page(db: sqlite3.Connection, user_name: str, view: str, filters: Filters) -> Page:
     kind = filters.get("kind")
     before = filters.get("before")
     conditions: list[str] = []
@@ -181,16 +211,16 @@ def feed(
     cards = tuple(_card(db, row) for row in rows[:PAGE])
     more = len(rows) > PAGE
     last = cards[-1] if more else None
-    return Page(cards, f"{last.published_at}|{last.id}" if last else None)
+    return Page(cards, f"{last.published_at}|{last.id}" if last else None, _newest(db))
 
 
-def new_count(db: sqlite3.Connection, user_name: str, view: str, since: str) -> int:
-    """Stories in the view fetched after `since`."""
-    stamp = _instant(since, "since")
+def new_count(db: sqlite3.Connection, user_name: str, view: str, after: int) -> int:
+    """Stories in the view with an id above `after`, the `newest` of an earlier page."""
+    floor = _after(after)
     clause, params = _view_clause(db, user_name, view)
     where = " AND " + clause if clause is not None else ""
     row = db.execute(
-        "SELECT COUNT(*) FROM stories s WHERE s.fetched_at > ?" + where, [stamp, *params]
+        "SELECT COUNT(*) FROM stories s WHERE s.id > ?" + where, [floor, *params]
     ).fetchone()
     return int(row[0])
 

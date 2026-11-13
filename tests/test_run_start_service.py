@@ -999,7 +999,7 @@ def test_make_server_refuses_a_signal_url_before_binding(raw, monkeypatch):
     opened: list[object] = []
     monkeypatch.setattr(service, "_Server", lambda *args: opened.append(args))
     with pytest.raises(ValueError, match="--signal-url"):
-        service.make_server(None, "127.0.0.1", 0, signal_url=raw)  # type: ignore[arg-type]
+        service.make_server(Path("unused"), "127.0.0.1", 0, signal_url=raw)
     assert opened == []  # no socket was asked for
 
 

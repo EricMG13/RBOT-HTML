@@ -73,6 +73,21 @@ def match_story(db: sqlite3.Connection, story_id: int) -> list[int]:
     return found
 
 
+def _link_existing(
+    db: sqlite3.Connection, topic_id: int, keywords: Sequence[str], kinds: Sequence[str]
+) -> None:
+    """Link every stored story that meets the rule: one index query per keyword, not per story."""
+    kind_filter = " AND src.kind IN (" + ", ".join("?" * len(kinds)) + ")" if kinds else ""
+    for keyword in keywords:
+        db.execute(
+            "INSERT OR IGNORE INTO topic_stories(topic_id, story_id)"
+            " SELECT ?, s.id FROM stories_fts JOIN stories s ON s.id = stories_fts.rowid"
+            " JOIN sources src ON src.id = s.source_id"
+            " WHERE stories_fts MATCH ?" + kind_filter,
+            [topic_id, fts_phrase(keyword), *kinds],
+        )
+
+
 def add_topic(
     db: sqlite3.Connection,
     name: str,
@@ -95,10 +110,7 @@ def add_topic(
         except sqlite3.IntegrityError as exc:
             raise StoreError(f"topic {name!r} already exists") from exc
         assert cur.lastrowid is not None
-        topic = db.execute("SELECT * FROM topics WHERE id=?", (cur.lastrowid,)).fetchone()
-        for story in db.execute("SELECT id FROM stories ORDER BY id").fetchall():
-            if _matches(db, story["id"], topic):
-                _link(db, cur.lastrowid, story["id"])
+        _link_existing(db, cur.lastrowid, cleaned, allowed)
     return cur.lastrowid
 
 

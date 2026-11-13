@@ -19,15 +19,14 @@
 
   const state = {
     view: 'foryou', kind: '', q: '', next: null, shown: 0, topics: [], approved: undefined,
-    me: null, seq: 0, loading: false, lastLoad: null, retry: null, pollTimer: null, searchTimer: null,
+    me: null, seq: 0, loading: false, newest: null, retry: null, pollTimer: null, searchTimer: null,
   };
 
   class ApiError extends Error {
     constructor(status, message) { super(message); this.status = status; }
   }
 
-  // meta, when given, receives the response's Date header (meta.date) so callers can use the server's clock.
-  async function api(method, path, body, meta) {
+  async function api(method, path, body) {
     const init = {method, headers: {}};
     if (method !== 'GET') {
       init.headers['Content-Type'] = 'application/json';
@@ -39,7 +38,6 @@
     } catch (err) {
       throw new ApiError(0, 'Signal could not be reached. Check your connection and try again.');
     }
-    if (meta) meta.date = res.headers.get('Date');
     let data = null;
     let readable = true;
     try {
@@ -118,21 +116,19 @@
   // next page. On failure the last good list stays and the error band offers Retry.
   async function load(reset) {
     const seq = ++state.seq;
-    const started = new Date();
-    const meta = {};
     const before = reset ? null : state.next;
     clearError();
     setBusy(true);
     if (reset) { els.skeleton.hidden = false; els.cards.hidden = true; els.empty.hidden = true; els.more.hidden = true; }
     else els.more.disabled = true;
     try {
-      const data = await api('GET', '/api/feed?' + feedParams(before), undefined, meta);
+      const data = await api('GET', '/api/feed?' + feedParams(before));
       if (seq !== state.seq) return false;
       if (reset) { els.cards.textContent = ''; state.shown = 0; }
       const firstNew = els.cards.children.length;
       appendCards(data.cards);
       state.next = data.next_before;
-      if (reset) { state.lastLoad = serverTime(meta.date) || started; hidePill(); }
+      if (reset) { state.newest = data.newest; hidePill(); }
       renderEmpty();
       announce(state.shown === 0 ? 'No stories' : state.shown + (state.shown === 1 ? ' story' : ' stories') + ' shown');
       if (!reset && els.cards.children[firstNew]) els.cards.children[firstNew].focus();
@@ -153,13 +149,6 @@
         els.more.hidden = state.next === null;
       }
     }
-  }
-
-  // The server's clock from a Date header; null when missing or unparseable (the caller then uses the browser's).
-  function serverTime(header) {
-    if (!header) return null;
-    const t = new Date(header);
-    return Number.isNaN(t.getTime()) ? null : t;
   }
 
   function hidePill() { els.pill.hidden = true; }
@@ -308,13 +297,13 @@
   // ----- new-stories poll. Fail-open by design: a failed poll only means no pill this round; the next
   // poll tries again, and the feed itself reports its own failures in the error band.
   async function poll() {
-    if (document.visibilityState === 'hidden' || !state.me || !state.lastLoad || state.loading) return;
+    if (document.visibilityState === 'hidden' || !state.me || state.newest === null || state.loading) return;
     loadStatus();
     try {
-      const snap = {view: state.view, kind: state.kind, q: state.q, lastLoad: state.lastLoad};
-      const params = new URLSearchParams({view: snap.view, since: snap.lastLoad.toISOString()});
+      const snap = {view: state.view, kind: state.kind, q: state.q, newest: state.newest};
+      const params = new URLSearchParams({view: snap.view, after: String(snap.newest)});
       const data = await api('GET', '/api/feed/new?' + params);
-      const current = state.view === snap.view && state.kind === snap.kind && state.q === snap.q && state.lastLoad === snap.lastLoad;
+      const current = state.view === snap.view && state.kind === snap.kind && state.q === snap.q && state.newest === snap.newest;
       if (current && data.count > 0) {
         els.pill.textContent = data.count + (data.count === 1 ? ' new story' : ' new stories');
         if (els.pill.hidden) announce(els.pill.textContent);
