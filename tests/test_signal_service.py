@@ -428,6 +428,24 @@ def test_loop_pass_updates_status_and_recovers_from_a_failing_source_with_record
     assert status["last_pass_at"] == later.isoformat()
 
 
+def test_a_pass_that_raises_at_loop_level_is_shown_by_type_only_with_recorded_feed(
+    svc_with_loop, monkeypatch
+):
+    loop, call = svc_with_loop
+    good_run_due = service.ingest.run_due
+
+    def boom(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("secret")
+
+    monkeypatch.setattr(service.ingest, "run_due", boom)
+    loop.run_once(NOW)  # must not raise
+    shown = call("GET", "/api/status")[2]["loop_error"]
+    assert shown and "RuntimeError" in shown and "secret" not in shown
+    monkeypatch.setattr(service.ingest, "run_due", good_run_due)
+    loop.run_once(NOW + timedelta(seconds=601))
+    assert call("GET", "/api/status")[2]["loop_error"] is None
+
+
 def test_a_save_during_a_pass_succeeds(svc_with_loop, cookie):
     loop, call = svc_with_loop  # fetch replaced by one that blocks on an Event mid-pass
     with pass_in_progress(loop):
