@@ -187,6 +187,21 @@ def test_fts_follows_title_update_and_delete(tmp_path: Path) -> None:
     assert hits("beta") == 0
 
 
+def test_feed_indexes_exist_after_open(tmp_path):
+    db = open_db(tmp_path)
+    try:
+        names = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='index'")}
+    finally:
+        db.close()
+    assert {
+        "idx_story_duplicates_story_id",
+        "idx_stories_published_at_id",
+        "idx_topic_stories_story_id",
+        "idx_stories_link_key",
+        "idx_stories_title_key",
+    } <= names
+
+
 def test_link_first_seen_as_a_folded_duplicate_folds_again(tmp_path: Path) -> None:
     from datetime import timedelta
 

@@ -260,7 +260,8 @@ folder (read access only if they open `library.html` from it); only the service'
 
 Signal collects stories from news, regulator and ratings feeds that the owner has approved, folds
 duplicate stories and keeps them in a local SQLite store under `<root>/signal/`. Slice 1 is the
-store and the command line; pages, the AI pass, digests and login are later slices.
+store and the command line; slice 2 adds the feed page below. The AI pass, digests and login are
+later slices.
 
 ```
 python -m deploy_workflow.signal --root <root> users add <name> --role <reader|writer|owner>
@@ -269,7 +270,29 @@ python -m deploy_workflow.signal --root <root> sources approve <id>     # or: so
 python -m deploy_workflow.signal --root <root> sources list
 python -m deploy_workflow.signal --root <root> ingest                   # add --loop for a pass every 60 s
 python -m deploy_workflow.signal --root <root> stories --limit 20
+python -m deploy_workflow.signal --root <root> topics add ...           # topics are made here only
+python -m deploy_workflow.signal --root <root> serve --host <address> --port 8766
 ```
+
+`serve` runs the feed page and its ingest loop. The address is 127.0.0.1 (this machine only) or this
+machine's own address to serve colleagues; 0.0.0.0 is refused. In the Windows package
+`Start signal.cmd <shared folder> [address]` does the same on port 8766. It makes no model call and
+needs no provider key. To link it from the run start page, start that page with
+`--signal-url http://<address>:8766/` (the wrapper `Start run page.cmd` takes no such option, so pass
+it when starting `python -m deploy_workflow.run_start` by hand); the page then shows a Signal link in
+its left rail, and without the option it is unchanged.
+
+The page shows Latest, For you, Saved and one view per topic, newest first. A reader can filter by
+kind, search, save a story, follow a topic, and a pill announces new stories without moving the
+list. Limits: the display name a reader types is not a login; there are no AI summaries or ranking
+yet, only newest first; topics are created from the command line; a connection is cut after 120
+seconds and one address may hold at most 16 connections.
+
+More limits. The root folder must be on a local disk: the database's WAL mode does not work on a
+network share. A mistyped root folder is created rather than refused. Saves and follows belong to the
+exact display name typed, capitals included. The new-story pill counts stories in the view (by story
+number, so a story stored during the page's own load is still counted) and ignores the active kind
+filter and search. Signal has no link back to the run start page.
 
 Only approved sources are fetched. Design: `docs/superpowers/specs/2026-11-13-signal-design.md`.
 Candidate sources: `docs/signal/sources.json` (85 checked on 2026-11-13, 60 meet tier A (fetched and parsed with dated items); none

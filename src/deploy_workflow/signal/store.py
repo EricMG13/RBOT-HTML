@@ -112,6 +112,11 @@ CREATE TABLE saves(
     saved_at TEXT NOT NULL,
     UNIQUE(user_name, story_id)
 );
+CREATE INDEX IF NOT EXISTS idx_story_duplicates_story_id ON story_duplicates(story_id);
+CREATE INDEX IF NOT EXISTS idx_stories_published_at_id ON stories(published_at, id);
+CREATE INDEX IF NOT EXISTS idx_topic_stories_story_id ON topic_stories(story_id);
+CREATE INDEX IF NOT EXISTS idx_stories_link_key ON stories(link_key);
+CREATE INDEX IF NOT EXISTS idx_stories_title_key ON stories(title_key);
 """
 
 # Ordered; later slices append. Index i holds the script that brings the schema to version i + 1.

@@ -1,3 +1,4 @@
+import json
 import tempfile
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
@@ -143,3 +144,56 @@ def test_a_slice_1_database_gains_the_new_tables(tmp_path):
     assert db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0] == "2"
     names = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert {"topics", "topic_stories", "topic_follows", "saves"} <= names
+
+
+def test_add_topic_links_exactly_what_the_per_story_path_links(tmp_path):
+    database = open_db(tmp_path)
+    try:
+        words = [
+            *("merger", "remedy", "spectrum", "auction", "roaming"),
+            *("broadband", "tariff", "licence", "appeal", "fine"),
+        ]
+        base = datetime(2026, 1, 1, tzinfo=UTC)
+        with database:
+            for index, kind in enumerate(("regulator", "news", "research")):
+                database.execute(
+                    "INSERT INTO sources(name, kind, url, state, proposed_by, created_at)"
+                    " VALUES(?, ?, ?, 'approved', 'x', ?)",
+                    (f"S{index}", kind, f"https://s{index}.org/f", base.isoformat()),
+                )
+            rows = []
+            for i in range(2000):
+                at = (base + timedelta(minutes=i)).isoformat()
+                title = " ".join(words[(i * k + k) % len(words)] for k in (1, 3, 7))
+                summary = " ".join(words[(i * k + 2) % len(words)] for k in (2, 5, 9))
+                link = f"https://s{i % 3}.org/{i}"
+                rows.append((i % 3 + 1, title, link, link, title, at, at, summary))
+            database.executemany(
+                "INSERT INTO stories(source_id, title, link, link_key, title_key, published_at,"
+                " fetched_at, summary) VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
+                rows,
+            )
+        keywords = ["merger", "spectrum auction", 'say "tariff"', "no such word"]
+        kinds = ["regulator", "research"]
+        first = add_topic(database, "New path", keywords, kinds, "x")
+        with database:
+            second = database.execute(
+                "INSERT INTO topics(name, keywords, kinds, created_by, created_at)"
+                " VALUES('Old path', ?, ?, 'x', ?)",
+                (json.dumps(keywords), json.dumps(kinds), base.isoformat()),
+            ).lastrowid
+        for story_id in range(1, 2001):
+            match_story(database, story_id)
+
+        def linked(topic_id):
+            return {
+                row[0]
+                for row in database.execute(
+                    "SELECT story_id FROM topic_stories WHERE topic_id=?", (topic_id,)
+                )
+            }
+
+        assert linked(first) == linked(second)
+        assert 0 < len(linked(first)) < 2000
+    finally:
+        database.close()

@@ -46,6 +46,9 @@ def offline(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> list[str]:
     for name in ["src", "docs/reuse/selected-methods", "docs/visualisations", "prompts"]:
         (root / name).mkdir(parents=True)
         (root / name / "keep.txt").write_text("x")
+    (root / "src/deploy_workflow/signal/web").mkdir(parents=True)
+    for name in ["index.html", "signal.css", "signal.js", "render.js", "render.test.cjs"]:
+        (root / "src/deploy_workflow/signal/web" / name).write_text(name)
     (root / "src/deploy_workflow/inbox").mkdir(parents=True)
     (root / "src/deploy_workflow/inbox/scheduler.py").write_text("SCHEDULER = 1")
     (root / "docs/visualisations/catalogue.csv").write_text("id\nV1\n")
@@ -208,6 +211,37 @@ def test_the_package_ships_the_static_library_and_its_two_windows_wrappers(
     assert "0.0.0.0" not in line
 
 
+def test_the_package_ships_the_signal_starter_and_its_page_files(
+    tmp_path: Path, offline: list[str]
+) -> None:
+    target = tmp_path / "windows-amd64"
+    target.mkdir()
+    runtime.bundle(target, None)
+    raw = (target / "Start signal.cmd").read_bytes()
+    assert raw.startswith(b"@echo off\r\n") and b"\n" not in raw.replace(b"\r\n", b"")
+    page = raw.decode("ascii")
+    python = '"%~dp0engine\\runtime\\python.exe" -I -B -X utf8'
+    line = (
+        f'{python} -m deploy_workflow.signal --root "%ROOT%" serve --host "%HOSTADDR%" --port 8766'
+    )
+    assert line in page and "exit /b %errorlevel%" in page
+    assert 'set "ROOT=%~1"' in page and "%FINAL_WORKFLOW_WORKSPACE%" in page
+    assert 'set "HOSTADDR=%~2"' in page
+    assert 'if not defined HOSTADDR set "HOSTADDR=127.0.0.1"' in page
+    assert "echo Usage: Start signal.cmd ^<shared folder^> [address]" in page
+    assert "exit /b 1" in page and "0.0.0.0 is refused" in page
+    assert "no model call and needs" in page and "API_KEY" not in page and "TOKEN" not in page
+    web = target / "engine/src/deploy_workflow/signal/web"
+    assert sorted(p.name for p in web.iterdir()) == [
+        "index.html",
+        "render.js",
+        "signal.css",
+        "signal.js",
+    ]  # not the node test
+    # signal.service finds the brand files at engine/credit_os/web, beside engine/src.
+    assert (target / "engine/credit_os/web/index.html").is_file()
+
+
 def test_the_package_ships_the_run_page_starter_and_the_new_ruling(
     tmp_path: Path, offline: list[str]
 ) -> None:
@@ -261,3 +295,26 @@ def test_a_missing_runtime_folder_is_created_empty_and_the_manifest_removed(
     runtime.clear_runtime(target, target / "engine/runtime", manifest)
     assert (target / "engine/runtime").is_dir() and not list((target / "engine/runtime").iterdir())
     assert not manifest.exists()
+
+
+def test_a_real_bundle_gives_the_signal_service_its_brand_files_and_no_node_test(
+    tmp_path: Path,
+) -> None:
+    """The repository's own sources, bundled for a Mac (no runtime, so no download)."""
+    from deploy_workflow.signal import service
+
+    target = tmp_path / "bundle"
+    target.mkdir()
+    runtime.bundle(target, None)
+    engine = target / "engine"
+    brand = service.find_brand(engine)
+    assert brand == engine / "credit_os" / "web"
+    for name, (path, _type) in service.STATIC.items():
+        if name.startswith(("brand", "fonts/")):
+            relative = path.relative_to(service._BRAND)
+            assert (brand / relative).is_file(), name
+    assert (brand / "brand.css").is_file() and (brand / "brand/symbol.svg").is_file()
+    web = engine / "src/deploy_workflow/signal/web"
+    for name in ("index.html", "signal.css", "signal.js", "render.js"):
+        assert (web / name).is_file(), name
+    assert not (web / "render.test.cjs").exists()

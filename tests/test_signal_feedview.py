@@ -142,9 +142,38 @@ def test_bad_requests_raise_view_error(db_feed, bad):
         feed(db_feed, "ak", **bad)
 
 
-def test_new_count(db_feed):  # every fixture story fetched at 09:40Z
-    assert new_count(db_feed, "ak", "latest", "2026-11-13T09:39:00+00:00") == 36
-    assert new_count(db_feed, "ak", "latest", "2026-11-13T09:40:00+00:00") == 0
+def test_page_reports_the_newest_story_id(db_feed):
+    assert feed(db_feed, "ak", "latest").newest == 36
+
+
+def test_new_count_counts_ids_after_the_cursor(db_feed):
+    assert new_count(db_feed, "ak", "latest", 36) == 0
+    assert new_count(db_feed, "ak", "latest", 30) == 6
+    assert new_count(db_feed, "ak", "latest", 0) == 36
+    assert new_count(db_feed, "ak", "topic:1", 0) == 1
+
+
+@pytest.mark.parametrize("after", [-1, 2**63, True, "x", 1.5, None])
+def test_new_count_refuses_a_bad_after(db_feed, after):
+    with pytest.raises(ViewError):
+        new_count(db_feed, "ak", "latest", after)
+
+
+def test_empty_store_newest_is_zero(tmp_path):
+    db = open_db(tmp_path)
+    try:
+        assert feed(db, "ak", "latest").newest == 0
+    finally:
+        db.close()
+
+
+def test_story_stored_after_the_load_with_an_earlier_fetched_at_is_counted(db_feed):
+    """An ingest pass stamps fetched_at at its start but commits later."""
+    loaded = feed(db_feed, "ak", "latest").newest
+    early = FETCHED - timedelta(hours=1)  # earlier than the page load, inserted after it
+    entry = Entry("Late commit story", "https://a.org/late", LAST, "Committed after the load")
+    assert add_story(db_feed, 1, entry, early) == "new"
+    assert new_count(db_feed, "ak", "latest", loaded) == 1
 
 
 @pytest.mark.parametrize(
@@ -160,24 +189,8 @@ def test_oversized_ids_and_zoneless_cursor_raise_view_error(db_feed, bad):
         feed(db_feed, "ak", **bad)
 
 
-def test_new_count_compares_instants_not_text(db_feed):
-    assert new_count(db_feed, "ak", "latest", "2026-11-13T04:40:00-05:00") == 0
-
-
-@pytest.mark.parametrize("since", ["garbage", "", "2026-11-13T09:39:00"])
-def test_new_count_refuses_unparseable_or_zoneless_since(db_feed, since):
-    with pytest.raises(ViewError):
-        new_count(db_feed, "ak", "latest", since)
-
-
 def test_ids_of_thousands_of_digits_raise_view_error(db_feed):
     with pytest.raises(ViewError):
         feed(db_feed, "ak", "topic:" + "9" * 5000)
     with pytest.raises(ViewError):
         feed(db_feed, "ak", "latest", before="2026-11-13T09:00:00+00:00|" + "9" * 5000)
-
-
-@pytest.mark.parametrize("since", ["9999-12-31T23:59:59-23:59", "0001-01-01T00:00:00+23:59"])
-def test_times_that_overflow_utc_raise_view_error(db_feed, since):
-    with pytest.raises(ViewError):
-        new_count(db_feed, "ak", "latest", since)

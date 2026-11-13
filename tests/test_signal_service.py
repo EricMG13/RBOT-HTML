@@ -188,6 +188,33 @@ def test_a_missing_brand_file_fails_at_start(tmp_path, monkeypatch):
         make_server(tmp_path, "127.0.0.1", 0)
 
 
+def _tree(base: Path, *parts: str) -> Path:
+    web = base.joinpath(*parts)
+    (web / "brand").mkdir(parents=True)
+    (web / "brand.css").write_text("x")
+    return web
+
+
+def test_brand_files_are_found_in_the_repository_layout(tmp_path):
+    web = _tree(tmp_path, "apps", "issuer-library", "credit_os", "web")
+    assert service.find_brand(tmp_path) == web
+
+
+def test_brand_files_are_found_in_the_packaged_layout(tmp_path):
+    web = _tree(tmp_path, "credit_os", "web")  # engine/credit_os/web beside engine/src
+    assert service.find_brand(tmp_path) == web
+
+
+def test_brand_lookup_with_no_candidate_names_the_first_so_start_fails_loudly(tmp_path):
+    assert service.find_brand(tmp_path) == (
+        tmp_path / "apps" / "issuer-library" / "credit_os" / "web"
+    )
+
+
+def test_the_real_layout_has_the_brand_files():
+    assert (service.find_brand(Path(service.__file__).resolve().parents[3]) / "brand.css").is_file()
+
+
 def test_name_then_feed(svc):
     assert svc.call("GET", "/api/feed?view=latest")[0] == 401
     status, headers, _ = svc.call("POST", "/api/me", body={"name": "  A.  Kovac "})
@@ -220,7 +247,7 @@ def test_me_without_a_name_and_status_need_no_name(svc):
 def test_every_other_api_route_needs_a_name(svc):
     for method, path in (
         ("GET", "/api/feed?view=latest"),
-        ("GET", "/api/feed/new?view=latest&since=2026-11-13T00:00:00%2B00:00"),
+        ("GET", "/api/feed/new?view=latest&after=0"),
         ("POST", "/api/stories/5/save"),
         ("DELETE", "/api/stories/5/save"),
         ("GET", "/api/topics"),
@@ -257,14 +284,22 @@ def test_feed_parameters(svc, cookie):
     ].startswith("Wire")
 
 
+def test_feed_carries_the_newest_story_id(svc, cookie):
+    assert svc.call("GET", "/api/feed?view=latest", cookie=cookie)[2]["newest"] == 36
+
+
 def test_new_count(svc, cookie):
-    since = urllib.parse.quote("2026-11-13T09:00:00+00:00")
-    assert svc.call("GET", f"/api/feed/new?view=latest&since={since}", cookie=cookie)[2] == {
-        "count": 36
-    }
+    assert svc.call("GET", "/api/feed/new?view=latest&after=0", cookie=cookie)[2] == {"count": 36}
+    assert svc.call("GET", "/api/feed/new?view=latest&after=36", cookie=cookie)[2] == {"count": 0}
     assert svc.call("GET", "/api/feed/new?view=latest", cookie=cookie)[0] == 400
-    assert svc.call("GET", f"/api/feed/new?since={since}", cookie=cookie)[0] == 400
-    assert svc.call("GET", "/api/feed/new?view=latest&since=yesterday", cookie=cookie)[0] == 400
+    assert svc.call("GET", "/api/feed/new?after=0", cookie=cookie)[0] == 400
+    assert svc.call("GET", "/api/feed/new?view=latest&after=x", cookie=cookie)[0] == 400
+    assert svc.call("GET", "/api/feed/new?view=latest&after=-1", cookie=cookie)[0] == 400
+    assert svc.call("GET", f"/api/feed/new?view=latest&after={'9' * 20}", cookie=cookie)[0] == 400
+    assert (
+        svc.call("GET", "/api/feed/new?view=latest&since=2026-11-13T09:00:00Z", cookie=cookie)[0]
+        == 400
+    )
 
 
 def test_save_and_follow_round_trip(svc, cookie):
@@ -417,6 +452,16 @@ def test_wildcard_host_is_refused():
     assert main(["--root", "x", "serve", "--host", "0.0.0.0"]) == 2
 
 
+def test_a_taken_port_names_the_address_and_exits_2(tmp_path, capsys):
+    with socket.socket() as taken:
+        taken.bind(("127.0.0.1", 0))
+        taken.listen()
+        port = taken.getsockname()[1]
+        assert service.serve(tmp_path, "127.0.0.1", port) == 2
+    message = capsys.readouterr().err.strip()
+    assert message.startswith(f"cannot listen on 127.0.0.1:{port}: ") and "\n" not in message
+
+
 def _raw(svc: Live, data: bytes) -> socket.socket:
     sock = socket.create_connection(("127.0.0.1", svc.port), timeout=10)
     sock.sendall(data)
@@ -436,7 +481,8 @@ def _closed_within(sock: socket.socket, seconds: float) -> bool:
     return True
 
 
-def test_a_trickling_connection_is_closed_at_the_deadline(svc, monkeypatch):
+def test_a_trickling_connection_is_closed_at_the_deadline(svc, monkeypatch, caplog):
+    caplog.set_level(logging.INFO, logger=service.log.name)
     monkeypatch.setattr(service, "SOCKET_TIMEOUT", 0.5)
     monkeypatch.setattr(service.Handler, "timeout", 5)  # per-read timeout longer than the deadline
     host = f"127.0.0.1:{svc.port}"
@@ -460,6 +506,10 @@ def test_a_trickling_connection_is_closed_at_the_deadline(svc, monkeypatch):
         thread.join(timeout=5)
         sock.close()
     assert svc.call("GET", "/api/status")[0] == 200
+    cut = [r for r in caplog.records if "connection deadline reached" in r.getMessage()]
+    assert len(cut) == 1
+    assert cut[0].levelno == logging.INFO and cut[0].getMessage().startswith("127.0.0.1 ")
+    assert cut[0].exc_info is None
 
 
 def test_one_address_has_a_share_of_the_connection_ceiling(svc, monkeypatch):
