@@ -230,6 +230,7 @@ def test_earlier_format_citations_sit_behind_a_basis_control_not_in_the_sentence
         assert [c["data-paragraph"] for c in page.controls] == [f"{OUT}:{block['line']}"]
         assert 'class="basis-link"' in markup and 'class="figure"' not in markup
         assert basis_data(page.controls[0]) == items
-        assert visible == f"{sentence} Basis"
+        # The control is the trace icon: it draws no word, and it is named by its aria-label.
+        assert visible == sentence and page.controls[0].get("aria-label")
         for citation in items:
             assert citation not in visible

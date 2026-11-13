@@ -9,7 +9,7 @@
     inHeader: links.length, inDocument: document.querySelectorAll('a.start-run').length,
     inContent: document.querySelectorAll('#content a.start-run').length,
     inAnyFormOfTheClass: document.documentElement.outerHTML.includes('start-run'),
-    historyTable: document.querySelectorAll('#content .history-table').length,
+    historyRuns: document.querySelectorAll('#content .history .tl-i').length,
     fits: de.scrollWidth <= innerWidth, scrollWidth: de.scrollWidth, innerWidth,
   };
   if (link) {

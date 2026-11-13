@@ -1,4 +1,6 @@
 (async () => {
+  // Measures the Overview as the redesign draws it: the lead, the why grid (key findings beside
+  // what would change the view and what to watch), the module tiles and the limitations.
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
   for (let i = 0; i < 200 && !document.querySelector('#overview-lead'); i++) await sleep(50);
   await sleep(300);
@@ -6,59 +8,53 @@
   const box = element => element.getBoundingClientRect();
   const style = (element, name) => getComputedStyle(element)[name];
   const de = document.documentElement;
-  const main = $('.overview-main'), aside = $('.overview-aside');
   const seen = {
-    hasMain: main !== null, hasAside: aside !== null,
-    ids: [...document.querySelectorAll('#content [id^="overview-"]')].map(part => part.id),
-    fits: de.scrollWidth <= window.innerWidth,
+    parts: [...document.querySelectorAll('#content .overview-part')].map(part => part.id),
+    fits: de.scrollWidth <= window.innerWidth && $('#content').scrollWidth <= $('#content').clientWidth,
     viewport: window.innerWidth,
+    navigatorShown: style($('#navigator'), 'display') !== 'none',
   };
-  if (main && aside) {
-    const m = box(main), a = box(aside);
-    const pageH2 = $('#module-head h2');
-    seen.pageH2Left = pageH2 && box(pageH2).left;
-    seen.mainBox = { left: m.left, right: m.right, top: m.top, bottom: m.bottom };
-    seen.asideBox = { left: a.left, right: a.right, top: a.top, bottom: a.bottom, width: a.width };
-    seen.inMain = [...main.querySelectorAll('[id^="overview-"]')].map(part => part.id);
-    seen.inAside = [...aside.querySelectorAll('[id^="overview-"]')].map(part => part.id);
-    seen.asideLabel = aside.getAttribute('aria-label');
-  }
   const lead = $('#overview-lead');
   if (lead) {
-    const h2 = lead.querySelector('h2'), h3 = [...lead.querySelectorAll('h3')].find(h => h.textContent === 'Bottom line');
-    const first = lead.querySelector('.reading-headline p, .reading-headline li, p.intro');
+    const h2 = lead.querySelector('h2'), eyebrow = lead.querySelector('h3.eyebrow');
+    const first = lead.querySelector('.verdict-lead, p.intro');
     seen.lead = {
       text: lead.textContent,
-      h2: h2 && { text: h2.textContent, size: style(h2, 'fontSize'), transform: style(h2, 'textTransform') },
-      h3Class: h3 ? h3.className : null,
+      h2: h2 && { text: h2.textContent, cls: h2.className, transform: style(h2, 'textTransform') },
+      eyebrow: eyebrow && eyebrow.textContent,
       firstSize: first ? style(first, 'fontSize') : null,
       firstText: first ? first.textContent : null,
+      left: box(lead).left,
     };
   }
-  const entry = $('.bottom-entry');
-  seen.entries = [...document.querySelectorAll('.bottom-entry')].map(row => row.textContent);
-  if (entry) seen.entryColumns = style(entry, 'gridTemplateColumns');
+  const why = $('#overview-why');
+  if (why) {
+    const key = why.querySelector(':scope > .c14'), side = why.querySelector(':scope > .c10');
+    const w = box(why), k = box(key), s = box(side);
+    seen.why = {
+      width: w.width, gap: s.left - k.right,
+      key: { left: k.left, width: k.width, top: k.top },
+      side: { left: s.left, width: s.width, top: s.top },
+      keyItems: [...key.querySelectorAll('.feed-item .feed-title')].map(t => t.textContent),
+      callout: side.querySelector('.callout h2')?.textContent ?? null,
+      pageH2Left: box($('#module-head h2')).left,
+    };
+  }
+  const watch = $('#overview-watch');
+  if (watch) {
+    seen.watch = {
+      from: watch.querySelector('.from a')?.textContent ?? null,
+      inSide: Boolean($('#overview-why .c10 #overview-watch')),
+      entries: [...watch.querySelectorAll('.tl-i')].map(item => [item.querySelector('.tl-d').textContent, item.querySelector('.tl-t').textContent]),
+      lanes: document.querySelectorAll('#content .event-lane, #content .lane').length,
+    };
+  }
+  seen.tiles = [...document.querySelectorAll('#overview-modules .mt')].map(tile => [
+    tile.querySelector('.mt-name').textContent,
+    tile.querySelector('.mt-state')?.textContent ?? '',
+    tile.querySelector('.mt-lead').textContent,
+  ]);
   seen.limits = [...document.querySelectorAll('#overview-limitations li')].map(li => li.textContent);
-  const table = $('#overview-dates table.dates-table');
-  if (table) {
-    const thead = table.querySelector('thead'), row = table.querySelector('tbody tr');
-    seen.dates = {
-      caption: table.querySelector('caption') !== null,
-      cols: table.querySelectorAll('th[scope="col"]').length,
-      theadHeight: box(thead).height, theadDisplay: style(thead, 'display'),
-      rowDisplay: row && style(row, 'display'),
-      rowColumns: row && style(row, 'gridTemplateColumns'),
-      rows: [...table.querySelectorAll('tbody tr')].map(r => r.textContent.trim()),
-    };
-  }
-  const charts = $('#overview-charts');
-  if (charts) {
-    const link = [...charts.querySelectorAll('a')].find(a => a.textContent === 'Chart index');
-    seen.charts = {
-      href: link ? link.getAttribute('href') : null,
-      cards: [...charts.querySelectorAll('.panel-card')].map(card => box(card).width),
-    };
-  }
   seen.chartIndexLinks = [...document.querySelectorAll('#content a')].filter(a => a.textContent === 'Chart index').length;
   const out = document.createElement('pre');
   out.id = 'probe';
