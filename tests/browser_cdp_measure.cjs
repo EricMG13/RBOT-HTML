@@ -3,44 +3,16 @@
 // job: {url, width, height, features?: [{name, value}], waitFor: selector, hover?: selector, measure: JS expression}
 // Prints the measure expression's JSON value on one line. Exits 1, with the reason on stderr, when Chrome cannot be driven or the
 // selector never appears.
-const { spawn } = require('child_process');
 const fs = require('fs');
-const os = require('os');
-const path = require('path');
+const { startChrome, connect } = require('./browser_cdp_common.cjs');
 
 const [chromePath, jobFile] = process.argv.slice(2);
 const job = JSON.parse(fs.readFileSync(jobFile, 'utf8'));
-const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'cdp-measure-'));
-const chrome = spawn(chromePath, ['--headless=new', '--disable-gpu', '--remote-debugging-port=0', '--user-data-dir=' + profile, '--hide-scrollbars', '--allow-file-access-from-files', 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
-let stderr = '';
-const endpoint = new Promise((resolve, reject) => {
-  chrome.stderr.on('data', d => {
-    stderr += d;
-    const m = stderr.match(/DevTools listening on (ws:\/\/\S+)/);
-    if (m) resolve(m[1]);
-  });
-  setTimeout(() => reject(new Error('Chrome did not start: ' + stderr.slice(0, 400))), 20000);
-});
+const { chrome, profile, endpoint } = startChrome(chromePath, 'cdp-measure-', ['--allow-file-access-from-files']);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 async function main() {
-  const ws = new WebSocket(await endpoint);
-  await new Promise((resolve, reject) => { ws.onopen = resolve; ws.onerror = reject; });
-  let id = 0;
-  const pending = new Map();
-  ws.onmessage = e => {
-    const m = JSON.parse(e.data);
-    if (m.id && pending.has(m.id)) {
-      const [resolve, reject] = pending.get(m.id);
-      pending.delete(m.id);
-      if (m.error) reject(new Error(JSON.stringify(m.error))); else resolve(m.result);
-    }
-  };
-  const send = (method, params = {}, sessionId) => new Promise((resolve, reject) => {
-    const n = ++id;
-    pending.set(n, [resolve, reject]);
-    ws.send(JSON.stringify({ id: n, method, params, sessionId }));
-  });
+  const { ws, send } = await connect(endpoint);
   const { targetId } = await send('Target.createTarget', { url: 'about:blank' });
   const { sessionId } = await send('Target.attachToTarget', { targetId, flatten: true });
   const S = (method, params) => send(method, params, sessionId);

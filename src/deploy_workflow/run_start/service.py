@@ -90,6 +90,7 @@ wildcard address (``0.0.0.0``, ``::``, or any spelling that resolves to one) can
 from __future__ import annotations
 
 import argparse
+import html
 import ipaddress
 import json
 import logging
@@ -153,6 +154,8 @@ _RUN_FIELDS = (
     "stalled",
 )
 _LIBRARY = "/library/"
+_RAIL_MARKER = b"<!--rail-signal-->"  # in the start page, right after the activity link
+_HOSTNAME = re.compile(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?")
 
 
 class _ClientGone(Exception):
@@ -188,6 +191,7 @@ class _Server(ThreadingHTTPServer):
     scheduler: Scheduler
     allowed_hosts: frozenset[str]
     advertised_port: int = 0
+    rail_signal: str = ""  # the validated rail anchor, or "" for none
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         self.active_connections = 0
@@ -356,7 +360,9 @@ class Handler(BaseHTTPRequestHandler):
     def _get(self, url: urllib.parse.SplitResult) -> None:
         path = url.path
         if path == "/":
-            page = startup.FORM.read_bytes()
+            page = startup.FORM.read_bytes().replace(
+                _RAIL_MARKER, self._service.rail_signal.encode("ascii")
+            )
             raise _Reply(
                 200,
                 page,
@@ -561,9 +567,50 @@ def _hosts(host: str, port: int) -> frozenset[str]:
     return frozenset(allowed)
 
 
-def make_server(scheduler: Scheduler, host: str, port: int) -> ThreadingHTTPServer:
-    """A server bound to ``host:port`` (port 0 picks one); not yet serving."""
+def signal_link(url: str) -> str:
+    """The normalised ``http://<host>:<port>/`` of a Signal address; ValueError otherwise."""
+    if not url.isascii() or not url.isprintable() or any(c in " \"'<>[]" for c in url):
+        raise ValueError("--signal-url: printable ASCII without spaces or quotes")
+    parts = urllib.parse.urlsplit(url)
+    host = parts.hostname or ""
+    try:
+        port = parts.port
+    except ValueError:
+        port = None
+    if (
+        not url.startswith("http://")
+        or not _HOSTNAME.fullmatch(host)
+        or port is None
+        or not 1 <= port <= 65535
+        or parts.path not in ("", "/")
+        or parts.query
+        or parts.fragment
+        or "@" in parts.netloc
+        or url.endswith(("?", "#"))
+    ):
+        raise ValueError("--signal-url: pass http://<host>:<port>/ (no path, query or login)")
+    return f"http://{host}:{port}/"
+
+
+def _rail_anchor(url: str) -> str:
+    return (
+        f'<a id="rail-signal" href="{html.escape(url, quote=True)}" title="Signal">'
+        '<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+        'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+        '<path d="M5 20v-4M10 20v-8M15 20V8M20 20V4"/></svg>'
+        '<span class="sr-only">Signal</span></a>'
+    )
+
+
+def make_server(
+    scheduler: Scheduler, host: str, port: int, signal_url: str = ""
+) -> ThreadingHTTPServer:
+    """A server bound to ``host:port`` (port 0 picks one); not yet serving.
+
+    ``signal_url`` is validated here by ``signal_link`` (ValueError); it adds the rail link."""
+    link = signal_link(signal_url) if signal_url else ""  # a bad value raises before any socket
     server = _Server((host, port), Handler)
+    server.rail_signal = _rail_anchor(link) if link else ""
     port = server.server_address[1]
     server.scheduler, server.allowed_hosts = scheduler, _hosts(host, port)
     server.advertised_port = port
@@ -578,6 +625,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--max-running", type=int, default=defaults.max_running)
     parser.add_argument("--max-per-day", type=int, default=defaults.max_per_day)
+    parser.add_argument("--signal-url", help="http://<host>:<port>/ of Signal: adds a rail link")
     return parser
 
 
@@ -587,19 +635,26 @@ def _loop(scheduler: Scheduler) -> None:
         time.sleep(scheduler.settings.poll_seconds)
 
 
+def _refusal(args: argparse.Namespace) -> str | None:
+    if not 0 <= args.port <= 65535:
+        return "--port must be from 0 to 65535"
+    if args.max_running < 1 or args.max_per_day < 1:
+        return "--max-running and --max-per-day must be at least 1"
+    if _wildcard(args.host):
+        return "--host: pass this machine's own address, not 0.0.0.0 (no Host header would match)"
+    return None
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
-    if not 0 <= args.port <= 65535:
-        print("--port must be from 0 to 65535", file=sys.stderr)
+    refusal = _refusal(args)
+    if refusal:
+        print(refusal, file=sys.stderr)
         return 2
-    if args.max_running < 1 or args.max_per_day < 1:
-        print("--max-running and --max-per-day must be at least 1", file=sys.stderr)
-        return 2
-    if _wildcard(args.host):
-        print(
-            "--host: pass this machine's own address, not 0.0.0.0 (no Host header would match)",
-            file=sys.stderr,
-        )
+    try:
+        signal_url = "" if args.signal_url is None else signal_link(args.signal_url)
+    except ValueError as error:
+        print(error, file=sys.stderr)
         return 2
     settings = Settings(args.root, max_running=args.max_running, max_per_day=args.max_per_day)
     try:
@@ -608,7 +663,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(error, file=sys.stderr)
         return 2
     try:
-        server = make_server(scheduler, args.host, args.port)
+        server = make_server(scheduler, args.host, args.port, signal_url)
     except (OSError, OverflowError) as error:  # the address is taken or is not one
         scheduler.close()
         print(f"cannot listen on {args.host}:{args.port}: {error}", file=sys.stderr)

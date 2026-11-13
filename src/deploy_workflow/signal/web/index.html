@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Signal</title>
+<link rel="icon" type="image/svg+xml" href="/static/brand/symbol.svg">
+<link rel="stylesheet" href="/static/brand.css">
+<link rel="stylesheet" href="/static/signal.css">
+</head>
+<body>
+<a class="skip-link" href="#feed">Skip to the feed</a>
+<div class="app">
+
+  <nav class="rail" aria-label="Application">
+    <span class="brand-mark" aria-hidden="true"></span>
+    <ul class="rail-list">
+      <li>
+        <a class="rail-link on" href="/" aria-current="page" aria-label="Signal" title="Signal">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2 20h.01M7 20v-4M12 20v-8M17 20V8M22 4v16"/></svg>
+        </a>
+      </li>
+    </ul>
+  </nav>
+
+  <nav class="side" id="channels" aria-label="Signal channels">
+    <h1 class="brand">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2 20h.01M7 20v-4M12 20v-8M17 20V8M22 4v16"/></svg>
+      Signal
+    </h1>
+    <ul class="ch-list" id="view-list">
+      <li><button type="button" class="ch" data-view="foryou">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 21a9 9 0 1 1 0-18 9 9 0 0 1 0 18zM12 15a3 3 0 1 1 0-6 3 3 0 0 1 0 6z"/></svg>For you</button></li>
+      <li><button type="button" class="ch" data-view="latest">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 5v14M6 13l6 6 6-6"/></svg>Latest</button></li>
+      <li><button type="button" class="ch" data-view="saved">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 3h12v18l-6-4-6 4z"/></svg>Saved</button></li>
+    </ul>
+    <h2 class="side-head" id="topics-head">Topics</h2>
+    <ul class="ch-list" id="topic-list" aria-labelledby="topics-head"></ul>
+    <div class="me">
+      <button type="button" class="me-chip" id="name-chip" aria-describedby="name-note">
+        <span class="av" id="me-initials" aria-hidden="true"></span>
+        <span class="me-text"><span class="me-name" id="me-name">Set your name</span><span class="role" id="me-role" hidden></span></span>
+      </button>
+      <span class="me-note" id="name-note" role="tooltip">A display name, not a login. It only labels what you save and follow.</span>
+    </div>
+  </nav>
+
+  <main class="main" id="feed" tabindex="-1" aria-labelledby="view-title" aria-busy="false">
+    <header class="top">
+      <button type="button" class="btn channels-toggle" id="channels-toggle" aria-expanded="false" aria-controls="channels">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 6h16M4 12h16M4 18h16"/></svg>Channels</button>
+      <h2 id="view-title" tabindex="-1">For you</h2>
+      <p class="live" id="freshness"><span class="pulse" aria-hidden="true"></span><span id="freshness-text">Checking sources</span></p>
+    </header>
+
+    <div class="bar">
+      <div class="chips" role="group" aria-label="Kind of story" id="kind-chips">
+        <button type="button" class="chip" data-kind="" aria-pressed="true">All</button>
+        <button type="button" class="chip" data-kind="regulator" aria-pressed="false">Regulators</button>
+        <button type="button" class="chip" data-kind="news" aria-pressed="false">News</button>
+        <button type="button" class="chip" data-kind="ratings" aria-pressed="false">Ratings</button>
+        <button type="button" class="chip" data-kind="research" aria-pressed="false">Research</button>
+      </div>
+      <div class="search" role="search">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M21 21l-4.3-4.3M11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14z"/></svg>
+        <input type="search" id="search" autocomplete="off" aria-label="Search stories" placeholder="Search stories" aria-keyshortcuts="/">
+        <kbd aria-hidden="true">/</kbd>
+      </div>
+    </div>
+
+    <button type="button" class="pill-new" id="new-pill" hidden></button>
+
+    <div class="band" id="error-band" hidden>
+      <p id="error-text"></p>
+      <button type="button" class="btn" id="retry">Retry</button>
+    </div>
+
+    <div id="cards" class="cards"></div>
+    <div id="skeleton" class="cards" aria-hidden="true" hidden>
+      <div class="card skel"><span class="bar-s w1"></span><span class="bar-s w2"></span><span class="bar-s w3"></span><span class="bar-s w4"></span></div>
+      <div class="card skel"><span class="bar-s w1"></span><span class="bar-s w2"></span><span class="bar-s w3"></span><span class="bar-s w4"></span></div>
+      <div class="card skel"><span class="bar-s w1"></span><span class="bar-s w2"></span><span class="bar-s w3"></span><span class="bar-s w4"></span></div>
+    </div>
+    <div id="empty" hidden></div>
+    <button type="button" class="btn more" id="more" hidden>Show older</button>
+  </main>
+</div>
+
+<dialog id="name-dialog" aria-labelledby="name-title" aria-describedby="name-help">
+  <form id="name-form" novalidate>
+    <h2 id="name-title">Your name</h2>
+    <p id="name-help">Signal shows your name next to what you save and follow. It is a display name, not a login.</p>
+    <label for="name-input">Display name</label>
+    <input type="text" id="name-input" name="name" autocomplete="name" required aria-describedby="name-error">
+    <p class="field-error" id="name-error" hidden></p>
+    <div class="dialog-acts">
+      <button type="button" class="btn" id="name-cancel" hidden>Cancel</button>
+      <button type="submit" class="btn pri">Continue</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="sr-only" id="live" aria-live="polite"></div>
+<script src="/static/render.js" defer></script>
+<script src="/static/signal.js" defer></script>
+</body>
+</html>
