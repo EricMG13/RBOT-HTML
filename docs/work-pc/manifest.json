@@ -387,6 +387,7 @@
   "docs/sweeps/2026-11-10/REPORT.md": "8669120cda1c42cc3a8e5384735143dd00dcb4aa",
   "docs/sweeps/2026-11-10/goal.txt": "657475a4a7694db909f9707be2b2a5e77d14559f",
   "docs/sweeps/2026-11-13-optimisation-review/REPORT.md": "5143e4f7d03449b4894f17f2893bae812ce6772e",
+  "docs/sweeps/2026-11-13-optimisation-review/analysis-depth-proposal.md": "74cff06b5ffeab1eafdcc468ac67fda90fe082c8",
   "docs/sweeps/2026-11-13-optimisation-review/appendix-inventory.md": "ec7c31b41dc227356692337afc543de2f2fe1185",
   "docs/sweeps/2026-11-13-optimisation-review/findings.json": "9dc14da7ec36b7cfd49c315a28ec893586046373",
   "docs/sweeps/2026-11-13-optimisation-review/frontend-changes-needed.md": "cb1b774f1d989e852b5e7591b8703f56c73eb339",
@@ -897,6 +898,6 @@
   "tools/work_pc_delta.py": "fa5e9e81c534657f593cb8752a94de10cba0eead",
   "uv.lock": "7a4f05aeff999e9284ec29f34acacdd2619d64b1"
  },
- "head": "6279aeaa57248890a8c2dc0c1f319047eedb02e8",
- "head_date": "2026-11-13T22:44:23Z"
+ "head": "088090f157543e6f61ab1d9f0b903ed654e3ab5c",
+ "head_date": "2026-11-13T22:49:05Z"
 }
