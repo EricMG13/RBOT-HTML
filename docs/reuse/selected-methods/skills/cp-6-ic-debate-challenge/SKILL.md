@@ -167,8 +167,8 @@ Shared presentation rules:
 ### CP-6 | ICDebateChallenge | Layer L6 | Schema: Nested
 
 **Upstream:** CP-1, CP-1A, CP-1B, CP-1C, CP-2, CP-2A, CP-2B, CP-2C, CP-2D, CP-2E, CP-3, CP-3A, CP-3B, CP-3C, CP-4, CP-4A
+**Upstream (QA gate):** CP-5, CP-5A (accepted before this module runs; CP-5 is never its consumer)
 **Downstream (Analytical):** CP-6A
-**Downstream (QA):** CP-5, CP-5A
 
 ---
 
@@ -252,7 +252,7 @@ The required analytical output and sole downstream handoff is one validated cano
 module_id: CP-6 | module_name: ICDebateChallenge | schema_family: Nested | layer: L6
 
 #### Dependencies
-UP: CP-1, CP-1A, CP-1B, CP-1C, CP-2, CP-2A, CP-2B, CP-2C, CP-2D, CP-2E, CP-3, CP-3A, CP-3B, CP-3C, CP-4, CP-4A | DOWN (Analytical): CP-6A | DOWN (QA): CP-5, CP-5A
+UP: CP-1, CP-1A, CP-1B, CP-1C, CP-2, CP-2A, CP-2B, CP-2C, CP-2D, CP-2E, CP-3, CP-3A, CP-3B, CP-3C, CP-4, CP-4A | UP (QA gate): CP-5, CP-5A | DOWN (Analytical): CP-6A
 
 #### Governance Rules
 1. CP-6 is an adversarial debate module — output must force a decision-useful action bias, not produce balanced narrative.
@@ -331,8 +331,8 @@ CP-6A's binding rules are CP-6's: the same canon, and every rule in `## Canon Co
 ### CP-6A | PortfolioDebateChallenge | Layer L6 | Schema: Nested
 
 **Upstream:** CP-0, CP-1, CP-1B, CP-1C, CP-2, CP-2A, CP-2B, CP-2C, CP-2D, CP-2E, CP-3, CP-3A, CP-3B, CP-3C, CP-4, CP-4A, CP-6
+**Upstream (QA gate):** CP-5, CP-5A (accepted before this module runs; CP-5 is never its consumer)
 **Downstream (Analytical):** (terminal L6 module)
-**Downstream (QA):** CP-5, CP-5A
 
 ---
 
@@ -414,7 +414,7 @@ The required analytical output and sole downstream handoff is one validated cano
 module_id: CP-6A | module_name: PortfolioDebateChallenge | schema_family: Nested | layer: L6
 
 #### Dependencies
-UP: CP-0, CP-1, CP-1B, CP-1C, CP-2, CP-2A, CP-2B, CP-2C, CP-2D, CP-2E, CP-3, CP-3A, CP-3B, CP-3C, CP-4, CP-4A, CP-6 | DOWN (Analytical): (terminal L6 module) | DOWN (QA): CP-5, CP-5A
+UP: CP-0, CP-1, CP-1B, CP-1C, CP-2, CP-2A, CP-2B, CP-2C, CP-2D, CP-2E, CP-3, CP-3A, CP-3B, CP-3C, CP-4, CP-4A, CP-6 | UP (QA gate): CP-5, CP-5A | DOWN (Analytical): (terminal L6 module)
 
 #### Governance Rules
 1. CP-6A is the terminal portfolio debate module — output must force a definitive sizing and posture decision, not produce balanced narrative.

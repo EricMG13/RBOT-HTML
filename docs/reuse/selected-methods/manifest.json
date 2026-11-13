@@ -119,10 +119,10 @@
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-6-ic-debate-challenge/SKILL.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-6-ic-debate-challenge/SKILL.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-6-ic-debate-challenge/SKILL.md",
-      "sha256": "95e1a8678f42928fab02205c29395efc1976aeba49fa9e03547baaa7933e7823",
-      "use": "unchanged selected methodology; historical source is evidence, not inherited authority",
+      "sha256": "31a9286b6fc23f7c683f8c9a746db9bc9ce7bdcc45d7598ef7f789b28e7cfac8",
+      "use": "selected methodology with named CP-5/CP-6 ordering edits (see `edit`); historical source is evidence, not inherited authority",
       "source_sha256": "0ae74db02dd569fe7805e62a661f22cd436494183ba5cb928f8be37aa549a96b",
-      "edit": "named edit: Dependencies sentence added: `Its QA gate is CP-5: CP-6 runs only after CP-5's handoff is accepted (Passed or Restricted), so CP-5 is upstream of CP-6 and never its consumer.` (caos SKILL.md line 8); no other caos hunk ported; wording from caos-databricks vendor/deploy-v (last changed 99069f83, repo HEAD dfff264); sha256 is this edited file, source_sha256 the previously archived file"
+      "edit": "named edits (CP-5 is CP-6's upstream QA gate, never its consumer), all from caos-databricks vendor/deploy-v (last changed 99069f83, repo HEAD dfff264): Dependencies sentence `Its QA gate is CP-5: CP-6 runs only after CP-5's handoff is accepted (Passed or Restricted), so CP-5 is upstream of CP-6 and never its consumer.` (caos line 8); in both header blocks `**Downstream (QA):** CP-5, CP-5A` replaced by `**Upstream (QA gate):** CP-5, CP-5A (accepted before this module runs; CP-5 is never its consumer)` placed before `**Downstream (Analytical):**` (caos 175, 339); in both UP/DOWN lines `| DOWN (QA): CP-5, CP-5A` replaced by `| UP (QA gate): CP-5, CP-5A` before `| DOWN (Analytical)` (caos 260, 422); no other caos hunk ported; sha256 is this edited file, source_sha256 the previously archived file"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-6-ic-debate-challenge/references/REF_CP-6_STEPS.md",

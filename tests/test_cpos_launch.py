@@ -2069,6 +2069,14 @@ def test_cp6_instruction_says_its_qa_gate_is_cp5_upstream_of_it(tmp_path):
         "Its QA gate is CP-5: CP-6 runs only after CP-5's handoff is accepted (Passed or "
         "Restricted), so CP-5 is upstream of CP-6 and never its consumer." in text
     )
+    assert (
+        "**Upstream (QA gate):** CP-5, CP-5A (accepted before this module runs; "
+        "CP-5 is never its consumer)" in text
+    )
+    assert "UP (QA gate): CP-5, CP-5A | DOWN (Analytical): CP-6A" in text
+    assert "UP (QA gate): CP-5, CP-5A | DOWN (Analytical): (terminal L6 module)" in text
+    assert "**Downstream (QA):** CP-5, CP-5A" not in text  # the stale header lines
+    assert "DOWN (QA): CP-5, CP-5A" not in text
 
 
 def test_cp2_instruction_splits_a_mixed_direction_and_gives_none_supported_a_row(tmp_path):
@@ -2228,6 +2236,8 @@ def test_every_module_is_told_what_stands_for_acceptance_scripts_and_questions(t
 # Every prose module changed on 2026-11-13 (Deploy V methods plan, Task 6): the canon's Analytical
 # appendix section is now sent after the reader-layer sections. The data modules (CP-0, CP-1,
 # CP-1C, CP-PARSE) are unchanged.
+# CP-6 changed again on 2026-11-13 (Task 5B fix round 1): its four stale `Downstream (QA)` header
+# lines now say CP-5 is its upstream QA gate (caos wording).
 METHOD_TEXT_SHA256_AT_1B41E65 = {
     "CP-0": "e8d3e77bc48bc98e2fd8595e7b46ee7fc786e859591cf244325f3508b7d5dac9",
     "CP-1": "02477a91d582f6301b2dbfadd96572ea75f9845493de337d7160a55111b62170",
@@ -2247,7 +2257,7 @@ METHOD_TEXT_SHA256_AT_1B41E65 = {
     "CP-4": "a769b7456e5661d70cb25388fc4acb444cfd0aecd8f778554f98369ebadc7f7e",
     "CP-4C": "3f70a354c3af18aad766ca847d1fd8922fe2e3a4156715f502a32b95be789491",
     "CP-5": "9ac221698cc36a06473ce8cd9c2128c1705da362b289163d4ab54fda0d418d76",
-    "CP-6": "900dba5480f8a4632df64821fc04fc9cbe76b16791c9cdad659e9ab91b677329",
+    "CP-6": "115d07e8934f049b920e497834bcf61d53c6fe0cdd0266daf56b87d18d5e1f26",
     "CP-8": "7801db139f31238e89757e40fbe588a6cefb9d26ccdab57e2719de4a8654df7c",
     "CP-DR": "83aa5447c37db42db2e3df91cdd0cfaf491f37c0436fc8257c0d5fb43e735353",
     "CP-L10": "5b0e904dd62e1d1b341ec3d7d1717500d68ce1aee734b347e0dbbdfbe696b006",
