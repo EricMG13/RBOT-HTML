@@ -20,6 +20,20 @@ Scope: OFFLINE only. Tests, reviewer probes (`.superpowers/sdd/cp1-method/probes
 - Gates on the tree merged with `main` `7c21c1e`: `uv run pytest tests/test_cpos_cp1_check.py tests/test_cpos_launch.py tests/test_cpos_register_scope.py tests/test_changes.py tests/test_library_index.py tests/test_handoff_loop.py tests/test_credit_os_store.py tests/test_credit_os_catalogue.py tests/test_context_form.py -q -m "not browser"` 2385 passed, 1 skipped (paid), exit 0; `uv run python tools/quality_gate.py` exit 0, 0 findings. Sizes: earnings_update 545,434 of 546,000; short_snapshot 155,712 of 157,500; all eight under their ceilings.
 Not verified: any model run under the method: no model output has passed the check, and a CP-1 that cannot satisfy it within three writes stops the run at the second module; at what cost; a real GBP or adjusted-only handoff (VMO2 included); the library and the report drawing `GBPm` tables, an adjusted label or a chart with no unit in a browser; the browser-marked tests on the final tree; agreement of CP-1's figures with the filing (the check proves its tables agree with each other; `FX Effect on Cash`, `Temporary Equity` and `Reconciling items` can absorb an error); interim rows have no statement tie; other modules' money tables stay `US$m`; the full suite, slow gates and `tests/model`.
 
+## 2026-11-13 — Signal: an unexpected error on one source no longer starves the rest (branch `claude/signal-ingest-starvation`)
+
+Scope is **offline only**: recorded feeds, no network, no live service run. Defect (adversarial
+review, PR 102 W1 / PR 106-109 W2): an exception other than a refused fetch or unreadable feed left
+no check row, so that source failed first on every pass and later sources were never checked.
+Now `ingest.run_due` logs the traceback, records a failed check `unexpected error (<Type>); see the
+log` (the exception text is not stored) and continues. Three tests failed for that cause before the
+fix. At `07090d5`: `uv run pytest tests/test_signal_ingest.py tests/test_signal_service.py
+tests/test_signal_cli.py -q` 77 passed; `uv run python tools/quality_gate.py` 0 findings; the
+reviewer's loop-coverage probe exits 0. Not verified: the real service loop against a live feed; a
+store error raised by `record_check` itself (still propagates to the loop); the full suite.
+Open, older than this change: a story whose topic match raised straight after it was added is not
+matched on a later pass.
+
 ## 2026-11-13 — CP-DR web lookup: page fetch and SEC EDGAR tools (branch `claude/t5-cpdr-lookup-2e88f4`)
 
 Ruling: `docs/rulings/2026-11-13-cpdr-web-lookup.md`. Scope is **offline only**: no live request, no
@@ -954,29 +968,3 @@ this macOS host has no `timeout` executable):
   not proof that a model satisfies the new combined chart instructions or a complete TDG pathway.
 - Still outside scope: paid model output for the new contracts, Windows, screen-reader/print
   testing, the pre-existing escaped-pipe parser discrepancy and the weekly full test suite.
-
-## 2026-11-10 — Word documents (.docx) in the issuer folder (branch `claude/optimistic-johnson-bmnwip`, after main `3ac4db6`)
-
-Owner: "Add docx compatibility too". Input only: nothing is written as Word.
-
-- How it reads them:
-  - The launcher now reads `.docx`. Like an HTML filing, a Word file is converted to text pages
-    (`docx_text.py`) and pinned as `<name>.jsonl`, headed by its name and hash.
-  - The text covers body paragraphs in order, table rows as cells joined by ` | `, and tabs and
-    line breaks. Tracked deletions and tab-stop definitions are not text. Headers, footers,
-    footnotes and comments are not read.
-  - Parsing uses the workbook reader's guarded XML parse (no DTD or entity) and its size limits.
-    A file that is not a Word document, or has no text, stops the launch naming the file.
-- Unchanged:
-  - HTML filings convert to the same bytes as before, so existing run folders still resume.
-  - Old `.doc` files are still not read; the form says to save them as PDF.
-- Also updated: the context form's file types (its copy is drift-tested against the launcher's),
-  its help text, and README. The inbox reads the same list.
-- Tests:
-  - `tests/test_docx_text.py` (7) and a launcher test, written first; the tab-stop case found a
-    defect, fixed before commit.
-  - Launcher, context-form, inbox-drops, library-page and Word tests: all pass except 3 inbox
-    permission tests that also fail on main here, because the sandbox runs as root.
-  - Quality gate: 0 findings.
-- Not verified: Word files made by Word itself; the tests build minimal files by hand.
-

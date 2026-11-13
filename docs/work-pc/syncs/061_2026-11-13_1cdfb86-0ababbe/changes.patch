@@ -1,0 +1,192 @@
+diff --git a/VERIFICATION.md b/VERIFICATION.md
+index 16c0d5e..0fcbaf1 100644
+--- a/VERIFICATION.md
++++ b/VERIFICATION.md
+@@ -4,6 +4,20 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
+ engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
+ `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
+ 
++## 2026-11-13 — Signal: an unexpected error on one source no longer starves the rest (branch `claude/signal-ingest-starvation`)
++
++Scope is **offline only**: recorded feeds, no network, no live service run. Defect (adversarial
++review, PR 102 W1 / PR 106-109 W2): an exception other than a refused fetch or unreadable feed left
++no check row, so that source failed first on every pass and later sources were never checked.
++Now `ingest.run_due` logs the traceback, records a failed check `unexpected error (<Type>); see the
++log` (the exception text is not stored) and continues. Three tests failed for that cause before the
++fix. At `07090d5`: `uv run pytest tests/test_signal_ingest.py tests/test_signal_service.py
++tests/test_signal_cli.py -q` 77 passed; `uv run python tools/quality_gate.py` 0 findings; the
++reviewer's loop-coverage probe exits 0. Not verified: the real service loop against a live feed; a
++store error raised by `record_check` itself (still propagates to the loop); the full suite.
++Open, older than this change: a story whose topic match raised straight after it was added is not
++matched on a later pass.
++
+ ## 2026-11-13 — CP-DR web lookup: page fetch and SEC EDGAR tools (branch `claude/t5-cpdr-lookup-2e88f4`)
+ 
+ Ruling: `docs/rulings/2026-11-13-cpdr-web-lookup.md`. Scope is **offline only**: no live request, no
+diff --git a/src/deploy_workflow/signal/ingest.py b/src/deploy_workflow/signal/ingest.py
+index 3263cca..77776f3 100644
+--- a/src/deploy_workflow/signal/ingest.py
++++ b/src/deploy_workflow/signal/ingest.py
+@@ -1,5 +1,6 @@
+ """One ingest pass over the approved sources that are due, and a health summary per source."""
+ 
++import logging
+ import sqlite3
+ from collections.abc import Callable
+ from dataclasses import dataclass
+@@ -21,6 +22,8 @@ from deploy_workflow.signal.store import (
+ )
+ from deploy_workflow.signal.topics import match_story
+ 
++log = logging.getLogger(__name__)
++
+ MIN_INTERVAL = timedelta(seconds=600)
+ QUIET_AFTER = timedelta(days=7)
+ HEALTH_WEEKS = 6
+@@ -67,13 +70,30 @@ def run_due(
+ ) -> list[tuple[int, bool, str]]:
+     """Check every approved source with no check in the last MIN_INTERVAL.
+ 
+-    Only a refused fetch or an unreadable feed is recorded as a failed check; any other
+-    exception is a bug and propagates, leaving no check row for that source."""
++    A refused fetch or an unreadable feed is recorded as a failed check with its own reason.
++    Any other Exception is logged with its traceback and recorded as a failed check whose
++    reason names only the exception type (the text may hold internal detail), keeping the
++    previous etag and modified; the pass goes on to the later sources. This is a documented,
++    logged fail-open so one bad source cannot starve the rest. BaseException is not caught."""
+     results: list[tuple[int, bool, str]] = []
+     for source in sources(db, "approved"):
+         if not _is_due(db, source["id"], now):
+             continue
+-        check = _check_source(db, source, now, fetch_fn if fetch_fn is not None else fetch.fetch)
++        try:
++            check = _check_source(
++                db, source, now, fetch_fn if fetch_fn is not None else fetch.fetch
++            )
++        except Exception as error:
++            log.exception("unexpected error checking source %s", source["id"])
++            previous = last_check(db, source["id"])
++            check = Check(
++                now,
++                False,
++                f"unexpected error ({type(error).__name__}); see the log",
++                previous["etag"] if previous else None,
++                previous["modified"] if previous else None,
++                0,
++            )
+         record_check(db, source["id"], check)
+         results.append((source["id"], check.ok, check.reason))
+     set_meta(db, "last_pass_at", _utc_text(now))
+diff --git a/tests/test_signal_ingest.py b/tests/test_signal_ingest.py
+index c2d5403..ccbb709 100644
+--- a/tests/test_signal_ingest.py
++++ b/tests/test_signal_ingest.py
+@@ -82,13 +82,55 @@ def test_unparseable_feed_is_failing_with_the_parser_reason_with_recorded_feed(d
+     assert health(db_a, 1, NOW).reason
+ 
+ 
+-def test_an_unexpected_error_is_not_swallowed_with_recorded_feed(db_a):
++REASON = "unexpected error (RuntimeError); see the log"
++
++
++def _two_sources_first_raises(db):
++    a = propose_source(db, "A", "news", "https://a.org/f", "x")
++    set_source_state(db, a, "approved")
++    b = propose_source(db, "B", "news", "https://b.org/f", "x")
++    set_source_state(db, b, "approved")
++    calls = []
++
+     def fn(url, e, m):
+-        raise RuntimeError("bug")
++        calls.append(url)
++        if "a.org" in url:
++            raise RuntimeError("boom 10.0.0.5")
++        return Fetched(RSS, None, None)
+ 
+-    with pytest.raises(RuntimeError):
+-        run_due(db_a, NOW, fn)
+-    assert health(db_a, 1, NOW).state == "never checked"
++    fn.calls = calls
++    return a, b, fn
++
++
++def test_an_unexpected_error_fails_that_source_and_the_rest_still_run_with_recorded_feed(
++    db, caplog
++):
++    a, b, fn = _two_sources_first_raises(db)
++    out = run_due(db, NOW, fn)
++    assert out == [(a, False, REASON), (b, True, "2 new")]
++    reasons = [row["reason"] for row in db.execute("SELECT reason FROM source_checks")]
++    assert reasons and not any("10.0.0.5" in reason for reason in reasons)
++    errors = [r for r in caplog.records if r.levelname == "ERROR"]
++    assert errors and errors[0].exc_info is not None
++    assert "Traceback" in caplog.text and "boom 10.0.0.5" in caplog.text
++    assert str(a) in errors[0].getMessage()
++
++
++def test_a_source_that_raised_is_not_retried_within_600_seconds_with_recorded_feed(db):
++    _a, _b, fn = _two_sources_first_raises(db)
++    run_due(db, NOW, fn)
++    fn.calls.clear()
++    assert run_due(db, NOW + timedelta(seconds=60), fn) == []
++    assert fn.calls == []
++    run_due(db, NOW + timedelta(seconds=601), fn)
++    assert sorted(fn.calls) == ["https://a.org/f", "https://b.org/f"]
++
++
++def test_health_reports_a_source_that_raised_as_failing_with_recorded_feed(db):
++    a, _b, fn = _two_sources_first_raises(db)
++    run_due(db, NOW, fn)
++    h = health(db, a, NOW)
++    assert (h.state, h.reason) == ("failing", REASON)
+ 
+ 
+ def test_not_modified_is_ok_and_keeps_validators_with_recorded_feed(db_a):
+diff --git a/tests/test_signal_service.py b/tests/test_signal_service.py
+index c4cdbb6..e29e9be 100644
+--- a/tests/test_signal_service.py
++++ b/tests/test_signal_service.py
+@@ -412,16 +412,38 @@ def test_the_service_serves_no_file_from_the_root(svc):
+         assert svc.call("GET", path)[0] in (403, 404)
+ 
+ 
+-def test_loop_pass_updates_status_and_survives_a_failing_pass_with_recorded_feed(svc_with_loop):
++def test_loop_pass_updates_status_and_recovers_from_a_failing_source_with_recorded_feed(
++    svc_with_loop,
++):
+     # one approved source; fetch replaced: first call raises RuntimeError, later calls RSS
+     loop, call = svc_with_loop
+     loop.run_once(NOW)
+-    assert call("GET", "/api/status")[2]["loop_error"]  # the failure is visible
+-    assert "fell over" not in call("GET", "/api/status")[2]["loop_error"]
+-    loop.run_once(NOW + timedelta(seconds=60))
++    status = call("GET", "/api/status")[2]  # the source is recorded failing; the pass completes
++    assert status["loop_error"] is None and status["sources"] == {"approved": 1, "failing": 1}
++    assert status["last_pass_at"] == NOW.isoformat()
++    later = NOW + timedelta(seconds=601)
++    loop.run_once(later)
+     status = call("GET", "/api/status")[2]
+     assert status["loop_error"] is None and status["sources"] == {"approved": 1, "failing": 0}
+-    assert status["last_pass_at"] == (NOW + timedelta(seconds=60)).isoformat()
++    assert status["last_pass_at"] == later.isoformat()
++
++
++def test_a_pass_that_raises_at_loop_level_is_shown_by_type_only_with_recorded_feed(
++    svc_with_loop, monkeypatch
++):
++    loop, call = svc_with_loop
++    good_run_due = service.ingest.run_due
++
++    def boom(*args: object, **kwargs: object) -> None:
++        raise RuntimeError("secret")
++
++    monkeypatch.setattr(service.ingest, "run_due", boom)
++    loop.run_once(NOW)  # must not raise
++    shown = call("GET", "/api/status")[2]["loop_error"]
++    assert shown and "RuntimeError" in shown and "secret" not in shown
++    monkeypatch.setattr(service.ingest, "run_due", good_run_due)
++    loop.run_once(NOW + timedelta(seconds=601))
++    assert call("GET", "/api/status")[2]["loop_error"] is None
+ 
+ 
+ def test_a_save_during_a_pass_succeeds(svc_with_loop, cookie):

@@ -10,7 +10,7 @@
   "AGENTS.md": "fdb9b92b4148f91c725308a9a78fc33e54633e71",
   "METHODOLOGY-REVIEW.md": "72342dedc792306a001b27f244425450f7bee7d1",
   "README.md": "1fd3352f4b147b38f0a7f73a1bf2be3bb67c7f95",
-  "VERIFICATION.md": "16c0d5e04c8eb4f0379f65fc3f6f43446abef3f2",
+  "VERIFICATION.md": "0fcbaf12e112fd780472a74c9c633e24e1cecfdb",
   "apps/issuer-library/README.md": "f776e07a39ac8965f66d2256054d61bfa2214f09",
   "apps/issuer-library/credit_os/SOURCE.md": "a88ec9a069c4e0b38946ab497a97873ca1a81e88",
   "apps/issuer-library/credit_os/catalog.json": "f8b0cedb8da041c14694bc7b971d71ea48c99697",
@@ -736,7 +736,7 @@
   "src/deploy_workflow/signal/fetch.py": "d1c4089e1178356e1d7581bf98866a7e6f908ab3",
   "src/deploy_workflow/signal/fold.py": "134f28e448c6e4e546c7bbeec1ba1942c7b5acd4",
   "src/deploy_workflow/signal/identity.py": "1aea45b7777185d6f6b91c382ace4c58a3ed026c",
-  "src/deploy_workflow/signal/ingest.py": "3263ccaa67943b67a43ff9e993e6e94e69665259",
+  "src/deploy_workflow/signal/ingest.py": "77776f3c3a354767e51ee78ebaf60dab5838e6a3",
   "src/deploy_workflow/signal/service.py": "3779e7192010d9dc33c452afbfdc36d1e1e0c6c7",
   "src/deploy_workflow/signal/store.py": "d38c73367aa14793b677d618cca034cbd201ef1b",
   "src/deploy_workflow/signal/topics.py": "79f7a11ab5cc7e11ffefaac378ec28a0fe42bb8c",
@@ -888,9 +888,9 @@
   "tests/test_signal_fetch.py": "f33bc9cac5b3654b8fa675752948b02f1a28697a",
   "tests/test_signal_fold.py": "37595b15f161409bc23ac039849d7878f1b99e90",
   "tests/test_signal_identity.py": "2bd18543949ad778fad64f33df1ae7381638c234",
-  "tests/test_signal_ingest.py": "c2d5403e0973eaaecf8bf97dd8e41691bcf81803",
+  "tests/test_signal_ingest.py": "ccbb709a9bbe8e233070f4d4f26fbde9c9cca053",
   "tests/test_signal_page_browser.py": "5510418ed32b985e0a3827c69cebe1824c35df0b",
-  "tests/test_signal_service.py": "c4cdbb60d3fa9489845080914b041e38fd4c603a",
+  "tests/test_signal_service.py": "e29e9bec72d81676683c3ed0517fc25555459468",
   "tests/test_signal_store.py": "89d0876751e1f38891629edce50a4507de524056",
   "tests/test_signal_topics.py": "01ceb715c46a6df1e84bda43b5829a3bd4aae704",
   "tests/test_update_library.py": "f1990265bd3708808644bfaffc7601c6a442f13f",
@@ -903,6 +903,6 @@
   "tools/work_pc_delta.py": "fa5e9e81c534657f593cb8752a94de10cba0eead",
   "uv.lock": "7a4f05aeff999e9284ec29f34acacdd2619d64b1"
  },
- "head": "1cdfb86fde796f94a4345a8d35315d1d4081486f",
- "head_date": "2026-11-13T23:08:30Z"
+ "head": "0ababbe51991dcecbff8732db35779083cd6573b",
+ "head_date": "2026-11-13T23:35:30Z"
 }
