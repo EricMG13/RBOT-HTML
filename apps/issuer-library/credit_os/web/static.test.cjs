@@ -5176,3 +5176,10 @@ test('M3 timer: entering the home with a run to follow starts the timer without 
   state.wait = null; api.syncActivityTimer(); assert.equal(timers.size, 0, 'no run left to follow: the timer stops');
   state.wait = 30000; api.syncActivityTimer(Object.create(null)); assert.equal(swaps.length, 2, 'a hashchange event is not "fresh": navigating back re-loads at once');
 });
+
+test('A14: a closed drawer is not drawn in print: the print hide list holds .inspector[hidden] and the screen-only flex rule cannot win there', () => {
+  const css = read('screen.css');
+  assert.ok(/@media print\{[^\n]*\.inspector\[hidden\][^\n]*\{display:none!important\}/.test(css), 'the print hide list names the closed drawer');
+  assert.ok(css.includes('@media screen{.inspector[hidden]{display:flex!important;'), 'the slide-off rule is for screen only');
+  assert.ok(!/(^|\n)\.inspector\[hidden\]\{display:flex!important/.test(css), 'no bare rule that would out-rank the print list');
+});

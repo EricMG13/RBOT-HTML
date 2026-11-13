@@ -548,3 +548,9 @@ test('net debt, maturity and measure text with <b>&" is escaped where the compar
   assert.ok(html.includes('&lt;b&gt;&amp;&quot;x&lt;/b&gt;'));
   assert.ok(!/<b>&"x/.test(html) && !html.includes('&"x'), 'no raw markup survives');
 });
+
+test('A13: tableView draws every cell of a ragged row, the extra cell under an empty header', () => {
+  const view = Evidence.tableView({line: 1, headers: ['A', 'Consumer', 'B'], rows: [{line: 2, cells: ['1', 'c', '2', 'EXTRA']}, {line: 3, cells: ['3', 'c', '4']}]});
+  assert.deepEqual(view.headers, ['A', 'B', '']);
+  assert.deepEqual(view.rows.map(row => row.cells), [['1', '2', 'EXTRA'], ['3', '4', '']]);
+});

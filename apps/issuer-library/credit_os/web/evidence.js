@@ -47,11 +47,13 @@
   // ---- data: one pass over every handoff of the run, by role ----
   const shownOrNot = value => (value === null || value === undefined || value === '' ? 'Not recorded' : String(value));
   const count = (n, one, many) => `${n} ${n === 1 ? one : many}`;
-  // The table as written minus the columns that address another module; no column left (or no row), no table.
+  // The table as written minus the columns that address another module; no column left (or no row), no table. A row with more cells than the table has headers keeps
+  // every one of them, the extras under empty headers: nothing the handoff wrote is dropped here.
   function tableView(block) {
-    const keep = block.headers.map((header, at) => at).filter(at => shapes.columnKind(block.headers[at]) !== 'intermodule');
+    const extra = Math.max(0, ...block.rows.map(row => row.cells.length - block.headers.length));
+    const keep = [...block.headers.map((header, at) => at).filter(at => shapes.columnKind(block.headers[at]) !== 'intermodule'), ...Array.from({length: extra}, (_, k) => block.headers.length + k)];
     if (!keep.length || !block.rows.length) return null;
-    return {line: block.line, headers: keep.map(at => block.headers[at]), rows: block.rows.map(row => ({line: row.line, cells: keep.map(at => row.cells[at] ?? '')}))};
+    return {line: block.line, headers: keep.map(at => block.headers[at] ?? ''), rows: block.rows.map(row => ({line: row.line, cells: keep.map(at => row.cells[at] ?? '')}))};
   }
   // Each section with the chain of headings from its level-2 ancestor down, and its role.
   function classify(sections, placement) {
