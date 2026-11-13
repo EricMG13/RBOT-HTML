@@ -498,7 +498,7 @@
   "src/deploy_vii/table_markdown.py": "ea3e4ebab2ad30aae279204bab2c300685b95a12",
   "src/deploy_workflow/__init__.py": "148fdfe9e0fa16d57a7ecdbf1be97b32a27eb15a",
   "src/deploy_workflow/changes.py": "9f34c9ff89cd09b17dfb26456c224fa4ecd3b35b",
-  "src/deploy_workflow/changes_check.py": "a71ea6bb793074135264b59abea2249839d62597",
+  "src/deploy_workflow/changes_check.py": "8a798b4fb00d454d6127ee6f9587df2284c85f0e",
   "src/deploy_workflow/confidence.py": "9925b3fc6d25d9c44b0f5a9d7aed095e5c28c291",
   "src/deploy_workflow/context.py": "51517c348055ec6917aa51060c29f3faade67daa",
   "src/deploy_workflow/context_cites.py": "e73e671648029e4d7fb81af9be6af3a53521ea5b",
@@ -761,7 +761,7 @@
   "tests/model/test_transport.py": "129688c26c486ce7f3122bd87ba1d0203e4264fe",
   "tests/model/test_turn.py": "5b57cc4ff6219bc504aa66e733e979e31938fd04",
   "tests/test_brand_tokens.py": "b44f4d37f314a335f766240114a69e4fedda2ce5",
-  "tests/test_changes.py": "aa0c15cc1a90b2ae5e13164ad5a32f2a13be4ea7",
+  "tests/test_changes.py": "6b75353e55392ffedfc112ecd509f48e5ca7dce7",
   "tests/test_citation_markers.py": "f98b3ee15cebbc615d4b404c24c470db2f7b65f5",
   "tests/test_confidence.py": "e5e85a27f9eafc12d388c26cf45df95f554f3f83",
   "tests/test_context_form.py": "259697b74117491d362dd07e9c4d2abe0ba58209",
@@ -804,6 +804,6 @@
   "tools/work_pc_delta.py": "fa5e9e81c534657f593cb8752a94de10cba0eead",
   "uv.lock": "7a4f05aeff999e9284ec29f34acacdd2619d64b1"
  },
- "head": "6774a812c97aaab8f2f928192963037b17315d01",
- "head_date": "2026-11-13T04:16:45Z"
+ "head": "bb7629de900f590ea9d55b7daae7f2a1210d678d",
+ "head_date": "2026-11-13T04:16:51Z"
 }
