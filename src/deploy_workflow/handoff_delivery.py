@@ -307,24 +307,43 @@ def table(rows: list[tuple[int, str]]) -> tuple[list[str], list[tuple[int, str, 
         elif selected:
             break
 
-    def cells(text: str) -> list[str]:
+    def cells(line: int, text: str) -> list[str]:
         if not text.endswith("|"):
-            raise ValueError("Markdown table rows require both boundary pipes")
+            raise ValueError(f"Markdown table rows require both boundary pipes: line {line}")
         return [c.strip().replace(r"\|", "|") for c in re.split(r"(?<!\\)\|", text[1:-1])]
 
     if len(selected) < 3:
-        raise ValueError("Expected a populated Markdown table")
-    headers = cells(selected[0][1])
-    separator = cells(selected[1][1])
+        where = f": the table starts at line {selected[0][0]}" if selected else ""
+        raise ValueError(f"Expected a populated Markdown table{where}")
+    head_line, head_text = selected[0]
+    headers = cells(head_line, head_text)
+    separator = cells(*selected[1])
     if (
         len(headers) < 2
         or len(separator) != len(headers)
         or not all(re.fullmatch(r":?-{3,}:?", c) for c in separator)
     ):
-        raise ValueError("Invalid Markdown table header")
-    result = [(line, raw, cells(raw)) for line, raw in selected[2:]]
-    if any(len(values) != len(headers) or not values[0] for _, _, values in result):
-        raise ValueError("Markdown table row does not match its header")
+        dashes = all(re.fullmatch(r":?-{3,}:?", c) for c in separator)
+        fault = (
+            f"the header has {len(headers)} cells and the separator row has {len(separator)}"
+            if dashes or len(separator) != len(headers)
+            else "the second row is not made of --- cells"
+        )
+        raise ValueError(
+            f'Invalid Markdown table header at line {head_line}: {fault} ("{head_text[:80]}")'
+        )
+    result = [(line, raw, cells(line, raw)) for line, raw in selected[2:]]
+    for line, _, values in result:
+        if len(values) != len(headers):
+            raise ValueError(
+                f"Markdown table row does not match its header at line {line}: "
+                f"the row has {len(values)} cells and the header has {len(headers)}"
+            )
+        if not values[0]:
+            raise ValueError(
+                f"Markdown table row does not match its header at line {line}: "
+                "its first cell is empty"
+            )
     return headers, result
 
 
