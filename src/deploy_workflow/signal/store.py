@@ -119,8 +119,67 @@ CREATE INDEX IF NOT EXISTS idx_stories_link_key ON stories(link_key);
 CREATE INDEX IF NOT EXISTS idx_stories_title_key ON stories(title_key);
 """
 
+_MIGRATION_3 = """
+CREATE TABLE groups(
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    visibility TEXT NOT NULL CHECK(visibility IN ('everyone', 'invited')),
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE TABLE group_members(
+    group_id INTEGER NOT NULL REFERENCES groups(id),
+    user_name TEXT NOT NULL,
+    joined_at TEXT NOT NULL,
+    UNIQUE(group_id, user_name)
+);
+CREATE TABLE group_topics(
+    group_id INTEGER NOT NULL REFERENCES groups(id),
+    topic_id INTEGER NOT NULL REFERENCES topics(id),
+    UNIQUE(group_id, topic_id)
+);
+CREATE TABLE threads(
+    id INTEGER PRIMARY KEY,
+    group_id INTEGER NOT NULL REFERENCES groups(id),
+    story_id INTEGER REFERENCES stories(id),
+    title TEXT,
+    started_by TEXT,
+    created_at TEXT NOT NULL,
+    last_activity_at TEXT NOT NULL,
+    UNIQUE(group_id, story_id),
+    CHECK((story_id IS NULL) <> (title IS NULL))
+);
+CREATE TABLE comments(
+    id INTEGER PRIMARY KEY,
+    thread_id INTEGER NOT NULL REFERENCES threads(id),
+    parent_id INTEGER REFERENCES comments(id),
+    author TEXT NOT NULL,
+    text TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    edited_at TEXT,
+    deleted_at TEXT
+);
+CREATE TABLE reactions(
+    comment_id INTEGER NOT NULL REFERENCES comments(id),
+    user_name TEXT NOT NULL,
+    key TEXT NOT NULL,
+    UNIQUE(comment_id, user_name, key)
+);
+CREATE TABLE read_marks(
+    user_name TEXT NOT NULL,
+    thread_id INTEGER NOT NULL REFERENCES threads(id),
+    seen_comment_id INTEGER NOT NULL,
+    UNIQUE(user_name, thread_id)
+);
+CREATE INDEX IF NOT EXISTS idx_threads_group_activity ON threads(group_id, last_activity_at, id);
+CREATE INDEX IF NOT EXISTS idx_threads_story_id ON threads(story_id);
+CREATE INDEX IF NOT EXISTS idx_comments_thread_id ON comments(thread_id, id);
+CREATE INDEX IF NOT EXISTS idx_comments_parent_id ON comments(parent_id);
+CREATE INDEX IF NOT EXISTS idx_group_members_user ON group_members(user_name);
+"""
+
 # Ordered; later slices append. Index i holds the script that brings the schema to version i + 1.
-MIGRATIONS = [_MIGRATION_1, _MIGRATION_2]
+MIGRATIONS = [_MIGRATION_1, _MIGRATION_2, _MIGRATION_3]
 _BUSY_SECONDS = 30
 
 

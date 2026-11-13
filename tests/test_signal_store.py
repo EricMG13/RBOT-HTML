@@ -152,7 +152,7 @@ def test_concurrent_first_open_all_succeed(tmp_path: Path) -> None:
         got = [results.get(timeout=60) for _ in procs]
         for p in procs:
             p.join(30)
-        assert got == ["ok 2"] * 4
+        assert got == ["ok 3"] * 4
 
 
 def test_fts_follows_title_update_and_delete(tmp_path: Path) -> None:
