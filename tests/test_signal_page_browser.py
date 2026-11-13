@@ -95,15 +95,8 @@ class Run:
         self.origin = origin
 
     def assert_quiet(self) -> None:
-        """No console error or policy violation, but for the favicon 404 that
-        `test_a_plain_visit_logs_nothing` reports on its own."""
-        favicon = f"{self.origin}/favicon.ico"
-        assert [
-            line
-            for line in self.console
-            if not (line["source"] == "network" and line["text"].endswith(favicon))
-            or "404" not in line["text"]
-        ] == []
+        """No console error or policy violation."""
+        assert self.console == []
 
     def assert_same_origin(self) -> None:
         assert self.requests, "no request was recorded"
@@ -485,9 +478,6 @@ def test_a_stopped_service_shows_the_error_band_and_keeps_the_cards(
 
 
 def test_a_plain_visit_logs_nothing(chrome_path: str, site: Live, tmp_path: Path) -> None:
-    # DEFECT (reported, not fixed): the page names no icon, so Chrome asks for /favicon.ico, the
-    # service answers 404 and the browser logs a console error on every visit. This test is left
-    # failing on purpose; the other tests ignore only that one line.
     run = drive(chrome_path, site, [*ENTER_NAME, *view("latest", "Latest", 30)])
     assert run.console == []
 
