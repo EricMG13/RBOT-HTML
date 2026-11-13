@@ -1897,13 +1897,12 @@ PERIOD_TABLE_BLOCK = (
     "that has a column for every period you state for it; a line split across two tables "
     "cannot be combined. Where a table states its unit, write it as the three-letter currency "
     "code and `millions` or `thousands` (`USD millions`), the same in every statement table. "
-    "Python uses this table to check that the "
-    "last twelve months are twelve months and to date a balance printed under an `LTM Qn YYYY` "
-    "label; add no figure to it. Where another table labels a row or column `LTM Qn YYYY`, give "
-    "that exact label a row in this table with its Start and End dates. "
-    "Print a balance (debt, cash, undrawn facilities) at a period's end under that period's "
-    "column as a plain number: the `H1 2025` column holds the 30 June 2025 balance. Put the date "
-    "in the row label or the Source, not in the cell.\n\n"
+    "Python uses this table to check that the last twelve months are twelve months; add no "
+    "figure to it. Print every balance the forecast needs (total debt, cash, undrawn committed "
+    "facilities) as a row of a table whose columns are those period headers, each a plain "
+    "number at that period's end: the `H1 2025` column holds the 30 June 2025 balance. Put the "
+    "date in the row label or the Source, not in the cell. A column headed `LTM …` holds flows "
+    "only, never a balance.\n\n"
 )
 # Goes into CP-1's instructions when the forecast is published without CP-2G (owner, 2026-11-11:
 # "allow forecast to function with just relevant layer 1 modules"). Same JSON shape as

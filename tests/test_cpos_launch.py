@@ -5716,9 +5716,11 @@ INTEREST_SENTENCE = (
     "expense, not cash paid."
 )
 BALANCE_SENTENCE = (
-    "Print a balance (debt, cash, undrawn facilities) at a period's end under that period's "
-    "column as a plain number: the `H1 2025` column holds the 30 June 2025 balance. Put the date "
-    "in the row label or the Source, not in the cell."
+    "Print every balance the forecast needs (total debt, cash, undrawn committed facilities) as "
+    "a row of a table whose columns are those period headers, each a plain number at that "
+    "period's end: the `H1 2025` column holds the 30 June 2025 balance. Put the date in the row "
+    "label or the Source, not in the cell. A column headed `LTM …` holds flows only, never a "
+    "balance."
 )
 
 
@@ -5786,8 +5788,8 @@ def test_several_operands_naming_both_period_and_column_are_all_named_in_the_rep
 
 def test_the_forecast_instruction_sentences_say_what_python_does():  # whole-branch review L3, L4
     table = cpos_launch.PERIOD_TABLE_BLOCK
-    assert "to date a balance printed under an `LTM Qn YYYY` label; add no figure to it." in table
-    assert "give that exact label a row in this table with its Start and End dates." in table
+    assert "check that the last twelve months are twelve months; add no figure to it." in table
+    assert "LTM Qn YYYY" not in table and "to date a balance" not in table
     assert "only to check" not in table and "change no other table" not in table
     shown = "history only for a line named under such a header, or in a row labelled with one."
     for block in (cpos_launch.FORECAST_BLOCK, cpos_launch.LAYER1_FORECAST_BLOCK):
