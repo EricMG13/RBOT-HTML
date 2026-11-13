@@ -77,7 +77,8 @@ COVENANT_ROUTES = {
     ("maturity-wall", "CP-1", "Chart data: debt maturities", "chart"),
 }
 # Run order for each pathway (registry.plan over the preset, CP-MODEL and CP-8 removed; required
-# producers such as CP-1A are added). Owner, 2026-11-11: CP-DR and CP-2E are in every preset.
+# producers such as CP-1A are added). Owner, 2026-11-11: CP-DR and CP-2E are in every preset except
+# the lite credit assessment (listed here) and the deactivated short snapshot (SHORT_SNAPSHOT).
 PATHWAY_MODULES = {
     "credit_snapshot": (
         *("CP-0", "CP-1", "CP-1A", "CP-DR", "CP-4", "CP-2", "CP-2A", "CP-2E", "CP-2G", "CP-3"),
@@ -96,6 +97,7 @@ PATHWAY_MODULES = {
     "portfolio_decision": (
         *("CP-0", "CP-1", "CP-1A", "CP-DR", "CP-2", "CP-2E", "CP-3", "CP-5", "CP-6"),
     ),
+    "lite_credit_assessment": ("CP-0", "CP-1", "CP-1A", "CP-2", "CP-2A"),
 }
 # The owner's preset answer key (2026-11-11), hand-written as sets: what each pathway requests.
 PRESET_ANSWER_KEY = {
@@ -1245,6 +1247,8 @@ def test_the_lite_preset_is_cp0_cp1_cp1a_cp2_cp2a_with_no_cp_model():
 
     assert PRESETS["lite_credit_assessment"] == LITE_MODULES
     assert "CP-MODEL" not in PRESETS["lite_credit_assessment"]
+    # Owner, 2026-11-13: lite has neither CP-DR nor CP-2E.
+    assert not {"CP-DR", "CP-2E"} & set(PRESETS["lite_credit_assessment"])
 
 
 def test_the_lite_pathway_plans_exactly_cp0_cp1_cp1a_cp2_cp2a_in_order(tmp_path):
@@ -1351,7 +1355,7 @@ def test_the_lite_pathway_runs_end_to_end_to_a_verified_delivery_with_a_syntheti
 # are the owner's; each other pathway's is its measured total (2026-11-13: covenant_refinancing
 # 1,091,950; distressed_restructuring 1,124,925; earnings_update 518,628; portfolio_decision
 # 902,476; relative_value 1,017,908; short_snapshot 140,075) rounded up to the next 10,000 plus 5%.
-# credit_snapshot measured 1,273,034 and lite_credit_assessment 392,429 once CP-MODEL was removed (2026-11-13).
+# credit_snapshot measured 1,273,034 and lite_credit_assessment 392,429 (CP-MODEL removed).
 INSTRUCTION_BUDGET = {
     "lite_credit_assessment": 420_000,
     "credit_snapshot": 1_340_000,
@@ -2603,7 +2607,7 @@ def test_the_presets_are_the_owners_answer_key():
     assert all(len(m) == len(set(m)) for m in PRESETS.values())
 
 
-@pytest.mark.parametrize("pathway", sorted(PATHWAY_MODULES))
+@pytest.mark.parametrize("pathway", sorted(set(PATHWAY_MODULES) - {"lite_credit_assessment"}))
 @pytest.mark.parametrize("peer_source", ["cp_dr_public", "user_list", "user_comps", "none"])
 def test_cpdr_and_cp2e_are_in_every_pathway_and_run_in_order(tmp_path, pathway, peer_source):
     """Owner, 2026-11-11: "cp-dr should be on every run or cp-1c wont work. so should cp-2e."
@@ -4314,6 +4318,56 @@ def test_each_pathways_run_reaches_the_library_screens(tmp_path, provider, capsy
         assert console == [], (route, console)
         assert UNFILLED.search(shown) is None, (route, UNFILLED.findall(shown))
         assert ISSUER in shown, route
+
+
+@pytest.mark.browser
+def test_a_lite_run_fills_the_library_pages_and_its_forecast_page_states_the_gap(
+    tmp_path, provider, capsys
+):
+    """A synthetic lite run (no CP-MODEL, so no forecast) launched into runs/ and read in the real
+    library: it is labelled "Lite credit assessment", CP-2 writes the Overview lead, the Forecast
+    page says that no forecast was published, and no page shows an unfilled value."""
+    from test_library_page_browser import visit
+
+    argv = launch(tmp_path, "--live", "--ruling", str(RULING), pathway="lite_credit_assessment")
+    argv[argv.index("--out") + 1] = str(tmp_path / "runs" / RUN_ID)
+    routes = list(
+        prepare(
+            tmp_path / "context.json",
+            tmp_path / "issuer",
+            tmp_path / "preview",
+            config="sol-medium",
+            cap="50",
+        ).plan.layout.routes
+    )
+    provider.answer = lambda context: answer(context, routes)
+    assert main(argv) == 0
+    seen = capsys.readouterr()
+    assert "Library not updated" not in seen.err and "Model not published" not in seen.err
+    assert tuple(c[0] for c in provider.calls) == LITE_MODULES
+    text = (tmp_path / "library/data.js").read_text(encoding="utf-8")
+    data = json.loads(text.removeprefix("window.CREDIT_OS_DATA=").rstrip().removesuffix(";"))
+    assert data["workspace"]["runs"][RUN_ID]["pathway"] == "lite_credit_assessment"
+    assert data["workspace"]["models"] == []
+    index = tmp_path / "library/index.html"
+    shown = {}
+    for name, route in {
+        "Overview": f"#W-Overview/overview?c={RUN_ID}",
+        "Changes": f"#W-Changes/changes?c={RUN_ID}",
+        "Modules": f"#CP-2A?c={RUN_ID}",
+        "Forecast": f"#W-Forecast/none?c={RUN_ID}",
+        "Evidence": f"#W-Evidence/sources?c={RUN_ID}",
+    }.items():
+        dom, console = visit(index, route)
+        shown[name] = " ".join(re.sub(r"(?s)<(script|style)\b.*?</\1>|<[^>]+>", " ", dom).split())
+        assert console == [], (name, console)
+        assert UNFILLED.search(shown[name]) is None, (name, UNFILLED.findall(shown[name]))
+        assert ISSUER in shown[name] and "Lite credit assessment" in shown[name], name
+    dom, _ = visit(index, f"#W-Overview/overview?c={RUN_ID}")
+    lead = re.search(r'(?s)<section class="overview-part" id="overview-lead">.*?</section>', dom)
+    assert lead is not None and 'href="#CP-2/' in lead[0]  # the lead is written by CP-2
+    assert "First run of this pathway" in shown["Changes"]
+    assert "No forecast model was published from this run\u2019s files" in shown["Forecast"]
 
 
 def test_a_delivery_without_a_forecast_has_no_forecast_key_in_its_receipt(

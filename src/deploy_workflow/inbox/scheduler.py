@@ -246,7 +246,8 @@ class Scheduler:
     def submit(self, sid: str, answers: Answers, approved_digest: str) -> Record:
         """Start one run for an approved submission. Repeating a submission returns its record.
 
-        ``Refused`` if the answers are not valid, a module is unknown, or the approval is not the
+        ``Refused`` if the answers are not valid, the pathway is deactivated (the short credit
+        snapshot), a module is unknown, or the approval is not the
         digest this service issued for exactly the files and answers now held. The files are
         sealed first (no upload or removal lands after that), checked, then the record is saved
         and only then is the sealed folder renamed, so an interruption between them is finished

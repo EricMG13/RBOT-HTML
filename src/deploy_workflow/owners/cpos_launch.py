@@ -2249,7 +2249,8 @@ def _instructions(
 
 def pathway_modules(settings: RunContext) -> tuple[str, ...]:
     """A pathway's analytical modules: its preset less the modules that have their own route.
-    Owner, 2026-11-11: CP-DR and CP-2E are in every preset (CP-1C needs CP-DR's peers), so the
+    Owner, 2026-11-11: CP-DR and CP-2E are in every preset except ``short_snapshot`` and
+    ``lite_credit_assessment``, which have neither (CP-1C needs CP-DR's peers), so the
     context's peer source no longer adds a module. Explicit --modules are run as given."""
     return tuple(m for m in PATHWAY_MODULES[settings.run.pathway] if m not in NOT_ANALYTICAL)
 

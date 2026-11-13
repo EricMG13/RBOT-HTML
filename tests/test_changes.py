@@ -341,6 +341,51 @@ def test_a_lite_run_with_an_earlier_lite_run_plans_cp8_last(tmp_path):
     assert first.ordered == LITE_MODULES
 
 
+@pytest.mark.browser
+def test_a_second_lite_run_runs_cp8_last_and_the_changes_page_shows_the_comparison(
+    tmp_path, provider, capsys
+):
+    """Synthetic: the real launcher, checker, delivery and library over a prior lite run. It
+    proves the wiring of CP-8 after the five lite modules, not analytical quality."""
+    from test_library_page_browser import visit
+
+    workspace = tmp_path / "ws"
+    make_run(
+        workspace,
+        "prior-1",
+        as_of="2024-12-31",
+        pathway="lite_credit_assessment",
+        cp1_extra=PRIOR_TABLES,
+    )
+    context = context_file(tmp_path, "lite_credit_assessment")
+    folder = issuer_folder(tmp_path)
+    preview = prepare(context, folder, tmp_path / "preview", config="sol-medium", cap="50")
+    routes = list(preview.plan.layout.routes)
+    argv = [
+        *("--context", str(context), "--sources", str(folder)),
+        *("--config", "sol-medium", "--cap", "50", "--out", str(workspace / "runs/cur")),
+        *("--live", "--ruling", str(RULING)),
+    ]
+    provider.answer = lambda ctx: (
+        cp8_answer(ctx) if ctx["module_id"] == "CP-8" else answer(ctx, routes)
+    )
+    assert main(argv) == 0
+    capsys.readouterr()
+    assert tuple(c[0] for c in provider.calls) == (*LITE_MODULES, "CP-8")
+    out = workspace / "runs/cur"
+    receipt = next((out / "deliveries").glob("*/delivery.json"))
+    assert (receipt.parent / "CP-8.md").is_file() and (receipt.parent / "changes.json").is_file()
+    completed = json.loads(next(out.glob("completed-*.json")).read_text())
+    assert completed["changes"].startswith(
+        "changes: CP-8 compares with the lite_credit_assessment run"
+    )
+    dom, console = visit(workspace / "library/index.html", "#W-Changes/changes?c=cur")
+    text = " ".join(re.sub(r"(?s)<(script|style)\b.*?</\1>|<[^>]+>", " ", dom).split())
+    assert console == []
+    assert "Lite credit assessment" in text and "Since 31 December 2024" in text
+    assert re.search(r"\b(undefined|NaN|null|\[object Object\])\b", text) is None
+
+
 def two_priors(tmp_path):
     workspace = tmp_path / "ws"
     make_run(workspace, "older", as_of="2024-09-30", pathway=PATHWAY)
