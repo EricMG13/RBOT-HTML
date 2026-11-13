@@ -1236,7 +1236,7 @@ def test_a_complete_cp8_handoff_is_accepted():
         (
             "| Total debt / EBITDA | 4.20x (FY2023) | 3.60x (FY2024) |",
             "| Total debt / EBITDA | 3.60x (FY2023) | 4.20x (FY2024) |",
-            "earlier figure 3.60",
+            "Earlier cell: write exactly `4.20x (FY2023)`",
         ),  # the pack's values in the wrong columns
         (
             "| Total debt / EBITDA | 4.20x (FY2023) | 3.60x (FY2024) |",
@@ -1244,7 +1244,11 @@ def test_a_complete_cp8_handoff_is_accepted():
             "name a pack measure",
         ),  # a row with figures that names no pack measure, whatever its values
         ("| Cash |", "| Cash balance |", "name a pack measure"),
-        ("| 4.20x (FY2023) |", "| -4.20x (FY2023) |", "earlier figure -4.20"),  # the sign counts
+        (
+            "| 4.20x (FY2023) |",
+            "| -4.20x (FY2023) |",
+            "Earlier cell: write exactly `4.20x (FY2023)`",
+        ),  # the sign counts
         ("by 0.60x", "by -0.60x", "-0.60"),  # a difference printed with the wrong sign
         ("Leverage fell by 0.60x.", "Leverage rose by 0.60x.", "direction"),
         ("300 US$m (FY2023)", "300 US$bn (FY2023)", "unit"),  # the scale is part of the value
@@ -1316,7 +1320,7 @@ def test_a_fact_row_without_figures_is_free_text_and_one_with_a_figure_names_a_m
 
 def test_a_measure_the_pack_cannot_compare_is_stated_as_not_stated_or_not_comparable():
     row = (
-        "| EBITDA / cash interest | not stated | 3.60x (FY2024) | New source "
+        "| EBITDA / cash interest | Not stated | 3.60x (FY2024) | New source "
         "| The earlier run does not state it, so it is not comparable. |"
     )
     text = REGISTERS.replace(COVER_ROW, row, 1)  # the pack measure's own row, worded differently
@@ -1324,9 +1328,9 @@ def test_a_measure_the_pack_cannot_compare_is_stated_as_not_stated_or_not_compar
     bare = row.replace("The earlier run does not state it, so it is not comparable.", "Cover rose.")
     again = REGISTERS.replace(COVER_ROW, bare, 1)
     assert any("not comparable" in i.lower() for i in cp8_issues(again, PACK))
-    wrong = row.replace("not stated |", "2.90x (FY2023) |")
+    wrong = row.replace("Not stated |", "2.90x (FY2023) |")
     third = REGISTERS.replace(COVER_ROW, wrong, 1)
-    assert any("earlier figure 2.90" in i for i in cp8_issues(third, PACK))
+    assert any("Earlier cell: write exactly `Not stated`" in i for i in cp8_issues(third, PACK))
 
 
 def test_a_judged_row_that_says_not_comparable_may_give_both_values_and_no_difference():
@@ -1866,7 +1870,7 @@ def test_a_cp8_that_is_not_accepted_loses_only_itself_and_the_run_says_why(tmp_p
     # The loop sent the answer back, naming the figure, before it gave up.
     sent_back = " ".join(p.read_text() for p in (out / "live/modules").glob("*/*.tools.json"))
     assert "REJECTED" in sent_back
-    assert "current figure 3.70 is not the pack's current value (3.60)" in sent_back
+    assert "Current cell: write exactly `3.60x (FY2024)`" in sent_back
     (receipt,) = (out / "deliveries").glob("*/delivery.json")
     assert not (receipt.parent / "CP-8.md").exists()
     assert not (receipt.parent / "changes.json").exists()
@@ -2123,10 +2127,10 @@ REAL_REGISTERS = """## Findings
 
 | Measure or fact | Earlier | Current | Cause | Effect on the credit view |
 | --- | --- | --- | --- | --- |
-| Total debt / EBITDA | 6.57x | 6.01x | Unresolved | Not comparable. |
-| EBITDA / cash interest | 3.29x | 3.60x | Unresolved | Not comparable. |
-| Cash | 6,261 US$m | 6,261 US$m | None | Same definition. |
-| Undrawn committed facilities | 843 US$m | 843 US$m | None | Same definition. |
+| Total debt / EBITDA | 6.57x (FY2024) | 6.01x (FY2024) | Unresolved | Not comparable. |
+| EBITDA / cash interest | 3.29x (FY2024) | 3.60x (FY2024) | Unresolved | Not comparable. |
+| Cash | 6261 US$m (FY2024) | 6261 US$m (FY2024) | None | Same definition. |
+| Undrawn committed facilities | 843 US$m (FY2024) | 843 US$m (FY2024) | None | Same definition. |
 @@FACT@@
 
 ### What changed: the analysis
@@ -2361,7 +2365,7 @@ def _with_basis(basis: str) -> str:
 
 
 def test_cp8s_basis_line_accepts_the_comparison_and_an_earlier_run_handoff_by_name():
-    assert cp8_issues(_with_basis(EARLIER_BASIS), PACK) == ()
+    assert basis_issues(EARLIER_BASIS) == []
     assert cp8_issues(_with_basis("Basis: Run comparison."), PACK) == ()  # the optional full stop
 
 
@@ -2463,11 +2467,6 @@ def test_modules_that_appear_or_go_between_two_preset_runs_are_a_method_change()
         assert any("CP-DR" in i and "`Method change`" in i for i in found), (cause, found)
 
 
-def test_the_phrase_the_pack_does_not_say_is_refused_between_two_preset_runs():
-    found = module_issues(PRESET_PACK, "Method change", CHANGED_SET, "Method change", REAL_WHY)
-    assert any("CP-2E" in i and "does not say" in i for i in found), found
-
-
 @pytest.mark.parametrize(
     "pack",
     [
@@ -2478,16 +2477,6 @@ def test_the_phrase_the_pack_does_not_say_is_refused_between_two_preset_runs():
 )
 def test_where_a_run_was_not_a_preset_the_cause_stays_unresolved(pack):
     assert module_issues(pack, "Unresolved", REAL_WHY, "Unresolved", REAL_WHY) == ()
-
-
-def test_a_prior_with_no_recorded_selection_counts_as_a_preset_run():
-    """tdg-reader-format-001's manifest has no `selection` key; it was a base because it ran the
-    pathway's lead module. The pack states null as recorded; the rule still fires."""
-    pack = {**PACK, "prior": {"selection": None}, "current": {"selection": "preset"}}
-    found = module_issues(pack, "Unresolved", REAL_WHY, "Unresolved", REAL_WHY)
-    assert any("CP-DR" in i and "`Method change`" in i for i in found), found
-    assert any("CP-2E" in i and "does not say" in i for i in found), found
-    assert module_issues(pack, "Method change", CHANGED_SET, "Method change", CHANGED_SET) == ()
 
 
 def test_a_prior_without_a_recorded_selection_is_stated_null_in_the_pack(tmp_path):
@@ -4095,3 +4084,196 @@ def test_an_empty_issuer_register_is_told_one_row_per_measure_then_no_material_c
     )
     found = cp8_issues(empty, PACK)
     assert any(wording in i for i in found), found
+
+
+# --- C2: the accepted form of a Basis item, a value cell and a null earlier selection -------------
+
+BASIS_MODULES = [
+    {"module": "CP-1", "ran_prior": True, "ran_current": True},
+    {"module": "CP-2", "ran_prior": True, "ran_current": True},
+    {"module": "CP-DR", "ran_prior": True, "ran_current": False},
+    {"module": "CP-2A", "ran_prior": False, "ran_current": True},
+]
+BASIS_PACK = {**PACK, "modules": BASIS_MODULES}
+THREE_FORMS = "is not one of the three forms this module uses"
+
+
+def basis_issues(basis: str) -> list[str]:
+    found = cp8_issues(_with_basis(basis), BASIS_PACK)
+    return [i for i in found if i.startswith("Basis item")]
+
+
+def test_a_basis_line_of_the_three_forms_naming_modules_that_ran_is_accepted():
+    line = "Basis: Run comparison; Financial data (CP-1), earlier run; Downside pathway (CP-2A)."
+    assert basis_issues(line) == []
+    assert basis_issues("Basis: Financial data (CP-1); Credit view (CP-2), earlier run") == []
+
+
+@pytest.mark.parametrize(
+    "item",
+    [
+        "changes.json",
+        "prior/CP-1.md, page 4",
+        "Earlier run: Financial data (CP-1)",
+        "Financial data (CP-1), page 4",
+        "Run comparison pack",
+    ],
+)
+def test_a_basis_item_in_any_other_form_is_refused_with_the_three_forms(item):
+    found = basis_issues(f"Basis: {item}")
+    assert len(found) == 1, found
+    assert item in found[0] and THREE_FORMS in found[0]
+    assert "`<plain module name> (<code>), earlier run`" in found[0]
+
+
+@pytest.mark.parametrize(
+    ("item", "message"),
+    [
+        (
+            "Downside pathway (CP-2A), earlier run",
+            (
+                "Basis item `Downside pathway (CP-2A), earlier run`: `CP-2A` did not run in the "
+                "earlier run."
+            ),
+        ),
+        (
+            "Recovery (CP-9)",
+            "Basis item `Recovery (CP-9)`: `CP-9` did not run in this run.",
+        ),
+        (
+            "Research (CP-DR)",
+            "Basis item `Research (CP-DR)`: `CP-DR` did not run in this run.",
+        ),
+    ],
+)
+def test_a_basis_item_of_the_right_form_naming_a_module_that_did_not_run_is_refused(item, message):
+    assert basis_issues(f"Basis: {item}") == [message]
+
+
+def cell_issues(prior: str, current: str, pack: dict | None = None) -> list[str]:
+    row = f"| Total debt / EBITDA | {prior} | {current} | New period | Leverage fell by 0.60x. |"
+    found = cp8_issues(REGISTERS.replace(LEVERAGE_ROW, row), pack or PACK)
+    return [i for i in found if "cell" in i]
+
+
+def value_pack(value, unit, period):
+    held = {"label": "Total debt / EBITDA", "unit": unit, "value": value, "period": period}
+    measure = {**PACK["measures"][0], "prior": {**held, "definition": None}}
+    return {**PACK, "measures": [{**measure, "unit": unit}, *PACK["measures"][1:]]}
+
+
+def test_a_value_cell_is_exactly_the_pack_value_unit_and_period():
+    pack = value_pack("6.01", "x", "FY2024")
+    assert cell_issues("6.01x (FY2024)", "3.60x (FY2024)", pack) == []
+    for wrong in ("6.01 x (FY2024)", "6.0x (FY2024)", "6.01x", "6.01x FY2024"):
+        (issue,) = cell_issues(wrong, "3.60x (FY2024)", pack)
+        assert (
+            issue == "Issuer register, 'Total debt / EBITDA', Earlier cell: write exactly "
+            f"`6.01x (FY2024)` (the pack's value, unit and period); it is `{wrong}`."
+        )
+
+
+def test_a_value_cell_with_a_unit_after_a_space():
+    pack = value_pack("6261", "US$m", "2024-09-30")
+    assert cell_issues("6261 US$m (2024-09-30)", "3.60x (FY2024)", pack) == []
+    for wrong in (
+        "6,261 US$m (2024-09-30)",
+        "USD 6261 million (2024-09-30)",
+        "6261 US$m (30 September 2024)",
+        "6261US$m (2024-09-30)",
+    ):
+        (issue,) = cell_issues(wrong, "3.60x (FY2024)", pack)
+        assert "write exactly `6261 US$m (2024-09-30)`" in issue and wrong in issue
+
+
+def test_a_value_cell_where_the_pack_value_is_null_is_exactly_not_stated():
+    pack = value_pack(None, "x", "FY2023")
+    assert cell_issues("Not stated", "3.60x (FY2024)", pack) == []
+    for wrong in ("—", "n/a", "0", "not stated"):
+        (issue,) = cell_issues(wrong, "3.60x (FY2024)", pack)
+        assert "write exactly `Not stated`" in issue
+    assert cell_issues("4.20x (FY2023)", "Not stated", PACK)[0].startswith(
+        "Issuer register, 'Total debt / EBITDA', Current cell: write exactly `3.60x (FY2024)`"
+    )
+
+
+def test_a_value_cell_leaves_out_a_part_the_pack_gives_as_null():
+    assert cell_issues("6.01x", "3.60x (FY2024)", value_pack("6.01", "x", None)) == []
+    assert cell_issues("6.01", "3.60x (FY2024)", value_pack("6.01", None, None)) == []
+    assert (
+        cell_issues("45.05% (FY2024)", "3.60x (FY2024)", value_pack("45.05", "%", "FY2024")) == []
+    )
+
+
+def test_a_bold_value_cell_is_the_same_cell():
+    assert cell_issues("**4.20x (FY2023)**", "3.60x (FY2024)") == []
+
+
+def test_the_value_cells_of_the_real_first_cp8_are_accepted():
+    """Hand-copied from lines 71-75 of tdg-proof-snapshot-opus-002's CP-8, with the pack values."""
+    real = [
+        ("x", "6.01", "FY2024", "6.01", "FY2024", "6.01x (FY2024)", "6.01x (FY2024)"),
+        ("x", "4.51", "FY2024", "4.51", "FY2024", "4.51x (FY2024)", "4.51x (FY2024)"),
+        ("x", "3.60", "FY2024", "3.60", "FY2024", "3.60x (FY2024)", "3.60x (FY2024)"),
+        (
+            "US$m",
+            "6261",
+            "2024-09-30",
+            "6261",
+            "FY2024",
+            "6261 US$m (2024-09-30)",
+            "6261 US$m (FY2024)",
+        ),
+        (
+            "US$m",
+            "843",
+            "2024-09-30",
+            "1006",
+            "FY2024",
+            "843 US$m (2024-09-30)",
+            "1006 US$m (FY2024)",
+        ),
+    ]
+    for unit, pv, pp, cv, cp, earlier, current in real:
+        pack_measure = {
+            **PACK["measures"][0],
+            "unit": unit,
+            "prior": {"label": "m", "unit": unit, "value": pv, "period": pp, "definition": None},
+            "current": {"label": "m", "unit": unit, "value": cv, "period": cp, "definition": None},
+        }
+        pack = {**PACK, "measures": [pack_measure, *PACK["measures"][1:]]}
+        assert cell_issues(earlier, current, pack) == [], (earlier, current)
+
+
+NULL_PRIOR_PACK = {**PACK, "prior": {"selection": None}, "current": {"selection": "preset"}}
+WHY = "The pack shows no selection for the earlier run, so why it did not run is not shown."
+
+
+def test_with_no_recorded_earlier_selection_the_cause_is_method_change_or_unresolved():
+    for cause in ("Unresolved", "Method change"):
+        assert module_issues(NULL_PRIOR_PACK, cause, WHY, cause, WHY) == ()
+    found = module_issues(NULL_PRIOR_PACK, "New source", WHY, "Method change", WHY)
+    assert list(found) == [
+        (
+            "Analysis register, CP-DR: the earlier run records no selection, so write the Cause "
+            "`Method change` or `Unresolved`, not 'New source'."
+        )
+    ]
+    found = module_issues(NULL_PRIOR_PACK, "Method change", WHY, "New period", WHY)
+    assert any("CP-2E" in i and "`Method change` or `Unresolved`" in i for i in found), found
+
+
+def test_between_two_preset_runs_unresolved_is_refused_and_the_phrase_is_not():
+    found = module_issues(PRESET_PACK, "Unresolved", CHANGED_SET, "Method change", CHANGED_SET)
+    assert list(found) == [
+        (
+            "Analysis register, CP-DR: both runs used the pathway's own modules, so the pathway's "
+            "module set changed between them: write the Cause `Method change`, not 'Unresolved'."
+        )
+    ]
+    assert module_issues(PRESET_PACK, "Method change", REAL_WHY, "Method change", REAL_WHY) == ()
+
+
+def test_with_an_explicit_run_no_cause_is_required_beyond_the_fixed_list():
+    pack = {**PACK, "prior": {"selection": "preset"}, "current": {"selection": "explicit"}}
+    assert module_issues(pack, "Unresolved", REAL_WHY, "Unresolved", REAL_WHY) == ()
