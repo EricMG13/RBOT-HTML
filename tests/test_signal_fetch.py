@@ -1,125 +1,128 @@
-"""Fetch rules for Signal: https only, public addresses only, size cap, conditional requests."""
+"""Fetch rules for Signal, on injected resolver, connector and clock: nothing touches a network."""
 
-import email.message
 import http.client
-import io
-import os
-import socket
-import threading
+import ssl
 import time
-import urllib.error
-import urllib.request
-import urllib.response
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
 import pytest
 
+from deploy_workflow.research import webfetch
+from deploy_workflow.research.webfetch import ConnectionTarget
 from deploy_workflow.signal import fetch as fetch_module
-from deploy_workflow.signal.fetch import Fetched, FetchRefused, check_address, fetch
+from deploy_workflow.signal.fetch import (
+    MAX_BYTES,
+    Fetched,
+    FetchRefused,
+    Wiring,
+    check_address,
+    fetch,
+)
+
+PUBLIC_IP = "93.184.216.34"
+URL = "https://feeds.example.org/x"
 
 
 def PUBLIC(host: str) -> Iterable[str]:
-    return ["93.184.216.34"]
+    return [PUBLIC_IP]
 
 
 def _map(host: str) -> Iterable[str]:
-    return ["10.0.0.1"] if host == "internal.example" else ["93.184.216.34"]
+    return ["10.0.0.1"] if host == "internal.example" else [PUBLIC_IP]
 
 
-class FakeResponse:
-    def __init__(self, status: int, body: bytes = b"", headers: dict[str, str] | None = None):
+class Reply:
+    def __init__(
+        self,
+        status: int,
+        body: bytes = b"",
+        headers: Mapping[str, str] | None = None,
+        on_read: Callable[[], None] | None = None,
+    ) -> None:
         self.status = status
-        self.headers = email.message.Message()
-        for name, value in (headers or {}).items():
-            self.headers[name] = value
-        self._body = io.BytesIO(body)
+        self.headers = {name.lower(): value for name, value in (headers or {}).items()}
+        self.body = body
+        self.consumed = 0
+        self.on_read = on_read
 
-    def read(self, n: int = -1) -> bytes:
-        return self._body.read(n)
+    def getheader(self, name: str, /) -> str | None:
+        return self.headers.get(name.lower())
+
+    def read(self, amt: int) -> bytes:
+        if self.on_read is not None:
+            self.on_read()
+        chunk = self.body[self.consumed : self.consumed + amt]
+        self.consumed += len(chunk)
+        return chunk
+
+
+def redirect(location: str | None, status: int = 302) -> Reply:
+    return Reply(status, b"r" * 100, {"Location": location} if location else None)
+
+
+class Wire:
+    """A connector that answers each request from a script, in order, and records what it saw."""
+
+    def __init__(self, *replies: Reply | Exception) -> None:
+        self.script = list(replies)
+        self.targets: list[ConnectionTarget] = []
+        self.requests: list[tuple[str, dict[str, str]]] = []
+        self.closed = 0
+        self.on_response: Callable[[], None] = lambda: None
+
+    def __call__(self, target: ConnectionTarget) -> "Wire":
+        self.targets.append(target)
+        return self
+
+    def request(self, method: str, url: str, *, headers: Mapping[str, str]) -> None:
+        assert method == "GET"
+        self.requests.append((url, dict(headers)))
+
+    def getresponse(self) -> Reply:
+        self.on_response()
+        step = self.script.pop(0)
+        if isinstance(step, Exception):
+            raise step
+        return step
 
     def close(self) -> None:
-        self._body.close()
+        self.closed += 1
 
 
-class RecordingOpener:
-    def __init__(self, response: FakeResponse):
-        self.response = response
-        self.headers: dict[str, str] = {}
-        self.timeout: float | None = None
+class Counting:
+    """A resolver that answers from a list, one answer per call, then repeats the last."""
 
-    def __call__(self, request: urllib.request.Request, timeout: float) -> FakeResponse:
-        self.headers = dict(request.headers)
-        self.timeout = timeout
-        return self.response
+    def __init__(self, *answers: list[str]) -> None:
+        self.answers = list(answers)
+        self.calls: list[str] = []
 
-
-@pytest.fixture
-def big_opener() -> RecordingOpener:
-    return RecordingOpener(FakeResponse(200, b"x" * (2 * 1024 * 1024 + 1)))
+    def __call__(self, host: str) -> Iterable[str]:
+        self.calls.append(host)
+        return self.answers.pop(0) if len(self.answers) > 1 else self.answers[0]
 
 
-@pytest.fixture
-def exact_opener() -> RecordingOpener:
-    return RecordingOpener(FakeResponse(200, b"x" * (2 * 1024 * 1024)))
+class Clock:
+    def __init__(self) -> None:
+        self.now = 1000.0
+
+    def __call__(self) -> float:
+        return self.now
+
+    def advance(self, seconds: float) -> None:
+        self.now += seconds
 
 
-@pytest.fixture
-def recording_opener() -> RecordingOpener:
-    return RecordingOpener(FakeResponse(304))
+def run(
+    wire: Wire, url: str = URL, etag: str | None = None, modified: str | None = None, **kw: Any
+):
+    kw.setdefault("resolve", _map)
+    clock = kw.pop("clock", time.monotonic)
+    return fetch(url, etag, modified, wiring=Wiring(wire, clock), **kw)
 
 
-@pytest.fixture
-def recording_opener_200() -> RecordingOpener:
-    return RecordingOpener(FakeResponse(200, b"<rss/>", {"ETag": '"v2"'}))
-
-
-class _Body(io.BytesIO):
-    """Response body that counts what was read; like http.client, reads nothing once closed."""
-
-    consumed = 0
-
-    def read(self, size: int | None = -1) -> bytes:
-        if self.closed:
-            return b""
-        data = super().read(size)
-        self.consumed += len(data)
-        return data
-
-
-class _Reply(urllib.response.addinfourl):
-    """addinfourl with the `msg` attribute urllib's error processor reads."""
-
-    msg = "reply"
-
-
-class FakeHTTPS(urllib.request.BaseHandler):
-    """Stands in for the HTTPS handler: answers each URL from a table, never connects."""
-
-    handler_order = 100  # ahead of the real HTTPS handler, so nothing connects
-
-    def __init__(self, table: dict[str, tuple[int, str | None]]):
-        self.table = table
-        self.seen: list[str] = []
-        self.bodies: list[_Body] = []
-        self.on_open: Callable[[], None] = lambda: None
-
-    def https_open(self, req: urllib.request.Request) -> Any:
-        self.seen.append(req.full_url)
-        code, location = self.table[req.full_url]
-        headers = email.message.Message()
-        if location:
-            headers["Location"] = location
-        self.on_open()
-        body = _Body(b"<rss/>" if code == 200 else b"r" * (5 * 1024 * 1024))
-        self.bodies.append(body)
-        return _Reply(body, headers, req.full_url, code)
-
-
-def _real_opener(table: dict[str, tuple[int, str | None]]) -> tuple[Any, FakeHTTPS]:
-    fake = FakeHTTPS(table)
-    built = urllib.request.build_opener(fetch_module.redirect_handler(_map), fake)
-    return built.open, fake
+def ok() -> Reply:
+    return Reply(200, b"<rss/>")
 
 
 @pytest.mark.parametrize(
@@ -131,23 +134,63 @@ def test_only_https_with_a_host(url):
         check_address(url, resolve=PUBLIC)
 
 
-@pytest.mark.parametrize(
-    "addr", ["127.0.0.1", "10.0.0.5", "192.168.1.1", "169.254.169.254", "::1", "fc00::1", "0.0.0.0"]
-)
+NON_PUBLIC = [
+    "127.0.0.1",
+    "10.0.0.5",
+    "192.168.1.1",
+    "169.254.169.254",
+    "::1",
+    "fc00::1",
+    "0.0.0.0",
+    "fec0::1",
+    "fec0:0:0:ffff::1",
+    "ff02::1",
+    "ff05::2",
+    "224.0.0.1",
+    "64:ff9b::a9fe:a9fe",
+    "64:ff9b::7f00:1",
+    "::a9fe:a9fe",
+    "::7f00:1",
+    "64:ff9b::808:808",
+    "::ffff:127.0.0.1",
+]
+
+
+@pytest.mark.parametrize("addr", NON_PUBLIC)
 def test_non_public_addresses_are_refused(addr):
     with pytest.raises(FetchRefused, match="public"):
-        check_address("https://feeds.example.org/x", resolve=lambda h: [addr])
+        check_address(URL, resolve=lambda h: [addr])
+
+
+@pytest.mark.parametrize("addr", NON_PUBLIC)
+def test_a_redirect_hop_to_a_non_public_address_is_refused(addr):
+    wire = Wire(redirect("https://other.example.org/y"), ok())
+
+    def resolve(host: str) -> Iterable[str]:
+        return [addr] if host == "other.example.org" else [PUBLIC_IP]
+
+    with pytest.raises(FetchRefused, match="public"):
+        run(wire, resolve=resolve)
+    assert [t.host for t in wire.targets] == ["feeds.example.org"]
 
 
 def test_one_private_address_among_public_is_refused():
     with pytest.raises(FetchRefused):
-        check_address(
-            "https://feeds.example.org/x", resolve=lambda h: ["93.184.216.34", "10.0.0.1"]
-        )
+        check_address(URL, resolve=lambda h: [PUBLIC_IP, "10.0.0.1"])
 
 
 def test_public_https_passes():
-    check_address("https://feeds.example.org/x", resolve=PUBLIC)
+    check_address(URL, resolve=PUBLIC)
+    check_address("https://feeds-1.example.org:8443/x", resolve=PUBLIC)
+    check_address("https://WWW.Example.org/feed", resolve=PUBLIC)
+
+
+def test_check_address_looks_the_resolver_up_at_call_time(monkeypatch):
+    monkeypatch.setattr(fetch_module, "_resolve", lambda host: ["10.0.0.1"])
+    with pytest.raises(FetchRefused, match="public"):
+        check_address(URL)
+    with pytest.raises(FetchRefused, match="public"):
+        fetch(URL, None, None, wiring=Wiring(Wire(ok())))
 
 
 def test_unresolvable_host_is_refused():
@@ -155,150 +198,9 @@ def test_unresolvable_host_is_refused():
         raise OSError("name not known")
 
     with pytest.raises(FetchRefused, match="name not known"):
-        check_address("https://feeds.example.org/x", resolve=fail)
-
-
-def test_redirect_to_a_private_address_is_refused():
-    opener, fake = _real_opener({"https://feeds.example.org/x": (302, "https://internal.example/")})
-    with pytest.raises(FetchRefused, match="public"):
-        fetch("https://feeds.example.org/x", None, None, resolve=_map, opener=opener)
-    assert fake.seen == ["https://feeds.example.org/x"]
-
-
-def test_redirect_to_http_is_refused():
-    opener, _ = _real_opener({"https://feeds.example.org/x": (302, "http://feeds.example.org/y")})
-    with pytest.raises(FetchRefused, match="https"):
-        fetch("https://feeds.example.org/x", None, None, resolve=_map, opener=opener)
-
-
-def test_redirect_to_a_public_https_address_is_followed():
-    opener, fake = _real_opener(
-        {
-            "https://feeds.example.org/x": (302, "https://other.example.org/y"),
-            "https://other.example.org/y": (200, None),
-        }
-    )
-    got = fetch("https://feeds.example.org/x", None, None, resolve=_map, opener=opener)
-    assert got.body == b"<rss/>"
-    assert fake.seen == ["https://feeds.example.org/x", "https://other.example.org/y"]
-
-
-def test_more_than_three_redirects_are_refused():
-    table = {
-        f"https://feeds.example.org/{i}": (302, f"https://feeds.example.org/{i + 1}")
-        for i in range(10)
-    }
-    opener, fake = _real_opener(table)
-    with pytest.raises(FetchRefused, match="more than 3 redirects"):
-        fetch("https://feeds.example.org/0", None, None, resolve=_map, opener=opener)
-    assert fake.seen == [f"https://feeds.example.org/{i}" for i in range(4)]
-
-
-def test_alternating_urls_do_not_get_more_hops():
-    table = {
-        "https://feeds.example.org/a": (302, "https://feeds.example.org/b"),
-        "https://feeds.example.org/b": (302, "https://feeds.example.org/a"),
-    }
-    opener, fake = _real_opener(table)
-    with pytest.raises(FetchRefused, match="more than 3 redirects"):
-        fetch("https://feeds.example.org/a", None, None, resolve=_map, opener=opener)
-    assert len(fake.seen) == 4
-
-
-def test_redirect_response_body_is_never_read():
-    opener, fake = _real_opener(
-        {
-            "https://feeds.example.org/x": (302, "https://other.example.org/y"),
-            "https://other.example.org/y": (200, None),
-        }
-    )
-    fetch("https://feeds.example.org/x", None, None, resolve=_map, opener=opener)
-    assert fake.bodies[0].consumed == 0
-    assert fake.bodies[0].closed
-
-
-def test_refused_redirect_response_is_closed():
-    opener, fake = _real_opener({"https://feeds.example.org/x": (302, "https://internal.example/")})
-    with pytest.raises(FetchRefused):
-        fetch("https://feeds.example.org/x", None, None, resolve=_map, opener=opener)
-    assert fake.bodies[0].closed
-
-
-class _Clock:
-    """Replaces time.monotonic so a test can move time without waiting."""
-
-    def __init__(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        self.offset = 0.0
-        real = time.monotonic
-        monkeypatch.setattr(fetch_module.time, "monotonic", lambda: real() + self.offset)
-
-
-class _SlowResponse(FakeResponse):
-    def __init__(self, clock: _Clock):
-        super().__init__(200, b"x" * 100)
-        self.clock = clock
-
-    def read(self, n: int = -1) -> bytes:
-        self.clock.offset += 6
-        return super().read(1)
-
-
-def test_body_that_trickles_past_the_total_deadline_is_refused(monkeypatch):
-    opener = RecordingOpener(_SlowResponse(_Clock(monkeypatch)))
-    with pytest.raises(FetchRefused, match="longer than 10 seconds"):
-        fetch("https://feeds.example.org/x", None, None, resolve=PUBLIC, opener=opener)
-
-
-def test_redirect_hop_after_the_total_deadline_is_refused(monkeypatch):
-    clock = _Clock(monkeypatch)
-    fake = FakeHTTPS(
-        {
-            "https://feeds.example.org/x": (302, "https://other.example.org/y"),
-            "https://other.example.org/y": (200, None),
-        }
-    )
-    fake.on_open = lambda: setattr(clock, "offset", clock.offset + 16)
-
-    def default_opener(resolve: Any, deadline: float, watch: Any) -> Any:
-        # the real wiring from fetch to the handler, with only the HTTPS layer faked
-        return urllib.request.build_opener(
-            fetch_module.redirect_handler(resolve, deadline), fake
-        ).open
-
-    monkeypatch.setattr(fetch_module, "_default_opener", default_opener)
-    with pytest.raises(FetchRefused, match="longer than 10 seconds"):
-        fetch("https://feeds.example.org/x", None, None, resolve=_map)
-    assert fake.seen == ["https://feeds.example.org/x"]
-
-
-@pytest.mark.parametrize("location", ["https://[::1", "https://[feeds.example.org]/feed"])
-def test_malformed_redirect_location_is_refused(location):
-    opener, _ = _real_opener({"https://feeds.example.org/x": (302, location)})
-    with pytest.raises(FetchRefused):
-        fetch("https://feeds.example.org/x", None, None, resolve=_map, opener=opener)
-
-
-def test_non_ascii_start_path_is_refused():
-    def encoding_opener(request: urllib.request.Request, timeout: float) -> Any:
-        request.full_url.encode("ascii")  # what http.client does to the request line
-        return FakeResponse(200)
-
-    with pytest.raises(FetchRefused):
-        fetch(
-            "https://feeds.example.org/actualités",
-            None,
-            None,
-            resolve=PUBLIC,
-            opener=encoding_opener,
-        )
-
-
-@pytest.mark.parametrize(
-    "url", ["https://[::1/x", f"https://{'a' * 64}.invalid/x", "https://a..invalid/x"]
-)
-def test_unparseable_addresses_are_refused_with_the_real_resolver(url):
-    with pytest.raises(FetchRefused):
-        check_address(url)
+        check_address(URL, resolve=fail)
+    with pytest.raises(FetchRefused, match="resolved to no address"):
+        check_address(URL, resolve=lambda h: [])
 
 
 @pytest.mark.parametrize(
@@ -320,419 +222,464 @@ def test_unparseable_addresses_are_refused_with_the_real_resolver(url):
         "https://a..example.org/",
         "https://feeds.example.org./",
         f"https://{'a' * 64}.example.org/",
+        "https://Keeds.example.org/feed",  # Kelvin sign lower-cases to "k"
     ],
 )
 def test_host_must_be_a_plain_name(url):
     with pytest.raises(FetchRefused, match="plain host name"):
         check_address(url, resolve=PUBLIC)
-
-
-def test_plain_host_with_port_and_hyphen_passes():
-    check_address("https://feeds-1.example.org:8443/x", resolve=PUBLIC)
-
-
-def test_redirect_to_a_percent_encoded_host_is_refused():
-    opener, _ = _real_opener(
-        {"https://feeds.example.org/x": (302, "https://cdn%2einternal.attacker.test/feed")}
-    )
-    with pytest.raises(FetchRefused, match="plain host name"):
-        fetch("https://feeds.example.org/x", None, None, resolve=_map, opener=opener)
-
-
-def test_environment_proxy_is_ignored(monkeypatch):
-    monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:9")
-    monkeypatch.delenv("NO_PROXY", raising=False)
-    monkeypatch.delenv("no_proxy", raising=False)
-    connected: list[Any] = []
-
-    def refuse(address: Any, *args: Any, **kwargs: Any) -> Any:
-        connected.append(address)
-        raise OSError("no network in tests")
-
-    monkeypatch.setattr(socket, "create_connection", refuse)
+    wire = Wire(ok())
     with pytest.raises(FetchRefused):
-        fetch("https://feeds.example.org/x", None, None, resolve=PUBLIC)
-    assert connected
-    assert all(address[0] == "feeds.example.org" for address in connected)
+        run(wire, url)
+    assert not wire.targets
 
 
-def test_http_error_text_from_the_server_is_not_copied():
-    def failing(request: urllib.request.Request, timeout: float) -> Any:
-        reason = "<script>" + "Z" * 5000
-        raise urllib.error.HTTPError(request.full_url, 500, reason, email.message.Message(), None)
-
-    with pytest.raises(FetchRefused) as refused:
-        fetch("https://feeds.example.org/x", None, None, resolve=PUBLIC, opener=failing)
-    assert str(refused.value) == "server answered HTTP 500"
+@pytest.mark.parametrize("url", ["https://[::1/x", "https://feeds.example.org:99999/x"])
+def test_unparseable_addresses_are_refused(url):
+    with pytest.raises(FetchRefused):
+        check_address(url, resolve=PUBLIC)
 
 
-def test_other_error_text_is_cut():
-    def failing(request: urllib.request.Request, timeout: float) -> Any:
-        raise OSError("Q" * 5000)
+def test_non_ascii_start_path_is_refused():
+    wire = Wire(ok())
+    with pytest.raises(FetchRefused):
+        run(wire, "https://feeds.example.org/actualités")
+    assert not wire.targets
 
-    with pytest.raises(FetchRefused) as refused:
-        fetch("https://feeds.example.org/x", None, None, resolve=PUBLIC, opener=failing)
-    assert len(str(refused.value)) < 300
+
+def test_private_start_address_is_refused_before_any_connection():
+    wire = Wire(ok())
+    with pytest.raises(FetchRefused, match="public"):
+        run(wire, "https://internal.example/x")
+    assert not wire.targets
+
+
+# M1: the connection goes to the address that was checked.
+def test_no_second_lookup_changes_where_the_request_goes():
+    resolver = Counting([PUBLIC_IP, "93.184.216.35"], ["127.0.0.1"])
+    wire = Wire(ok())
+    run(wire, resolve=resolver)
+    assert resolver.calls == ["feeds.example.org"]
+    assert [t.ip for t in wire.targets] == [PUBLIC_IP]
+    assert wire.targets[0].port == 443
+    assert wire.targets[0].timeout == fetch_module.TIMEOUT_SECONDS
+
+
+def test_each_hop_is_resolved_once_and_pinned_to_its_own_checked_address():
+    answers = {"feeds.example.org": ["93.184.216.34"], "other.example.org": ["93.184.216.99"]}
+    calls: list[str] = []
+
+    def resolve(host: str) -> Iterable[str]:
+        calls.append(host)
+        return answers[host]
+
+    wire = Wire(redirect("https://other.example.org/y"), ok())
+    run(wire, resolve=resolve)
+    assert calls == ["feeds.example.org", "other.example.org"]
+    assert [(t.host, t.ip) for t in wire.targets] == [
+        ("feeds.example.org", "93.184.216.34"),
+        ("other.example.org", "93.184.216.99"),
+    ]
+
+
+def test_the_production_connector_is_pinned_to_the_checked_address(monkeypatch):
+    built: list[dict[str, Any]] = []
+
+    class Capture(Wire):
+        def __init__(self, host: str, ip: str, **kwargs: Any) -> None:
+            super().__init__(ok())
+            built.append({"host": host, "ip": ip, **kwargs})
+
+    monkeypatch.setattr(webfetch, "PinnedHTTPSConnection", Capture)
+    monkeypatch.setattr(webfetch, "tls_context", lambda: "context")
+    got = fetch(URL, None, None, resolve=PUBLIC)
+    assert got.body == b"<rss/>"
+    assert len(built) == 1
+    assert (built[0]["host"], built[0]["ip"], built[0]["port"]) == (
+        "feeds.example.org",
+        PUBLIC_IP,
+        443,
+    )
+    assert built[0]["timeout"] == fetch_module.TIMEOUT_SECONDS
+
+
+# Redirects
+def test_redirect_to_http_is_refused():
+    with pytest.raises(FetchRefused, match="https"):
+        run(Wire(redirect("http://feeds.example.org/y")))
+
+
+def test_redirect_to_a_public_https_address_is_followed_and_its_body_not_read():
+    first = redirect("https://other.example.org/y")
+    wire = Wire(first, ok())
+    got = run(wire)
+    assert got.body == b"<rss/>"
+    assert [url for url, _ in wire.requests] == ["/x", "/y"]
+    assert first.consumed == 0
+    assert wire.closed == 2
+
+
+def test_relative_location_is_resolved_against_the_current_url():
+    wire = Wire(redirect("/other?a=1"), ok())
+    run(wire, "https://feeds.example.org/dir/x")
+    assert wire.requests[1][0] == "/other?a=1"
+    assert wire.targets[1].host == "feeds.example.org"
+
+
+@pytest.mark.parametrize("status", [301, 302, 303, 307, 308])
+def test_each_redirect_status_is_followed(status):
+    assert run(Wire(redirect("https://other.example.org/y", status), ok())).body == b"<rss/>"
 
 
 @pytest.mark.parametrize(
-    "addr", ["64:ff9b::a9fe:a9fe", "64:ff9b::7f00:1", "::a9fe:a9fe", "::7f00:1", "64:ff9b::808:808"]
+    "location",
+    [
+        "https://other.example:8443/",
+        "https://other.example.org:444/",
+        "http://other.example.org/",
+        "https://127.0.0.1/",
+        "https://[::1]/",
+        "https://user@other.example.org/",
+        "https://cdn%2einternal.attacker.test/feed",
+        "https://[::1",
+        "https://[feeds.example.org]/feed",
+        "https://internal.example/",
+        "",
+        None,
+    ],
 )
-def test_ipv6_forms_embedding_ipv4_are_refused(addr):
-    with pytest.raises(FetchRefused, match="public"):
-        check_address("https://feeds.example.org/x", resolve=lambda h: [addr])
+def test_unacceptable_redirect_targets_are_refused(location):
+    wire = Wire(redirect(location), ok())
+    with pytest.raises(FetchRefused):
+        run(wire)
+    assert len(wire.targets) == 1
+    assert wire.closed == 1
 
 
-def test_body_over_two_megabytes_is_refused(big_opener):
-    with pytest.raises(FetchRefused, match="2 MB"):
-        fetch("https://feeds.example.org/x", None, None, resolve=PUBLIC, opener=big_opener)
+def test_an_explicit_default_port_on_a_redirect_is_accepted():
+    wire = Wire(redirect("https://other.example.org:443/y"), ok())
+    run(wire)
+    assert wire.targets[1].port == 443
 
 
-def test_body_of_exactly_two_megabytes_is_accepted(exact_opener):
-    got = fetch("https://feeds.example.org/x", None, None, resolve=PUBLIC, opener=exact_opener)
-    assert got.body is not None and len(got.body) == 2 * 1024 * 1024
+def test_validators_go_to_the_first_address_only():
+    wire = Wire(redirect("https://other.example.org/y"), ok())
+    run(wire, etag='"abc"', modified="Fri, 13 Nov 2026 09:00:00 GMT")
+    first, second = (headers for _, headers in wire.requests)
+    assert first["If-None-Match"] == '"abc"'
+    assert first["If-Modified-Since"] == "Fri, 13 Nov 2026 09:00:00 GMT"
+    assert "If-None-Match" not in second and "If-Modified-Since" not in second
+    assert second["Host"] == "other.example.org"
 
 
-def test_conditional_headers_are_sent_and_304_returns_no_body(recording_opener):
-    got = fetch(
-        "https://feeds.example.org/x",
-        '"abc"',
-        "Fri, 13 Nov 2026 09:00:00 GMT",
-        resolve=PUBLIC,
-        opener=recording_opener,
-    )
-    assert recording_opener.headers["If-none-match"] == '"abc"'
-    assert recording_opener.headers["If-modified-since"] == "Fri, 13 Nov 2026 09:00:00 GMT"
-    assert recording_opener.timeout == 10
-    assert "Mozilla" in recording_opener.headers["User-agent"]
+def test_more_than_three_redirects_are_refused():
+    wire = Wire(*[redirect(f"https://feeds.example.org/{i + 1}") for i in range(10)])
+    with pytest.raises(FetchRefused, match="more than 3 redirects"):
+        run(wire, "https://feeds.example.org/0")
+    assert len(wire.targets) == 4
+
+
+def test_three_redirects_then_the_feed_succeed():
+    wire = Wire(*[redirect(f"https://feeds.example.org/{i + 1}") for i in range(3)], ok())
+    assert run(wire, "https://feeds.example.org/0").body == b"<rss/>"
+
+
+# Request headers
+def test_headers_sent_on_the_first_request():
+    wire = Wire(ok())
+    run(wire, etag=None, modified=None)
+    ((path, headers),) = wire.requests
+    assert path == "/x"
+    assert set(headers) == {"Host", "User-Agent", "Accept", "Accept-Encoding", "Connection"}
+    assert headers["User-Agent"] == fetch_module.USER_AGENT
+    assert headers["Accept-Encoding"] == "identity"
+
+
+def test_identity_encoding_is_asked_for_on_every_hop():
+    wire = Wire(redirect("https://other.example.org/y"), ok())
+    run(wire)
+    assert [headers["Accept-Encoding"] for _, headers in wire.requests] == ["identity", "identity"]
+
+
+def test_a_port_on_the_first_address_is_connected_to_and_named_in_host():
+    wire = Wire(ok())
+    run(wire, "https://feeds-1.example.org:8443/x")
+    assert wire.targets[0].port == 8443
+    assert wire.requests[0][1]["Host"] == "feeds-1.example.org:8443"
+
+
+# Status and body
+def test_304_returns_no_body_and_the_validators_sent():  # none came back, so the sent ones stay
+    wire = Wire(Reply(304))
+    got = run(wire, etag='"abc"', modified="Fri, 13 Nov 2026 09:00:00 GMT")
     assert got == Fetched(None, '"abc"', "Fri, 13 Nov 2026 09:00:00 GMT")
 
 
-def test_no_conditional_headers_when_none_given(recording_opener_200):
-    fetch("https://feeds.example.org/x", None, None, resolve=PUBLIC, opener=recording_opener_200)
-    assert "If-none-match" not in recording_opener_200.headers
-    assert "If-modified-since" not in recording_opener_200.headers
+def test_304_prefers_the_validators_the_server_sent():
+    got = run(Wire(Reply(304, headers={"ETag": '"new"', "Last-Modified": "Sat"})), etag='"abc"')
+    assert got == Fetched(None, '"new"', "Sat")
 
 
-def test_200_returns_body_and_validators(recording_opener_200):
-    got = fetch(
-        "https://feeds.example.org/x", None, None, resolve=PUBLIC, opener=recording_opener_200
+BAD_VALIDATORS = {
+    "obs-fold": '"a"\r\n X-Folded: evil',
+    "nul": '"a\x00b"',
+    "del": '"a\x7fb"',
+    "tab": '"a\tb"',
+    "empty": "",
+    "long": "M" * 60000,
+    "just over": "M" * 257,
+}
+
+
+@pytest.mark.parametrize("bad", BAD_VALIDATORS.values(), ids=BAD_VALIDATORS)
+def test_a_malformed_validator_on_a_200_is_not_returned(bad):
+    got = run(Wire(Reply(200, b"<rss/>", {"ETag": bad, "Last-Modified": bad})))
+    assert got == Fetched(b"<rss/>", None, None)
+
+
+def test_a_validator_of_the_longest_allowed_size_is_returned():
+    got = run(Wire(Reply(200, b"<rss/>", {"ETag": "E" * 256})))
+    assert got.etag == "E" * 256
+
+
+def test_validators_on_a_200_after_a_redirect_are_not_returned():
+    wire = Wire(
+        redirect("https://other.example.org/y"),
+        Reply(200, b"<rss/>", {"ETag": '"h"', "Last-Modified": "Sat"}),
     )
-    assert (got.body, got.etag) == (b"<rss/>", '"v2"')
+    assert run(wire) == Fetched(b"<rss/>", None, None)
 
 
-def test_other_status_is_refused_with_the_status():
-    opener = RecordingOpener(FakeResponse(500))
-    with pytest.raises(FetchRefused, match="500"):
-        fetch("https://feeds.example.org/x", None, None, resolve=PUBLIC, opener=opener)
+def test_a_304_after_a_redirect_is_refused():
+    wire = Wire(redirect("https://other.example.org/y"), Reply(304, headers={"ETag": '"h"'}))
+    with pytest.raises(FetchRefused, match="304"):
+        run(wire, etag='"abc"')
 
 
-def test_network_error_is_refused_with_its_text():
-    def failing(request: urllib.request.Request, timeout: float) -> Any:
-        raise TimeoutError("timed out")
-
-    with pytest.raises(FetchRefused, match="timed out"):
-        fetch("https://feeds.example.org/x", None, None, resolve=PUBLIC, opener=failing)
+def test_a_304_with_a_malformed_validator_keeps_the_one_sent():
+    reply = Reply(304, headers={"ETag": '"a"\r\n X: y', "Last-Modified": "M" * 60000})
+    assert run(Wire(reply), etag='"abc"', modified="Fri") == Fetched(None, '"abc"', "Fri")
 
 
-def test_private_start_address_is_refused_before_any_request():
-    called: list[int] = []
-
-    def opener(request: urllib.request.Request, timeout: float) -> Any:
-        called.append(1)
-        return FakeResponse(200)
-
-    with pytest.raises(FetchRefused, match="public"):
-        fetch("https://internal.example/x", None, None, resolve=_map, opener=opener)
-    assert not called
+def test_a_304_with_one_clean_validator_mixes_it_with_the_one_sent():
+    reply = Reply(304, headers={"ETag": '"new"', "Last-Modified": "\x00"})
+    assert run(Wire(reply), etag='"abc"', modified="Fri") == Fetched(None, '"new"', "Fri")
 
 
-def test_host_case_is_ignored():
-    check_address("https://WWW.Example.org/feed", resolve=PUBLIC)
+STORED_BAD = ['"a"\r\n X: y', "x" * 257, "\x00", ""]
 
 
-def test_non_ascii_letters_that_lowercase_to_ascii_are_refused():
-    # U+212A KELVIN SIGN lower-cases to "k"; the name connected to must be the name checked.
-    with pytest.raises(FetchRefused, match="plain host name"):
-        check_address("https://\u212aeeds.example.org/feed", resolve=PUBLIC)
+@pytest.mark.parametrize("bad", STORED_BAD, ids=["fold", "long", "nul", "empty"])
+def test_a_stored_etag_the_module_would_not_accept_is_not_sent_or_returned(bad):
+    wire = Wire(Reply(304))
+    got = run(wire, etag=bad, modified="Fri")
+    assert "If-None-Match" not in wire.requests[0][1]
+    assert got == Fetched(None, None, "Fri")
 
 
-SHORT = 0.5  # TOTAL_SECONDS in these tests
-LATE = SHORT + 1.0  # a fetch still running at this point has outrun the deadline
+@pytest.mark.parametrize("bad", STORED_BAD, ids=["fold", "long", "nul", "empty"])
+def test_a_stored_modified_the_module_would_not_accept_is_not_sent_or_returned(bad):
+    wire = Wire(Reply(304))
+    got = run(wire, etag='"abc"', modified=bad)
+    assert "If-Modified-Since" not in wire.requests[0][1]
+    assert got == Fetched(None, '"abc"', None)
 
 
-def _workers() -> list[threading.Thread]:
-    return [t for t in threading.enumerate() if t.name == "signal-fetch"]
+def test_valid_stored_validators_are_sent_and_returned():
+    wire = Wire(Reply(304))
+    got = run(wire, etag='"abc"', modified="Fri")
+    headers = wire.requests[0][1]
+    assert (headers["If-None-Match"], headers["If-Modified-Since"]) == ('"abc"', "Fri")
+    assert got == Fetched(None, '"abc"', "Fri")
 
 
-@pytest.fixture
-def short_deadline(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    monkeypatch.setattr(fetch_module, "TOTAL_SECONDS", SHORT)
-    yield
-    for worker in _workers():  # nothing may outlive the patches below
-        worker.join(5)
+def test_200_returns_body_and_validators():
+    got = run(Wire(Reply(200, b"<rss/>", {"ETag": '"v2"', "Last-Modified": "Sat"})))
+    assert got == Fetched(b"<rss/>", '"v2"', "Sat")
 
 
-class _DrippingOpener:
-    """An opener answering over a socket pair: head at once, one byte of drip per `every` s."""
-
-    def __init__(self, head: bytes, drip: bytes, tail: bytes, every: float = 0.2) -> None:
-        self.head, self.drip, self.tail, self.every = head, drip, tail, every
-        self.responses: list[http.client.HTTPResponse] = []
-
-    def __call__(self, request: urllib.request.Request, timeout: float) -> http.client.HTTPResponse:
-        ours, theirs = socket.socketpair()
-        ours.settimeout(timeout)  # what http.client sets: a per-operation timeout
-        threading.Thread(target=self._serve, args=(theirs,), daemon=True).start()
-        response = http.client.HTTPResponse(ours)
-        response.begin()
-        ours.close()  # as urllib does: the response's file keeps the connection open
-        self.responses.append(response)
-        return response
-
-    def _serve(self, theirs: socket.socket) -> None:
-        with theirs:
-            try:
-                theirs.sendall(self.head)
-                for byte in self.drip:
-                    time.sleep(self.every)
-                    theirs.sendall(bytes([byte]))
-                theirs.sendall(self.tail)
-            except OSError:
-                pass  # the client shut the connection
+@pytest.mark.parametrize("status", [204, 401, 404, 500])
+def test_other_status_is_refused_with_the_status(status):
+    with pytest.raises(FetchRefused, match=str(status)):
+        run(Wire(Reply(status)))
 
 
-CHUNKED = b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n"
+def test_body_of_exactly_the_cap_is_accepted():
+    got = run(Wire(Reply(200, b"x" * MAX_BYTES)))
+    assert got.body is not None and len(got.body) == MAX_BYTES
 
 
+def test_body_one_byte_over_the_cap_is_refused_without_reading_the_rest():
+    reply = Reply(200, b"x" * (MAX_BYTES * 3))
+    with pytest.raises(FetchRefused, match="2 MB"):
+        run(Wire(reply))
+    assert reply.consumed == MAX_BYTES + 1
+
+
+def test_a_declared_length_over_the_cap_is_refused_before_reading():
+    reply = Reply(200, b"x" * 10, {"Content-Length": str(MAX_BYTES + 1)})
+    with pytest.raises(FetchRefused, match="2 MB"):
+        run(Wire(reply))
+    assert reply.consumed == 0
+
+
+def test_a_body_shorter_than_its_declared_length_is_refused():
+    with pytest.raises(FetchRefused, match="ended early"):
+        run(Wire(Reply(200, b"<rss/>", {"Content-Length": "1000"})))
+
+
+def test_a_body_matching_its_declared_length_is_accepted():
+    assert run(Wire(Reply(200, b"<rss/>", {"Content-Length": "6"}))).body == b"<rss/>"
+
+
+@pytest.mark.parametrize("length", ["+1000", "1_000", "1" * 19, "5, 5", "٥"])
+def test_an_unusable_content_length_is_refused(length):
+    with pytest.raises(FetchRefused, match="unusable length"):
+        run(Wire(Reply(200, b"<rss/>", {"Content-Length": length})))
+
+
+@pytest.mark.parametrize("length", ["", "-5", "0x10", "abc"])
+def test_a_length_http_client_ignores_is_undeclared(length):
+    got = run(Wire(Reply(200, b"<rss/>", {"Content-Length": length})))
+    assert got.body == b"<rss/>"
+
+
+@pytest.mark.parametrize("encoding", ["gzip", "br", "deflate"])
+def test_a_content_encoding_is_refused(encoding):
+    with pytest.raises(FetchRefused, match="content encoding"):
+        run(Wire(Reply(200, b"x", {"Content-Encoding": encoding})))
+
+
+def test_identity_content_encoding_is_accepted():
+    assert run(Wire(Reply(200, b"x", {"Content-Encoding": "Identity"}))).body == b"x"
+
+
+# Failures
 @pytest.mark.parametrize(
-    ("head", "tail"),
+    "error",
     [
-        (CHUNKED + b"6;", b"\r\n<rss/>\r\n0\r\n\r\n"),  # chunk-size line extension dripped
-        (CHUNKED + b"6\r\n<rss/>\r\n0\r\nX-T: ", b"\r\n\r\n"),  # trailer dripped
+        OSError("socket broke"),
+        TimeoutError("timed out"),
+        ssl.SSLCertVerificationError("certificate verify failed"),
+        http.client.BadStatusLine("garbage"),
+        http.client.IncompleteRead(b"ab", 5),
+        ValueError("bad header"),
     ],
-    ids=["chunk-extension", "trailer"],
+    ids=lambda error: type(error).__name__,
 )
-def test_chunk_framing_dripped_past_the_deadline_is_refused_on_time(short_deadline, head, tail):
-    opener = _DrippingOpener(head, b"y" * 15, tail)
-    start = time.monotonic()
-    with pytest.raises(FetchRefused, match="longer than"):
-        fetch("https://feeds.example.org/x", None, None, resolve=PUBLIC, opener=opener)
-    assert time.monotonic() - start < LATE
+def test_every_failure_is_a_one_line_refusal(error):
+    with pytest.raises(FetchRefused) as refused:
+        run(Wire(error))
+    assert "\n" not in str(refused.value) and str(refused.value)
 
 
-def test_cut_leaves_no_worker_and_closes_the_response(short_deadline):
-    opener = _DrippingOpener(CHUNKED + b"6\r\n<rss/>\r\n0\r\nX-T: ", b"y" * 15, b"\r\n\r\n")
-    with pytest.raises(FetchRefused):
-        fetch("https://feeds.example.org/x", None, None, resolve=PUBLIC, opener=opener)
-    assert not _workers()
-    assert all(response.isclosed() for response in opener.responses)
+def test_a_failure_while_connecting_is_a_refusal():
+    def connect(target: ConnectionTarget) -> Any:
+        raise OSError("connection refused")
+
+    with pytest.raises(FetchRefused, match="connection refused"):
+        fetch(URL, None, None, resolve=PUBLIC, wiring=Wiring(connect))
 
 
-def test_connect_attempts_across_addresses_stop_at_the_deadline(monkeypatch, short_deadline):
-    monkeypatch.setattr(fetch_module, "TIMEOUT_SECONDS", 1)
-    silent = ("127.0.0.1", 9)
-
-    def getaddrinfo(host: str, port: int, *args: Any, **kwargs: Any) -> list[Any]:
-        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", silent)] * 3
-
-    def connect(self: socket.socket, address: Any) -> None:
-        # a dropped SYN: the attempt waits out this socket's own timeout
-        time.sleep(self.gettimeout() or 0)
-        raise TimeoutError("timed out")
-
-    monkeypatch.setattr(socket, "getaddrinfo", getaddrinfo)
-    monkeypatch.setattr(socket.socket, "connect", connect)
-    start = time.monotonic()
-    with pytest.raises(FetchRefused, match="longer than"):
-        fetch("https://feeds.example.org/x", None, None, resolve=PUBLIC)
-    assert time.monotonic() - start < LATE
+def _assert_short_line(error, absent=()):
+    text = str(error)
+    assert len(text) <= 200 and "\n" not in text and "\r" not in text
+    assert all(piece not in text for piece in absent)
 
 
-def test_slow_address_lookup_stops_at_the_deadline_and_never_connects(short_deadline):
-    opened: list[str] = []
+def test_a_long_scheme_is_not_echoed_and_the_reason_is_short():
+    with pytest.raises(FetchRefused) as refused:
+        check_address("s" * 60000 + "://feeds.example.org/", resolve=PUBLIC)
+    _assert_short_line(refused.value, absent=("sss",))
+
+
+def test_a_long_host_keeps_every_reason_within_200_characters():
+    host = ".".join(["a" * 63] * 3 + ["b" * 61])
+    assert len(host) == 253
+    for resolve in (lambda h: ["10.0.0.1"], lambda h: []):
+        with pytest.raises(FetchRefused) as refused:
+            check_address(f"https://{host}/", resolve=resolve)
+        _assert_short_line(refused.value)
+
+
+def test_a_failure_reason_is_200_characters_in_all():
+    with pytest.raises(FetchRefused) as refused:
+        run(Wire(OSError("Q" * 5000)))
+    _assert_short_line(refused.value)
+    assert str(refused.value).startswith("fetch failed: ")
+
+
+def test_a_reply_without_a_status_line_puts_no_server_text_in_the_reason():
+    with pytest.raises(FetchRefused) as refused:
+        run(Wire(http.client.BadStatusLine("secret-looking body line")))
+    _assert_short_line(refused.value, absent=("secret",))
+    assert "BadStatusLine" in str(refused.value)
+
+
+def test_error_text_is_cut_to_one_short_line():
+    with pytest.raises(FetchRefused) as refused:
+        run(Wire(OSError("Q" * 5000 + "\nline two")))
+    _assert_short_line(refused.value)
+
+
+def test_a_failure_that_is_not_a_fetch_error_is_not_hidden():
+    with pytest.raises(KeyError):
+        run(Wire(KeyError("bug")))
+
+
+# Total deadline, on a fake clock
+def test_a_clock_past_the_deadline_refuses_before_any_connection():
+    clock = Clock()
+    wire = Wire(ok())
 
     def slow(host: str) -> Iterable[str]:
-        time.sleep(2)
-        return ["93.184.216.34"]
+        clock.advance(11)
+        return [PUBLIC_IP]
 
-    def opener(request: urllib.request.Request, timeout: float) -> Any:
-        opened.append(request.full_url)
-        raise OSError("tests make no connection")
-
-    start = time.monotonic()
-    with pytest.raises(FetchRefused, match="longer than"):
-        fetch("https://feeds.example.org/x", None, None, resolve=slow, opener=opener)
-    assert time.monotonic() - start < LATE
-    for worker in _workers():
-        worker.join(5)
-    assert opened == []
-
-
-class _EndsLate:
-    """A body whose end arrives after the deadline (time moved by a patched clock)."""
-
-    status = 200
-
-    def __init__(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        self.headers = email.message.Message()
-        self.offset = 0.0
-        real = time.monotonic
-        monkeypatch.setattr(fetch_module.time, "monotonic", lambda: real() + self.offset)
-
-    def read(self, n: int = -1) -> bytes:
-        self.offset += 11
-        return b""
-
-    def close(self) -> None:
-        pass
-
-
-def test_body_end_reached_after_the_deadline_is_refused(monkeypatch):
-    response = _EndsLate(monkeypatch)
     with pytest.raises(FetchRefused, match="longer than 10 seconds"):
-        fetch(
-            "https://feeds.example.org/x",
-            None,
-            None,
-            resolve=PUBLIC,
-            opener=lambda request, timeout: response,
-        )
+        run(wire, resolve=slow, clock=clock)
+    assert not wire.targets
 
 
-def test_successful_fetch_leaves_no_worker():
-    got = fetch(
-        "https://feeds.example.org/x",
-        None,
-        None,
-        resolve=PUBLIC,
-        opener=_DrippingOpener(
-            b"HTTP/1.1 200 OK\r\nContent-Length: 6\r\nConnection: close\r\n\r\n<rss/>", b"", b""
-        ),
-    )
-    assert got == Fetched(b"<rss/>", None, None)
-    assert not _workers()
-
-
-@pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")
-def test_a_bug_in_the_fetch_thread_is_not_a_refusal():
-    def broken(request: urllib.request.Request, timeout: float) -> Any:
-        raise KeyError("bug")
-
-    with pytest.raises(Exception) as raised:
-        fetch("https://feeds.example.org/x", None, None, resolve=PUBLIC, opener=broken)
-    assert not isinstance(raised.value, FetchRefused)
-
-
-@pytest.mark.skipif(not os.path.isdir("/dev/fd"), reason="counts open descriptors via /dev/fd")
-def test_holding_a_descriptor_that_is_not_a_socket_fails_without_leaking_one(tmp_path):
-    watch = fetch_module._Watch()
-    with open(tmp_path / "plain", "wb") as plain:
-        before = len(os.listdir("/dev/fd"))
-        for _ in range(20):
-            with pytest.raises(OSError):
-                watch.hold(plain.fileno())
-        assert len(os.listdir("/dev/fd")) == before
-
-
-@pytest.mark.skipif(not hasattr(os, "get_blocking"), reason="reads the descriptor's blocking flag")
-def test_holding_a_connection_leaves_its_timeout_and_blocking_state_unchanged():
-    ours, theirs = socket.socketpair()
-    with ours, theirs:
-        ours.settimeout(0.3)
-        watch = fetch_module._Watch()
-        watch.hold(ours.fileno())
-        assert ours.gettimeout() == 0.3
-        assert not os.get_blocking(ours.fileno())  # a timeout means non-blocking underneath
-        start = time.monotonic()
-        with pytest.raises(TimeoutError):  # a stalled read still times out per operation
-            ours.recv(1)
-        assert time.monotonic() - start < 2
-        watch.release()
-    plain, other = socket.socketpair()
-    with plain, other:
-        watch = fetch_module._Watch()
-        watch.hold(plain.fileno())
-        assert plain.gettimeout() is None
-        assert os.get_blocking(plain.fileno())
-        watch.release()
-
-
-def test_an_expired_watch_refuses_to_connect_and_creates_no_socket(monkeypatch):
-    lookups: list[str] = []
-
-    def getaddrinfo(host: str, port: int, *args: Any, **kwargs: Any) -> list[Any]:
-        lookups.append(host)
-        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", 9))]
-
-    def forbidden(self: socket.socket, address: Any) -> None:
-        raise AssertionError("a connection was attempted after the deadline")
-
-    monkeypatch.setattr(socket, "getaddrinfo", getaddrinfo)
-    monkeypatch.setattr(socket.socket, "connect", forbidden)
-    watch = fetch_module._Watch()
-    watch.expire()
-    connection = fetch_module._HeldConnection("feeds.example.org", watch=watch, timeout=1)
-    with pytest.raises(FetchRefused, match="longer than"):
-        connection.connect()
-    assert lookups == []
-    assert connection.sock is None
-
-
-def test_a_lookup_that_ends_after_the_deadline_opens_no_connection(monkeypatch):
-    watch = fetch_module._Watch()
-
-    def getaddrinfo(host: str, port: int, *args: Any, **kwargs: Any) -> list[Any]:
-        watch.expire()  # the deadline falls while the lookup runs
-        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", 9))]
-
-    def forbidden(self: socket.socket, address: Any) -> None:
-        raise AssertionError("a connection was attempted after the deadline")
-
-    monkeypatch.setattr(socket, "getaddrinfo", getaddrinfo)
-    monkeypatch.setattr(socket.socket, "connect", forbidden)
-    connection = fetch_module._HeldConnection("feeds.example.org", watch=watch, timeout=1)
-    with pytest.raises(FetchRefused, match="longer than"):
-        connection.connect()
-    assert connection.sock is None
-
-
-def test_a_slow_redirect_hop_lookup_ending_after_the_deadline_makes_no_connection(monkeypatch):
-    clock = _Clock(monkeypatch)
-    fake = FakeHTTPS(
-        {
-            "https://feeds.example.org/x": (302, "https://other.example.org/y"),
-            "https://other.example.org/y": (200, None),
-        }
-    )
+def test_a_slow_redirect_hop_lookup_opens_no_second_connection():
+    clock = Clock()
+    wire = Wire(redirect("https://other.example.org/y"), ok())
 
     def slow_hop(host: str) -> Iterable[str]:
         if host == "other.example.org":
-            clock.offset += 16  # the lookup outlives the deadline
-        return ["93.184.216.34"]
+            clock.advance(11)
+        return [PUBLIC_IP]
 
-    def default_opener(resolve: Any, deadline: float, watch: Any) -> Any:
-        return urllib.request.build_opener(
-            fetch_module.redirect_handler(resolve, deadline), fake
-        ).open
-
-    monkeypatch.setattr(fetch_module, "_default_opener", default_opener)
     with pytest.raises(FetchRefused, match="longer than 10 seconds"):
-        fetch("https://feeds.example.org/x", None, None, resolve=slow_hop)
-    assert fake.seen == ["https://feeds.example.org/x"]
+        run(wire, resolve=slow_hop, clock=clock)
+    assert [t.host for t in wire.targets] == ["feeds.example.org"]
 
 
-def test_a_connection_that_completes_after_the_deadline_is_closed_and_refused(monkeypatch):
-    watch = fetch_module._Watch()
-    ours, theirs = socket.socketpair()
+def test_the_deadline_is_one_for_every_hop_and_handed_to_the_connection():
+    clock = Clock()
+    wire = Wire(redirect("https://other.example.org/y"), ok())
+    run(wire, clock=clock)
+    assert {t.deadline for t in wire.targets} == {1000.0 + fetch_module.TOTAL_SECONDS}
+    assert all(t.clock is clock for t in wire.targets)
 
-    def late(address: Any, timeout: Any, source_address: Any = None) -> socket.socket:
-        watch.expire()  # the deadline falls while the connect runs
-        return ours
 
-    monkeypatch.setattr(socket, "create_connection", late)
-    monkeypatch.setattr(socket, "getaddrinfo", lambda *args, **kwargs: [])
-    connection = fetch_module._HeldConnection("feeds.example.org", watch=watch, timeout=1)
-    with theirs, pytest.raises(FetchRefused, match="longer than"):
-        connection.connect()
-    assert ours.fileno() == -1  # closed
+def test_headers_that_arrive_after_the_deadline_are_refused():
+    clock = Clock()
+    wire = Wire(ok())
+    wire.on_response = lambda: clock.advance(11)
+    with pytest.raises(FetchRefused, match="longer than 10 seconds"):
+        run(wire, clock=clock)
+
+
+def test_a_body_that_trickles_past_the_deadline_is_refused():
+    clock = Clock()
+    reply = Reply(200, b"x" * 100, on_read=lambda: clock.advance(6))
+    with pytest.raises(FetchRefused, match="longer than 10 seconds"):
+        run(Wire(reply), clock=clock)
+
+
+def test_a_body_end_reached_after_the_deadline_is_refused():
+    clock = Clock()
+    reply = Reply(200, b"", on_read=lambda: clock.advance(11))
+    with pytest.raises(FetchRefused, match="longer than 10 seconds"):
+        run(Wire(reply), clock=clock)

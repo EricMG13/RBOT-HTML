@@ -69,6 +69,7 @@ CREATE TABLE story_duplicates(
     seen_at TEXT NOT NULL,
     UNIQUE(duplicate_source_id, link_key)
 );
+CREATE INDEX IF NOT EXISTS idx_story_duplicates_link_key ON story_duplicates(link_key);
 CREATE VIRTUAL TABLE stories_fts USING fts5(
     title, summary, content='stories', content_rowid='id'
 );
@@ -317,12 +318,15 @@ def last_check(db: sqlite3.Connection, source_id: int) -> sqlite3.Row | None:
 def _earliest_match(
     db: sqlite3.Connection, source_id: int, lkey: str, tkey: str, published: datetime
 ) -> int | None:
-    """Id of the earliest story with this link key, or, from another source, this title key
-    within the window. A source never folds into itself by title."""
+    """Id of the earliest story with this link key (as a story or a folded duplicate), or, from
+    another source, this title key within the window. A source never folds into itself by title."""
     rows = db.execute(
         "SELECT id, published_at, link_key = ? AS same_link FROM stories"
-        " WHERE link_key = ? OR (title_key = ? AND source_id != ?)",
-        (lkey, lkey, tkey, source_id),
+        " WHERE link_key = ? OR (title_key = ? AND source_id != ?)"
+        " UNION ALL"
+        " SELECT s.id, s.published_at, 1 AS same_link FROM story_duplicates d"
+        " JOIN stories s ON s.id = d.story_id WHERE d.link_key = ? AND s.source_id != ?",
+        (lkey, lkey, tkey, source_id, lkey, source_id),
     ).fetchall()
     long_title = len(tkey.split()) >= MIN_TITLE_WORDS
     found: list[tuple[datetime, int]] = []

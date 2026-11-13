@@ -275,7 +275,7 @@ Only approved sources are fetched. Design: `docs/superpowers/specs/2026-11-13-si
 Candidate sources: `docs/signal/sources.json` (85 checked on 2026-11-13, 60 meet tier A (fetched and parsed with dated items); none
 is approved until the owner approves it).
 
-Known limits: DNS, connect and TLS handshake cannot be interrupted (the worker may outlive a timed-out fetch until its own timeout), DNS rebinding is not defended against, and two ingest passes running at once may both fetch a due source.
+Known limits: the connection goes to the address that was checked; the one system DNS lookup per hop cannot be interrupted; redirects go only to https hosts on the default port; and two ingest passes running at once may both fetch a due source.
 
 ## Current limits
 

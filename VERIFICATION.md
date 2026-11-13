@@ -4,12 +4,12 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
-## 2026-11-13 — Signal slice 1: command line (branch `claude/intelligence-feature-design-4dd9c3`, tip after the follow-up Low batch)
+## 2026-11-13 — Signal slice 1: command line (branch `claude/signal-1b-store-ingest-cli`, tip after the pre-merge review fixes)
 Scope: Signal slice 1 command line only (`python -m deploy_workflow.signal`); no pages, no AI pass, no login, no model call, no cost.
-- `uv run pytest tests/test_signal_store.py tests/test_signal_feeds.py tests/test_signal_fetch.py tests/test_signal_fold.py tests/test_signal_ingest.py tests/test_signal_cli.py -q`: exit 0, 148 passed, 0 warnings.
-- `uv run python tools/quality_gate.py`: exit 0, 0 findings in 20 changed files.
-- Security: the fetch code had a security audit and a re-review; the total 10-second deadline was rebuilt so a watching thread cuts the connection (a deadline checked on the calling thread cannot run while a standard-library call blocks). The 17 attack probes behind it (`probe_fetch_*`) are kept under `.superpowers/sdd/2026-11-13-signal-1-store-and-ingest/probes/`, not in the repository; at this tip 19 of the 20 probes and the local real-TLS experiment exit 0; `probe_fetch_sec3_post_deadline_connect` case B (a lookup inside `socket.create_connection` that outlives the deadline) still exits 1 because the connect follows that lookup with no point to check between them.
-- Live fetch of two public feeds (UK CMA cases Atom, BEREC RSS), no model call, no cost; real network, throwaway root outside the repository. All commands exit 0. `<root>` stands for the long scratch folder passed to `--root`:
+- `uv run pytest tests/test_signal_store.py tests/test_signal_feeds.py tests/test_signal_fetch.py tests/test_signal_fold.py tests/test_signal_ingest.py tests/test_signal_cli.py -q`: exit 0, 234 passed.
+- `uv run python tools/quality_gate.py`: exit 0, output `quality gate: 0 finding(s) in 14 changed file(s), 2642 line(s) in scope`.
+- Security: the fetcher was rebuilt on `research.webfetch` after a pre-merge review found the first version connected to an address it had not checked. A security review of the rebuilt fetcher over real TLS on loopback found nothing High or Medium: every connection went to a checked address; 58 non-public address forms and 50 hostile redirect targets were refused; the 10-second deadline held against dripped headers and bodies. Its probes are kept under `.superpowers/sdd/slice1-review-fixes/probes/`, not in the repository; two of them (`probe_f2_validator_provenance`, `probe_f2_validator_injection`) now exit 1 because the behaviour they demonstrated is gone. The 17 earlier `probe_fetch_*` probes tested the deleted transport and no longer apply.
+- Live fetch of two public feeds (UK CMA cases Atom, BEREC RSS), no model call, no cost; real network, throwaway root outside the repository. All commands exit 0. `<root>` stands for the long scratch folder passed to `--root`. Re-run on 2026-11-13 with the rebuilt fetcher over real TLS (same commands, throwaway root, no model call): CMA cases 50 new, BEREC 10 new, every command exit 0; the transcript below is from the first run.
 ```
 $ signal --root <root> sources propose "CMA cases" --kind regulator --url https://www.gov.uk/cma-cases.atom --by owner
 $ signal --root <root> sources propose "BEREC" --kind regulator --url https://www.berec.europa.eu/en/rss.xml --by owner
@@ -30,7 +30,7 @@ $ signal --root <root> sources list
 $ signal --root <root> ingest
 (no output: sources not due within the minimum interval)
 ```
-- Known limits: DNS lookup, TCP connect and TLS handshake cannot be interrupted, so fetch returns on time but the worker thread may outlive the call until that single step ends; after the deadline no new connection is opened except one whose lookup ends inside `socket.create_connection` itself (it is then closed and refused before the handshake); DNS rebinding between the address check and the connection; two simultaneous passes may both fetch a due source; Windows not run (the duplicate-socket call was chosen for it).
+- Known limits: the one system DNS lookup per hop cannot be interrupted; `webfetch.py` reuses its connect timeout for the TLS handshake, so a slow connect plus a hung handshake can run to about twice the 10-second deadline (no request is sent after the deadline); two simultaneous passes may both fetch a due source; Windows not run.
 - Not verified: Windows; a live failing source, redirect, or conditional-GET (etag) against a real server; `ingest --loop`; stories were not compared with the feeds by hand beyond the five lines shown; the "no output" second ingest was read as "not due", not checked against the interval setting.
 
 ## 2026-11-13 — Issuer library screens redrawn from a screen-to-component map; source references and audit material moved to Evidence (branch `claude/report-redesign-evidence`)
