@@ -282,6 +282,13 @@ CP1_CHECKED["Debt principal to carrying value"] = synthetic_table(
     "| Basis and limitation |",
     f"| FY2024 | {GAP} | {GAP} | 1400 | US$m | Synthetic. |",
 )
+# The Period table the acceptance check needs (R11): the statement columns' dates, so a Net debt
+# row dated by the day is found to be a fiscal year (or not).
+CP1_CHECKED["Period table"] = synthetic_table(
+    "| Period | Start | End |",
+    "| FY2023 | 2022-10-01 | 2023-09-30 |",
+    "| FY2024 | 2023-10-01 | 2024-09-30 |",
+)
 PERIOD_HEAD = "| Period | {} | Reporting unit | Basis and limitation |"
 DEBT_STACK_HEAD = (
     "| Facility | Ranking | Secured | Amount | Cumulative leverage | Reporting unit "
@@ -2986,9 +2993,23 @@ def test_cp1_is_asked_for_the_period_table_whenever_a_forecast_is_wanted(tmp_pat
         )
 
 
-def test_cp1_is_not_asked_for_the_period_table_when_no_forecast_is_wanted(tmp_path):
+def test_cp1_is_asked_for_the_period_table_in_one_sentence_when_no_forecast_is_wanted(tmp_path):
+    # R11: the acceptance check needs the table on every run; without a forecast the short
+    # sentence asks for it, and no other module is asked.
     _, texts = all_instructions(tmp_path, modules=("CP-0", "CP-1", "CP-2A"))
-    assert all("| Period | Start | End |" not in text for text in texts.values())
+    head = texts["CP-1"].partition(cpos_launch.METHOD_MARK)[0]
+    assert cpos_launch.PERIOD_REQUIRED_BLOCK in head
+    assert cpos_launch.PERIOD_TABLE_BLOCK not in head
+    assert head.count("| Period | Start | End |") == 1
+    assert all("| Period | Start | End |" not in t for n, t in texts.items() if n != "CP-1")
+
+
+def test_cp1_is_told_to_print_the_period_table_once_when_a_forecast_is_wanted(tmp_path):
+    _, texts = all_instructions(tmp_path, modules=("CP-0", "CP-1", "CP-2A", "CP-2G"))
+    head = texts["CP-1"].partition(cpos_launch.METHOD_MARK)[0]
+    assert cpos_launch.PERIOD_TABLE_BLOCK in head
+    assert cpos_launch.PERIOD_REQUIRED_BLOCK not in head
+    assert head.count("| Period | Start | End |") == 1
 
 
 def test_the_presets_are_the_owners_answer_key():

@@ -2028,6 +2028,15 @@ PERIOD_TABLE_BLOCK = (
 )
 
 
+# Goes into CP-1's instructions when PERIOD_TABLE_BLOCK is not sent: the check needs the table.
+PERIOD_REQUIRED_BLOCK = (
+    "Period table: inside `## Findings`, print one table headed "
+    f"`| {' | '.join(cp1_check.PERIOD_HEADER)} |`, a row for each period column "
+    "header of your statement tables (`Period` as printed, for example `FY2024`; `Start` and "
+    "`End` as YYYY-MM-DD); add no figure.\n\n"
+)
+
+
 def _fixed_rows(spec: cp1_check.StatementSpec) -> str:
     optional = f"; optional {', '.join(f'`{r}`' for r in spec.optional)}" if spec.optional else ""
     return f"`### {spec.heading}`: {', '.join(f'`{r}`' for r in spec.fixed)}{optional}"
@@ -2038,7 +2047,7 @@ def _fixed_rows(spec: cp1_check.StatementSpec) -> str:
 CP1_CHECK_BLOCK = (
     "Checked tables: CP-OS recomputes your figures at acceptance and sends back any that fail, so "
     "print these inside `## Findings` (only there, outside code fences), each heading exact and "
-    "written once. Each statement table is headed "
+    "written once in the whole handoff. Each statement table is headed "
     "`| Line item | <one column per period> | Unit | Basis | Source |`; a period header is "
     f"exactly one of {', '.join(f'`{f}`' for f in cp1_check.PERIOD_FORMS)}; the Unit of a fixed "
     f"row is a currency code and `millions` or `thousands` (`{cp1_check.UNIT_EXAMPLE}`). Keep the "
@@ -2056,14 +2065,20 @@ CP1_CHECK_BLOCK = (
     + "; and, only when the issuer states an adjusted EBITDA, "
     + ", ".join(f"`{m.name}`" for m in cp1_check.METRICS[3:])
     + ". Reported EBITDA is the primary denominator. `Period` is the Period cell of the "
-    "`Net debt data` row the ratio belongs to (`FY2024 / 2024-09-30` for a fiscal year, the date "
-    f"alone for an interim), `Unit` is that row's Reporting unit (`{cp1_check.REGISTER_UNIT}`), "
+    "`Net debt data` row the ratio belongs to (`FY2024 / 2024-09-30` or the date alone), "
+    f"`Unit` is that row's Reporting unit (`{cp1_check.REGISTER_UNIT}`), "
     "`Currency` is the code. Numerator and Denominator Value are the plain figures of the "
     "statement tables and `Net debt data`; Calculated Value is numerator over denominator printed "
     "to exactly two decimal places, worked with `calculate`; a zero or negative denominator is "
     "`Not calculable: <reason>`.\n"
     f"`### {cp1_check.RECON_HEADING}` (selector below) ties the maturity ladder, which stays "
     "contractual principal, to the carrying value in `Net debt data`.\n"
+    f"The {cp1_check.PERIOD_TABLE} (a row for every statement column, asked for separately) is "
+    "the sixth table: a row is a fiscal-year row when its date is the "
+    "`End` of that column's row there, whatever form its Period cell takes (an `FY2024 / date` "
+    "cell must name a row and its `End`). Statement ties run for `USD` statements only: a non-USD "
+    "issuer writes its statements in its own currency and `Not supplied: <reason>` in the US$m "
+    "tables.\n"
     "Refused, naming the row, both figures and the difference: a table or fixed row missing; a "
     "Unit, period header or Period not as above; a cell that is not a plain number or stated gap; "
     "a Calculated Value more than half a unit of its second decimal from numerator over "
@@ -2072,7 +2087,7 @@ CP1_CHECK_BLOCK = (
     "Gross debt (or Net debt), and, for fiscal-year rows only (an interim EBITDA is a "
     "last-twelve-months figure, so interim rows have no statement tie), EBITDA and cash interest "
     "against their statement lines, and Gross debt and Cash against `Total Debt` and `Cash & "
-    "Equivalents`, each in a statement column for that fiscal year; assets that differ from "
+    "Equivalents`, each in that fiscal year's statement column; assets that differ from "
     "liabilities plus any temporary equity plus equity, the cash flows plus any FX effect from "
     "the net change, or opening cash plus the change from closing cash (when the filing itself "
     "prints such a difference, write `Not supplied: <reason>` on the total it cannot support and "
@@ -2673,6 +2688,7 @@ def _prepare(  # noqa: PLR0913, PLR0915 - `prepare`'s body: one keyword per sett
     for module, block, wanted in (
         ("CP-2G", FORECAST_BLOCK, forecast),
         ("CP-1", PERIOD_TABLE_BLOCK, forecast),
+        ("CP-1", PERIOD_REQUIRED_BLOCK, not forecast),
         ("CP-1", CP1_CHECK_BLOCK, True),
         ("CP-1", LAYER1_FORECAST_BLOCK, forecast and "CP-2G" not in ordered),
         ("CP-0", CP0_BLOCK, True),

@@ -16,6 +16,7 @@ from deploy_workflow.owners.cpos_launch import (
     CHART_TABLES,
     CP1_CHECK_BLOCK,
     DEBT_RECON,
+    PERIOD_REQUIRED_BLOCK,
     _chart_header,
     _cp1_issues,
     _owned_issues,
@@ -77,6 +78,7 @@ NET_DEBT = {
     "FY2024 / 2024-09-30": ("24,880", "6,261", "18,619"),
     "FY2023 / 2023-09-30": ("19,750", "3,472", "16,278"),
 }
+PERIODS = (("FY2024", "2023-10-01", "2024-09-30"), ("FY2023", "2022-10-01", "2023-09-30"))
 
 
 def register(rows=REGISTER, overrides=None) -> str:
@@ -97,6 +99,7 @@ def register(rows=REGISTER, overrides=None) -> str:
 
 def build(*, reg=None, drop=(), **given) -> str:
     use = {
+        "periods": PERIODS,
         "income": INCOME,
         "cash_flow": CASH_FLOW,
         "balance": BALANCE,
@@ -113,6 +116,7 @@ def build(*, reg=None, drop=(), **given) -> str:
         statement("T4.4 Income statement", income),
         statement("T4.5 Cash flow statement", cash_flow),
         statement("T4.6 Balance sheet", balance),
+        "PERIODS",
         reg if reg is not None else register(),
         table(
             "Chart data: leverage",
@@ -153,7 +157,16 @@ def build(*, reg=None, drop=(), **given) -> str:
             [["FY2024 / 2024-09-30", *recon, "US$m", BASIS]],
         ),
     ]
-    kept = [p for p in parts if not any(p.startswith(f"### {name}") for name in drop)]
+    periods = use["periods"]
+    period_table = (
+        table("Period table", ["Period", "Start", "End"], [list(r) for r in periods]).split(
+            "\n", 2
+        )[2]  # the table alone: CP-1 prints it without a heading
+        if periods
+        else ""
+    )
+    parts = [period_table if p == "PERIODS" else p for p in parts]
+    kept = [p for p in parts if p and not any(p.startswith(f"### {name}") for name in drop)]
     return "## Findings\n\n" + "\n\n".join(kept) + "\n\n## Calculations\n\nNone.\n"
 
 
@@ -244,12 +257,13 @@ def test_a_reported_ebitda_operand_that_differs_from_the_statement_is_refused():
     named(issue, "Net debt / EBITDA", "FY2024", "4,173", "3,813", "EBITDA (Reported)")
 
 
-def test_the_statement_ties_run_for_any_currency_in_millions():
-    # R3: a statement Unit is a currency code plus `millions` or `thousands`; the tie to the
-    # US$m tables then runs (the old "skipped unless USD millions" rule is gone).
+def test_the_statement_ties_are_skipped_whole_for_a_statement_not_in_usd():
+    # R13 (replaces R3's any-currency tie): a EUR statement is not tied to the US$m tables, in
+    # either direction; the same wrong operand under a USD statement is refused (next test).
     reg = register(overrides={("Net debt / EBITDA", "FY2024"): ["18,619", "4,173", "4.46"]})
     text = build(reg=reg, leverage=(("6.53", "4.46"), ("6.27", "5.17")))
-    issue = only(_cp1_issues(text.replace("| USD millions |", "| EUR millions |")))
+    assert _cp1_issues(text.replace("| USD millions |", "| EUR millions |")) == ()
+    issue = only(_cp1_issues(text))
     named(issue, "Net debt / EBITDA", "4,173", "3,813", "EBITDA (Reported)", "difference 360")
 
 
@@ -302,12 +316,12 @@ def test_a_cash_walk_that_does_not_close_is_refused():
 
 def test_a_missing_fixed_row_is_named_with_the_table_count():
     issue = only(_cp1_issues(build(balance=without(BALANCE, "Total Assets"))))
-    named(issue, "5 of 5 required tables", "T4.6 Balance sheet", "Total Assets")
+    named(issue, "6 of 6 required tables", "T4.6 Balance sheet", "Total Assets")
 
 
 def test_missing_tables_are_counted_and_named():
     issue = only(_cp1_issues(build(drop=("T4.4 Income statement", "T4.9 Calculation register"))))
-    named(issue, "3 of 5 required tables", "T4.4 Income statement", "T4.9 Calculation register")
+    named(issue, "4 of 6 required tables", "T4.4 Income statement", "T4.9 Calculation register")
 
 
 def test_a_denominator_with_words_in_it_is_refused():
@@ -346,7 +360,7 @@ def test_a_table_that_cannot_be_read_is_an_issue_not_a_pass():
         "| Line item | FY2024 | FY2023 | Unit | Basis | Source |", "| Item | FY2024 |", 1
     )
     issue = only(_cp1_issues(text))
-    named(issue, "4 of 5 required tables", "T4.4 Income statement")
+    named(issue, "5 of 6 required tables", "T4.4 Income statement")
 
 
 def test_a_blocked_module_that_states_every_figure_as_a_gap_passes():
@@ -415,7 +429,7 @@ def test_the_launcher_text_names_every_fixed_row_and_metric_and_is_short():
     assert check.REGISTER_HEADING in CP1_CHECK_BLOCK
     assert check.RECON_HEADING in CP1_CHECK_BLOCK
     assert "| " + " | ".join(check.REGISTER_COLUMNS) + " |" in CP1_CHECK_BLOCK
-    assert len(CP1_CHECK_BLOCK) < 3_426 + 1_500  # fix round 1 may grow the block by under 1,500
+    assert len(CP1_CHECK_BLOCK) <= 4_498 + 1_200  # 4,498 at 4de3482; round 2 may add 1,200
 
 
 def test_the_launcher_text_states_every_refusal_of_the_rulings_from_the_constants():
@@ -432,8 +446,20 @@ def test_the_launcher_text_states_every_refusal_of_the_rulings_from_the_constant
         "gap beside a stated principal",
         "only there, outside code fences",
         "Gross debt and Cash against `Total Debt` and `Cash & Equivalents`",
+        "is the sixth table",
+        "`End` of that column's row",
+        "`USD` statements only",
+        "`Not supplied: <reason>` in the US$m tables",
+        "once in the whole handoff",
     ):
         assert words in CP1_CHECK_BLOCK, words
+
+
+def test_the_period_table_sentence_names_the_header_the_check_reads():
+    sentence = PERIOD_REQUIRED_BLOCK
+    assert "| " + " | ".join(check.PERIOD_HEADER) + " |" in sentence
+    assert sentence.count(".") <= 3 and "YYYY-MM-DD" in sentence  # one instruction, short
+    assert "| " + " | ".join(check.PERIOD_HEADER) + " |" not in CP1_CHECK_BLOCK  # not twice
 
 
 # --- properties -------------------------------------------------------------------------
@@ -627,7 +653,7 @@ def test_the_interim_rows_have_no_statement_tie():
     text = build(reg=reg, leverage=(("8.29", "6.21"), ("6.27", "5.17")), cover=("2.59", "2.71"))
     assert _cp1_issues(text) != ()  # a fiscal-year row with that EBITDA is refused
     text = text.replace(DATED, "2025-06-30")
-    text = re.sub(r"^\| FY2024 \|", "| 2025-06-30 |", text, flags=re.MULTILINE)
+    text = re.sub(r"^\| FY2024 \| (?=\d\.\d\d \|)", "| 2025-06-30 | ", text, flags=re.MULTILINE)
     assert _cp1_issues(text) == ()
 
 
@@ -658,8 +684,8 @@ def test_a_reconciliation_period_that_matches_no_net_debt_row_is_refused():
 
 def test_a_net_debt_table_dated_by_the_day_ties_register_rows_written_with_that_date():
     text = build().replace(DATED, "2024-09-30").replace("FY2023 / 2023-09-30", "2023-09-30")
-    text = re.sub(r"^\| FY2024 \|", "| 2024-09-30 |", text, flags=re.MULTILINE)
-    text = re.sub(r"^\| FY2023 \|", "| 2023-09-30 |", text, flags=re.MULTILINE)
+    text = re.sub(r"^\| FY2024 \| (?=\d\.\d\d \|)", "| 2024-09-30 | ", text, flags=re.MULTILINE)
+    text = re.sub(r"^\| FY2023 \| (?=\d\.\d\d \|)", "| 2023-09-30 | ", text, flags=re.MULTILINE)
     assert _cp1_issues(text) == ()
 
 
@@ -779,8 +805,9 @@ def test_a_table_outside_findings_or_inside_a_fence_is_not_read():
     assert _cp1_issues("## Request\n\n" + fenced + wrong) != ()
     body = build().split("## Findings\n\n", 1)[1].split("\n\n## Calculations", 1)[0]
     elsewhere = "## Findings\n\nSee below.\n\n## Calculations\n\n" + body + "\n"
-    issue = only(_cp1_issues(elsewhere))
-    named(issue, "0 of 5 required tables")
+    issues = _cp1_issues(elsewhere)
+    assert any("T4.6 Balance sheet" in i and "## Calculations" in i for i in issues), issues
+    assert any("0 of 6 required tables" in i for i in issues), issues
 
 
 def test_an_escaped_pipe_in_a_cell_and_a_one_hyphen_separator_parse():
@@ -872,3 +899,251 @@ def test_a_net_debt_or_chart_figure_longer_than_twenty_five_characters_is_refuse
     assert any("Net debt data" in i and "Gross debt" in i and "25 characters" in i for i in issues)
     issues = _cp1_issues(build(cover=(huge, "2.71")))
     assert any("Chart data: interest cover" in i and "25 characters" in i for i in issues)
+
+
+# --- fix round 2: the controller's rulings R8', R11-R14 (answer key typed from the brief) ---
+
+
+def move_under_calculations(text: str, heading: str) -> str:
+    """The `### heading` table cut out of `## Findings` and put under `## Calculations`."""
+    block = re.search(rf"### {re.escape(heading)}\n.*?(?=\n\n###|\n\n## )", text, re.DOTALL)
+    assert block, heading
+    out = text.replace(block[0] + "\n\n", "", 1)
+    return out.replace("## Calculations\n\n", f"## Calculations\n\n{block[0]}\n\n", 1)
+
+
+def test_a_leverage_chart_under_calculations_is_refused_by_name_and_place():
+    text = build(leverage=(("6.01", "4.88"), ("6.27", "5.17")))  # the register states 6.53
+    issues = _cp1_issues(move_under_calculations(text, "Chart data: leverage"))
+    assert any("Chart data: leverage" in i and "## Calculations" in i for i in issues), issues
+
+
+def test_a_fenced_second_chart_heading_before_the_real_one_is_refused():
+    text = build()
+    real = re.search(r"### Chart data: leverage\n.*?(?=\n\n###)", text, re.DOTALL)[0]
+    wrong = real.replace("6.53", "6.01")
+    text = text.replace(real, f"```\n{wrong}\n```\n\n{real}", 1)
+    issues = _cp1_issues(text)
+    assert any("Chart data: leverage" in i and "code fence" in i for i in issues), issues
+
+
+def test_net_debt_data_under_calculations_is_refused():
+    issues = _cp1_issues(move_under_calculations(build(), "Net debt data"))
+    assert any("Net debt data" in i and "## Calculations" in i for i in issues), issues
+
+
+def test_every_table_the_check_reads_must_be_written_once_inside_findings():
+    for heading in (
+        *(s.heading for s in check.STATEMENTS),
+        check.REGISTER_HEADING,
+        check.RECON_HEADING,
+        check.NET_DEBT_HEADING,
+        check.LADDER_HEADING,
+        *check.CHART_COLUMNS,
+    ):
+        copy = f"### {heading}\n\nSynthetic.\n\n"
+        twice = build().replace(f"### {heading}", copy + f"### {heading}", 1)
+        issues = _cp1_issues(twice)
+        assert any(heading in i and "more than once" in i for i in issues), (heading, issues)
+
+
+def date_only(text: str) -> str:
+    """Every Period cell of the fixture written as the day alone (the Period table keeps its
+    labels and dates)."""
+    text = text.replace(DATED, "2024-09-30").replace("FY2023 / 2023-09-30", "2023-09-30")
+    text = re.sub(r"^\| FY2024 \| (\d\.\d\d)", r"| 2024-09-30 | \1", text, flags=re.MULTILINE)
+    return re.sub(r"^\| FY2023 \| (\d\.\d\d)", r"| 2023-09-30 | \1", text, flags=re.MULTILINE)
+
+
+def principal_as_debt(**kwargs) -> str:
+    """Gross debt 25,068 (the contractual principal) in Net debt, register, chart and the
+    reconciliation, against T4.6 Total Debt 24,880: the known failure of the 10-K."""
+    net_debt = {**NET_DEBT, DATED: ("25,068", "6,261", "18,807")}
+    reg = register(
+        overrides={
+            ("Total debt / EBITDA", "FY2024"): ["25,068", "3,813", "6.57"],
+            ("Net debt / EBITDA", "FY2024"): ["18,807", "3,813", "4.93"],
+            ("Total debt / adjusted EBITDA", "FY2024"): ["25,068", "4,173", "6.01"],
+            ("Net debt / adjusted EBITDA", "FY2024"): ["18,807", "4,173", "4.51"],
+        }
+    )
+    return build(
+        net_debt=net_debt,
+        reg=reg,
+        leverage=(("6.57", "4.93"), ("6.27", "5.17")),
+        recon=("24,319", "749", "25,068"),
+        **kwargs,
+    )
+
+
+def eBITDA_3000(**kwargs) -> str:
+    reg = register(overrides={("EBITDA / cash interest", "FY2024"): ["3,000", "1,158", "2.59"]})
+    return build(reg=reg, cover=("2.59", "2.71"), **kwargs)
+
+
+@pytest.mark.parametrize("dated", [False, True], ids=["FY form", "date only"])
+def test_a_fiscal_year_gross_debt_that_is_not_total_debt_is_refused_in_either_period_form(dated):
+    text = principal_as_debt()
+    text = date_only(text) if dated else text
+    sole(text, "Net debt data", "Gross debt 25,068", "Total Debt", "24,880", "difference 188")
+
+
+@pytest.mark.parametrize("dated", [False, True], ids=["FY form", "date only"])
+def test_a_fiscal_year_ebitda_that_is_not_the_statement_is_refused_in_either_period_form(dated):
+    text = eBITDA_3000()
+    text = date_only(text) if dated else text
+    sole(text, "EBITDA / cash interest", "3,000", "3,813", "EBITDA (Reported)", "difference 813")
+
+
+def test_a_cash_interest_operand_that_is_not_the_statement_line_is_refused():
+    reg = register(overrides={("EBITDA / cash interest", "FY2024"): ["3,813", "1,000", "3.81"]})
+    sole(
+        build(reg=reg, cover=("3.81", "2.71")),
+        "EBITDA / cash interest",
+        "1,000",
+        "1,158",
+        "Cash Interest Paid",
+        "difference 158",
+    )
+
+
+def test_the_full_fixture_passes_with_every_period_cell_written_as_the_day_alone():
+    assert _cp1_issues(date_only(build())) == ()
+
+
+def test_a_period_cell_with_a_date_that_is_not_the_period_tables_end_is_refused():
+    text = build().replace(DATED, "FY2024 / 2024-09-29")
+    issues = _cp1_issues(text)
+    assert any(
+        "FY2024 / 2024-09-29" in i and "2024-09-30" in i and "Period table" in i for i in issues
+    ), issues
+
+
+def test_a_period_cell_whose_label_is_not_a_period_table_row_is_refused():
+    text = build().replace(DATED, "FY2025 / 2024-09-30")
+    issues = _cp1_issues(text)
+    assert any("FY2025 / 2024-09-30" in i and "Period table" in i for i in issues), issues
+
+
+def test_a_handoff_with_no_period_table_is_one_table_short():
+    issue = sole(build(periods=()), "5 of 6 required tables", "Period table")
+    assert "| Period | Start | End |" in issue
+
+
+def test_a_statement_column_with_no_period_table_row_is_refused():
+    text = build(periods=PERIODS[:1])  # no FY2023 row
+    issues = _cp1_issues(text)
+    assert any("FY2023" in i and "Period table" in i for i in issues), issues
+
+
+def test_a_period_the_period_table_dates_twice_differently_is_refused():
+    text = build(periods=(*PERIODS, ("FY2024", "2023-10-01", "2024-10-01")))
+    assert any("FY2024" in i and "twice" in i for i in _cp1_issues(text))
+
+
+def test_a_fiscal_year_ending_in_february_is_tied_by_its_date_not_its_label_arithmetic():
+    # Fiscal 2024 ends 2025-02-01 and is headed FY2024 in the statements and the Period table.
+    periods = (("FY2024", "2024-02-04", "2025-02-01"), ("FY2023", "2023-02-05", "2024-02-03"))
+    text = build(periods=periods).replace(DATED, "2025-02-01")
+    text = text.replace("FY2023 / 2023-09-30", "2024-02-03")
+    text = re.sub(r"^\| FY2024 \| (\d\.\d\d)", r"| 2025-02-01 | \1", text, flags=re.MULTILINE)
+    text = re.sub(r"^\| FY2023 \| (\d\.\d\d)", r"| 2024-02-03 | \1", text, flags=re.MULTILINE)
+    assert _cp1_issues(text) == ()
+    wrong = text.replace("| 3,813 | 3,148 |", "| 3,900 | 3,148 |")  # T4.4 reported EBITDA FY2024
+    assert any("EBITDA (Reported)" in i and "3,900" in i for i in _cp1_issues(wrong))
+
+
+def test_an_interim_only_handoff_has_no_statement_tie():
+    periods = (("9M 2025", "2024-10-01", "2025-06-30"), ("9M 2024", "2023-10-01", "2024-06-30"))
+    text = build(periods=periods).replace(DATED, "2025-06-30")
+    text = text.replace("FY2023 / 2023-09-30", "2024-06-30")
+    text = text.replace("| Line item | FY2024 | FY2023 |", "| Line item | 9M 2025 | 9M 2024 |")
+    text = re.sub(r"^\| FY2024 \| (\d\.\d\d)", r"| 2025-06-30 | \1", text, flags=re.MULTILINE)
+    text = re.sub(r"^\| FY2023 \| (\d\.\d\d)", r"| 2024-06-30 | \1", text, flags=re.MULTILINE)
+    assert _cp1_issues(text) == ()
+    assert _cp1_issues(text.replace("| 3,813 | 3,148 |", "| 3,000 | 3,148 |")) == ()
+
+
+def test_the_no_column_advice_names_a_header_the_pack_accepts():
+    text = build().replace("| Line item | FY2024 | FY2023 |", "| Line item | FY2024 | FY2022 |")
+    advice = [
+        found[1]
+        for issue in _cp1_issues(text)
+        if (found := re.search(r"add the column, headed `([^`]*)`", issue))
+    ]
+    assert advice and set(advice) == {"FY2023"}
+
+
+EUR_GAP = "Not supplied: reported in EUR millions"
+
+
+def eur_issuer(*, cover_stated: bool) -> str:
+    overrides = {}
+    for name, rows in REGISTER.items():
+        for period, (num, den, value) in zip(("FY2024", "FY2023"), rows, strict=True):
+            keep = cover_stated and "cash interest" in name
+            overrides[(name, period)] = [num, den, value] if keep else [EUR_GAP] * 3
+    reg = register(overrides=overrides)
+    gap = (EUR_GAP, EUR_GAP)
+    return build(
+        net_debt={p: (EUR_GAP, EUR_GAP, EUR_GAP) for p in NET_DEBT},
+        reg=reg,
+        leverage=(gap, gap),
+        cover=gap if not cover_stated else ("3.29", "2.71"),
+        recon=("24,319", "561", EUR_GAP),
+    ).replace("| USD millions |", "| EUR millions |")
+
+
+@pytest.mark.parametrize("cover_stated", [False, True], ids=["six rows gapped", "cover stated"])
+def test_a_eur_issuer_with_gapped_us_dollar_tables_is_accepted(cover_stated):
+    assert _cp1_issues(eur_issuer(cover_stated=cover_stated)) == ()
+
+
+@pytest.mark.parametrize("cell", ["\uff12\uff14\uff0c\uff18\uff18\uff10", "24,88O", "24.880,0"])
+def test_a_figure_a_tie_cannot_read_is_refused_not_skipped(cell):
+    # Fullwidth digits, a letter O and a European grouping are not plain ASCII-digit numbers.
+    net_debt = {**NET_DEBT, DATED: (cell, "6,261", "18,619")}
+    issues = _cp1_issues(build(net_debt=net_debt))
+    assert any("Gross debt" in i and cell in i and "plain number" in i for i in issues), issues
+
+
+def test_a_chart_cell_that_is_not_a_number_is_refused_by_the_tie():
+    issues = _cp1_issues(build(leverage=(("6.5x", "4.88"), ("6.27", "5.17"))))
+    assert any("6.5x" in i and "plain number" in i for i in issues), issues
+
+
+# --- fix round 2, Low 2: one test per mutant the re-review found surviving ---
+
+
+def test_two_statement_columns_with_the_same_header_are_refused():
+    text = build().replace("| Line item | FY2024 | FY2023 |", "| Line item | FY2024 | FY2024 |", 1)
+    assert any("two columns headed `FY2024`" in i for i in _cp1_issues(text))
+
+
+def findings_with_a_fenced_section_line(fence: str) -> str:
+    """A fence inside `## Findings` holding a line that, read outside a fence, closes it."""
+    return build().replace(
+        "## Findings\n\n", f"## Findings\n\n{fence}\n## Notes\n{fence.strip()}\n\n", 1
+    )
+
+
+@pytest.mark.parametrize("fence", ["~~~", "  ```", "```"])
+def test_a_section_line_inside_a_fence_does_not_end_findings(fence):
+    assert _cp1_issues(findings_with_a_fenced_section_line(fence)) == ()
+
+
+def test_a_reconciliation_or_ladder_cell_over_twenty_five_characters_is_refused():
+    huge = "1" + "0" * 25
+    issues = _cp1_issues(build(recon=(huge, "561", "24,880")))
+    assert any("25 characters" in i for i in issues), issues
+    ladder = (huge, *LADDER[1:])
+    assert any("25 characters" in i for i in _cp1_issues(build(ladder=ladder)))
+
+
+def test_a_reconciliation_or_ladder_cell_that_is_not_a_number_is_refused():
+    issues = _cp1_issues(build(recon=("24,319", "5 61", "24,880")))
+    assert any("5 61" in i and "plain number" in i for i in issues), issues
+    gap = "Not supplied: the ladder is incomplete"
+    ladder = ("93", "9x", "92", "6,637", "4,768", "12,637")
+    issues = _cp1_issues(build(ladder=ladder, recon=(gap, "561", "24,880")))
+    assert any("9x" in i and "plain number" in i for i in issues), issues

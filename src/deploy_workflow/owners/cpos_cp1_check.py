@@ -7,13 +7,17 @@ tables the check reads, and their fixed rows and names, are defined here once; t
 sent to CP-1 is rendered from these constants. Decimal and Fraction only: no float touches an
 amount or ratio.
 
-Tables are read only inside `## Findings` and outside code fences. This module imports nothing
-from `cpos_launch` (which imports it), so it keeps its own small table reader."""
+Tables are read only inside `## Findings` and outside code fences, and a table's heading must
+appear once in the whole handoff (every other reader of the handoff reads the first copy anywhere).
+Fiscal years are identified by dates: the Period table (`| Period | Start | End |`) gives each
+statement column its `End`, and a row is a fiscal-year row when its date is that `End`. This module
+imports nothing from `cpos_launch` (which imports it), so it keeps its own small table reader."""
 
 import re
 from collections import Counter
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from datetime import date
 from decimal import Context, Decimal, Inexact
 from fractions import Fraction
 from typing import NamedTuple
@@ -21,13 +25,14 @@ from typing import NamedTuple
 from deploy_vii.model._cells import beyond_rounding, half_unit
 from deploy_workflow.changes import same_period
 from deploy_workflow.credit_os_catalogue import period_order
-from deploy_workflow.owners.cpos_periods import period_of
+from deploy_workflow.owners.cpos_periods import _date, period_of
 
 _NUMBER = re.compile(r"-?\d[\d,]*(?:\.\d+)?", re.ASCII)
 _TWO_PLACES = re.compile(r"-?\d[\d,]*\.\d{2}", re.ASCII)
 _UNIT = re.compile(r"[A-Z]{3} (millions|thousands)", re.ASCII)
 _PERIOD_HEADER = re.compile(r"FY\d{4}|Q[1-4] \d{4}|H1 \d{4}|9M \d{4}", re.ASCII)
-_FISCAL = re.compile(r"FY(\d{4})(?: / \d{4}-\d{2}-\d{2})?", re.ASCII)
+_FISCAL = re.compile(r"(FY\d{4})(?: / (\d{4}-\d{2}-\d{2}))?", re.ASCII)
+_FY_HEADER = re.compile(r"FY\d{4}", re.ASCII)
 _SEPARATOR = re.compile(r"\s*:?-+:?\s*")
 _EXACT = Context(prec=1000, traps=[Inexact])  # exact sums of figures of at most MAX_CELL digits
 GAP_WORDS = ("Not supplied:", "Not calculable:")
@@ -92,6 +97,8 @@ REGISTER_COLUMNS = (
 RECON_HEADING = "Debt principal to carrying value"
 RECON_COLUMNS = ("Contractual principal", "Reconciling items", "Carrying value")
 RECON_HEADER = ["Period", *RECON_COLUMNS, "Reporting unit", "Basis and limitation"]
+PERIOD_TABLE = "Period table"
+PERIOD_HEADER = ["Period", "Start", "End"]
 NET_DEBT_HEADING = "Net debt data"
 NET_DEBT_COLUMNS = ("Gross debt", "Cash", "Net debt")
 LADDER_HEADING = "Chart data: debt maturities"
@@ -197,9 +204,110 @@ def _table(lines: list[str], heading: str) -> list[list[str]] | None:
             break
         if line.startswith("|"):
             rows.append(_cells(line))
+    return _unseparated(rows)
+
+
+def _unseparated(rows: list[list[str]]) -> list[list[str]]:
     if len(rows) > 1 and all(_SEPARATOR.fullmatch(c) for c in rows[1]):
         del rows[1]
     return rows
+
+
+def _blocks(lines: list[str]) -> list[list[list[str]]]:
+    """Every table of the lines, whatever its heading, as rows of cells (separator dropped)."""
+    found: list[list[list[str]]] = []
+    current: list[list[str]] = []
+    for line in [*lines, ""]:
+        if line.startswith("|"):
+            current.append(_cells(line))
+        elif current:
+            found.append(_unseparated(current))
+            current = []
+    return found
+
+
+def _sites(text: str, tracked: Sequence[str]) -> dict[str, list[tuple[int, str | None]]]:
+    """Where each tracked `### heading` line stands in the whole handoff, fenced lines included:
+    (line number, what is wrong with its place or None when it is inside `## Findings` and
+    outside a code fence)."""
+    found: dict[str, list[tuple[int, str | None]]] = {}
+    section, fence = "", None
+    for number, line in enumerate(text.splitlines(), 1):
+        marker = line.lstrip()[:3]
+        if marker in ("```", "~~~"):
+            fence = None if fence == marker else (fence or marker)
+        elif fence is None and line.startswith("## "):
+            section = line.rstrip()
+        stripped = line.strip()
+        if stripped.startswith("### ") and stripped[4:] in tracked:
+            where = None
+            if fence is not None:
+                where = "inside a code fence"
+            elif section != "## Findings":
+                where = f"under `{section}`" if section else "before any `##` section"
+            found.setdefault(stripped[4:], []).append((number, where))
+    return found
+
+
+def _placement(text: str, tracked: Sequence[str]) -> list[str]:
+    """A table the check reads must be headed once in the handoff, inside `## Findings` and
+    outside a code fence: the other readers of the handoff read the first heading anywhere."""
+    issues = []
+    for heading, places in _sites(text, tracked).items():
+        if len(places) == 1 and places[0][1] is None:
+            continue
+        seen = ", ".join(f"line {n} {where or 'in `## Findings`'}" for n, where in places)
+        many = "appears more than once" if len(places) > 1 else "is misplaced"
+        issues.append(
+            f"`### {heading}` {many} ({seen}); write it once, inside `## Findings` and outside "
+            "a code fence, where every reader of the handoff reads it."
+        )
+    return issues
+
+
+@dataclass(frozen=True)
+class Periods:
+    """The Period table: each period header's `End` and the labels dated twice differently."""
+
+    present: bool
+    ends: dict[str, date]
+    spans: dict[str, tuple[date, date]]
+    twice: tuple[str, ...]
+
+    def fiscal(self, cell: str) -> str | None:
+        """The statement column (`FY2024`) a Period cell names: by its label (`FY2024`,
+        `FY2024 / 2024-09-30`) or, for the day alone, by the fiscal-year row ending that day;
+        None for an interim (a day that ends no fiscal year) or any other cell."""
+        found = _FISCAL.fullmatch(cell)
+        if found:
+            return found[1]
+        day = _date(cell)
+        years = [k for k, end in self.ends.items() if _FY_HEADER.fullmatch(k) and end == day]
+        return min(years, default=None) if day else None
+
+
+def _periods(lines: list[str]) -> Periods:
+    seen: dict[str, set[tuple[date, date]]] = {}
+    present = False
+    for rows in _blocks(lines):
+        if rows[0] != PERIOD_HEADER:
+            continue
+        present = True
+        for row in rows[1:]:
+            if (
+                len(row) >= 3
+                and (start := _date(row[1]))
+                and (end := _date(row[2]))
+                and start <= end
+            ):
+                seen.setdefault(row[0], set()).add((start, end))
+    once = {k: next(iter(v)) for k, v in seen.items() if len(v) == 1}
+    return Periods(
+        present,
+        {k: v[1] for k, v in once.items()},
+        once,
+        tuple(k for k, v in seen.items() if len(v) > 1),
+    )
 
 
 def _records(
@@ -221,15 +329,9 @@ class Statement:
     stated_twice: tuple[str, ...]
     wrong_width: tuple[str, ...]
 
-    def column(self, period: str) -> int | None:
-        return next(
-            (
-                i
-                for i, p in enumerate(self.periods)
-                if _PERIOD_HEADER.fullmatch(p) and same_period(p, period)
-            ),
-            None,
-        )
+    def column(self, year: str) -> int | None:
+        """The column headed `year` (`FY2024`), the statement column its Period-table row names."""
+        return self.periods.index(year) if year in self.periods else None
 
     def cell(self, label: str, at: int) -> str | None:
         row = self.rows.get(label)
@@ -238,6 +340,12 @@ class Statement:
     def unit(self, label: str) -> str | None:
         row = self.rows.get(label)
         return row[-3] if row else None
+
+    def usd(self, label: str) -> bool:
+        """Whether the row's Unit is `USD millions` or `USD thousands`: only a USD statement is
+        tied to the US$m tables."""
+        unit = self.unit(label) or ""
+        return _UNIT.fullmatch(unit) is not None and unit[:3] == "USD"
 
     def per(self, label: str) -> int | None:
         """How many of the row's units make one of the US$m tables' (1 for millions, 1,000 for
@@ -267,6 +375,7 @@ class Reg:
     metric: Metric
     cells: dict[str, str]
     nd: dict[str, str] | None  # the `Net debt data` row whose Period this row's matches
+    year: str | None  # the statement column (`FY2024`) of a fiscal-year row; None for an interim
 
     @property
     def period(self) -> str:
@@ -275,12 +384,6 @@ class Reg:
     @property
     def where(self) -> str:
         return f"`{REGISTER_HEADING}` {self.metric.name} {self.period}"
-
-    @property
-    def fiscal(self) -> bool:
-        """A fiscal-year row (the Net debt form `FY2024 / 2024-09-30`), the only kind tied to the
-        statement tables: an interim row's EBITDA is a last-twelve-months figure."""
-        return self.nd is not None and _FISCAL.fullmatch(self.nd["Period"]) is not None
 
 
 def _listed(net_debt: list[dict[str, str]]) -> str:
@@ -292,7 +395,7 @@ def _net_row(net_debt: list[dict[str, str]], period: str) -> dict[str, str] | No
 
 
 def _register(
-    lines: list[str], net_debt: list[dict[str, str]]
+    lines: list[str], net_debt: list[dict[str, str]], periods: Periods
 ) -> tuple[list[Reg] | None, list[str]]:
     """The fixed-name rows of the register (None when the table is absent or misheaded: the count
     in `_completeness` says so), and the issues of rows that cannot be read."""
@@ -310,7 +413,9 @@ def _register(
             )
             continue
         cells = dict(zip(REGISTER_COLUMNS, row, strict=True))
-        regs.append(Reg(_METRIC[row[0]], cells, _net_row(net_debt, cells["Period"])))
+        nd = _net_row(net_debt, cells["Period"])
+        year = periods.fiscal(cells["Period"]) or (nd and periods.fiscal(nd["Period"])) or None
+        regs.append(Reg(_METRIC[row[0]], cells, nd, year))
     return regs, issues
 
 
@@ -347,11 +452,13 @@ def _figure(side: Side) -> Decimal | None:
 
 
 def _tie(where: str, left: Side, right: Side) -> str | None:
-    """The issue when two stated figures differ, or when one is stated and the other is a gap or
-    absent; None when both agree or neither is stated. Figures in the same unit agree exactly; one
+    """The issue when two stated figures differ, when one is stated and the other is a gap or
+    absent, or when a cell is neither a plain number nor a gap; None when both agree or neither
+    is stated. Figures in the same unit agree exactly; one
     in thousands agrees within half a unit of the millions figure's last printed place."""
-    if any(s.cell is not None and not _readable(s.cell) for s in (left, right)):
-        return None  # refused where the cell is read
+    for side in (left, right):
+        if side.cell is not None and not _readable(side.cell):
+            return f"{where}: {side.name} `{side.cell}` must be {PLAIN}."
     a, b = _figure(left), _figure(right)
     if a is None and b is None:
         return None
@@ -370,18 +477,20 @@ def _tie(where: str, left: Side, right: Side) -> str | None:
     return f"{where}: {left.said} is not {right.said} (difference {_fmt(abs(a - b))}); {CORRECT}."
 
 
-def _line_tie(found: Statement, label: str, period: str, side: Side, where: str) -> list[str]:
-    """A figure of a US$m table against the statement line for the same fiscal year. A fiscal
-    year with no column in the statement is refused when the figure is stated."""
-    at = found.column(period)
+def _line_tie(found: Statement, label: str, year: str, side: Side, where: str) -> list[str]:
+    """A figure of a US$m table against the statement line for the same fiscal year (`year`, the
+    statement column's header). A fiscal year with no column in the statement is refused when the
+    figure is stated. A statement not in USD is not tied: its figures are in another currency."""
+    if not found.usd(label):
+        return []  # refused where the Unit cell is read, or in a currency the tables do not state
+    at = found.column(year)
     if at is None:
         if _stated(side.cell) is None:
             return []
-        year = _FISCAL.match(period)
         text = (
             f"{where}: {side.said} is a figure, but `{found.spec.heading}` has no column for the "
-            f"fiscal year of {period} (no difference can be worked); add the column, headed "
-            f"`{year[0] if year else 'FY2024'}`."
+            f"fiscal year of {year} (no difference can be worked); add the column, headed "
+            f"`{year}`."
         )
         return [text]
     per, cell = found.per(label), found.cell(label, at)
@@ -394,21 +503,39 @@ def _line_tie(found: Statement, label: str, period: str, side: Side, where: str)
 
 # --- 2a: the tables and fixed rows exist ---------------------------------------------------
 
+REQUIRED = len(STATEMENTS) + 3  # the statements, the register, the reconciliation, the periods
+TRACKED = (
+    *(spec.heading for spec in STATEMENTS),
+    REGISTER_HEADING,
+    RECON_HEADING,
+    NET_DEBT_HEADING,
+    LADDER_HEADING,
+    *CHART_COLUMNS,
+)
+
 
 def _names(names: Sequence[str]) -> str:
     return ", ".join(f"`{n}`" for n in names)
 
 
-def _completeness(lines: list[str], statements: list[Statement | None]) -> list[str]:
+def _completeness(
+    lines: list[str], statements: list[Statement | None], periods: Periods
+) -> list[str]:
     missing = [
-        spec.heading for spec, found in zip(STATEMENTS, statements, strict=True) if found is None
+        f"`{spec.heading}`"
+        for spec, found in zip(STATEMENTS, statements, strict=True)
+        if found is None
     ]
     register = _table(lines, REGISTER_HEADING)
     if not register or register[0] != list(REGISTER_COLUMNS):
-        missing.append(REGISTER_HEADING)
+        missing.append(f"`{REGISTER_HEADING}`")
     recon = _table(lines, RECON_HEADING)
     if not recon or recon[0] != RECON_HEADER:
-        missing.append(RECON_HEADING)
+        missing.append(f"`{RECON_HEADING}`")
+    if not periods.present:
+        missing.append(
+            f"`{PERIOD_TABLE}` (no heading; header exactly `| {' | '.join(PERIOD_HEADER)} |`)"
+        )
     notes = []
     for found in statements:
         if found is None:
@@ -421,20 +548,77 @@ def _completeness(lines: list[str], statements: list[Statement | None]) -> list[
                 f"`{found.spec.heading}` states {_names(found.stated_twice)} more than once; "
                 "each fixed row is written once"
             )
-    twice = [
-        h
-        for h in (*(s.heading for s in STATEMENTS), REGISTER_HEADING, RECON_HEADING)
-        if lines.count(f"### {h}") > 1
-    ]
-    if twice:
-        notes.append(f"{_names(twice)} appears more than once in `## Findings`; write it once")
     if not missing and not notes:
         return []
-    parts = [f"{5 - len(missing)} of 5 required tables are present"]
+    parts = [f"{REQUIRED - len(missing)} of {REQUIRED} required tables are present"]
     if missing:
-        parts.append(f"missing or headed otherwise than the method states: {_names(missing)}")
+        parts.append(f"missing or headed otherwise than the method states: {', '.join(missing)}")
     parts += notes
     return ["; ".join(parts) + ". Add what is missing; nothing is filled in for you."]
+
+
+def _period_cells(
+    lines: list[str], regs: list[Reg], net_debt: list[dict[str, str]]
+) -> dict[str, list[str]]:
+    """The distinct Period cells of each table that states them, by heading."""
+    recon = _records(lines, RECON_HEADING, RECON_HEADER)
+    cells = {
+        NET_DEBT_HEADING: [r["Period"] for r in net_debt],
+        REGISTER_HEADING: [r.period for r in regs],
+        RECON_HEADING: [r["Period"] for r in recon],
+        **{h: [r["Period"] for r in _records(lines, h)] for h in CHART_COLUMNS},
+    }
+    return {heading: list(dict.fromkeys(found)) for heading, found in cells.items()}
+
+
+def _period_issues(
+    periods: Periods,
+    statements: list[Statement | None],
+    cells: dict[str, list[str]],
+) -> list[str]:
+    """What the Period table has to say for the fiscal years to be found by date: no period dated
+    twice, a row for each statement column, and each `FY2024 / 2024-09-30` Period cell naming a
+    row of it and that row's `End`. Without the table the count says so."""
+    if not periods.present:
+        return []
+    issues = [
+        f"`{PERIOD_TABLE}` dates `{label}` twice, with different dates; write one row for it."
+        for label in periods.twice
+    ]
+    headers = dict.fromkeys(
+        p for found in statements if found for p in found.periods if _PERIOD_HEADER.fullmatch(p)
+    )
+    issues += [
+        f"`{PERIOD_TABLE}` has no row with `YYYY-MM-DD` dates for the statement column `{p}`; "
+        f"add `| {p} | <first day> | <last day> |`."
+        for p in headers
+        if p not in periods.spans and p not in periods.twice
+    ]
+    for heading, found in cells.items():
+        for cell in found:
+            issue = _unmatched_period(periods, heading, cell)
+            if issue:
+                issues.append(issue)
+    return issues
+
+
+def _unmatched_period(periods: Periods, heading: str, cell: str) -> str | None:
+    named = _FISCAL.fullmatch(cell)
+    if not named or not named[2] or named[1] in periods.twice:
+        return None
+    label, day = named[1], named[2]
+    if label not in periods.spans:
+        return (
+            f"`{heading}` Period `{cell}`: `{label}` is not a row of the `{PERIOD_TABLE}`; "
+            "add its row or write the Period cell with the fiscal year's own header."
+        )
+    end = periods.ends[label].isoformat()
+    if end == day:
+        return None
+    return (
+        f"`{heading}` Period `{cell}`: the `{PERIOD_TABLE}` ends `{label}` on {end}, not {day}; "
+        f"write `{label} / {end}`, the date alone, or correct the Period table."
+    )
 
 
 # --- 2b: operands readable -----------------------------------------------------------------
@@ -687,7 +871,7 @@ def _numerator_ties(regs: list[Reg]) -> list[str]:
 def _operand_ties(reg: Reg, income: Statement | None, flow: Statement | None) -> list[str]:
     """A fiscal-year register row's EBITDA and cash interest operands against their statement
     lines (found by the fiscal year of its Net debt row); an interim row has no statement tie."""
-    if not reg.fiscal or reg.nd is None:
+    if reg.year is None:
         return []
     column = "Numerator Value" if reg.metric.cover else "Denominator Value"
     pairs = [(income, reg.metric.ebitda, column)]
@@ -697,25 +881,26 @@ def _operand_ties(reg: Reg, income: Statement | None, flow: Statement | None) ->
     for found, label, operand in pairs:
         if found is not None:
             side = Side(operand, reg.cells[operand])
-            issues += _line_tie(found, label, reg.nd["Period"], side, reg.where)
+            issues += _line_tie(found, label, reg.year, side, reg.where)
     return issues
 
 
-def _net_debt_ties(balance: Statement | None, net_debt: list[dict[str, str]]) -> list[str]:
+def _net_debt_ties(
+    balance: Statement | None, net_debt: list[dict[str, str]], periods: Periods
+) -> list[str]:
     """A fiscal-year Net debt row's gross debt and cash against the balance sheet's Total Debt and
     Cash & Equivalents for that year."""
     if balance is None:
         return []
     issues = []
     for record in net_debt:
-        if _FISCAL.fullmatch(record["Period"]) is None:
+        year = periods.fiscal(record["Period"])
+        if year is None:
             continue
         for column, label in (("Gross debt", "Total Debt"), ("Cash", "Cash & Equivalents")):
             if column in record:
                 where = f"`{NET_DEBT_HEADING}` {record['Period']}"
-                issues += _line_tie(
-                    balance, label, record["Period"], Side(column, record[column]), where
-                )
+                issues += _line_tie(balance, label, year, Side(column, record[column]), where)
     return issues
 
 
@@ -827,9 +1012,10 @@ def _reconciliation(lines: list[str], net_debt: list[dict[str, str]]) -> list[st
     row, period = rows[0], rows[0]["Period"]
     ladder = [r["Debt maturing"] for r in _records(lines, LADDER_HEADING) if "Debt maturing" in r]
     figures = [row[c] for c in RECON_COLUMNS]
-    too_long = [c for c in (*figures, *ladder) if len(c) > MAX_CELL and not _gap(c)]
-    if too_long:
-        return [f"`{RECON_HEADING}` or `{LADDER_HEADING}`: `{too_long[0][:30]}...` is not {PLAIN}."]
+    unreadable = [c for c in (*figures, *ladder) if not _readable(c)]
+    if unreadable:  # a cell no tie can read (a long one included) is refused, never skipped
+        shown = unreadable[0] if len(unreadable[0]) <= MAX_CELL else f"{unreadable[0][:30]}..."
+        return [f"`{RECON_HEADING}` or `{LADDER_HEADING}`: `{shown}` is not {PLAIN}."]
     issues = ladder_issues(ladder, figures[0], figures[1], figures[2], period)
     nd = _net_row(net_debt, period)
     if nd is None and net_debt:
@@ -862,10 +1048,13 @@ def cp1_issues(text: str) -> tuple[str, ...]:
     statements = [_statement(lines, spec) for spec in STATEMENTS]
     income, flow, balance = statements
     net_debt = _records(lines, NET_DEBT_HEADING)
-    found_regs, unreadable = _register(lines, net_debt)
+    periods = _periods(lines)
+    found_regs, unreadable = _register(lines, net_debt, periods)
     regs = found_regs or []
     steps: list[Callable[[], list[str]]] = [
-        lambda: _completeness(lines, statements),
+        lambda: _placement(text, TRACKED),
+        lambda: _completeness(lines, statements, periods),
+        lambda: _period_issues(periods, statements, _period_cells(lines, regs, net_debt)),
         lambda: [i for found in statements if found for i in _statement_cells(found)],
         lambda: unreadable,
         lambda: _register_cells(regs, net_debt),
@@ -874,9 +1063,9 @@ def cp1_issues(text: str) -> tuple[str, ...]:
         lambda: _chart_ties(lines, regs) if found_regs is not None else [],
         lambda: _numerator_ties(regs),
         lambda: [i for reg in regs for i in _operand_ties(reg, income, flow)],
-        lambda: _net_debt_ties(balance, net_debt),
+        lambda: _net_debt_ties(balance, net_debt, periods),
         lambda: _statement_sums(balance, BALANCE_RULES),
         lambda: _statement_sums(flow, CASH_RULES),
         lambda: _reconciliation(lines, net_debt),
     ]
-    return tuple(issue for step in steps for issue in step())
+    return tuple(dict.fromkeys(issue for step in steps for issue in step()))
