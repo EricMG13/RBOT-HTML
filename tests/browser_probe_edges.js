@@ -11,6 +11,9 @@
   const header = document.querySelector('header.issuer'), h1 = header.querySelector('h1');
   const seen = {h1Left: h1.getBoundingClientRect().left, headerRight: inner(header, 'right'),
     content: {left: firstText(document.getElementById('content')), right: inner(document.getElementById('content'), 'right')}};
+  // The first block of the body (a card or a state panel draws its own inset, so its text sits inside its edge).
+  const block = [...document.getElementById('content').children].find(el => el.getBoundingClientRect().width);
+  if (block) seen.block = {left: block.getBoundingClientRect().left, right: block.getBoundingClientRect().right};
   const head = document.getElementById('module-head');
   if (head.textContent.trim()) seen.head = {left: firstText(head), right: inner(head, 'right')};
   const browse = document.querySelector('.mobile-modules');

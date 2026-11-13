@@ -5,7 +5,7 @@
   await sleep(400);
   const card = document.querySelector('.inspector-body .evidence-fields > div'), cs = getComputedStyle(card);
   const body = document.querySelector('.inspector-body'), bs = getComputedStyle(body);
-  const seen = {padding: cs.padding, borderLeft: cs.borderLeftWidth, columns: cs.gridTemplateColumns.split(' ')[0],
+  const seen = {padding: cs.padding, borderLeft: cs.borderLeftWidth, display: cs.display, columns: cs.gridTemplateColumns.split(' ')[0],
     valueWidth: card.querySelector(':scope > div').getBoundingClientRect().width,
     bodyContent: body.clientWidth - parseFloat(bs.paddingLeft) - parseFloat(bs.paddingRight)};
   const out = document.createElement('pre'); out.id = 'probe';

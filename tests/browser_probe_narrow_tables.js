@@ -2,7 +2,7 @@
 // width less its padding); the page must not widen, and every table must sit in a focusable scroll region that holds its own overflow.
 (async () => {
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-  for (let i = 0; i < 200 && !document.querySelector('.dates-table, .history-table, .ev-tbl table'); i++) await sleep(50);
+  for (let i = 0; i < 200 && !document.querySelector('.dates-table, .history-table, .ev-tbl table, .overview-part'); i++) await sleep(50);
   const de = document.documentElement, content = document.getElementById('content');
   content.style.width = '340px'; content.style.maxWidth = '340px'; content.style.minWidth = '0';
   await sleep(100);

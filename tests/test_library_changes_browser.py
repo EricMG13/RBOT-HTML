@@ -157,7 +157,7 @@ def two_runs(workspace: Path, *, pack=True, note=None) -> None:
 
 
 def tab_names(dom: str) -> list[str]:
-    tabs = re.search(r'<div class="workspace-tabs"[^>]*>(.*?)</div>', dom, re.DOTALL).group(1)
+    tabs = re.search(r'<div class="workspace-tabs[^"]*"[^>]*>(.*?)</div>', dom, re.DOTALL).group(1)
     return re.findall(r"<a [^>]*>(?:<img[^>]*>)?([A-Za-z ]+)</a>", tabs)
 
 
@@ -170,10 +170,27 @@ def test_the_changes_tab_sits_between_overview_and_modules_and_shows_the_compari
     assert re.search(r'<a href="#W-Changes/changes[^"]*" aria-current="page"', dom)
     assert "Since 30 September 2024 · Credit snapshot" in dom
     assert BOTTOM in dom and "Cash is USD 6,300 million." in dom
-    # Part 2: values as the pack writes them; leverage is Not comparable and shows no difference.
-    assert "<td>6.57x (FY2024)</td><td>6.01x (FY2025)</td>" in dom
+    # Part 2: values as the pack writes them, drawn as the earlier and current side of a card;
+    # leverage is Not comparable and shows no difference on the route or in Evidence.
+    assert (
+        '<p class="chg-v">6.57x (FY2024)</p>' in dom
+        and '<p class="chg-v">6.01x (FY2025)</p>' in dom
+    )
     assert "-0.56" not in dom
-    assert "<td>6300 US$m (2025-03-31)</td><td>39 US$m</td>" in dom
+    assert '<p class="chg-v">6261 US$m (2024-09-30)</p>' in dom
+    assert '<p class="chg-v">6300 US$m (2025-03-31)</p>' in dom
+    # The computed difference is Evidence's: listed there only where the measure is comparable.
+    evidence, console = visit(page, "#W-Evidence/calculations?c=later&m=CP-8")
+    assert console == []
+    assert (
+        '<td class="">Total debt / EBITDA</td><td class="">6.57x (FY2024)</td>'
+        '<td class="">6.01x (FY2025)</td><td class="">\u2014</td>'
+    ) in evidence
+    assert (
+        '<td class="">Cash</td><td class="">6261 US$m (2024-09-30)</td>'
+        '<td class="">6300 US$m (2025-03-31)</td><td class="">39 US$m</td>'
+    ) in evidence
+    assert "-0.56" not in evidence
     # Part 3 and 5: the module row, and Over time with both runs, earliest first.
     assert 'change-status">Unchanged</span>' in dom
     over = dom[dom.index('id="changes-over-time"') :]
@@ -189,7 +206,8 @@ def test_a_first_run_says_so_and_shows_nothing_else(tmp_path):
     dom, console = visit(build(tmp_path), "#W-Changes/changes?c=only")
     assert console == []
     assert tab_names(dom)[2] == "Changes"
-    assert '<p class="changes-first">First run of this pathway</p>' in dom
+    assert "<li>First run of this pathway</li>" in dom
+    assert 'class="empty-state" role="status"' in dom
     for part in ("changes-issuer", "changes-analysis", "changes-over-time", "changes-heading"):
         assert part not in dom
 

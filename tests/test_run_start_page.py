@@ -1525,7 +1525,15 @@ def test_a_finished_runs_report_and_submitter_show_when_the_library_is_served(
     assert f'data-run="{record.id}"' not in dom and "submitted by Dana Reyes" not in dom
     assert "reports/" not in dom
     dom = html.unescape(_served_dom(page, f"/library/#W-Report/history?c={record.id}"))
-    assert record.id.upper() in dom.upper() and "history-table" in dom
+    # The history is a run timeline: the run is an entry named by its date and pathway (its code is
+    # only in the link that opens it, never drawn as text) and is the one being shown.
+    assert '<ol class="tl tl-v">' in dom and '<li class="tl-i" aria-current="true">' in dom
+    assert f'href="#W-Overview/overview?c={record.id}"' in dom
+    assert (
+        '<p class="tl-t">Credit snapshot</p>' in dom
+        and '<div class="tl-d">31 March 2025</div>' in dom
+    )
+    assert f">{record.id}<" not in dom
 
 
 def test_a_reload_with_a_saved_run_shows_that_run_and_never_the_upload_stage(page):
