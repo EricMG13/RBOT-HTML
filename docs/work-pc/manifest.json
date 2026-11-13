@@ -329,6 +329,7 @@
   "docs/reuse/selected-methods/skills/cp-l10-financial-change-screen/references/REF_CP-L30_ADAPTIVE_METHOD.md": "32501899aae063abf81d841323698af5dc3678bf",
   "docs/reuse/selected-methods/skills/cp-l10-financial-change-screen/references/REF_CP-L40_ADAPTIVE_METHOD.md": "ac394b84d98b437adc49c6a7b938d0e841578073",
   "docs/reuse/selected-methods/skills/cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md": "04a5744b85384061998e8b4cb699518707eb41d5",
+  "docs/reviews/2026-11-13-uninstalled-modules.md": "2eb788038552b2da3a5edd729a3811a2184b0dc6",
   "docs/rulings/2026-11-04-live-module-tests.md": "d01faef4b75d3bfa7805d4d05d6577e18e59824d",
   "docs/rulings/2026-11-05-cp2-reader-test.md": "634a0eed7dafec74304149d444c8ea815f5e3996",
   "docs/rulings/2026-11-05-launcher-live-retry.md": "2376c97eb52a147d13855e724a0c507bffa49a88",
@@ -875,6 +876,6 @@
   "tools/work_pc_delta.py": "fa5e9e81c534657f593cb8752a94de10cba0eead",
   "uv.lock": "7a4f05aeff999e9284ec29f34acacdd2619d64b1"
  },
- "head": "4f6b32c7f8ce09e63a2023fc8b31cf5430f3eb86",
- "head_date": "2026-11-13T21:25:37Z"
+ "head": "0d863b7a0253e35d2e220809c348b4b063747778",
+ "head_date": "2026-11-13T21:26:25Z"
 }
