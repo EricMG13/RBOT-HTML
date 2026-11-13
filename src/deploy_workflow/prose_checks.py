@@ -486,35 +486,8 @@ def _is_id_header(header: str) -> bool:
     return folded == "id" or folded.endswith(" id")
 
 
-PERIOD_LABEL = re.compile(
-    r"(?:FY\d+E?|[QH]\d|LTM|\d+M)(?:\s+\d{4})?", re.IGNORECASE
-)  # A period, not an ID.
-
-
-def _calculation_tables(text: str) -> list[list[list[str]]]:
-    """Pipe tables under `## Calculations`, up to the next H2 outside a fence."""
-    kept: list[str] = []
-    in_calculations = fenced = False
-    for line in text.splitlines():
-        if line.lstrip().startswith(FENCE):
-            fenced = not fenced
-        heading = None if fenced else HEADING.fullmatch(line)
-        if heading is not None and len(heading[1]) <= 2:
-            in_calculations = heading[2] == "Calculations"
-        if in_calculations:
-            kept.append(line)
-    return _tables("\n".join(kept))
-
-
 def _register_ids(text: str) -> set[str]:
     ids: set[str] = set()
-    for rows in _calculation_tables(text):
-        header = len(rows) >= 2 and all(re.fullmatch(r":?-+:?", c) for c in rows[1])
-        ids.update(
-            row[0]
-            for row in rows[2 if header else 0 :]
-            if row and _has_letter_and_digit(row[0]) and not PERIOD_LABEL.fullmatch(row[0])
-        )
     for rows in _tables(text):
         if len(rows) < 3 or not all(re.fullmatch(r":?-+:?", c) for c in rows[1]):
             continue

@@ -200,9 +200,19 @@ def test_check_6_whole_token_only() -> None:
 def test_check_6_a_calculations_first_column_id_is_refused_outside_calculations_not() -> None:
     # Owner 2026-11-11 (L1): an ID in `## Calculations` is its first column's letter+digit cell.
     table = "\n## Calculations\n\n| Calculation | Value |\n| --- | --- |\n| C3 | 5 |\n"
-    assert found(prose_issues(bottom("See C3 for it.", table))) == [(6, 7)]
+    assert prose_issues(bottom("See C3 for it.", table)) == ()
     elsewhere = "\n## Gaps\n\n| Metric | Value |\n| --- | --- |\n| M2 | 5 |\n"
     assert prose_issues(bottom("Measure M2 is high.", elsewhere)) == ()
+
+
+def test_check_6_a_label_first_column_cell_is_not_an_id() -> None:
+    table = (
+        "\n## Calculations\n\n| ID | Value |\n| --- | --- |\n| C-1 | 3.1x |\n\n"
+        "| Carried reader metric | Value |\n| --- | --- |\n"
+        "| FY2024 gross debt | USD 25,068 million |\n"
+    )
+    assert prose_issues(bottom("FY2024 gross debt is large.", table)) == ()
+    assert found(prose_issues(bottom("Leverage per C-1 is high.", table))) == [(6, 7)]
 
 
 def test_check_6_an_id_column_cell_is_an_id_in_any_table() -> None:
@@ -726,7 +736,7 @@ def test_a_section_after_a_data_section_is_read_again() -> None:
 
 
 def test_check_6_stays_on_the_reader_passages() -> None:
-    table = "\n## Calculations\n\n| Calculation | Value |\n| --- | --- |\n| C3 | 5 |\n"
+    table = "\n## Calculations\n\n| ID | Value |\n| --- | --- |\n| C3 | 5 |\n"
     assert prose_issues(under("### Method", "Measure C3 is high.") + table) == ()
     assert [c for c, _, _ in named(prose_issues(bottom("Measure C3 is high.", table)))] == [6]
 
