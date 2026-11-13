@@ -1,0 +1,1651 @@
+{
+ "verified_on": "2026-11-13",
+ "method": "Feed addresses were taken from publishers' own pages where a link existed, otherwise probed at conventional paths, and each was fetched live with curl (15 s limit, 5 MB cap, generic client agent, at least 1 s between requests per host). Each body was parsed with Python's xml.etree to read the root element, item count and newest item date, and scanned for DOCTYPE or ENTITY declarations; tier A requires https, RSS 2.0 or Atom, at least one dated item, under 2 MB, no DTD and a newest item within 90 days.",
+ "sources": [
+  {
+   "name": "CMA activity (GOV.UK)",
+   "publisher": "Competition and Markets Authority",
+   "kind": "regulator",
+   "sectors": [
+    "cross-sector",
+    "tmt",
+    "healthcare"
+   ],
+   "region": "UK",
+   "url": "https://www.gov.uk/government/organisations/competition-and-markets-authority.atom",
+   "tier": "A",
+   "format": "atom",
+   "http_status": 200,
+   "items": 20,
+   "newest_item": "2026-11-12",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "UK merger, market and consumer-enforcement activity affecting leveraged issuers.",
+   "note": "Published via GOV.UK (Crown-owned domain)."
+  },
+  {
+   "name": "CMA cases and projects (GOV.UK)",
+   "publisher": "Competition and Markets Authority",
+   "kind": "regulator",
+   "sectors": [
+    "cross-sector",
+    "tmt",
+    "healthcare"
+   ],
+   "region": "UK",
+   "url": "https://www.gov.uk/cma-cases.atom",
+   "tier": "A",
+   "format": "atom",
+   "http_status": 200,
+   "items": 50,
+   "newest_item": "2026-11-11",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Case-level updates on UK merger inquiries and market investigations.",
+   "note": "Published via GOV.UK."
+  },
+  {
+   "name": "Ofcom activity (GOV.UK)",
+   "publisher": "Ofcom",
+   "kind": "regulator",
+   "sectors": [
+    "tmt"
+   ],
+   "region": "UK",
+   "url": "https://www.gov.uk/government/organisations/ofcom.atom",
+   "tier": "A",
+   "format": "atom",
+   "http_status": 200,
+   "items": 20,
+   "newest_item": "2026-10-20",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "UK telecoms, broadcasting and spectrum regulator publications that move TMT credits.",
+   "note": "Ofcom's own domain exposed no feed (see tier C entry); this is its GOV.UK activity feed, which is thin (newest item is the oldest of the set)."
+  },
+  {
+   "name": "MHRA activity (GOV.UK)",
+   "publisher": "MHRA",
+   "kind": "regulator",
+   "sectors": [
+    "healthcare"
+   ],
+   "region": "UK",
+   "url": "https://www.gov.uk/government/organisations/medicines-and-healthcare-products-regulatory-agency.atom",
+   "tier": "A",
+   "format": "atom",
+   "http_status": 200,
+   "items": 20,
+   "newest_item": "2026-11-13",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "UK drug and device approvals and safety decisions.",
+   "note": "Published via GOV.UK."
+  },
+  {
+   "name": "MHRA drug and device alerts (GOV.UK)",
+   "publisher": "MHRA",
+   "kind": "regulator",
+   "sectors": [
+    "healthcare"
+   ],
+   "region": "UK",
+   "url": "https://www.gov.uk/drug-device-alerts.atom",
+   "tier": "A",
+   "format": "atom",
+   "http_status": 200,
+   "items": 50,
+   "newest_item": "2026-11-12",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Recalls and safety alerts for medicines and devices that can hit pharma and medtech issuers.",
+   "note": "Published via GOV.UK."
+  },
+  {
+   "name": "UK CAA activity (GOV.UK)",
+   "publisher": "UK Civil Aviation Authority",
+   "kind": "regulator",
+   "sectors": [
+    "aerospace-defence"
+   ],
+   "region": "UK",
+   "url": "https://www.gov.uk/government/organisations/civil-aviation-authority.atom",
+   "tier": "A",
+   "format": "atom",
+   "http_status": 200,
+   "items": 20,
+   "newest_item": "2026-09-25",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "UK aviation safety and economic regulation affecting airlines, airports and aerospace issuers.",
+   "note": "Published via GOV.UK."
+  },
+  {
+   "name": "Insolvency Service activity (GOV.UK)",
+   "publisher": "The Insolvency Service",
+   "kind": "regulator",
+   "sectors": [
+    "leveraged-finance",
+    "cross-sector"
+   ],
+   "region": "UK",
+   "url": "https://www.gov.uk/government/organisations/insolvency-service.atom",
+   "tier": "A",
+   "format": "atom",
+   "http_status": 200,
+   "items": 20,
+   "newest_item": "2026-11-13",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "UK insolvency policy, enforcement and statistics.",
+   "note": "Published via GOV.UK."
+  },
+  {
+   "name": "HM Treasury activity (GOV.UK)",
+   "publisher": "HM Treasury",
+   "kind": "regulator",
+   "sectors": [
+    "cross-sector"
+   ],
+   "region": "UK",
+   "url": "https://www.gov.uk/government/organisations/hm-treasury.atom",
+   "tier": "A",
+   "format": "atom",
+   "http_status": 200,
+   "items": 20,
+   "newest_item": "2026-11-12",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "UK fiscal and financial-sector policy announcements.",
+   "note": "Published via GOV.UK."
+  },
+  {
+   "name": "The Gazette insolvency notices",
+   "publisher": "The Gazette (TSO for HM Government)",
+   "kind": "regulator",
+   "sectors": [
+    "leveraged-finance",
+    "cross-sector"
+   ],
+   "region": "UK",
+   "url": "https://www.thegazette.co.uk/insolvency/notice/data.feed",
+   "tier": "A",
+   "format": "atom",
+   "http_status": 200,
+   "items": 10,
+   "newest_item": "2026-11-12",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Official UK corporate insolvency and restructuring notices.",
+   "note": "Feed title is generic ('Search Result'); the volume of notices is high relative to the 10 items returned. Reuse terms (Open Government Licence) not read."
+  },
+  {
+   "name": "FCA news",
+   "publisher": "Financial Conduct Authority",
+   "kind": "regulator",
+   "sectors": [
+    "leveraged-finance",
+    "cross-sector"
+   ],
+   "region": "UK",
+   "url": "https://www.fca.org.uk/news/rss.xml",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 20,
+   "newest_item": "2026-11-12",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "UK conduct regulator enforcement, market-abuse and listing-rule news.",
+   "note": "pubDate is not RFC 822 ('Thursday, November 12, 2026 - 10:05'); a strict RFC 822 date parser will reject it. Parsed here with an explicit format; no timezone given."
+  },
+  {
+   "name": "Bank of England news",
+   "publisher": "Bank of England",
+   "kind": "regulator",
+   "sectors": [
+    "leveraged-finance",
+    "cross-sector"
+   ],
+   "region": "UK",
+   "url": "https://www.bankofengland.co.uk/rss/news",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 50,
+   "newest_item": "2026-11-13",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Monetary policy, PRA and financial-stability announcements.",
+   "note": ""
+  },
+  {
+   "name": "Bank of England publications",
+   "publisher": "Bank of England",
+   "kind": "research",
+   "sectors": [
+    "leveraged-finance",
+    "cross-sector"
+   ],
+   "region": "UK",
+   "url": "https://www.bankofengland.co.uk/rss/publications",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 50,
+   "newest_item": "2026-11-13",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Reports, working papers and Financial Stability Report material on UK credit conditions.",
+   "note": ""
+  },
+  {
+   "name": "European Commission press corner (all press releases)",
+   "publisher": "European Commission",
+   "kind": "regulator",
+   "sectors": [
+    "cross-sector",
+    "tmt",
+    "healthcare",
+    "aerospace-defence"
+   ],
+   "region": "EU",
+   "url": "https://ec.europa.eu/commission/presscorner/api/rss?language=en",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 10,
+   "newest_item": "2026-11-13",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Carries DG COMP merger and state-aid decisions and EU sector policy; not filtered to competition, so volume includes unrelated items.",
+   "note": "Only 10 items returned, so busy days can push items out between polls."
+  },
+  {
+   "name": "European Commission digital strategy / connectivity news",
+   "publisher": "European Commission (DG CONNECT)",
+   "kind": "regulator",
+   "sectors": [
+    "tmt"
+   ],
+   "region": "EU",
+   "url": "https://digital-strategy.ec.europa.eu/en/rss.xml",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 10,
+   "newest_item": "2026-11-06",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "EU telecoms, spectrum, connectivity and Digital Markets Act policy.",
+   "note": ""
+  },
+  {
+   "name": "BEREC news",
+   "publisher": "BEREC",
+   "kind": "regulator",
+   "sectors": [
+    "tmt"
+   ],
+   "region": "EU",
+   "url": "https://www.berec.europa.eu/en/rss.xml",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 10,
+   "newest_item": "2026-11-11",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Body of European telecoms regulators: market, net-neutrality and consultation outputs.",
+   "note": ""
+  },
+  {
+   "name": "DOJ Antitrust Division press releases",
+   "publisher": "US Department of Justice",
+   "kind": "regulator",
+   "sectors": [
+    "cross-sector",
+    "tmt",
+    "healthcare"
+   ],
+   "region": "US",
+   "url": "https://www.justice.gov/news/rss?type%5B0%5D=press_release&field_component=376&require_all=0",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 25,
+   "newest_item": "2026-11-06",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "US merger challenges, consent decrees and criminal antitrust actions.",
+   "note": "The component filter 376 is assumed to be the Antitrust Division from the publisher's news-feeds page; items seen were antitrust statements. Query-string URL."
+  },
+  {
+   "name": "Autorité de la concurrence",
+   "publisher": "Autorité de la concurrence",
+   "kind": "regulator",
+   "sectors": [
+    "cross-sector",
+    "tmt"
+   ],
+   "region": "FR",
+   "url": "https://www.autoritedelaconcurrence.fr/fr/rss.xml",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 10,
+   "newest_item": "2026-09-24",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "French merger control and sanctions, including telecoms and media cases.",
+   "note": "Feed in French; 10 items."
+  },
+  {
+   "name": "FDA press releases",
+   "publisher": "US FDA",
+   "kind": "regulator",
+   "sectors": [
+    "healthcare"
+   ],
+   "region": "US",
+   "url": "https://www.fda.gov/about-fda/contact-fda/stay-informed/rss-feeds/press-releases/rss.xml",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 20,
+   "newest_item": "2026-11-09",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "FDA announcements on approvals, enforcement and policy.",
+   "note": ""
+  },
+  {
+   "name": "FDA Drugs: what's new",
+   "publisher": "US FDA",
+   "kind": "regulator",
+   "sectors": [
+    "healthcare"
+   ],
+   "region": "US",
+   "url": "https://www.fda.gov/about-fda/contact-fda/stay-informed/rss-feeds/drugs/rss.xml",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 20,
+   "newest_item": "2026-11-12",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Drug approvals, safety communications and guidance updates.",
+   "note": ""
+  },
+  {
+   "name": "FDA recalls and safety alerts",
+   "publisher": "US FDA",
+   "kind": "regulator",
+   "sectors": [
+    "healthcare"
+   ],
+   "region": "US",
+   "url": "https://www.fda.gov/about-fda/contact-fda/stay-informed/rss-feeds/recalls/rss.xml",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 20,
+   "newest_item": "2026-11-12",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Product recalls that can affect pharma, device and consumer-health issuers.",
+   "note": ""
+  },
+  {
+   "name": "EMA news and press releases",
+   "publisher": "European Medicines Agency",
+   "kind": "regulator",
+   "sectors": [
+    "healthcare"
+   ],
+   "region": "EU",
+   "url": "https://www.ema.europa.eu/en/news.xml",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 7,
+   "newest_item": "2026-11-13",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "CHMP opinions and EU drug authorisations.",
+   "note": "Only 7 items."
+  },
+  {
+   "name": "FAA news",
+   "publisher": "US Federal Aviation Administration",
+   "kind": "regulator",
+   "sectors": [
+    "aerospace-defence"
+   ],
+   "region": "US",
+   "url": "https://www.faa.gov/rss.xml",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 10,
+   "newest_item": "2026-11-12",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "US aviation safety and certification actions affecting aerospace issuers.",
+   "note": ""
+  },
+  {
+   "name": "EASA news",
+   "publisher": "European Union Aviation Safety Agency",
+   "kind": "regulator",
+   "sectors": [
+    "aerospace-defence"
+   ],
+   "region": "EU",
+   "url": "https://www.easa.europa.eu/en/newsroom-and-events/news/feed.xml",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 50,
+   "newest_item": "2026-11-12",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "EU airworthiness directives and certification news.",
+   "note": ""
+  },
+  {
+   "name": "SEC press releases",
+   "publisher": "US SEC",
+   "kind": "regulator",
+   "sectors": [
+    "leveraged-finance",
+    "cross-sector"
+   ],
+   "region": "US",
+   "url": "https://www.sec.gov/news/pressreleases.rss",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 25,
+   "newest_item": "2026-11-10",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "US securities enforcement and rule-making.",
+   "note": "SEC fair-access policy expects a declared user agent with contact details; the generic test agent worked for this feed but other SEC feeds returned 403."
+  },
+  {
+   "name": "SEC speeches and statements",
+   "publisher": "US SEC",
+   "kind": "regulator",
+   "sectors": [
+    "leveraged-finance",
+    "cross-sector"
+   ],
+   "region": "US",
+   "url": "https://www.sec.gov/news/speeches-statements.rss",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 25,
+   "newest_item": "2026-11-12",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Commissioner statements on disclosure and market structure.",
+   "note": "Same SEC user-agent caveat as the press-release feed."
+  },
+  {
+   "name": "EBA news",
+   "publisher": "European Banking Authority",
+   "kind": "regulator",
+   "sectors": [
+    "leveraged-finance"
+   ],
+   "region": "EU",
+   "url": "https://www.eba.europa.eu/rss.xml",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 10,
+   "newest_item": "2026-11-09",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "EU bank prudential standards that govern lender appetite for leveraged loans.",
+   "note": "Only 10 items."
+  },
+  {
+   "name": "ECB press",
+   "publisher": "European Central Bank",
+   "kind": "regulator",
+   "sectors": [
+    "leveraged-finance",
+    "cross-sector"
+   ],
+   "region": "EU",
+   "url": "https://www.ecb.europa.eu/rss/press.html",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 15,
+   "newest_item": "2026-11-13",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Rate decisions and policy announcements.",
+   "note": ""
+  },
+  {
+   "name": "ECB publications",
+   "publisher": "European Central Bank",
+   "kind": "research",
+   "sectors": [
+    "leveraged-finance",
+    "cross-sector"
+   ],
+   "region": "EU",
+   "url": "https://www.ecb.europa.eu/rss/pub.html",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 15,
+   "newest_item": "2026-11-12",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "ECB working papers, financial stability reviews and economic bulletins.",
+   "note": ""
+  },
+  {
+   "name": "ECB Banking Supervision press",
+   "publisher": "European Central Bank",
+   "kind": "regulator",
+   "sectors": [
+    "leveraged-finance"
+   ],
+   "region": "EU",
+   "url": "https://www.bankingsupervision.europa.eu/rss/press.html",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 15,
+   "newest_item": "2026-11-06",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Leveraged-lending guidance and supervisory decisions.",
+   "note": "Distinct domain from the main ECB site; counts as the third ECB feed."
+  },
+  {
+   "name": "Federal Reserve press releases",
+   "publisher": "US Federal Reserve",
+   "kind": "regulator",
+   "sectors": [
+    "leveraged-finance",
+    "cross-sector"
+   ],
+   "region": "US",
+   "url": "https://www.federalreserve.gov/feeds/press_all.xml",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 20,
+   "newest_item": "2026-11-12",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "US monetary policy and supervisory announcements.",
+   "note": ""
+  },
+  {
+   "name": "Federal Reserve monetary policy",
+   "publisher": "US Federal Reserve",
+   "kind": "regulator",
+   "sectors": [
+    "leveraged-finance",
+    "cross-sector"
+   ],
+   "region": "US",
+   "url": "https://www.federalreserve.gov/feeds/press_monetary.xml",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 15,
+   "newest_item": "2026-11-12",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "FOMC statements that move rates and high-yield spreads.",
+   "note": ""
+  },
+  {
+   "name": "Financial Stability Board",
+   "publisher": "Financial Stability Board",
+   "kind": "regulator",
+   "sectors": [
+    "leveraged-finance"
+   ],
+   "region": "Global",
+   "url": "https://www.fsb.org/feed/",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 10,
+   "newest_item": "2026-11-13",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Global work on non-bank leverage and credit-market stability.",
+   "note": ""
+  },
+  {
+   "name": "US Courts judiciary news",
+   "publisher": "Administrative Office of the US Courts",
+   "kind": "regulator",
+   "sectors": [
+    "leveraged-finance"
+   ],
+   "region": "US",
+   "url": "https://www.uscourts.gov/news/rss",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 10,
+   "newest_item": "2026-11-02",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Federal judiciary news including bankruptcy statistics.",
+   "note": "General judiciary news, not case-level bankruptcy dockets; no open case-level docket feed was found."
+  },
+  {
+   "name": "BBC News business",
+   "publisher": "BBC",
+   "kind": "news",
+   "sectors": [
+    "cross-sector"
+   ],
+   "region": "UK",
+   "url": "https://feeds.bbci.co.uk/news/business/rss.xml",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 55,
+   "newest_item": "2026-11-13",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Broad UK business headlines.",
+   "note": "BBC terms limit feed reuse to non-commercial personal use; not read in full."
+  },
+  {
+   "name": "BBC News technology",
+   "publisher": "BBC",
+   "kind": "news",
+   "sectors": [
+    "tmt"
+   ],
+   "region": "UK",
+   "url": "https://feeds.bbci.co.uk/news/technology/rss.xml",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 21,
+   "newest_item": "2026-11-13",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Telecom, media and technology headlines.",
+   "note": "BBC terms limit feed reuse to non-commercial personal use; not read in full."
+  },
+  {
+   "name": "The Guardian business",
+   "publisher": "The Guardian",
+   "kind": "news",
+   "sectors": [
+    "cross-sector"
+   ],
+   "region": "UK",
+   "url": "https://www.theguardian.com/uk/business/rss",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 40,
+   "newest_item": "2026-11-13",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "UK corporate and economy news.",
+   "note": ""
+  },
+  {
+   "name": "The Guardian telecommunications",
+   "publisher": "The Guardian",
+   "kind": "news",
+   "sectors": [
+    "tmt"
+   ],
+   "region": "UK",
+   "url": "https://www.theguardian.com/business/telecoms/rss",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 20,
+   "newest_item": "2026-11-07",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Telecoms industry coverage.",
+   "note": ""
+  },
+  {
+   "name": "The Guardian media",
+   "publisher": "The Guardian",
+   "kind": "news",
+   "sectors": [
+    "tmt"
+   ],
+   "region": "UK",
+   "url": "https://www.theguardian.com/media/rss",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 13,
+   "newest_item": "2026-11-13",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Media-sector news.",
+   "note": "Only 13 items."
+  },
+  {
+   "name": "CNBC Business News",
+   "publisher": "CNBC",
+   "kind": "news",
+   "sectors": [
+    "cross-sector"
+   ],
+   "region": "US",
+   "url": "https://www.cnbc.com/id/10001147/device/rss/rss.html",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 30,
+   "newest_item": "2026-11-12",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "US corporate and market headlines.",
+   "note": ""
+  },
+  {
+   "name": "CNBC Health and Science",
+   "publisher": "CNBC",
+   "kind": "news",
+   "sectors": [
+    "healthcare"
+   ],
+   "region": "US",
+   "url": "https://www.cnbc.com/id/10000108/device/rss/rss.html",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 30,
+   "newest_item": "2026-11-11",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "US healthcare and pharma headlines.",
+   "note": ""
+  },
+  {
+   "name": "NYT Business",
+   "publisher": "The New York Times",
+   "kind": "news",
+   "sectors": [
+    "cross-sector",
+    "leveraged-finance"
+   ],
+   "region": "US",
+   "url": "https://rss.nytimes.com/services/xml/rss/nyt/Business.xml",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 49,
+   "newest_item": "2026-11-13",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Headlines on deals, bankruptcies and regulation.",
+   "note": "Headlines, links and summaries only; article bodies are paywalled but feed is open. Terms not read."
+  },
+  {
+   "name": "WSJ Markets",
+   "publisher": "The Wall Street Journal (Dow Jones)",
+   "kind": "news",
+   "sectors": [
+    "leveraged-finance",
+    "cross-sector"
+   ],
+   "region": "US",
+   "url": "https://feeds.content.dowjones.io/public/rss/RSSMarketsMain",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 61,
+   "newest_item": "2026-11-13",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Market and credit headlines.",
+   "note": "Headline feed only; article bodies are paywalled. Terms not read."
+  },
+  {
+   "name": "Light Reading",
+   "publisher": "Light Reading (Informa)",
+   "kind": "news",
+   "sectors": [
+    "tmt"
+   ],
+   "region": "Global",
+   "url": "https://www.lightreading.com/rss.xml",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 50,
+   "newest_item": "2026-11-12",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Telecom operator, vendor and regulatory news.",
+   "note": ""
+  },
+  {
+   "name": "Fierce Network",
+   "publisher": "Fierce Network (Questex)",
+   "kind": "news",
+   "sectors": [
+    "tmt"
+   ],
+   "region": "US",
+   "url": "https://www.fierce-network.com/rss.xml",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 10,
+   "newest_item": "2026-11-11",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Telecom, cable and wireless news.",
+   "note": "The older address /rss/xml also works but uses a non-RFC 822 pubDate; this /rss.xml one parses with standard dates."
+  },
+  {
+   "name": "Telecoms.com",
+   "publisher": "Telecoms.com (Informa)",
+   "kind": "news",
+   "sectors": [
+    "tmt"
+   ],
+   "region": "Global",
+   "url": "https://www.telecoms.com/rss.xml",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 50,
+   "newest_item": "2026-11-13",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Operator and telecom deal news.",
+   "note": "The /feed address returns 403 to the test client; /rss.xml works."
+  },
+  {
+   "name": "Mobile World Live",
+   "publisher": "GSMA",
+   "kind": "news",
+   "sectors": [
+    "tmt"
+   ],
+   "region": "Global",
+   "url": "https://www.mobileworldlive.com/feed/",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 30,
+   "newest_item": "2026-11-13",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Mobile-operator industry news.",
+   "note": ""
+  },
+  {
+   "name": "RCR Wireless News",
+   "publisher": "RCR Wireless",
+   "kind": "news",
+   "sectors": [
+    "tmt"
+   ],
+   "region": "US",
+   "url": "https://www.rcrwireless.com/feed",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 10,
+   "newest_item": "2026-11-13",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Wireless and spectrum news.",
+   "note": "Only 10 items."
+  },
+  {
+   "name": "Advanced Television",
+   "publisher": "Advanced Television",
+   "kind": "news",
+   "sectors": [
+    "tmt"
+   ],
+   "region": "Global",
+   "url": "https://advanced-television.com/feed/",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 10,
+   "newest_item": "2026-11-13",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Pay-TV, broadcast and streaming industry news.",
+   "note": "Only 10 items."
+  },
+  {
+   "name": "Fierce Pharma",
+   "publisher": "Fierce Pharma (Questex)",
+   "kind": "news",
+   "sectors": [
+    "healthcare"
+   ],
+   "region": "US",
+   "url": "https://www.fiercepharma.com/rss.xml",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 10,
+   "newest_item": "2026-11-11",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Pharma deals, approvals and earnings.",
+   "note": "The /rss/xml address returns 403 to the test client; /rss.xml works."
+  },
+  {
+   "name": "Fierce Biotech",
+   "publisher": "Fierce Biotech (Questex)",
+   "kind": "news",
+   "sectors": [
+    "healthcare"
+   ],
+   "region": "US",
+   "url": "https://www.fiercebiotech.com/rss.xml",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 10,
+   "newest_item": "2026-11-10",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Biotech financings, trials and approvals.",
+   "note": "The /rss/xml address returns 403 to the test client; /rss.xml works."
+  },
+  {
+   "name": "Endpoints News",
+   "publisher": "Endpoints News",
+   "kind": "news",
+   "sectors": [
+    "healthcare"
+   ],
+   "region": "US",
+   "url": "https://endpts.com/feed/",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 24,
+   "newest_item": "2026-11-13",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Drug development and regulatory news.",
+   "note": "Publisher redirected endpts.com to endpoints.news."
+  },
+  {
+   "name": "STAT",
+   "publisher": "STAT",
+   "kind": "news",
+   "sectors": [
+    "healthcare"
+   ],
+   "region": "US",
+   "url": "https://www.statnews.com/feed/",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 20,
+   "newest_item": "2026-11-13",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Healthcare, pharma and regulation reporting.",
+   "note": ""
+  },
+  {
+   "name": "MedTech Dive",
+   "publisher": "Industry Dive",
+   "kind": "news",
+   "sectors": [
+    "healthcare"
+   ],
+   "region": "US",
+   "url": "https://www.medtechdive.com/feeds/news/",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 10,
+   "newest_item": "2026-11-12",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Medical-device approvals, deals and recalls.",
+   "note": "Only 10 items."
+  },
+  {
+   "name": "BioPharma Dive",
+   "publisher": "Industry Dive",
+   "kind": "news",
+   "sectors": [
+    "healthcare"
+   ],
+   "region": "US",
+   "url": "https://www.biopharmadive.com/feeds/news/",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 10,
+   "newest_item": "2026-11-12",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Pharma and biotech corporate news.",
+   "note": "Only 10 items."
+  },
+  {
+   "name": "Healthcare Dive",
+   "publisher": "Industry Dive",
+   "kind": "news",
+   "sectors": [
+    "healthcare"
+   ],
+   "region": "US",
+   "url": "https://www.healthcaredive.com/feeds/news/",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 10,
+   "newest_item": "2026-11-12",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Providers, payers and CMS policy news.",
+   "note": "Only 10 items."
+  },
+  {
+   "name": "FlightGlobal",
+   "publisher": "FlightGlobal (Cirium)",
+   "kind": "news",
+   "sectors": [
+    "aerospace-defence"
+   ],
+   "region": "Global",
+   "url": "https://www.flightglobal.com/rss",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 10,
+   "newest_item": "2026-11-13",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Aerospace, airline and manufacturer news.",
+   "note": "Redirects to /feed/; only 10 items."
+  },
+  {
+   "name": "SpaceNews",
+   "publisher": "SpaceNews",
+   "kind": "news",
+   "sectors": [
+    "aerospace-defence",
+    "tmt"
+   ],
+   "region": "Global",
+   "url": "https://spacenews.com/feed/",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 15,
+   "newest_item": "2026-11-13",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Satellite and launch industry news relevant to space and telecom issuers.",
+   "note": ""
+  },
+  {
+   "name": "Breaking Defense",
+   "publisher": "Breaking Defense",
+   "kind": "news",
+   "sectors": [
+    "aerospace-defence"
+   ],
+   "region": "US",
+   "url": "https://breakingdefense.com/feed/",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 15,
+   "newest_item": "2026-11-12",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Defence budgets, programmes and contracts.",
+   "note": ""
+  },
+  {
+   "name": "Defense News",
+   "publisher": "Defense News (Sightline Media)",
+   "kind": "news",
+   "sectors": [
+    "aerospace-defence"
+   ],
+   "region": "US",
+   "url": "https://www.defensenews.com/arc/outboundfeeds/rss/?outputType=xml",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 10,
+   "newest_item": "2026-11-12",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Defence procurement and industry news.",
+   "note": "Redirects to /feed/; only 10 items."
+  },
+  {
+   "name": "Defense One",
+   "publisher": "Defense One (Atlantic Media)",
+   "kind": "news",
+   "sectors": [
+    "aerospace-defence"
+   ],
+   "region": "US",
+   "url": "https://www.defenseone.com/rss/all/",
+   "tier": "A",
+   "format": "rss",
+   "http_status": 200,
+   "items": 22,
+   "newest_item": "2026-11-13",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "US defence policy and acquisition coverage.",
+   "note": ""
+  },
+  {
+   "name": "BIS and FSI publications",
+   "publisher": "Bank for International Settlements",
+   "kind": "research",
+   "sectors": [
+    "leveraged-finance",
+    "cross-sector"
+   ],
+   "region": "Global",
+   "url": "https://www.bis.org/doclist/bis_fsi_publs.rss",
+   "tier": "B",
+   "format": null,
+   "http_status": 200,
+   "items": 20,
+   "newest_item": "2026-11-12",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Global bank and market research.",
+   "note": "Root element is rdf:RDF (RSS 1.0), not RSS 2.0 or Atom; dc:date dates present."
+  },
+  {
+   "name": "BIS working papers",
+   "publisher": "Bank for International Settlements",
+   "kind": "research",
+   "sectors": [
+    "leveraged-finance",
+    "cross-sector"
+   ],
+   "region": "Global",
+   "url": "https://www.bis.org/doclist/wppubls.rss",
+   "tier": "B",
+   "format": null,
+   "http_status": 200,
+   "items": 25,
+   "newest_item": "2026-11-13",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Credit-market and monetary research papers.",
+   "note": "Root element is rdf:RDF (RSS 1.0), not RSS 2.0 or Atom; dc:date dates present."
+  },
+  {
+   "name": "BIS central bankers' speeches",
+   "publisher": "Bank for International Settlements",
+   "kind": "regulator",
+   "sectors": [
+    "leveraged-finance",
+    "cross-sector"
+   ],
+   "region": "Global",
+   "url": "https://www.bis.org/doclist/cbspeeches.rss",
+   "tier": "B",
+   "format": null,
+   "http_status": 200,
+   "items": 50,
+   "newest_item": "2026-11-12",
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "Speeches by central-bank officials.",
+   "note": "Root element is rdf:RDF (RSS 1.0), not RSS 2.0 or Atom; dc:date dates present."
+  },
+  {
+   "name": "ESMA news",
+   "publisher": "European Securities and Markets Authority",
+   "kind": "regulator",
+   "sectors": [
+    "leveraged-finance"
+   ],
+   "region": "EU",
+   "url": "https://www.esma.europa.eu/rss.xml",
+   "tier": "B",
+   "format": "rss",
+   "http_status": 200,
+   "items": 10,
+   "newest_item": null,
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "EU market-supervisor decisions and consultations.",
+   "note": "RSS 2.0 parses, 10 items, but items carry no pubDate or dc:date (date is only inside the description HTML), so no dated item."
+  },
+  {
+   "name": "Bundesnetzagentur press releases",
+   "publisher": "Bundesnetzagentur",
+   "kind": "regulator",
+   "sectors": [
+    "tmt"
+   ],
+   "region": "DE",
+   "url": "https://www.bundesnetzagentur.de/SiteGlobals/Functions/RSSFeed/DE/RSSNewsfeed/RSSNewsfeed_Pressemitteilungen.xml",
+   "tier": "B",
+   "format": "rss",
+   "http_status": 200,
+   "items": 10,
+   "newest_item": null,
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "German telecoms, energy and rail regulator decisions.",
+   "note": "RSS 2.0 parses, 10 items, but items carry no date elements; item links use http://."
+  },
+  {
+   "name": "LSTA",
+   "publisher": "Loan Syndications and Trading Association",
+   "kind": "research",
+   "sectors": [
+    "leveraged-finance"
+   ],
+   "region": "US",
+   "url": "https://www.lsta.org/feed/",
+   "tier": "B",
+   "format": "rss",
+   "http_status": 200,
+   "items": 0,
+   "newest_item": null,
+   "over_2mb": false,
+   "has_dtd": false,
+   "why_relevant": "US leveraged-loan market body.",
+   "note": "WordPress feed returned valid RSS with zero items."
+  },
+  {
+   "name": "Bundeskartellamt news",
+   "publisher": "Bundeskartellamt",
+   "kind": "regulator",
+   "sectors": [
+    "cross-sector",
+    "tmt"
+   ],
+   "region": "DE",
+   "url": "https://www.bundeskartellamt.de/DE/Service/RSS/_documents/rssnewsfeed.xml?nn=52038",
+   "tier": "B",
+   "format": null,
+   "http_status": null,
+   "items": null,
+   "newest_item": null,
+   "over_2mb": null,
+   "has_dtd": null,
+   "why_relevant": "German merger control and abuse cases.",
+   "note": "Address taken from the publisher's own RSS page, but the fetch timed out after 15 s; a HEAD request returned 303 to /error_path/400.html, so the endpoint appears to refuse the automated client."
+  },
+  {
+   "name": "FTC press releases",
+   "publisher": "US Federal Trade Commission",
+   "kind": "regulator",
+   "sectors": [
+    "cross-sector",
+    "healthcare"
+   ],
+   "region": "US",
+   "url": null,
+   "tier": "C",
+   "format": null,
+   "http_status": null,
+   "items": null,
+   "newest_item": null,
+   "over_2mb": null,
+   "has_dtd": null,
+   "why_relevant": "US merger and consumer-protection cases.",
+   "note": "Guessed feed address and the FTC homepage and press-release page all returned 404 from AkamaiGHost to the test client, so no feed address could be confirmed."
+  },
+  {
+   "name": "FCC",
+   "publisher": "US Federal Communications Commission",
+   "kind": "regulator",
+   "sectors": [
+    "tmt"
+   ],
+   "region": "US",
+   "url": null,
+   "tier": "C",
+   "format": null,
+   "http_status": null,
+   "items": null,
+   "newest_item": null,
+   "over_2mb": null,
+   "has_dtd": null,
+   "why_relevant": "US spectrum, licence and merger-review decisions.",
+   "note": "Pages and guessed feed addresses returned 403 Access Denied to the test client; no feed address could be confirmed."
+  },
+  {
+   "name": "Ofcom own domain",
+   "publisher": "Ofcom",
+   "kind": "regulator",
+   "sectors": [
+    "tmt"
+   ],
+   "region": "UK",
+   "url": null,
+   "tier": "C",
+   "format": null,
+   "http_status": null,
+   "items": null,
+   "newest_item": null,
+   "over_2mb": null,
+   "has_dtd": null,
+   "why_relevant": "UK telecoms regulator.",
+   "note": "ofcom.org.uk homepage fetched; no alternate feed link in its HTML and /rss paths returned 404. GOV.UK activity feed is listed above."
+  },
+  {
+   "name": "ACM (NL)",
+   "publisher": "Autoriteit Consument & Markt",
+   "kind": "regulator",
+   "sectors": [
+    "cross-sector",
+    "tmt"
+   ],
+   "region": "NL",
+   "url": null,
+   "tier": "C",
+   "format": null,
+   "http_status": null,
+   "items": null,
+   "newest_item": null,
+   "over_2mb": null,
+   "has_dtd": null,
+   "why_relevant": "Dutch competition and telecoms regulator.",
+   "note": "Homepage fetched with no feed link; /rss, /rss.xml and RSS-page guesses returned 404."
+  },
+  {
+   "name": "ARCEP",
+   "publisher": "ARCEP",
+   "kind": "regulator",
+   "sectors": [
+    "tmt"
+   ],
+   "region": "FR",
+   "url": null,
+   "tier": "C",
+   "format": null,
+   "http_status": null,
+   "items": null,
+   "newest_item": null,
+   "over_2mb": null,
+   "has_dtd": null,
+   "why_relevant": "French telecoms regulator.",
+   "note": "Homepage fetched with no feed link; guessed feed addresses returned 404 or 500 (HTML)."
+  },
+  {
+   "name": "EC DG Competition site",
+   "publisher": "European Commission DG COMP",
+   "kind": "regulator",
+   "sectors": [
+    "cross-sector"
+   ],
+   "region": "EU",
+   "url": null,
+   "tier": "C",
+   "format": null,
+   "http_status": null,
+   "items": null,
+   "newest_item": null,
+   "over_2mb": null,
+   "has_dtd": null,
+   "why_relevant": "EU merger and antitrust cases.",
+   "note": "competition-policy.ec.europa.eu exposed no feed link and /rss.xml returned 404; DG COMP decisions appear in the press-corner feed listed above."
+  },
+  {
+   "name": "NICE",
+   "publisher": "National Institute for Health and Care Excellence",
+   "kind": "regulator",
+   "sectors": [
+    "healthcare"
+   ],
+   "region": "UK",
+   "url": null,
+   "tier": "C",
+   "format": null,
+   "http_status": null,
+   "items": null,
+   "newest_item": null,
+   "over_2mb": null,
+   "has_dtd": null,
+   "why_relevant": "UK health technology appraisals.",
+   "note": "Homepage and guessed feed addresses returned 404 or HTML; no feed link found."
+  },
+  {
+   "name": "CMS",
+   "publisher": "US Centers for Medicare & Medicaid Services",
+   "kind": "regulator",
+   "sectors": [
+    "healthcare"
+   ],
+   "region": "US",
+   "url": null,
+   "tier": "C",
+   "format": null,
+   "http_status": null,
+   "items": null,
+   "newest_item": null,
+   "over_2mb": null,
+   "has_dtd": null,
+   "why_relevant": "US reimbursement decisions that drive provider and device issuers.",
+   "note": "The newsroom RSS-feeds page loaded but exposed no feed address in its HTML; guessed addresses returned 404."
+  },
+  {
+   "name": "SEC litigation releases and EDGAR 8-K Atom",
+   "publisher": "US SEC",
+   "kind": "regulator",
+   "sectors": [
+    "leveraged-finance"
+   ],
+   "region": "US",
+   "url": null,
+   "tier": "C",
+   "format": null,
+   "http_status": null,
+   "items": null,
+   "newest_item": null,
+   "over_2mb": null,
+   "has_dtd": null,
+   "why_relevant": "Litigation releases and current 8-K filings.",
+   "note": "Guessed addresses returned 403 to the test client (SEC requires a declared user agent); no address confirmed."
+  },
+  {
+   "name": "IMF",
+   "publisher": "International Monetary Fund",
+   "kind": "research",
+   "sectors": [
+    "cross-sector"
+   ],
+   "region": "Global",
+   "url": null,
+   "tier": "C",
+   "format": null,
+   "http_status": null,
+   "items": null,
+   "newest_item": null,
+   "over_2mb": null,
+   "has_dtd": null,
+   "why_relevant": "Global macro and financial-stability research.",
+   "note": "Homepage and guessed feed addresses returned 403 Access Denied to the test client."
+  },
+  {
+   "name": "Moody's",
+   "publisher": "Moody's Ratings",
+   "kind": "ratings",
+   "sectors": [
+    "leveraged-finance"
+   ],
+   "region": "Global",
+   "url": null,
+   "tier": "C",
+   "format": null,
+   "http_status": null,
+   "items": null,
+   "newest_item": null,
+   "over_2mb": null,
+   "has_dtd": null,
+   "why_relevant": "Ratings actions.",
+   "note": "Homepage fetched with no feed link; /rss and /rss.xml resolve to an error page. No open feed found."
+  },
+  {
+   "name": "S&P Global Ratings",
+   "publisher": "S&P Global Ratings",
+   "kind": "ratings",
+   "sectors": [
+    "leveraged-finance"
+   ],
+   "region": "Global",
+   "url": null,
+   "tier": "C",
+   "format": null,
+   "http_status": null,
+   "items": null,
+   "newest_item": null,
+   "over_2mb": null,
+   "has_dtd": null,
+   "why_relevant": "Ratings actions.",
+   "note": "Ratings pages and /rss returned 403 to the test client. No open feed found."
+  },
+  {
+   "name": "Fitch Ratings",
+   "publisher": "Fitch Ratings",
+   "kind": "ratings",
+   "sectors": [
+    "leveraged-finance"
+   ],
+   "region": "Global",
+   "url": null,
+   "tier": "C",
+   "format": null,
+   "http_status": null,
+   "items": null,
+   "newest_item": null,
+   "over_2mb": null,
+   "has_dtd": null,
+   "why_relevant": "Ratings actions.",
+   "note": "Homepage fetched with no feed link; /rss redirects to an HTML page. No open feed found."
+  },
+  {
+   "name": "DBRS Morningstar",
+   "publisher": "DBRS Morningstar",
+   "kind": "ratings",
+   "sectors": [
+    "leveraged-finance"
+   ],
+   "region": "Global",
+   "url": null,
+   "tier": "C",
+   "format": null,
+   "http_status": null,
+   "items": null,
+   "newest_item": null,
+   "over_2mb": null,
+   "has_dtd": null,
+   "why_relevant": "Ratings actions.",
+   "note": "Homepage fetched with no feed link; /rss and /rss.xml returned 404. No open feed found."
+  },
+  {
+   "name": "Scope Ratings",
+   "publisher": "Scope Ratings",
+   "kind": "ratings",
+   "sectors": [
+    "leveraged-finance"
+   ],
+   "region": "Europe",
+   "url": null,
+   "tier": "C",
+   "format": null,
+   "http_status": null,
+   "items": null,
+   "newest_item": null,
+   "over_2mb": null,
+   "has_dtd": null,
+   "why_relevant": "Ratings actions.",
+   "note": "Homepage fetched with no feed link; /rss and /rss.xml return an HTML page. No open feed found."
+  },
+  {
+   "name": "Telecompaper",
+   "publisher": "Telecompaper",
+   "kind": "news",
+   "sectors": [
+    "tmt"
+   ],
+   "region": "Europe",
+   "url": null,
+   "tier": "C",
+   "format": null,
+   "http_status": null,
+   "items": null,
+   "newest_item": null,
+   "over_2mb": null,
+   "has_dtd": null,
+   "why_relevant": "European telecom news.",
+   "note": "/rss returns an HTML page and /rss.xml returns 404; no feed link in homepage HTML. No open feed found."
+  },
+  {
+   "name": "European Leveraged Finance Association",
+   "publisher": "ELFA",
+   "kind": "research",
+   "sectors": [
+    "leveraged-finance"
+   ],
+   "region": "Europe",
+   "url": null,
+   "tier": "C",
+   "format": null,
+   "http_status": null,
+   "items": null,
+   "newest_item": null,
+   "over_2mb": null,
+   "has_dtd": null,
+   "why_relevant": "European leveraged-finance market body.",
+   "note": "The guessed domains elfa-eu.org and elfa-eu.com do not resolve; elfa.eu redirects to elfa.com, which is a different organisation. Real domain not established."
+  },
+  {
+   "name": "AFME",
+   "publisher": "Association for Financial Markets in Europe",
+   "kind": "research",
+   "sectors": [
+    "leveraged-finance"
+   ],
+   "region": "Europe",
+   "url": null,
+   "tier": "C",
+   "format": null,
+   "http_status": null,
+   "items": null,
+   "newest_item": null,
+   "over_2mb": null,
+   "has_dtd": null,
+   "why_relevant": "European wholesale-market body.",
+   "note": "/feed returned HTTP 400 (HTML); homepage had no feed link. No open feed found."
+  }
+ ]
+}
