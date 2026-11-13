@@ -165,8 +165,16 @@ immaterial.
 Status: inside a parent, like the seven above, and less visible than any of them. The words "ESG" and
 "sustainability" appear nowhere in this project's launcher, catalogue or library pages; the reader sees
 only "Rates, FX & hedging" (`src/deploy_workflow/credit_os_chips.py:70`). Making it its own module is
-small (routing entry, name, preset line). Not verified: whether any run's Rates, FX & hedging handoff
-actually contains the ESG tables; the run folders were not available to this session.
+small (routing entry, name, preset line). Checked on retained output: the ESG tables are written. Both 13 November Full credit assessment runs
+(`tdg-full-copilot-sol-001-resume`, `tdg-full-copilot-sol-high-001-resume`, in another session's scratch
+workspace) carry all eight, T2G.1 to T2G.8 (disclosure inventory, environmental and transition, social
+and operational, materiality classification, sustainability-linked mechanics, refinancing and cost of
+capital, credit implications, gaps), after the nine rates tables T2F.1 to T2F.9. So do the 10 November
+all-module run (`runs/cpos-tdg-sol-medium-all-001/deliveries/…/CP-2E.md:202` onward) and the 4 November
+cp-os run. The content is issuer-specific: for TransDigm, environmental remediation is classed Material
+(USD 41 million recognised), climate regulation Watch, the voluntary emissions target Immaterial to
+Credit, and no sustainability-linked instrument was found in the filings read. Not checked: how the
+Modules page presents these tables to a reader.
 
 ## Installed, but one part cannot work yet
 
