@@ -1089,7 +1089,7 @@
       "consumed_path": "docs/reuse/selected-methods/CPOS_REGISTER_SCOPE.md",
       "archive_path": "docs/reuse/selected-methods/CPOS_REGISTER_SCOPE.md",
       "exact_copy_found_at": null,
-      "sha256": "6b206064406ec25e3df00a1eccf4879f9a1efa3f27379002777c561b387c6137",
+      "sha256": "a37ec764e687fb824ed8c38bddde393a7c3b3465c9cdf36189768b0851c7ec7f",
       "use": "project-written (owner, 2026-11-13, T4): one section per measured module naming the registers it does not write in this transport, each with its method id and the method's own title; sent as the last section of that module's method block (CP-0, CP-1A, CP-DR, CP-2, CP-2A, CP-2E, CP-2G, CP-3, CP-5, CP-6); not a copy of any Deploy V file",
       "note": "ruling docs/rulings/2026-11-13-appendix-and-routing-scope.md; the lists are the registers classified CUT in every inventory row of both retained Sol runs (docs/sweeps/2026-11-13-optimisation-review/appendix-inventory.md)"
     }
