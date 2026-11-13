@@ -394,6 +394,17 @@ def test_calculate_difference_is_exact_and_refuses_missing(tmp_path: Path) -> No
     assert module.calculate("difference", ["1", "2", "3"]).startswith("ERROR")
 
 
+def test_calculate_difference_refuses_an_inexact_result_as_product_does(tmp_path: Path) -> None:
+    module = ModuleTools(task(), tmp_path, check)
+    big = "12345678901234567890123456789012345678"  # 38 digits; minus 0.1 needs 39
+    refused = module.calculate("difference", [big, "0.1"])
+    assert refused.startswith("ERROR"), refused
+    assert (
+        _calc(module, "difference", ["12345678901234567890123456789012345678", "1"])["value"]
+        == "12345678901234567890123456789012345677"
+    )
+
+
 def test_calculate_product_is_exact_and_never_rounds(tmp_path: Path) -> None:
     module = ModuleTools(task(), tmp_path, check)
     for values, expected in (

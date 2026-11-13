@@ -392,27 +392,26 @@ def _operate(operation: str, cells: list[Cell]) -> Cell | str:
         return f"ERROR: {operation} needs {low} to {high} operands"
     if operation == "ratio":
         return _ratio([(cells[0], 1)], [(cells[1], 1)])
-    if operation == "difference":
-        return calc([(cells[0], 1), (cells[1], -1)])
-    if operation == "product":
+    if operation in ("difference", "product"):
         try:
-            return _product(cells)
+            return _exact(operation, cells)
         except DecimalException:
-            return "ERROR: product needs more than 38 significant digits or overflows"
+            return f"ERROR: {operation} needs more than 38 significant digits or overflows"
     return calc((cell, 1) for cell in cells)
 
 
-def _product(cells: Sequence[Cell]) -> Cell:
-    """The operands multiplied under the active context with rounding refused; null with the
-    missing reason when an operand is missing. Raises `DecimalException` when inexact."""
+def _exact(operation: str, cells: Sequence[Cell]) -> Cell:
+    """The first operand less the second (`difference`) or all operands multiplied (`product`)
+    under the active context with rounding refused; null with the missing reason when an operand
+    is missing. Raises `DecimalException` when inexact."""
     if any(cell.value is None for cell in cells):
         return calc((cell, 1) for cell in cells)  # the kernel's missing-operand result
+    values = [cell.value for cell in cells if cell.value is not None]
     with localcontext() as context:
         context.traps[Inexact] = True
-        total = Decimal(1)
-        for cell in cells:
-            assert cell.value is not None
-            total *= cell.value
+        total = values[0] - values[1] if operation == "difference" else Decimal(1)
+        for value in values if operation == "product" else ():
+            total *= value
     if total.is_zero():
         total = Decimal(0)  # a product with a negative operand and a zero is zero, not -0
     return Cell(total, basis="CALCULATED")

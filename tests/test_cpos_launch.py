@@ -168,12 +168,12 @@ READER_BOTTOM_LINE = "The synthetic issuer shows one observed item."
 CHART_TABLES = {
     "Chart data: leverage": """| Period | Total debt / EBITDA | Net debt / EBITDA | Reporting unit | Basis and limitation |
 | --- | --- | --- | --- | --- |
-| FY2023 | 4.20 | 3.85 | x | Synthetic. |
-| FY2024 | 3.60 | 3.25 | x | Synthetic. |""",
+| FY2023 | 3.75 | 3.00 | x | Synthetic. |
+| FY2024 | 2.80 | 2.25 | x | Synthetic. |""",
     "Chart data: interest cover": """| Period | EBITDA / cash interest | Reporting unit | Basis and limitation |
 | --- | --- | --- | --- |
-| FY2023 | 3.10 | x | Synthetic. |
-| FY2024 | 3.40 | x | Synthetic. |""",
+| FY2023 | 3.20 | x | Synthetic. |
+| FY2024 | 4.00 | x | Synthetic. |""",
     "Chart data: liquidity": """| Period | Cash | Undrawn committed facilities | Reporting unit | Basis and limitation |
 | --- | --- | --- | --- | --- |
 | FY2023 | 300 | 450 | US$m | Synthetic. |
@@ -221,14 +221,26 @@ def synthetic_table(header: str, *rows: str) -> str:
     return "\n".join([header, "| --- |" + " --- |" * (header.count("|") - 2), *rows])
 
 
-# CP-1's checked tables (the acceptance check of CP-1's figures). Synthetic: every operand is a
-# stated gap, so the wiring is proved and no figure is compared; the register states the chart
-# figures so each chart row has its register row.
+# CP-1's checked tables (the acceptance check of CP-1's figures). Synthetic and consistent with the
+# net debt table and the chart tables above: reported EBITDA 400 / 500, cash interest 125 / 125,
+# total debt and cash as the net debt table states them; every other line is a stated gap. The
+# register states each chart figure worked from those operands (two-sided ties, R1), the Period
+# cells are the net debt table's, and the reconciliation states only the carrying value.
 GAP = "Not supplied: synthetic"
+FIGURES = {
+    ("T4.4 Income statement", "EBITDA (Reported)"): ("400", "500"),
+    ("T4.5 Cash flow statement", "Cash Interest Paid"): ("125", "125"),
+    ("T4.6 Balance sheet", "Total Debt"): ("1500", "1400"),
+    ("T4.6 Balance sheet", "Cash & Equivalents"): ("300", "275"),
+}
 CP1_CHECKED = {
     heading: synthetic_table(
-        "| Line item | FY2024 | Unit | Basis | Source |",
-        *(f"| {row} | {GAP} | USD millions | Synthetic. | annual.txt |" for row in rows),
+        "| Line item | FY2023 | FY2024 | Unit | Basis | Source |",
+        *(
+            f"| {row} | {' | '.join(FIGURES.get((heading, row), (GAP, GAP)))} "
+            "| USD millions | Synthetic. | annual.txt |"
+            for row in rows
+        ),
     )
     for heading, rows in {
         "T4.4 Income statement": ("EBITDA (Reported)",),
@@ -255,20 +267,20 @@ CP1_CHECKED["T4.9 Calculation register"] = synthetic_table(
     "| Denominator Source | Period | Currency | Unit | Calculated Value | Calculation Status "
     "| Evidence Quality Tier | Limitations |",
     *(
-        f"| {name} | n / d | {GAP} | annual.txt | {GAP} | annual.txt | {period} | USD | US$m "
+        f"| {name} | n / d | {num} | annual.txt | {den} | annual.txt | {period} | USD | US$m "
         f"| {value} | Stated | Tier 3 | Synthetic. |"
-        for name, values in (
-            ("Total debt / EBITDA", ("4.20", "3.60")),
-            ("Net debt / EBITDA", ("3.85", "3.25")),
-            ("EBITDA / cash interest", ("3.10", "3.40")),
+        for name, rows in (
+            ("Total debt / EBITDA", (("1500", "400", "3.75"), ("1400", "500", "2.80"))),
+            ("Net debt / EBITDA", (("1200", "400", "3.00"), ("1125", "500", "2.25"))),
+            ("EBITDA / cash interest", (("400", "125", "3.20"), ("500", "125", "4.00"))),
         )
-        for period, value in zip(("FY2023", "FY2024"), values, strict=True)
+        for period, (num, den, value) in zip(("FY2023", "FY2024"), rows, strict=True)
     ),
 )
 CP1_CHECKED["Debt principal to carrying value"] = synthetic_table(
     "| Period | Contractual principal | Reconciling items | Carrying value | Reporting unit "
     "| Basis and limitation |",
-    f"| FY2024 | {GAP} | {GAP} | {GAP} | US$m | Synthetic. |",
+    f"| FY2024 | {GAP} | {GAP} | 1400 | US$m | Synthetic. |",
 )
 PERIOD_HEAD = "| Period | {} | Reporting unit | Basis and limitation |"
 DEBT_STACK_HEAD = (
@@ -2826,9 +2838,10 @@ def test_every_module_is_told_what_stands_for_acceptance_scripts_and_questions(t
 # CP-1 changed on 2026-11-13 (CP-1 moves to the Deploy V method): it now sends the edited caos
 # dfff264 skill, runbook and step file, not the STEP_CONTRACTS sections, so runs made before it are
 # correctly marked "Earlier methods" for CP-1. The score section follows, as for every skill module.
+# Fix round 1 of that change (the acceptance check's rulings R2, R5, R9) edited the step file again.
 METHOD_TEXT_SHA256_AT_1B41E65 = {
     "CP-0": "e8d3e77bc48bc98e2fd8595e7b46ee7fc786e859591cf244325f3508b7d5dac9",
-    "CP-1": "0f7f1b36d36ab909834c8afee048f20005997d343489695318a6246da644c6c6",
+    "CP-1": "404df19c967e2be97bd1a499b1935219e2e8ee065ce68e22fcdbde44d6c0f535",
     "CP-1A": "4c8efcfafe748cd01e6c856041349397c77384c3c82566b1f36a429535c01639",
     "CP-1B": "38d9fa7b075d1ce5d0cd21bcc216f57f37369cd4db395b3f1fb65498697a509f",
     "CP-1C": "9353afdbce820f59c2dcabc951fc1ff3813174b3c84e79b47bc22bea97f3bbe8",
@@ -3084,10 +3097,10 @@ def test_cp1_chart_tables_become_the_report_chart_strip(tmp_path):
     figures = strip_of(prepared, raw, tmp_path, "model-chart-strip").figures
     assert [f.fig_id for f in figures] == ["S.1", "S.2", "S.3", "S.4"]
     assert [m.value for m in figures[0].chart.marks] == [
-        Decimal("4.20"),
-        Decimal("3.85"),
-        Decimal("3.60"),
-        Decimal("3.25"),
+        Decimal("3.75"),
+        Decimal("3.00"),
+        Decimal("2.80"),
+        Decimal("2.25"),
     ]
     assert [m.value for m in figures[3].chart.marks] == [Decimal(500), None, Decimal(1250)]
     assert figures[3].chart.marks[1].ref_id.startswith("G")
@@ -3110,9 +3123,9 @@ def test_an_all_gaps_non_usd_issuer_passes_with_no_chart_values(tmp_path, monkey
 @pytest.mark.parametrize(
     ("old", "new", "complaint"),
     [
-        ("| 3.85 |", "| 3.85x |", "3.85x"),
+        ("| 3.00 |", "| 3.00x |", "3.00x"),
         ("| 300 | 450 | US$m |", "| 300 | 450 | EUR m |", "EUR m"),
-        ("| FY2023 | 3.10 | x | Synthetic. |", "| FY2023 | 3.10 | x |  |", "Basis and limitation"),
+        ("| FY2023 | 3.20 | x | Synthetic. |", "| FY2023 | 3.20 | x |  |", "Basis and limitation"),
         ("### Chart data: liquidity", "### Liquidity data", "Chart data: liquidity"),
         ("| Period | Debt maturing |", "| Year | Debt maturing |", "Period"),
         ("| FY2026 | 500 |", "| FY2026 | Not supplied: |", "Not supplied: |"),
@@ -6689,9 +6702,19 @@ def test_a_net_debt_row_with_a_stated_gap_is_accepted_in_the_form_the_rule_allow
     prepared, task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
     raw = answer(context, list(prepared.plan.layout.routes))
     gap = "Not supplied: the debt note was not read"
+    reg = "| n / d | {} | annual.txt | {} | annual.txt | FY{} | USD | US$m | {} |"
+    # Ties are two-sided (R1): a gap in the net debt table needs its balance-sheet line, the
+    # register row worked from it and the chart figure beside it to be gaps too.
     for old, new in (
         ("| FY2023 | 1500 | 300 | 1200 |", f"| FY2023 | {gap} | 300 | {gap} |"),
         ("| FY2024 | 1400 | 275 | 1125 |", f"| FY2024 | 1400 | {gap} | {gap} |"),
+        ("| Total Debt | 1500 | 1400 |", f"| Total Debt | {gap} | 1400 |"),
+        ("| Cash & Equivalents | 300 | 275 |", f"| Cash & Equivalents | 300 | {gap} |"),
+        (reg.format(1500, 400, 2023, "3.75"), reg.format(gap, 400, 2023, gap)),
+        (reg.format(1200, 400, 2023, "3.00"), reg.format(gap, 400, 2023, gap)),
+        (reg.format(1125, 500, 2024, "2.25"), reg.format(gap, 500, 2024, gap)),
+        ("| FY2023 | 3.75 | 3.00 | x |", f"| FY2023 | {gap} | {gap} | x |"),
+        ("| FY2024 | 2.80 | 2.25 | x |", f"| FY2024 | 2.80 | {gap} | x |"),
     ):
         assert old in raw
         raw = raw.replace(old, new)
