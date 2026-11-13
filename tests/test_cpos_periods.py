@@ -1812,3 +1812,35 @@ def test_a_balance_named_under_a_period_column_is_read_as_printed_and_dated_by_t
     assert ytd["values"]["closing_cash"] == {"amount": "110", "reason": None}
     assert (ytd["start"], ytd["end"]) == ("2025-01-01", "2025-06-30")
     assert D(cell(record, "LTM", "revenue")["amount"]) == D(1040)  # the LTM flows are unchanged
+
+
+# --- per-row unit guard on a row under a real period column (restores the removed U4 / no-unit) --
+_LIQ_FY = "| FY2024 | 100 | 50 | US$m | Year end. |"
+_LIQ_LTM = "| LTM Q2 2025 | 120 | 60 | US$m | 30 June 2025. |"
+_UNIT_HEAD = (
+    "| Period | Cash | Undrawn | Reporting unit | Basis and limitation |\n"
+    "| --- | --- | --- | --- | --- |"
+)
+
+
+def _undrawn_at_ytd(cp1):
+    _, record = _e1_record(cp1)
+    return cell(record, "YTD", "undrawn")
+
+
+def test_a_row_in_thousands_is_n_a_when_the_named_row_and_headers_name_no_unit():  # U4
+    cp1 = (
+        E1_CP1.replace(
+            _UNIT_HEAD,
+            "| Period | Cash | Undrawn | Basis and limitation |\n| --- | --- | --- | --- |",
+        )
+        .replace(_LIQ_FY, "| FY2024 | 100 | 50 | Year end. |")
+        .replace(_LIQ_LTM, "| H1 2025 | 120000 | 60000 | 30 June 2025; in US$ thousands. |")
+    )
+    got = _undrawn_at_ytd(cp1)
+    assert got["amount"] is None and "in another unit" in got["reason"]
+
+
+def test_a_row_naming_no_unit_is_read_beside_a_named_row_with_a_unit():
+    cp1 = E1_CP1.replace(_LIQ_LTM, "| H1 2025 | 120 | 60 |  | 30 June 2025. |")
+    assert _undrawn_at_ytd(cp1) == {"amount": "60", "reason": None}
