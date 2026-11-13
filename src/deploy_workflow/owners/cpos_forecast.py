@@ -40,8 +40,9 @@ LAYER1_LIMIT = (
     "the arithmetic, are unreviewed. Not analytical review."
 )
 SOURCES = ("CP-2G", "CP-1")
-# A block that predates `currency` states none: it is read as USD, the only currency the field's
-# absence ever meant. A block written now states its own (acceptance refuses one that does not).
+# A block that predates `currency` states none and is read as USD, the only currency the field's
+# absence ever meant. A block that states `scale` without `currency` is never labelled: CP-2G's is
+# refused at acceptance (`cpos_launch._unstated_currency`), a layer-1 block's in `parse`.
 UNSTATED_CURRENCY = "USD"
 CURRENCY_CODE = re.compile(r"[A-Z]{3}")
 
@@ -325,26 +326,25 @@ _NAMES_THOUSANDS = re.compile(rf"\bthousands?\b|[$'\u2019]000s?\b|{_CURRENCY}\s?
 _NAMES_MILLIONS = re.compile(
     rf"\b(?:millions?|billions?)\b|{_CURRENCY}\s?(?:m|mm|mn|bn)\b", re.IGNORECASE
 )
-_NAMED_CURRENCY = {
-    "US$": "USD",
-    "USD": "USD",
-    "EUR": "EUR",
-    "GBP": "GBP",
-    "\u20ac": "EUR",
-    "\u00a3": "GBP",
-}
-_CURRENCY_CODES = re.compile(r"US\$|\b(?:USD|EUR|GBP)\b|[\u20ac\u00a3]", re.IGNORECASE)
+_CURRENCY_SIGN = {"USD": r"US\$", "EUR": "\u20ac", "GBP": "\u00a3"}
+
+
+def _names_currency(text: str, currency: str) -> bool:
+    """Whether CP-1 names `currency` anywhere, headings included: its code as a whole token or
+    glued to a scale suffix (`GBPm`, `GBPk`, `GBP000`), or, for the three that have one, its sign
+    (`US$`, a euro or pound sign). A bare `$` names no currency.
+    ponytail: presence only. A handoff that names the stated currency anywhere (a USD issuer that
+    mentions a EUR tranche, block wrongly `EUR`) passes, and so does one row in another currency;
+    reading each cell's own currency refused real handoffs."""
+    forms = [rf"(?<![A-Za-z]){currency}(?:mm|mn|bn|m|k|000s?)?(?![A-Za-z0-9])"]
+    if currency in _CURRENCY_SIGN:
+        forms.append(rf"(?<![A-Za-z]){_CURRENCY_SIGN[currency]}")
+    return re.search("|".join(forms), text, re.IGNORECASE) is not None
 
 
 def _unit_of(scale: int, currency: str | None) -> str:
     code = currency or UNSTATED_CURRENCY
     return f"{code} millions, scale 1" if scale == 1 else f"{code} thousands, scale 1000"
-
-
-def _currencies_named(text: str) -> frozenset[str]:
-    """The currencies a cell of CP-1 names by `US$`, a three-letter code, or a euro or pound sign.
-    A bare `$` is not one: it does not say which dollar."""
-    return frozenset(_NAMED_CURRENCY[m.upper()] for m in _CURRENCY_CODES.findall(text))
 
 
 def _units_named(text: str) -> frozenset[str]:
@@ -386,35 +386,24 @@ def _unit_cells(
 def _unit_problem(
     text: str, key: str, operand: Operand, scale: int, currency: str | None = None
 ) -> str | None:
-    """Why the named operand's row is in another unit or currency than the block's, or None. A
-    row is refused when a cell that may state its unit (`_unit_cells`) names the other unit and
-    none of them names the block's; and, when the block states `currency`, when a cell names a
-    currency and none of them names the block's."""
+    """Why the named operand's row is in the other unit than the block's, or None. A row is
+    refused when a cell that may state its unit (`_unit_cells`) names the other unit and none of
+    them names the block's. `currency` only words the message."""
     block, other = ("thousands", "millions") if scale == 1000 else ("millions", "thousands")
     issues = []
-    wrong_currency = []
     kind = "column" if operand.column is not None else "period"
     for group in _unit_cells(text, operand.row or "", operand.header, kind):
         named = [(what, cell, _units_named(cell)) for what, cell in group]
         if not any(block in units for *_, units in named):
             issues += [(what, cell) for what, cell, units in named if other in units]
-        coins = [(what, cell, _currencies_named(cell)) for what, cell in group]
-        if currency is not None and not any(currency in names for *_, names in coins):
-            wrong_currency += [(what, cell, names) for what, cell, names in coins if names]
-    where = f"base {key}: row `{_cut(_plain(operand.row or ''), 60)}` states its "
-    if issues:
-        what, cell = min(issues)
-        return (
-            f"{where}{_cut(what, 40)} as `{_cut(_plain(cell), 40)}`, not the block's unit "
-            f"({_unit_of(scale, currency)}); state a reason instead of an amount"
-        )
-    if wrong_currency:
-        what, cell, names = min(wrong_currency, key=lambda item: item[:2])
-        return (
-            f"{where}{_cut(what, 40)} as `{_cut(_plain(cell), 40)}`, in {', '.join(sorted(names))}"
-            f", not the block's currency {currency}; state a reason instead of an amount"
-        )
-    return None
+    if not issues:
+        return None
+    what, cell = min(issues)
+    return (
+        f"base {key}: row `{_cut(_plain(operand.row or ''), 60)}` states its {_cut(what, 40)} as "
+        f"`{_cut(_plain(cell), 40)}`, not the block's unit ({_unit_of(scale, currency)}); state a "
+        "reason instead of an amount"
+    )
 
 
 def _declined(document: dict[str, object], source: str) -> None:
@@ -565,6 +554,19 @@ def parse(source_text: str, cp1_text: str, source: str = "CP-2G") -> ForecastInp
     _check_base(inputs, cp1_text, source, stated)
     if inputs.facilities:
         _check_facilities(inputs, inputs.facilities, cp1_text, stated)
+    # A layer-1 handoff holds its own block: its `currency` key must not name itself.
+    named_in = cp1_text.replace("\r\n", "\n")
+    if source == "CP-1":
+        named_in = named_in.replace(_block(source_text, source), "")
+    if inputs.currency is not None and not _names_currency(named_in, inputs.currency):
+        raise ValueError(
+            f"CP-1 nowhere names `{inputs.currency}`: state `currency` as the three-letter code "
+            "of the currency CP-1 reports its figures in."
+        )
+    if source == "CP-1" and inputs.scale is not None and inputs.currency is None:
+        # CP-2G's own block is refused at acceptance (`_unstated_currency`); a layer-1 block is
+        # never checked there, so it is withheld here rather than labelled USD.
+        raise ValueError("the forecast inputs state `scale` but not `currency`")
     return inputs
 
 

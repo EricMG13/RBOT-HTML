@@ -1818,7 +1818,7 @@ FORECAST_BLOCK = (
     "printing 45 or +45, a release, is -45). A figure in CP-1's prose, a basis line or its "
     "sources is not a cell: an amount CP-1 prints in no table cell is stated as missing, with "
     "the reason. An amount CP-1 prints only in the other unit (for example revolver availability "
-    "in USD millions where the statements are in thousands) is stated as missing, with the "
+    "in millions where the statements are in thousands) is stated as missing, with the "
     "reason; do not rescale it. Where CP-1 prints the amount under more than one column, name "
     "a column headed by a reporting period (`FY2024`, `Q3 2025`, `H1 2025` or `9M 2025`): the "
     "Forecast page shows history only for a line named under such a header, or in a row "
@@ -1829,7 +1829,7 @@ FORECAST_BLOCK = (
     "`category`, `rationale` and `limitation`). Each driver's `values` are three decimal strings, "
     'one per forecast year (for example ["0.05", "0.04", "0.03"]), each rounded to at most four '
     'decimal places (a ratio of 0.48022670 is written "0.4802"); the `dividends` and '
-    '`debt_repayment` values are amounts in the block\'s unit (with `"scale": 1000`, USD 20 '
+    '`debt_repayment` values are amounts in the block\'s unit (with `"scale": 1000`, 20 '
     'million is `"20000"`, at most one decimal place) and every other driver is a ratio and is '
     "never scaled; `category` is exactly one of "
     f"{', '.join(f'`{c}`' for c in get_args(Category))}. When the method gives no forecast "
@@ -1953,7 +1953,7 @@ LAYER1_FORECAST_BLOCK = (
     "in `rationale`. Add no analyst judgement beyond that run-rate. Each driver's `values` are "
     'three decimal strings, one per forecast year (for example ["0.05", "0.04", "0.03"]), each '
     "rounded to at most four decimal places; the `dividends` and `debt_repayment` values are "
-    'amounts in the block\'s unit (with `"scale": 1000`, USD 20 million is `"20000"`, at '
+    'amounts in the block\'s unit (with `"scale": 1000`, 20 million is `"20000"`, at '
     "most one decimal place) and every other driver is a ratio and is never scaled; `category` "
     "is exactly one of "
     f"{', '.join(f'`{c}`' for c in get_args(Category))}. Leave a driver's values null, as "
@@ -2772,8 +2772,8 @@ def _unstated_currency(inputs: cpos_forecast.ForecastInputs) -> tuple[str, ...]:
     written now that states `scale` says which currency its statements are printed in."""
     if inputs.scale is None or inputs.currency is not None:
         return ()
-    asked = "state `currency`, the three-letter code CP-1's statement tables are printed in"
-    return (f"Forecast inputs: {asked} (`USD`).",)
+    asked = "state `currency`: the three-letter code of the currency CP-1 reports its figures in"
+    return (f"Forecast inputs: {asked}.",)
 
 
 def _cap(text: str) -> Decimal:

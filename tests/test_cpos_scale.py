@@ -429,7 +429,9 @@ def test_a_block_with_scale_one_is_the_block_without_it_plus_the_units():
 def test_layer_one_at_scale_1000():
     block = json.loads(block_k().split("```json\n")[1].split("\n```")[0])
     block["downside_shock"] = None
-    text = CP1_K + "\n### Forecast inputs (machine-readable)\n\n```json\n"
+    block["currency"] = "USD"  # F1: a layer-1 block that states `scale` states `currency`
+    text = "### Canonical statement data (USD thousands)\n\n" + CP1_K
+    text += "\n### Forecast inputs (machine-readable)\n\n```json\n"
     text += json.dumps(block) + "\n```\n"
     files = model_files(text.encode(), text.encode(), "CP-1", history=True)
     exact = json.loads(files["forecast_exact.json"])
@@ -880,9 +882,10 @@ def test_a_block_with_scale_and_no_currency_is_sent_back_at_acceptance():
     task = types.SimpleNamespace(module_id="CP-2G", handoffs={"CP-1": CP1_K2.encode()})
     (issue,) = cpos_launch._forecast_issues(task, block_k2())
     assert issue == (
-        "Forecast inputs: state `currency`, the three-letter code CP-1's statement tables are "
-        "printed in (`USD`)."
+        "Forecast inputs: state `currency`: the three-letter code of the currency CP-1 reports "
+        "its figures in."
     )
+    assert not re.search(r"USD|GBP|EUR|US\$", issue)
     assert cpos_launch._forecast_issues(task, block_k2(currency="USD")) == ()
 
 
@@ -898,12 +901,15 @@ def test_a_currency_without_a_scale_is_refused():
         parse(forecast_block(base=NAMED_BASE, currency="GBP"), CP1)
 
 
-def test_a_currency_that_differs_from_the_unit_cells_is_refused_naming_both():
+def test_a_currency_the_handoff_never_names_is_refused_and_the_one_it_names_is_read():
     cp1 = CP1_K2.replace("US$ million", "GBP million").replace("US$ thousands", "GBP thousands")
+    cp1 = cp1.replace("US$m", "GBPm")
     with pytest.raises(ValueError) as caught:
         parse(block_k2(currency="USD"), cp1)
-    message = str(caught.value)
-    assert "`GBP thousands`" in message and "currency USD" in message and "GBP" in message
+    assert str(caught.value) == (
+        "CP-1 nowhere names `USD`: state `currency` as the three-letter code of the currency "
+        "CP-1 reports its figures in."
+    )
     assert parse(block_k2(currency="GBP"), cp1).currency == "GBP"
 
 
@@ -911,3 +917,125 @@ def test_the_unit_refusals_name_the_blocks_currency():
     cp1 = CP1_K2.replace("US$ thousands", "GBP thousands").replace("US$m", "GBP m")
     with pytest.raises(ValueError, match=re.escape("(GBP thousands, scale 1000)")):
         parse(block_k2(currency="GBP", base={**K2_BASE, "undrawn": CHART_ROW}), cp1)
+
+
+# --- `currency` is named by CP-1 itself (F1 fix round 1) ----------------------------------------
+NOWHERE = (
+    "CP-1 nowhere names `{}`: state `currency` as the three-letter code of the currency CP-1 "
+    "reports its figures in."
+)
+
+
+def _headed(unit):
+    """CP-1 as it is really written: the unit is in a `###` heading, no table cell states it."""
+    return f"### Canonical statement data ({unit})\n\n{CP1}"
+
+
+def _currency_block(currency):
+    return forecast_block(base=NAMED_BASE, scale=1, currency=currency)
+
+
+def _layer_one_text(cp1, **changes):
+    return cp1 + "\n" + forecast_block(base=NAMED_BASE, downside_shock=None, **changes)
+
+
+def _task(cp1):
+    return types.SimpleNamespace(module_id="CP-2G", handoffs={"CP-1": cp1.encode()})
+
+
+def test_a_usd_block_over_a_sterling_handoff_is_refused_on_both_paths():  # (a)
+    cp1 = _headed("GBP millions")
+    block = _currency_block("USD")
+    (issue,) = cpos_launch._forecast_issues(_task(cp1), block)
+    assert issue.startswith(f"Forecast inputs: {NOWHERE.format('USD')}")
+    with pytest.raises(ValueError) as caught:
+        model_files(cp1.encode(), block.encode(), "CP-2G", history=True)
+    assert str(caught.value) == NOWHERE.format("USD")
+    layer_one = _layer_one_text(cp1, scale=1, currency="USD")
+    with pytest.raises(ValueError) as caught:  # the layer-1 handoff holds its own block
+        model_files(layer_one.encode(), layer_one.encode(), "CP-1", history=True)
+    assert str(caught.value) == NOWHERE.format("USD")
+
+
+def test_a_gbp_block_over_the_same_sterling_handoff_is_delivered_as_gbp_millions():  # (b)
+    cp1 = _headed("GBP millions")
+    assert cpos_launch._forecast_issues(_task(cp1), _currency_block("GBP")) == ()
+    assert _delivered_units(cp1, _currency_block("GBP")) == "GBP millions"
+    layer_one = _layer_one_text(cp1, scale=1, currency="GBP")
+    files = model_files(layer_one.encode(), layer_one.encode(), "CP-1", history=True)
+    assert json.loads(files["forecast_exact.json"])["units"] == "GBP millions"
+
+
+def test_a_gbp_block_over_a_usd_handoff_is_refused():  # (c)
+    (issue,) = cpos_launch._forecast_issues(_task(_headed("USD millions")), _currency_block("GBP"))
+    assert issue.startswith(f"Forecast inputs: {NOWHERE.format('GBP')}")
+
+
+def test_a_gbp_block_over_a_handoff_stating_only_usd_millions_is_refused():  # (h) plan test 4
+    cp1 = _with_unit_column(CP1, "USD millions")
+    with pytest.raises(ValueError) as caught:
+        parse(_currency_block("GBP"), cp1)
+    assert str(caught.value) == NOWHERE.format("GBP")
+
+
+def test_a_usd_row_whose_source_cell_mentions_a_eur_tranche_is_accepted():  # (d)
+    head = "| Metric | FY2024 | 9M 2025 | 9M 2024 |\n| --- | --- | --- | --- |"
+    cp1 = _headed("USD millions").replace(head, head.replace(" |\n", " | Source |\n") + " --- |")
+    for label, source in (
+        ("Total debt | 600 | 590 | 620", "EUR 500 million term loan"),
+        ("Cash and cash equivalents | 100 | 120 | 90", "p.5"),
+        ("Undrawn revolver | 50 | 50 | 50", "p.5"),
+    ):
+        cp1 = cp1.replace(f"| {label} |", f"| {label} | {source} |")
+    assert "| EUR 500 million term loan |" in cp1
+    block = _currency_block("USD")
+    assert cpos_launch._forecast_issues(_task(cp1), block) == ()
+    files = model_files(cp1.encode(), block.encode(), "CP-2G", history=True)
+    exact = json.loads(files["forecast_exact.json"])
+    assert exact["units"] == "USD millions"
+    assert exact["base"]["debt"]["amount"] == "600"
+
+
+def test_a_layer_one_block_with_scale_and_no_currency_is_withheld_never_usd_millions():  # (e)
+    text = _layer_one_text(_headed("US$m"), scale=1)
+    with pytest.raises(ValueError) as caught:
+        model_files(text.encode(), text.encode(), "CP-1", history=True)
+    assert str(caught.value) == "the forecast inputs state `scale` but not `currency`"
+
+
+def test_a_block_with_neither_key_still_reads_as_usd_millions():  # R3: retained blocks
+    text = _layer_one_text(_headed("US$m"))
+    files = model_files(text.encode(), text.encode(), "CP-1", history=True)
+    assert "units" not in json.loads(files["forecast_exact.json"])
+
+
+@pytest.mark.parametrize(
+    ("text", "currency", "named"),
+    [
+        ("### Statements (EURm)", "EUR", True),
+        ("| Cash | 9 | GBPk |", "GBP", True),
+        ("amounts in GBP000", "GBP", True),
+        ("GBPmn and GBPbn", "GBP", True),
+        ("sterling, GBP", "GBP", True),
+        ("revenue of £120m", "GBP", True),
+        ("revenue of €120m", "EUR", True),
+        ("revenue of US$120m", "USD", True),
+        ("usd millions", "USD", True),
+        ("CAD millions", "CAD", True),
+        ("revenue of $120m", "USD", False),
+        ("revenue of C$120m", "CAD", False),
+        ("USDA and GBPS", "USD", False),
+        ("revenue of £120m", "USD", False),
+        ("US$m", "GBP", False),
+        ("no unit stated", "EUR", False),
+    ],
+)
+def test_a_handoff_names_a_currency_by_code_or_sign_and_a_bare_dollar_sign_names_none(
+    text, currency, named
+):  # (f)
+    assert cpos_forecast._names_currency(text, currency) is named
+
+
+def test_the_forecast_instructions_suggest_no_currency_as_the_default():  # (g)
+    for block in (cpos_launch.FORECAST_BLOCK, cpos_launch.LAYER1_FORECAST_BLOCK):
+        assert "USD 20 million" not in block and "in USD millions where" not in block
