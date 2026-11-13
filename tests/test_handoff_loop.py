@@ -1192,6 +1192,12 @@ def test_a_quote_excuses_only_the_line_the_issue_names(tmp_path: Path) -> None:
     assert _dropped(tmp_path, rows, second, issue) == ["USD 755 million"]
 
 
+def test_a_number_already_on_the_line_is_no_correction_of_it(tmp_path: Path) -> None:
+    row = "Net debt was USD 247 million in 2024.\n"
+    issue = ("State the 2024 comparison under Findings.",)
+    assert _dropped(tmp_path, row, row.replace("247", "240"), issue) == ["USD 247 million"]
+
+
 def test_a_line_number_in_an_issue_label_excuses_no_value(tmp_path: Path) -> None:
     row = "| Adjustments | USD 247 million | FY2023 |\n"
     assert _dropped(

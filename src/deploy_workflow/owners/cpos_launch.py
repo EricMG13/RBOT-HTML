@@ -1414,13 +1414,20 @@ def _stated_gap(cell: str) -> bool:
     return cell.startswith(NOT_SUPPLIED) and bool(cell.removeprefix(NOT_SUPPLIED).strip())
 
 
+CURRENCY_CODES = (
+    "USD", "EUR", "GBP", "JPY", "CHF", "CAD", "AUD", "NZD", "SEK", "NOK", "DKK", "CNY", "HKD",
+    "SGD", "INR", "BRL", "MXN", "ZAR", "PLN", "CZK", "HUF", "TRY", "RUB", "KRW",
+)  # fmt: skip
+
+
 def _unit_advice(spec: OwnerTable, unit: str) -> str:
     """What to do about a unit cell that is not the chart unit. A cell that begins with the chart
     unit and adds other words is a unit cell holding more than the unit: its amounts are sound, so
     the advice is to cut the cell, never to replace the amounts with gaps. When the rest names
     another currency code or symbol the amounts may really be in it, so the gap advice stays."""
     rest = unit.removeprefix(spec.chart_unit)
-    other_currency = re.search(r"\b[A-Z]{3}\b|[$\u20ac\u00a3\u00a5]", rest)
+    codes = "|".join(CURRENCY_CODES)
+    other_currency = re.search(rf"\b(?:{codes})\b|[$\u20ac\u00a3\u00a5]", rest)
     if rest != unit and rest[:1] and not rest[:1].isalnum() and not other_currency:
         return (
             f"the Reporting unit must be exactly `{spec.chart_unit}` (the Amount's unit only); "
@@ -2967,7 +2974,37 @@ def _review_lines(directory: Path) -> tuple[str, ...]:
         "run's charge."
         for module in multiple
     ]
-    return tuple(lines)
+    return (*lines, *_dropped_value_lines(events))
+
+
+def _dropped_value_lines(events: Sequence[Mapping[str, Any]]) -> list[str]:
+    """One line per module whose accepted repair removed sourced values (the last such event of a
+    module), and one per module whose removed-values check failed."""
+    dropped = {
+        str(e.get("module")): e.get("count")
+        for e in events
+        if e.get("event") == "values_dropped_on_repair"
+    }
+    lines = []
+    for module, count in dropped.items():
+        one = count == 1
+        what = "1 sourced value" if one else f"{count} sourced values"
+        lines.append(
+            f"Review: {module} was accepted after a repair that removed {what}; the list is in "
+            f"that module's review.json (dropped_values). Check {'it' if one else 'them'}."
+        )
+    failed = dict.fromkeys(
+        str(e.get("module")) for e in events if e.get("event") == "dropped_values_check_failed"
+    )
+    lines += [
+        f"Review: {module} had a repair whose removed values could not be checked "
+        "(dropped_values_error in its review.json); compare the repair with the rejected draft."
+        for module in failed
+    ]
+    return lines
+
+
+FAILED_NO_USAGE = "failed, no usage reported"  # the reason handoff.py writes with a completion
 
 
 def _attempt(event: Mapping[str, Any]) -> str:
@@ -2990,7 +3027,8 @@ def _uncharged_summaries(events: Sequence[Mapping[str, Any]]) -> dict[Any, tuple
         counts = anonymous.setdefault(module, [0, 0, 0])
         if name == "compaction_uncharged":
             found[(module, attempt) if attempt else (module, number)] = (module, call)
-            counts[2] += not attempt
+            # a failed completion's own record is not a second sign that a start ended
+            counts[2] += not attempt and e.get("reason") != FAILED_NO_USAGE
         elif name == "context_compaction_started":
             if attempt:
                 started[(module, attempt)] = (module, call)

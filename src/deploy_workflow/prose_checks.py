@@ -1176,7 +1176,8 @@ def lost_values(previous: str, new: str, named: Sequence[str] = ()) -> list[dict
     lost: list[dict[str, str | int]] = []
     seen: set[object] = set()
     for number, line in enumerate(previous.splitlines(), 1):
-        nearby = twins.get(_shape(line), set())
+        # only numbers the repair brought onto the line can be a correction of it
+        nearby = twins.get(_shape(line), set()) - set(_tokens(line))
         for key, shown, token, figure in _tracked(line):
             excused = any(
                 (lines is None or number in lines)

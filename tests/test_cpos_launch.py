@@ -5467,6 +5467,15 @@ def test_a_unit_cell_naming_another_currency_keeps_the_gap_advice(unit):
     assert "must be exactly" not in issue
 
 
+@pytest.mark.parametrize(
+    "unit", ["US$m (LTM)", "US$m; PIK interest accrued", "US$m, RCF drawn only", "US$m (TTM basis)"]
+)
+def test_a_three_letter_acronym_after_the_unit_is_not_another_currency(unit):
+    (issue,) = debt_stack_issues(DEBT_UNIT_ROW.format(unit))
+    assert "must be exactly `US$m`" in issue
+    assert "Not supplied" not in issue
+
+
 def test_a_second_table_under_one_heading_is_named_not_reported_as_malformed_rows():
     second = (
         "| Transaction-only balance | Date | Amount | Unit | Basis | Source |\n"
@@ -7129,6 +7138,58 @@ def test_a_module_with_several_summaries_in_one_call_is_listed_for_review(tmp_pa
         (
             "Review: CP-8 had more than one context summary billed in one call; check the run's "
             "charge."
+        ),
+    )
+
+
+def test_an_accepted_repair_that_dropped_values_is_listed_for_review(tmp_path):
+    events_dir(
+        tmp_path,
+        ("values_dropped_on_repair", {"module": "CP-6", "count": 2}),
+        ("values_dropped_on_repair", {"module": "CP-2", "count": 1}),
+    )
+    assert cpos_launch._review_lines(tmp_path) == (
+        (
+            "Review: CP-6 was accepted after a repair that removed 2 sourced values; the list is "
+            "in that module's review.json (dropped_values). Check them."
+        ),
+        (
+            "Review: CP-2 was accepted after a repair that removed 1 sourced value; the list is "
+            "in that module's review.json (dropped_values). Check it."
+        ),
+    )
+
+
+def test_a_failed_dropped_value_check_is_listed_for_review(tmp_path):
+    events_dir(
+        tmp_path,
+        ("dropped_values_check_failed", {"module": "CP-4", "error": "ValueError: boom"}),
+        ("dropped_values_check_failed", {"module": "CP-4", "error": "ValueError: boom"}),
+    )
+    assert cpos_launch._review_lines(tmp_path) == (
+        (
+            "Review: CP-4 had a repair whose removed values could not be checked "
+            "(dropped_values_error in its review.json); compare the repair with the rejected "
+            "draft."
+        ),
+    )
+
+
+def test_a_failed_summary_and_an_unended_start_without_ids_are_two_summaries(tmp_path):
+    events_dir(
+        tmp_path,
+        ("context_compaction_started", {"module": "CP-5", "call_index": 1}),
+        ("context_compaction_started", {"module": "CP-5", "call_index": 2}),
+        ("context_compacted", {"module": "CP-5", "call_index": 3, "usd": "unknown"}),
+        (
+            "compaction_uncharged",
+            {"module": "CP-5", "call_index": 3, "reason": "failed, no usage reported"},
+        ),
+    )
+    assert cpos_launch._charge_notes(tmp_path) == (
+        (
+            "Charged excludes 2 context summaries with no reported charge (CP-5); "
+            "Copilot may bill them."
         ),
     )
 

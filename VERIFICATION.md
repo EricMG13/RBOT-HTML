@@ -4,6 +4,11 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-13 — Quality-defects appendix: Published rule, context-summary charges, dropped values on repair (branch `claude/quality-defects-appendix-cpdr`, whole-branch review and fix wave, origin/main merged at `0b46fa5`)
+Scope: OFFLINE only. Tests, reviewer probes (`.superpowers/sdd/quality-defects/probes/`) and a replay of the retained raw bodies of four Copilot runs and one opus run; no provider or model call, no live Copilot run. No instruction or checker changed here has been sent to a live model. T1: the Published rule is stated once and checked once, the unit and second-table messages are specific, and the library accepts a Published equal to the event date and a stated gap; no page layout changed, so no reader check is claimed (if the owner reads the Calendar change as presentational, T1 is built, not accepted). T2: a repair's dropped sourced values are listed; replay of 34 rejected-then-rewritten pairs reports only CP-6 USD 247 million and USD 755 million. T3: three completed context summaries (USD 0.353237 in all) sit inside their calls' settlements; four starts with no completion are disclosed, not charged; a late charge is disclosed beside `Charged:`, not settled or capped. Fix wave after the whole-branch review: the launcher prints a `Review:` line for an accepted repair that dropped values and for a failed check (M1); an unquoted, line-less issue no longer excuses a value through a number already on its line (L1); the unit advice recognises real currency codes only (L2); id-less failed summaries no longer hide an unended start (L3).
+Gates: quality gate exit 0; affected tests (`tests/model`, `test_handoff_loop.py`, `test_cpos_launch.py`, `test_credit_os_store.py`) only the three known failures (`tests/known-failures.txt`: `test_gate` x2, `test_o5_done_when`). Probes that exit 1 by ruling: `t3adv-p1`, `t3adv-p4-cap`, `t3adv-p2`, `t2-p3-mask`, `t2fix-p4-correction`, and `branch-guarded-twin-suite.py` (shows a rejected simplification); the branch probes for M1 and L1 to L3 exit 0 after the fix wave.
+Not demonstrated: a live Copilot run on this code; `drain_compactions` against the real SDK; the `Review:` and `Charged excludes` lines on a real run; the `run_comparison` call site (unreachable today); the 3.85 bytes-per-token estimate beyond the 15 modules measured; the opus limit; mutation and property tests (not run); PR size over the 800-line guide (ruled).
+
 ## 2026-11-13 — Issuer library screens redrawn from a screen-to-component map; source references and audit material moved to Evidence (branch `claude/report-redesign-evidence`)
 Scope: presentation only, offline, base `517b9fb`, head `d47e3ba` before this entry; no provider or model call, no change to analysis, module instructions or the Python that builds `data.js` (no Python outside `tests/` changed; under `apps/` only the README and `fixtures/shape-key.json` beside the web files changed; under `tests/` 19 files changed, among them `test_library_reader_refs.py`, `test_cpos_launch.py`, `test_run_start_page.py`, `test_library_page_browser.py`, `test_library_changes_browser.py` and the `browser_probe_*.js` helpers, edited to match the new pages). Design: `docs/visualisations/2026-11-13-screen-component-map.md`, plan `docs/superpowers/plans/2026-11-13-library-redesign.md`. Rules applied: findings pages show findings and one trace control per paragraph, row or figure; source references, file names, hashes, ids, calculation ids, registers, gap ledgers and run codes are drawn only on the Evidence page and its drawer; text written for another module is drawn nowhere, search and drawer included; a run is named by period and pathway; nothing is computed or reworded (allowed: counts of listed items, the elapsed clock on Run activity, date display); motion only for live run state.
 Reviews: tasks 0 to 13 each had a task review and fix rounds (T1 1, T2 1, T3 3, T4 1, T5 2, T6 2, T7 1, T8 1, T9 2, T10 3, T11 1, T12 2, T13 1; the third rounds from a root-cause plan); two end batches closed 30 deferred Low items. Whole-branch review at `ac1164f`: changes needed, 2 High (trace controls dead on Forecast and Changes; search and the drawer reached text written for another module), 6 Medium, 8 Low. A simplification review recommended four rewrites and deletions and compacting the classifier answer key (same parsed JSON). Fix wave `7881b72..47b8f28`, round 2 `53f4070`, round 3 `d47e3ba` (an Evidence search hit is matched by module and line together); each round was re-reviewed, and the re-review of `d47e3ba` approved with no High or Medium finding open.
@@ -954,36 +959,3 @@ Owner: "Yes, run it", then "Merge now apply corrections on next PR". Ruling
   cost saving and the reads CP-3 and CP-5 now get are estimates from retained requests; the
   relaunch refusal for old folders was checked by instruction text (old `CP-0.md` lacks the new
   sentence), not by a launch.
-
-## 2026-11-10 — Names, not codes, on every library screen (branch `claude/names-not-codes`)
-
-Owner: "Remove all cp-IDs and methodology step IDs from user facing screens. Replace with module
-name or other." Display only (`apps/issuer-library/credit_os/web/`); routes, hrefs, download names,
-`data.js` and the retained handoffs are unchanged. Record: `docs/design/2026-11-10-screens-pass.md`,
-"Codes off the screen".
-
-- Change: module codes read as module names everywhere, including Evidence & audit, the Evidence
-  tab, the inspector, chips, the coverage strip, the reports' "Built from" table and each delivered
-  report with its own inspector. `CP-x.md` reads "<name> handoff" and `CP-x_RUNBOOK.md` "<name>
-  runbook". A method step id (`T4.10`, `T1D.1`, `T4.D1`, `T2G.*`, `T2E.3.r01`) becomes the step's
-  title from the same output, or "a method step" / "method steps" when there is none. A column of
-  bare step ids is dropped. Kept as written: register references (`C9`, `G1`, `GAP-001`), a bare
-  `T<n>` ("T2 Biosystems", "Tier 2 (T2)"), and the quoted issuer source excerpt.
-- Answer key (scratch crawler, not shipped): every in-app route plus the delivered reports. Text,
-  option text, title, aria-label, alt and placeholder; one inspector per page. Before: 22,649
-  module-code and 1,914 step-id hits over 349 routes of the four retained TDG runs. After
-  (`54d7763`): `counted 0`. After merging main (`715f6f5`): `counted 0` over 186 routes and three
-  runs. Main's methodology change now excludes `cpos-tdg-sol-medium-all-001` from the library ("not
-  on the current methodology").
-- Tests written first and seen failing (15 static, 3 browser). On the merged tree: `node --test`
-  static + calendar 125 pass; `tests/test_library_page_browser.py` 21 passed; CI fast pytest list
-  1471 passed, 7 deselected; quality gate 0 findings. All exit 0.
-- Review: task review and fix round (mx-precise), whole-branch review (mx-architect), one fix
-  wave and its re-review; implementation by mx-feature. Parked as latent, no retained instance:
-  - step titles taken from any short second cell;
-  - a step id cited beside another module's code takes this output's title;
-  - the `;` joiner merging two untitled clauses;
-  - `CP-0-A.md`-style names in the app.
-- Not verified: Windows and Edge, phone widths, a screen reader; live Run activity data; a Forecast
-  model with step ids; runbook names on a rendered page (string-level test only); any issuer other
-  than TDG.
