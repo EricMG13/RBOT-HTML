@@ -56,7 +56,9 @@ fidelity, and delivery published module-to-module text verbatim. Evidence on mai
    its consequence for creditors); key findings, judgement first, with only the figures that move
    the view; the strongest contrary evidence and what would change the view; limitations once,
    only where they change a conclusion, the rest in the gaps table; then tables and registers,
-   unchanged and exact. Evidence, then risk mechanism, then credit implication governs the
+   unchanged and exact (superseded for the registers and routing text named in
+   `2026-11-13-appendix-and-routing-scope.md`, which modules no longer write). Evidence, then risk
+   mechanism, then credit implication governs the
    reasoning and the registers, written as ordinary sentences, never as labels. The persona text
    is kept with one added line: "Lead with the judgement; use data to support it, not to narrate
    it." Data modules (source readiness, canonical data, peers) keep tables as their main content
@@ -117,7 +119,8 @@ The handoff's H2 sections are unchanged (`## Request`, `## Sources`, `## Finding
 4. `### Limitations`
 
 Every other `## Findings` content (method sections, registers, tables, report selectors, the
-forecast block) follows `### Limitations`, unchanged and exact. These four headings replace
+forecast block) follows `### Limitations`, unchanged and exact. (Superseded for the registers and
+routing text named in `2026-11-13-appendix-and-routing-scope.md`.) These four headings replace
 `### Reader summary` and the module-specific opening H3 (`OPENING` in `cpos_launch.py`).
 
 "Reader passages" below means the bodies of these four sections only.
@@ -162,6 +165,9 @@ The Basis line carries what used to be inline citations.
   "Basis" link.
 
 ### H4. Tables and registers
+
+Superseded for the registers and routing text named in `2026-11-13-appendix-and-routing-scope.md`
+(owner, 2026-11-13): those are no longer written, and every other register stays as follows.
 
 Tables and registers follow the reader passages, unchanged and exact: same rows, columns, IDs,
 values and order. A table that cites sources has a column headed `Source` whose cells name the
@@ -347,3 +353,10 @@ headed `ID`. Reason: the first-column heuristic banned period labels such as `FY
 under a column headed `Calculation` or any other name is no longer banned from prose. The readers of earlier runs
 (`reader_passages`, `bottom_line_text`, `limitation_texts`, `is_earlier_format`) are not touched. Text only; the
 change is built in a later package.
+
+## Amendment, 2026-11-13
+
+Owner: "remove vmo2 checker the cause was resolved". The reading of one real run per change
+against the September VMO2 reference (decision 11 and the "Not machine-gated" paragraph) is no
+longer required. The VMO2 outputs stay the voice reference; fidelity checks and the mechanical
+prose checks are unchanged. `AGENTS.md` carries the rule.

@@ -1192,3 +1192,214 @@ def test_default_idle_bound_is_the_overall_bound(rig: Rig) -> None:
     adapter = rig.make(text_script())
     assert adapter._idle_s == adapter._overall_s == OVERALL_S
     assert adapter._idle_s > IDLE_S
+
+
+# ---------------------------------------------------------------- compaction events (T3)
+
+
+def compaction_script(*events: tuple[str, dict[str, Any]]) -> list[Step]:
+    """A text turn with the runtime's compaction events arriving mid-call, before the usage."""
+    return [
+        *(Emit(wire(kind, data)) for kind, data in events),
+        said("ANSWER"),
+        usage(copilotUsage={"totalNanoAiu": 123456}),
+        Idle(),
+    ]
+
+
+def test_a_compaction_that_completes_mid_call_is_on_the_reply(rig: Rig) -> None:
+    from deploy_workflow.model.turn import Compaction
+    from tests.model._compaction import COMPLETE_CP8, CP8_USD, START_CP8
+
+    script = compaction_script(
+        ("session.compaction_start", START_CP8), ("session.compaction_complete", COMPLETE_CP8)
+    )
+    reply = call(rig.make(script), request())
+    assert reply.kind == "ok"
+    assert [c.kind for c in reply.compactions] == ["start", "complete"]
+    done = reply.compactions[1]
+    assert done == Compaction(
+        kind="complete",
+        attempt_id="9adc3933-fffb-4810-a23a-717e91c08200",
+        tokens_before=259070,
+        tokens_after=42447,
+        token_limit=272000,
+        success=True,
+        usd=Decimal(CP8_USD),
+        usage_reported=True,
+        request_count=1,
+    )
+    # the call's own charge is untouched: the compaction's is a separate amount on the reply
+    assert reply.billed_usd == Decimal("0.00000123456")
+
+
+def test_a_call_without_compaction_has_none(rig: Rig) -> None:
+    assert call(rig.make(text_script()), request()).compactions == ()
+
+
+def test_a_start_with_no_complete_is_recorded_as_a_start_only(rig: Rig) -> None:
+    from tests.model._compaction import START_MEDIUM_CP8
+
+    script = compaction_script(("session.compaction_start", START_MEDIUM_CP8))
+    reply = call(rig.make(script), request())
+    assert [c.kind for c in reply.compactions] == ["start"]
+    assert reply.compactions[0].tokens_before == 225537
+
+
+def test_a_compaction_in_a_timed_out_call_is_still_on_the_reply(rig: Rig) -> None:
+    from tests.model._compaction import COMPLETE_CP8
+
+    script: list[Step] = [
+        Emit(wire("session.compaction_complete", COMPLETE_CP8)),
+        said("part"),
+        usage(copilotUsage={"totalNanoAiu": 5}),
+    ]
+    reply = call(rig.make(script, idle_s=0.2, overall_s=30.0), request())
+    assert reply.kind == "sent_usage" and reply.error_class == "IdleTimeout"
+    assert [c.kind for c in reply.compactions] == ["complete"]
+
+
+def test_compaction_stays_the_sdk_default(rig: Rig) -> None:
+    """Not disabled here: a module whose first prompt already exceeds the limit would fail."""
+    call(rig.make(text_script()), request())
+    assert "infinite_sessions" not in rig.session.options
+
+
+def test_a_compaction_call_exports_with_the_turns_own_billed_amount(
+    rig: Rig, tmp_path: Path
+) -> None:
+    """calls.jsonl carries the compaction and a settled charge that includes it; the recording
+    still exports, with the turn's own billed amount (what the raw body parses to)."""
+    from tests.model._compaction import COMPLETE_CP8, START_CP8
+    from tests.test_handoff_loop import GOOD
+
+    script: list[Step] = [
+        Emit(wire("session.compaction_start", START_CP8)),
+        Emit(wire("session.compaction_complete", COMPLETE_CP8)),
+        said(""),
+        usage(finishReason="tool_calls", numToolCalls=1, copilotUsage={"totalNanoAiu": 123456}),
+        Invoke("c1", "write_handoff", {"markdown": GOOD.decode()}),
+        Await(),
+    ]
+    run, exported = _run_and_export(rig, tmp_path, rig.make(script))
+    (rec,) = CallLog(run, Redactor()).records()
+    assert rec["cost_status"] == "billed"
+    # 0.00000123456 (the turn: 123,456 nano-AIU) + 0.0996381 (the compaction), by hand
+    assert Decimal(rec["settled_usd"]) == Decimal("0.09963933456")
+    assert [c["kind"] for c in rec["compactions"]] == ["start", "complete"]
+    assert exported["response"]["billed_usd"] == "0.00000123456"  # the turn's own, not the sum
+
+
+def test_a_completion_that_arrives_after_the_boundary_is_drained_when_the_module_ends(
+    rig: Rig,
+) -> None:
+    """Probe t3adv-p1: the compaction completes after the call's boundary, while the session is
+    still open. The reply cannot carry it; the drain hands it back."""
+    from tests.model._compaction import COMPLETE_CP8, CP8_USD, START_CP8
+
+    script: list[Step] = [
+        Emit(wire("session.compaction_start", START_CP8)),
+        said(""),
+        usage(finishReason="tool_calls", numToolCalls=1, copilotUsage={"totalNanoAiu": 123456}),
+        Invoke("c1", "read_pages", {"p": 1}),
+        Emit(wire("session.compaction_complete", COMPLETE_CP8)),
+        Await(),
+    ]
+    adapter = rig.make(script)
+    reply = call(adapter, request())
+    assert [c.kind for c in reply.compactions] == ["start"]
+    late = adapter.drain_compactions(DIGEST)
+    assert [(c.kind, c.usd) for c in late] == [("complete", Decimal(CP8_USD))]
+    assert adapter.drain_compactions(DIGEST) == ()  # drained once
+
+
+def test_a_drain_that_times_out_is_logged_not_silent(
+    rig: Rig, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    import logging
+
+    adapter = rig.make(tool_script())
+    call(adapter, request())
+    monkeypatch.setattr(copilot_adapter, "_OUTER_SLACK_S", 0.2)
+    assert adapter._loop is not None
+    adapter._loop.call_soon_threadsafe(time.sleep, 1.0)  # the loop does not answer in time
+    with caplog.at_level(logging.WARNING):
+        assert adapter.drain_compactions(DIGEST) == ()
+    assert any("drain" in r.getMessage() and r.levelno == logging.WARNING for r in caplog.records)
+
+
+def test_a_summary_running_at_the_module_end_is_swept_before_close(
+    rig: Rig, tmp_path: Path
+) -> None:
+    """The adapter is closed before the launcher totals the run: a summary that completes after
+    the module's end drain is taken by the sweep that precedes the close."""
+    import asyncio
+
+    from deploy_workflow.run_events import read_events
+    from tests.model._compaction import COMPLETE_CP8, START_CP8
+    from tests.test_handoff_loop import GOOD
+
+    script: list[Step] = [
+        Emit(wire("session.compaction_start", START_CP8)),
+        said(""),
+        usage(finishReason="tool_calls", numToolCalls=1, copilotUsage={"totalNanoAiu": 123456}),
+        Invoke("c1", "write_handoff", {"markdown": GOOD.decode()}),
+        Await(),
+    ]
+    adapter = rig.make(script)
+    run = tmp_path / "run"
+    run.mkdir()
+    executor = HandoffExecutor(
+        run / "live", adapter=adapter, cap_usd=Decimal(25), check=check, events=run
+    )
+    assert executor(task()) == GOOD
+    names = [e["event"] for e in read_events(run / "events.jsonl")]
+    assert "compaction_uncharged" in names and "compaction_charge_late" not in names
+    assert adapter._loop is not None
+    adapter._loop.call_soon_threadsafe(
+        rig.session.deliver, wire("session.compaction_complete", COMPLETE_CP8)
+    )
+    asyncio.run_coroutine_threadsafe(asyncio.sleep(0.05), adapter._loop).result(5)
+    executor.drain_late()
+    (late,) = [
+        e for e in read_events(run / "events.jsonl") if e["event"] == "compaction_charge_late"
+    ]
+    assert Decimal(late["usd"]) == Decimal("0.0996381")
+
+
+def test_draining_an_unknown_or_closed_exchange_gives_nothing(rig: Rig) -> None:
+    adapter = rig.make(text_script())
+    assert adapter.drain_compactions("e" * 64) == ()
+    call(adapter, request())
+    adapter.close()
+    assert adapter.drain_compactions(DIGEST) == ()
+
+
+def test_a_late_completion_through_the_executor_is_disclosed_not_lost(
+    rig: Rig, tmp_path: Path
+) -> None:
+    """Probe t3adv-p1's scenario end to end: the last call is settled without the summary's
+    charge; the module's end drains it into a ``compaction_charge_late`` event."""
+    from deploy_workflow.run_events import read_events
+    from tests.model._compaction import COMPLETE_CP8, CP8_USD, START_CP8
+    from tests.test_handoff_loop import GOOD
+
+    script: list[Step] = [
+        Emit(wire("session.compaction_start", START_CP8)),
+        said(""),
+        usage(finishReason="tool_calls", numToolCalls=1, copilotUsage={"totalNanoAiu": 123456}),
+        Invoke("c1", "write_handoff", {"markdown": GOOD.decode()}),
+        Emit(wire("session.compaction_complete", COMPLETE_CP8)),
+        Await(),
+    ]
+    run = tmp_path / "run"
+    run.mkdir()
+    executor = HandoffExecutor(
+        run / "live", adapter=rig.make(script), cap_usd=Decimal(25), check=check, events=run
+    )
+    assert executor(task()) == GOOD
+    events = read_events(run / "events.jsonl")
+    (late,) = [e for e in events if e["event"] == "compaction_charge_late"]
+    assert Decimal(late["usd"]) == Decimal(CP8_USD) and late["module"] == "CP-2"
+    assert not [e for e in events if e["event"] == "compaction_uncharged"]
+    assert executor.budget.spent == Decimal("0.00000123456")  # the last call's marker is final

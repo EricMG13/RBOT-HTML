@@ -32,7 +32,7 @@ from deploy_workflow.model.adapter import (
 )
 from deploy_workflow.model.handoff import _pages
 from deploy_workflow.model.providers import build
-from deploy_workflow.model.turn import ToolCall, Turn, Usage, hosted_kind
+from deploy_workflow.model.turn import Compaction, ToolCall, Turn, Usage, hosted_kind
 from deploy_workflow.owners import cpos_forecast, cpos_launch
 from deploy_workflow.owners.cpos import (
     HandoffPlan,
@@ -51,6 +51,7 @@ from deploy_workflow.owners.cpos_launch import (
     refuse_deactivated,
     without_for,
 )
+from deploy_workflow.run_events import read_events
 from deploy_workflow.run_expectations import RULES, Item
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -384,10 +385,10 @@ EVENT_HEAD = (
     "| Event date | Date precision | Published | Event | Status | Source | Credit relevance |"
 )
 EVENT_ROWS = (
-    "| 2025-03-31 | day | — | Synthetic note | Scheduled — matures | Synthetic filing p.1 | Wall |",
+    "| 2025-03-31 | day | 2024-11-07 | Synthetic note | Scheduled — matures | Filing p.1 | Wall |",
     "| 2025-06 | month | 2025-05-01 | Synthetic call | Historical — noted | Memo | Cost |",
-    "| 2025-Q3 | quarter | — | Synthetic review | Scenario — modelled | Synthetic memo | Rating |",
-    "| 2026 | year | — | Synthetic maturity | Scheduled — maturity | Synthetic filing p.2 | Wall |",
+    "| 2025-Q3 | quarter | 2024-11-07 | Synthetic review | Scenario — modelled | Memo | Rating |",
+    "| 2026 | year | 2024-11-07 | Synthetic maturity | Scheduled — maturity | Filing p.2 | Wall |",
 )
 EVENT_LANES = {  # module -> (lane name, a phrase of its catalogue guard the instructions carry)
     "CP-0": ("Sources", "import timestamp"),
@@ -514,6 +515,17 @@ PASSAGES = (
 )
 
 
+def register_rows(module: str) -> list[str]:
+    """The in-scope registers a real handoff of the ten measured modules carries (T4 presence
+    check), each with the row the method allows for one with nothing to report."""
+    rows: list[str] = []
+    for ident in cpos_launch.required_registers(module):
+        note = "Not supplied: nothing to report"
+        rows += [f"### {ident} - Register", "", "| Item | Value |", "| --- | --- |"]
+        rows += [f"| Observed | {note} |", ""]
+    return rows
+
+
 def answer(context: dict, plan_routes: list) -> str:
     lines = [f"# {context['module_id']}", "", "## Request", f"{ISSUER} as of {AS_OF}.", ""]
     lines += ["## Sources", ""]
@@ -550,6 +562,7 @@ def answer(context: dict, plan_routes: list) -> str:
         lines += ["### Post-balance-sheet adjustments", "", POST_BS_NONE, ""]
     for heading, table in OWNER_TABLES.get(context["module_id"], {}).items():
         lines += [f"### {heading}", "", table, ""]
+    lines += register_rows(context["module_id"])
     for heading in ("Calculations", "Gaps", "Next module"):
         held = heading == "Calculations" and context["module_id"] not in DATA_MODULE_IDS
         # The passage figures (fidelity check) are held in a table outside the passages.
@@ -595,11 +608,22 @@ def provider(monkeypatch):
             billed_usd=Decimal("0.01") if self.config_id == "deepseek-max" else None,
         )
         return AdapterReply(
-            "ok", turn, None, 200, None, None, 1, 2, turn.usage, billed_usd=turn.billed_usd
+            "ok",
+            turn,
+            None,
+            200,
+            None,
+            None,
+            1,
+            2,
+            turn.usage,
+            billed_usd=turn.billed_usd,
+            compactions=provider.compactions.get(context["module_id"], ()),
         )
 
     monkeypatch.setattr(LiveAdapter, "complete", complete)
     provider.calls = calls
+    provider.compactions = {}  # module -> the compactions its call reports (Copilot only)
     provider.searched = []
     provider.systems = {}
     provider.models = set()
@@ -2057,10 +2081,10 @@ def test_cp0_runs_the_deploy_v_skill_not_the_json_stand_in(tmp_path):
     for words in (
         "already listed, hashed and pinned the sources",
         "Do not write the registers P1, P2, P4, P6, P7 and P8",
-        "Write P3 and P5",
-        "T1 input gate, T2 source register, T3 source hierarchy",
-        "T8 recommended run command sheet",
-        "the minimum missing documents",
+        "Do not write T7 or T8: CP-OS orders the modules.",
+        "Write P3 and the readiness tables T1 input gate, T2 source register",
+        "T4 content-to-module map and T6 evidence trace",
+        "State any missing document under `## Gaps`.",
         "only for a source the effective-source set does not carry",
         "never a readiness ground and never a `CONDITIONAL` condition",
         "The package, parse and hash checks were done by the launcher: record no result for them",
@@ -2446,28 +2470,33 @@ def test_every_module_is_told_what_stands_for_acceptance_scripts_and_questions(t
 # CP-8 pin recomputed on 2026-11-13 (merge of origin/main into claude/deploy-v-methods): it is the
 # merge of main's CP-8 method change (cp8.md redesign) with this branch's appendix section. Every
 # other pin is this branch's value; main changed no other method text.
+# Ten pins recomputed on 2026-11-13 and again the same day for the canon-rule clause, CP-5's and
+# CP-6's two kept ids, CP-2E's kept ESG tables and the routing-ids sentence in every section
+# (T4, ruling 2026-11-13-appendix-and-routing-scope.md): CP-0, CP-1A, CP-DR, CP-2, CP-2A, CP-2E,
+# CP-2G, CP-3, CP-5 and CP-6 now end their method block with their
+# section of CPOS_REGISTER_SCOPE.md; the added text is that section and nothing else.
 METHOD_TEXT_SHA256_AT_1B41E65 = {
-    "CP-0": "e8d3e77bc48bc98e2fd8595e7b46ee7fc786e859591cf244325f3508b7d5dac9",
+    "CP-0": "307017934f4e8e75fc432e8b7ef100bba82ce84f1bb6910f37c7e715fe701e72",
     "CP-1": "02477a91d582f6301b2dbfadd96572ea75f9845493de337d7160a55111b62170",
-    "CP-1A": "4c8efcfafe748cd01e6c856041349397c77384c3c82566b1f36a429535c01639",
+    "CP-1A": "9de9426a829625461dee6cf850965590c923f661ceaa57208ad9028da8796b03",
     "CP-1B": "38d9fa7b075d1ce5d0cd21bcc216f57f37369cd4db395b3f1fb65498697a509f",
     "CP-1C": "9353afdbce820f59c2dcabc951fc1ff3813174b3c84e79b47bc22bea97f3bbe8",
     "CP-1D": "d4d1ee4507d743cdb9d98bffd865ca3d012a4b4fb79a92a275cfc6a796bff453",
-    "CP-2": "f925b66f13cff7bd7801d1c3cf7120eb1317126c8605bf1ff1875ce62ed3c162",
-    "CP-2A": "5caf04f5b39bae89726bcd5929e8f17ca14b7d753f1ac718d58eda27baf9569f",
+    "CP-2": "5cbdd1f22217b8bffcf9a276b2645a96f5eb40c05c6262d47473715eeee6cdcc",
+    "CP-2A": "ab479e6fbfecb748bdda2767345f7945c01fa719d13a76e364a13b54fb63a8b1",
     "CP-2D": "fe39c49f842c99f6ffd390bd409cbb44adbbe397720d0a0d4d935b52a34a8fda",
-    "CP-2E": "ab111a4fb0bd201b84dbec916ccdba6e5df92f60671b2d419949ca34d6118e34",
-    "CP-2G": "268a85d82da39c9b7b66474b4052eb23b310f7fc5ce0c9d7efa25766a5699cf2",
+    "CP-2E": "b5ebefffbbf3792026e330d32320aeee9a472ff1d50bb3dfd2eae7465d8cfb08",
+    "CP-2G": "30f8bb12685ec883e4c824ea03a53fac4c4c3afc9bd2801a2019db77740523aa",
     "CP-2H": "f500af91511584f3dda4d0dd10180766dabe19d81de7df12a99b6da2d92e89b4",
-    "CP-3": "b84b8a08baa01a24a12f9f5e92a24dc735129a9dfec1449b4d8329833deef123",
+    "CP-3": "2677edd0d0444fd83e02eea62bfa81464711467bf2c56ad59dd58ba544fade21",
     "CP-3C": "d1038d5097955d6bf47ccae01fee07bdc1db0b2e49eb7b77d0153c07b48768ac",
     "CP-3D": "a35a8a1d6f1b7aaecf7e98613e80a04c4c158f9163f315edbd004647463aa698",
     "CP-4": "a769b7456e5661d70cb25388fc4acb444cfd0aecd8f778554f98369ebadc7f7e",
     "CP-4C": "1d96547563190f89b909c37ea47969ecb04a2c794c5971b6db8f7c94c836b1f8",
-    "CP-5": "9ac221698cc36a06473ce8cd9c2128c1705da362b289163d4ab54fda0d418d76",
-    "CP-6": "115d07e8934f049b920e497834bcf61d53c6fe0cdd0266daf56b87d18d5e1f26",
+    "CP-5": "d9298b83eba40be26a7cc6ddf5d5c12558e5c5cd471e7ce39e9c3942dc27f733",
+    "CP-6": "3c5666e0da9f1898005a01dfdecc117580118bd2cdaa9796b84e646262ed80d5",
     "CP-8": "0a0b339a9f9a284328b9a6fb50513a9bd03f2aa58dd45a387fe057b6ce2612c3",
-    "CP-DR": "83aa5447c37db42db2e3df91cdd0cfaf491f37c0436fc8257c0d5fb43e735353",
+    "CP-DR": "a653c33d85726c2eafd65b91940ecaa8cb7787a158c3f9439ffea2a139f18657",
     "CP-L10": "5b0e904dd62e1d1b341ec3d7d1717500d68ce1aee734b347e0dbbdfbe696b006",
 }
 
@@ -5142,18 +5171,27 @@ def test_a_good_event_table_is_accepted_for_each_lane(module):
 @pytest.mark.parametrize(
     ("row", "complaint"),
     [
-        ("| 2025-03 | day | — | E | S | Src | R |", "Event date `2025-03` must be YYYY-MM-DD"),
-        ("| 2025-02-30 | day | — | E | S | Src | R |", "must be YYYY-MM-DD"),
-        ("| 2025-03-31 | month | — | E | S | Src | R |", "must be YYYY-MM"),
-        ("| 2025-13 | month | — | E | S | Src | R |", "must be YYYY-MM"),
-        ("| 2025-Q5 | quarter | — | E | S | Src | R |", "must be YYYY-Qn"),
-        ("| 2025-Q2 | year | — | E | S | Src | R |", "must be YYYY"),
+        (
+            "| 2025-03 | day | 2024-11-07 | E | S | Src | R |",
+            "Event date `2025-03` must be YYYY-MM-DD",
+        ),
+        ("| 2025-02-30 | day | 2024-11-07 | E | S | Src | R |", "must be YYYY-MM-DD"),
+        ("| 2025-03-31 | month | 2024-11-07 | E | S | Src | R |", "must be YYYY-MM"),
+        ("| 2025-13 | month | 2024-11-07 | E | S | Src | R |", "must be YYYY-MM"),
+        ("| 2025-Q5 | quarter | 2024-11-07 | E | S | Src | R |", "must be YYYY-Qn"),
+        ("| 2025-Q2 | year | 2024-11-07 | E | S | Src | R |", "must be YYYY"),
         ("| 2025 | week | — | E | S | Src | R |", "Date precision `week` must be one of"),
         ("| 2025-03-31 | day | May 2025 | E | S | Src | R |", "Published `May 2025`"),
         ("| 2025-03-31 | day | 2025-02-30 | E | S | Src | R |", "Published `2025-02-30`"),
-        ("| 2025-03-31 | day | — | | S | Src | R |", "Event is blank"),
-        ("| 2025-03-31 | day | — | E | S | Not supplied: none | R |", "Source is blank or not"),
-        ("| Not supplied: undated | day | — | E | S | Src | R |", "Event date is blank or not"),
+        ("| 2025-03-31 | day | 2024-11-07 | | S | Src | R |", "Event is blank"),
+        (
+            "| 2025-03-31 | day | 2024-11-07 | E | S | Not supplied: none | R |",
+            "Source is blank or not",
+        ),
+        (
+            "| Not supplied: undated | day | 2024-11-07 | E | S | Src | R |",
+            "Event date is blank or not",
+        ),
     ],
 )
 def test_a_malformed_event_row_is_sent_back(row, complaint):
@@ -5161,11 +5199,69 @@ def test_a_malformed_event_row_is_sent_back(row, complaint):
     assert any(complaint in i for i in issues), issues
 
 
+# Published is the date of the publication the row is taken from (checker-loop-3, corrected). The
+# 2033 maturity is taken from the FY2024 annual report, whose own date is 2024-11-07.
+TEN_K_ROW = (
+    "| 2033-06-15 | day | {} | 2033 senior secured notes mature | Scheduled \u2014 maturity "
+    "| Annual report FY2024, p.145 | Wall |"
+)
+
+
+def test_the_instructions_for_an_events_module_state_the_published_rule():
+    text = cpos_launch._selector(event_spec("CP-3"))
+    assert "date of the publication the row is taken from" in text
+    assert "only when that document states no date" in text
+
+
+def test_a_published_equal_to_the_event_date_is_accepted_for_a_cited_document():
+    row = (
+        "| 2025-03-31 | day | 2025-03-31 | Results | Historical \u2014 released | 8-K p.1 | Wall |"
+    )
+    assert event_issues(row) == ()
+
+
+def test_the_week_row_with_a_dash_is_refused_for_both_its_precision_and_its_published():
+    issues = event_issues("| 2025 | week | \u2014 | E | S | Src | R |")
+    assert any("Date precision `week` must be one of" in i for i in issues), issues
+    assert any("Published `\u2014`" in i and "Not supplied: <reason>" in i for i in issues), issues
+
+
+@pytest.mark.parametrize(
+    "cell",
+    [
+        "\u2014",
+        "-",
+        "Not stated",
+        "",
+        " ",
+        "n/a",
+        "TBC",
+        "Not supplied:",
+        "Not supplied:   ",
+        "07/11/2024",
+        "2024-11-7",
+        "November 7, 2024",
+        "2024-11",
+        "2024-02-30",
+    ],
+)
+def test_a_published_that_is_not_a_date_or_a_reasoned_gap_is_refused_once_with_the_forms(cell):
+    issues = event_issues(TEN_K_ROW.format(cell))
+    assert len(issues) == 1 and "Not supplied: <reason>" in issues[0], issues
+
+
+@pytest.mark.parametrize(
+    "cell", ["2024-11-07", "2033-06-15", "Not supplied: the memo states no date"]
+)
+def test_a_published_date_or_a_reasoned_gap_is_accepted(cell):
+    assert event_issues(TEN_K_ROW.format(cell)) == ()
+
+
 def test_an_event_table_of_only_not_supplied_is_valid_and_a_mixed_one_is_not():
     gap = "Not supplied: the handoff states no dated event"
     assert event_issues(f"| {gap} |" + f" {gap} |" * 6) == ()
     assert event_issues(f"| {gap} |" + f" {gap} |" * 6, EVENT_ROWS[0]) != ()
-    assert event_issues(f"| {gap} | day | — | E | S | Src | R |") != ()
+    assert event_issues(f"| {gap} | day | 2024-11-07 | E | S | Src | R |") != ()
 
 
 def test_an_event_table_needs_its_exact_header_and_a_row():
@@ -5212,16 +5308,37 @@ def test_the_checker_sends_back_a_handoff_with_a_bad_event_precision(tmp_path):
     ],
 )
 def test_an_event_status_starts_with_its_kind_and_a_dash(status, ok):
-    issues = event_issues(f"| 2025-03-31 | day | — | E | {status} | Src | R |")
+    issues = event_issues(f"| 2025-03-31 | day | 2024-11-07 | E | {status} | Src | R |")
     assert (issues == ()) is ok, issues
     assert ok or any("Status" in i for i in issues), issues
 
 
-def test_a_published_date_equal_to_the_event_date_is_sent_back():
-    issues = event_issues("| 2025-03-31 | day | 2025-03-31 | E | Scheduled — due | Src | R |")
-    assert any("write \u2014" in i for i in issues), issues
+def test_a_published_date_equal_to_the_event_date_is_accepted_when_the_document_is_cited():
+    # An 8-K or an earnings release is published on its event date: that is a legitimate row, so
+    # the old refusal is gone (owner ruling, T1 follow-up). The instruction states the rule.
+    assert (
+        event_issues("| 2025-03-31 | day | 2025-03-31 | E | Scheduled — due | 8-K p.1 | R |") == ()
+    )
     assert event_issues("| 2025-03-31 | day | 2025-03-30 | E | Scheduled — due | Src | R |") == ()
     assert event_issues("| 2025-03 | month | 2025-03-31 | E | Scheduled — due | Src | R |") == ()
+
+
+def test_a_period_table_unit_and_second_table_get_the_same_advice():
+    spec = cpos_launch.OWNER_TABLES["CP-1"][0]
+    head = PERIOD_HEAD.format("Revenue | Adjusted EBITDA")
+    row = "| FY2024 | 100 | 20 | {} | Basis. |"
+    heading = f"### {spec.heading}\n\n"
+    issues = cpos_launch.chart_issues(
+        heading + synthetic_table(head, row.format("US$m; per year")), spec
+    )
+    assert len(issues) == 2  # one per number cell, as before
+    assert all("must be exactly `US$m`" in i and "Basis and limitation" in i for i in issues)
+    other = cpos_launch.chart_issues(heading + synthetic_table(head, row.format("EUR m")), spec)
+    assert len(other) == 2 and all("write `Not supplied: reported in EUR m`" in i for i in other)
+    second = "| Other | Date |\n| --- | --- |\n| x | 2024-10-18 |"
+    text = heading + synthetic_table(head, row.format("US$m")) + "\n" + second
+    (two,) = cpos_launch.chart_issues(text, spec)
+    assert "a second table under this heading: give it its own ### heading" in two
 
 
 def test_the_event_rules_say_record_once_and_the_status_kinds():
@@ -5337,6 +5454,73 @@ def test_a_debt_stack_left_with_no_ranked_facility_may_state_none():
     assert "left out" in spec.rules and "states none" in cpos_launch._selector(spec)
 
 
+DEBT_UNIT_ROW = "| Term loan | 1 | Yes | 1871 | 4.72 | {} | Equal rank. |"
+
+
+def debt_stack_issues(*rows: str) -> tuple[str, ...]:
+    spec = next(t for t in ROW_SPECS if t.heading == "Chart data: debt stack")
+    text = "### Chart data: debt stack\n\n" + synthetic_table(DEBT_STACK_HEAD, *rows)
+    return cpos_launch.chart_issues(text, spec)
+
+
+def test_a_unit_that_starts_with_the_chart_unit_is_told_to_keep_only_the_unit():
+    (issue,) = debt_stack_issues(DEBT_UNIT_ROW.format("US$m; leverage in times"))
+    assert "must be exactly `US$m`" in issue and "Basis and limitation" in issue
+    assert "Not supplied" not in issue
+
+
+def test_a_real_other_unit_keeps_the_gap_advice_and_the_issue_count():
+    (issue,) = debt_stack_issues(DEBT_UNIT_ROW.format("EUR m"))
+    assert "write `Not supplied: reported in EUR m`" in issue
+    two = debt_stack_issues(
+        DEBT_UNIT_ROW.format("US$m; leverage in times"), DEBT_UNIT_ROW.format("US$m; x")
+    )
+    assert len(two) == 2
+
+
+@pytest.mark.parametrize(
+    "unit",
+    [
+        "US$m / EUR m",
+        "US$m; EUR amounts",
+        "US$m (GBP)",
+        "US$m (ILS)",
+        "US$m; TWD amounts",
+        "US$m / AED m",
+        "US$m (SAR)",
+    ],
+)
+def test_a_unit_cell_naming_another_currency_keeps_the_gap_advice(unit):
+    (issue,) = debt_stack_issues(DEBT_UNIT_ROW.format(unit))
+    assert f"write `Not supplied: reported in {unit}`" in issue
+    assert "must be exactly" not in issue
+
+
+@pytest.mark.parametrize(
+    "unit", ["US$m (LTM)", "US$m; PIK interest accrued", "US$m, RCF drawn only", "US$m (TTM basis)"]
+)
+def test_a_three_letter_acronym_after_the_unit_is_not_another_currency(unit):
+    (issue,) = debt_stack_issues(DEBT_UNIT_ROW.format(unit))
+    assert "must be exactly `US$m`" in issue
+    assert "Not supplied" not in issue
+
+
+def test_a_second_table_under_one_heading_is_named_not_reported_as_malformed_rows():
+    second = (
+        "| Transaction-only balance | Date | Amount | Unit | Basis | Source |\n"
+        "| --- | --- | ---: | --- | --- | --- |\n"
+        "| Pro forma gross debt | 2024-10-18 | 25230.5 | USD millions | C29 | p.63 |"
+    )
+    spec = next(t for t in ROW_SPECS if t.heading == "Chart data: debt stack")
+    first = DEBT_UNIT_ROW.format("US$m")
+    text = (
+        "### Chart data: debt stack\n\n" + synthetic_table(DEBT_STACK_HEAD, first) + "\n" + second
+    )
+    (issue,) = cpos_launch.chart_issues(text, spec)
+    assert "a second table under this heading: give it its own ### heading" in issue
+    assert "needs 7 cells" not in issue
+
+
 def test_a_repeated_class_and_scenario_row_is_sent_back_but_a_repeated_class_is_not():
     spec = next(t for t in ROW_SPECS if t.heading == RECOVERY)
     one = "| Senior | Base | 100 | 50 | 50 | US$m | S. |"
@@ -5348,7 +5532,7 @@ def test_a_repeated_class_and_scenario_row_is_sent_back_but_a_repeated_class_is_
 
 
 def test_a_user_reminder_status_the_cp6_guard_names_is_accepted_and_a_lookalike_is_not():
-    row = "| 2026-01-15 | day | — | Review | {} | Analyst note | Review date |"
+    row = "| 2026-01-15 | day | 2024-11-07 | Review | {} | Analyst note | Review date |"
     for status in ("User reminder", "User reminder — due"):
         assert event_issues(row.format(status), module="CP-6") == (), status
     for status in ("User reminders", "user reminder", "User reminder -"):
@@ -5700,7 +5884,7 @@ def test_a_claude_run_under_a_ruling_that_lists_web_search_runs_with_search_off(
 
     monkeypatch.setattr(handoff, "HandoffExecutor", recording)
     monkeypatch.setattr(cpos, "live_adapter_for", lambda *args: object())
-    monkeypatch.setattr(cpos, "_release", lambda adapter: None)
+    monkeypatch.setattr(cpos, "_release", lambda adapter, executor: None)
     prepared = prepare(
         context_file(tmp_path),
         issuer_folder(tmp_path),
@@ -6705,3 +6889,467 @@ def test_a_net_debt_period_the_pack_cannot_order_is_refused_with_the_form_to_wri
         "interim balance sheet, one form for the whole table and each period once; put any "
         "other word in the Basis and limitation cell."
     )
+
+
+# ---------------------------------------------------------------- compaction (T3)
+#
+# The compaction is the real CP-8 one of run tdg-full-copilot-sol-high-001-resume (tests/model/
+# _compaction.py): 259,070 tokens before, a charge of 9,963,810,000 nano-AIU x 1E-11 = USD
+# 0.0996381.
+# Each fake module call is 10 input and 5 output tokens on sol-medium: (10 x 2.00 + 5 x 10.00) / 1M
+# = USD 0.00007.
+
+COMPACTED = Compaction(
+    kind="complete",
+    attempt_id="9adc3933-fffb-4810-a23a-717e91c08200",
+    tokens_before=259070,
+    tokens_after=42447,
+    token_limit=272000,
+    success=True,
+    usd=Decimal("0.0996381"),
+)
+COMPACTING = Compaction(kind="start", attempt_id="9adc3933", tokens_before=241349)
+REVIEW_CP4 = (
+    "Review: CP-4 was written after GitHub Copilot summarised its context (259,070 tokens before); "
+    "check its figures against the earlier modules."
+)
+
+
+def charged_line(out: str) -> Decimal:
+    (line,) = [n for n in out.splitlines() if n.startswith("Charged:")]
+    return Decimal(line.split("USD")[1])
+
+
+def compacting_run(tmp_path, provider, *found):
+    argv = launch(tmp_path, "--modules", "CP-4", "--live", "--ruling", str(RULING))
+    routes = prepare_routes(tmp_path, "sol-medium")
+    provider.answer = lambda context: answer(context, routes)
+    provider.compactions = {"CP-4": found}
+    return argv
+
+
+def accepted_events(tmp_path):
+    events = read_events(tmp_path / "out" / "events.jsonl")
+    return {e["module"]: e for e in events if e["event"] == "module_accepted"}
+
+
+def test_a_module_written_after_a_compaction_is_flagged_charged_and_listed(
+    tmp_path, provider, capsys
+):
+    argv = compacting_run(tmp_path, provider, COMPACTING, COMPACTED)
+    assert main(argv) == 0
+    out = capsys.readouterr().out
+    assert out.count("Review:") == 1 and REVIEW_CP4 in out
+    accepted = accepted_events(tmp_path)
+    assert accepted["CP-4"]["written_after_compaction"] is True
+    assert accepted["CP-4"]["compaction_tokens_before"] == 259070
+    assert all("written_after_compaction" not in e for m, e in accepted.items() if m != "CP-4")
+    # every call 0.00007, and the compaction once: the run's reported charge includes it
+    assert charged_line(out) == Decimal("0.00007") * len(provider.calls) + Decimal("0.0996381")
+    notes = list((tmp_path / "out/requests/CP-4").glob("*/*.compaction.json"))
+    assert len(notes) == 1 and json.loads(notes[0].read_text())["tokens_before"] == 259070
+
+
+def test_a_resumed_module_keeps_its_flag_and_its_charge_is_not_settled_twice(
+    tmp_path, provider, capsys
+):
+    argv = compacting_run(tmp_path, provider, COMPACTING, COMPACTED)
+    assert main(argv) == 0
+    first = capsys.readouterr().out
+    calls, spent = len(provider.calls), charged_line(first)
+    ledger = sorted(p.name for p in (tmp_path / "out/live/owner-run-audit/reservations").iterdir())
+    # the second launch resumes: every response is retained, so no call is made
+    provider.answer = lambda context: pytest.fail("a retained module was sent again")
+    assert main(argv) == 0
+    second = capsys.readouterr().out
+    assert len(provider.calls) == calls
+    assert charged_line(second) == spent
+    assert REVIEW_CP4 in second and second.count("Review:") == 1
+    assert accepted_events(tmp_path)["CP-4"]["written_after_compaction"] is True
+    assert ledger == sorted(
+        p.name for p in (tmp_path / "out/live/owner-run-audit/reservations").iterdir()
+    )
+
+
+def test_a_compaction_that_only_started_is_recorded_but_flags_nothing(tmp_path, provider, capsys):
+    argv = compacting_run(tmp_path, provider, COMPACTING)
+    assert main(argv) == 0
+    out = capsys.readouterr().out
+    assert "Review:" not in out
+    assert all("written_after_compaction" not in e for e in accepted_events(tmp_path).values())
+    names = [e["event"] for e in read_events(tmp_path / "out/events.jsonl")]
+    assert "context_compaction_started" in names and "context_compacted" not in names
+    assert not list((tmp_path / "out/requests").glob("*/*/*.compaction.json"))
+    assert charged_line(out) == Decimal("0.00007") * len(provider.calls)
+
+
+def test_a_run_without_any_compaction_prints_no_review_line(tmp_path, provider, capsys):
+    argv = compacting_run(tmp_path, provider)
+    assert main(argv) == 0
+    out = capsys.readouterr().out
+    assert "Review:" not in out and "Context:" not in out
+    assert all("written_after_compaction" not in e for e in accepted_events(tmp_path).values())
+
+
+def test_an_unreadable_compaction_note_still_flags_the_module(tmp_path, provider, capsys):
+    argv = compacting_run(tmp_path, provider, COMPACTED)
+    assert main(argv) == 0
+    (note,) = (tmp_path / "out/requests/CP-4").glob("*/*.compaction.json")
+    note.write_text("{not json")
+    capsys.readouterr()
+    assert main(argv) == 0
+    out = capsys.readouterr().out
+    assert "Review: CP-4 was written after GitHub Copilot summarised its context;" in out
+
+
+def test_a_stopped_run_still_lists_the_modules_written_after_a_compaction(
+    tmp_path, provider, capsys
+):
+    """CP-0 is accepted after a compaction; CP-4 is then rejected and the run stops."""
+    argv = compacting_run(tmp_path, provider)
+    answers = provider.answer
+    provider.answer = lambda context: (
+        "## Request\n\nNot a handoff." if context["module_id"] == "CP-4" else answers(context)
+    )
+    provider.compactions = {"CP-0": (COMPACTED,)}
+    assert main(argv) == 1
+    err = capsys.readouterr().err
+    assert err.startswith("Stopped:") and "Review: CP-0 was written after" in err
+    assert "Review: CP-4" not in err
+
+
+def copilot_readiness(tmp_path, monkeypatch, limit):
+    from deploy_workflow.model import copilot
+
+    monkeypatch.setattr(copilot, "TOKEN_LIMITS", {"gpt-6.1-sol": limit})
+    prepared = prepare(
+        context_file(tmp_path), issuer_folder(tmp_path), tmp_path / "out",
+        config="copilot-sol-medium", cap="50",
+    )  # fmt: skip
+    return prepared, cpos_launch._readiness(prepared, "copilot-sol-medium")
+
+
+def test_readiness_warns_for_each_module_whose_first_prompt_nears_the_copilot_limit(
+    tmp_path, monkeypatch
+):
+    # A limit of 60,000 tokens (80% = 48,000) with the 32,000-token output budget: a module warns
+    # when its estimated prompt passes 16,000 tokens. The estimate by hand: the instruction file's
+    # bytes + 16,384 (the request's fixed part), over 3.85 bytes per token, rounded up.
+    prepared, text = copilot_readiness(tmp_path, monkeypatch, 60_000)
+    warned = {}
+    for module in prepared.ordered:
+        size = (prepared.directory / "instructions" / f"{module}.md").stat().st_size
+        tokens = -(-(size + 16384) * 100 // 385)
+        warned[module] = tokens
+    lines = [n for n in text.splitlines() if n.startswith("Context:  CP-")]
+    expected = [m for m, t in warned.items() if t + 32000 > 0.8 * 60_000]
+    assert expected  # the instructions alone are enough for some module to warn
+    assert [n.split(":")[1].strip() for n in lines] == expected
+    for line in lines:
+        module = line.split(":")[1].strip()
+        assert f"first prompt about {warned[module]:,} tokens (" in line
+        assert "over 80% of the 60,000-token limit" in line
+    # the handoffs of earlier modules are not written yet: the report says so
+    assert "handoffs not written yet are not counted" in text
+
+
+def test_readiness_is_silent_when_every_first_prompt_is_well_inside_the_limit(
+    tmp_path, monkeypatch
+):
+    _, text = copilot_readiness(tmp_path, monkeypatch, 272_000)
+    assert "Context:  CP-" not in text
+
+
+def test_readiness_has_no_context_lines_off_the_copilot_route(tmp_path):
+    prepared = prepare(
+        context_file(tmp_path), issuer_folder(tmp_path), tmp_path / "out",
+        config="sol-medium", cap="50",
+    )  # fmt: skip
+    assert "Context:" not in cpos_launch._readiness(prepared, "sol-medium")
+
+
+def test_a_model_whose_limit_is_not_known_gets_no_first_prompt_estimate(tmp_path):
+    prepared = prepare(
+        context_file(tmp_path), issuer_folder(tmp_path), tmp_path / "out",
+        config="copilot-opus-medium", cap="50",
+    )  # fmt: skip
+    assert cpos_launch._first_prompt_lines(prepared, "copilot-opus-medium") == ()
+
+
+# ---------------------------------------------------------------- compaction, fix round 1
+
+DISCLOSURE = (
+    "Charged excludes 1 context summary with no reported charge (CP-4); Copilot may bill them."
+)
+
+
+def test_a_started_compaction_with_no_completion_is_disclosed_next_to_the_charge(
+    tmp_path, provider, capsys
+):
+    argv = compacting_run(tmp_path, provider, COMPACTING)
+    assert main(argv) == 0
+    lines = capsys.readouterr().out.splitlines()
+    at = next(i for i, n in enumerate(lines) if n.startswith("Charged:"))
+    assert lines[at + 1] == DISCLOSURE
+    assert "Review:" not in "\n".join(lines)
+
+
+def test_the_disclosure_is_not_counted_again_when_the_run_is_relaunched(tmp_path, provider, capsys):
+    argv = compacting_run(tmp_path, provider, COMPACTING)
+    assert main(argv) == 0
+    capsys.readouterr()
+    provider.answer = lambda context: pytest.fail("a retained module was sent again")
+    assert main(argv) == 0
+    out = capsys.readouterr().out
+    assert out.count("Charged excludes") == 1 and DISCLOSURE in out
+
+
+def test_no_uncharged_compaction_means_no_disclosure_line(tmp_path, provider, capsys):
+    assert main(compacting_run(tmp_path, provider, COMPACTED)) == 0
+    assert "Charged excludes" not in capsys.readouterr().out
+
+
+def events_dir(tmp_path, *records):
+    from deploy_workflow.run_events import append_event
+
+    for name, fields in records:
+        append_event(tmp_path, name, **fields)
+    return tmp_path
+
+
+def test_uncharged_summaries_are_counted_once_each_and_modules_listed_once(tmp_path):
+    same = {
+        "module": "CP-5",
+        "call_index": 1,
+        "reason": "started, no completion reported",
+        "attempt_id": "a",
+    }
+    events_dir(
+        tmp_path,
+        ("compaction_uncharged", same),
+        ("compaction_uncharged", same),  # the same attempt recorded again
+        ("compaction_uncharged", {**same, "module": "CP-8", "call_index": 3, "attempt_id": "b"}),
+        ("compaction_uncharged", {**same, "module": "CP-8", "call_index": 5, "attempt_id": "c"}),
+    )
+    assert cpos_launch._charge_notes(tmp_path) == (
+        (
+            "Charged excludes 3 context summaries with no reported charge (CP-5, CP-8); "
+            "Copilot may bill them."
+        ),
+    )
+
+
+def test_late_charges_are_totalled_and_the_modules_named(tmp_path):
+    late = {"module": "CP-8", "call_index": 9, "usd": "0.0996381", "attempt_id": "a"}
+    events_dir(
+        tmp_path,
+        ("compaction_charge_late", late),
+        ("compaction_charge_late", late),  # again: a relaunch cannot count it twice
+        (
+            "compaction_charge_late",
+            {**late, "module": "CP-6", "usd": "0.1112661", "attempt_id": "b"},
+        ),
+    )
+    assert cpos_launch._charge_notes(tmp_path) == (
+        (
+            "Charged excludes USD 0.2109042 of context-summary charges reported after their "
+            "module ended (CP-8, CP-6); they were not settled."
+        ),
+    )
+
+
+def test_a_module_with_several_summaries_in_one_call_is_listed_for_review(tmp_path):
+    events_dir(
+        tmp_path,
+        ("compaction_multiple", {"module": "CP-8", "call_index": 2, "completions": 2}),
+    )
+    assert cpos_launch._review_lines(tmp_path) == (
+        (
+            "Review: CP-8 had more than one context summary billed in one call; check the run's "
+            "charge."
+        ),
+    )
+
+
+def test_an_accepted_repair_that_dropped_values_is_listed_for_review(tmp_path):
+    events_dir(
+        tmp_path,
+        ("values_dropped_on_repair", {"module": "CP-6", "count": 2}),
+        ("values_dropped_on_repair", {"module": "CP-2", "count": 1}),
+    )
+    assert cpos_launch._review_lines(tmp_path) == (
+        (
+            "Review: CP-6 was accepted after a repair that removed 2 sourced values; the list is "
+            "in that module's review.json (dropped_values). Check them."
+        ),
+        (
+            "Review: CP-2 was accepted after a repair that removed 1 sourced value; the list is "
+            "in that module's review.json (dropped_values). Check it."
+        ),
+    )
+
+
+def test_a_failed_dropped_value_check_is_listed_for_review(tmp_path):
+    events_dir(
+        tmp_path,
+        ("dropped_values_check_failed", {"module": "CP-4", "error": "ValueError: boom"}),
+        ("dropped_values_check_failed", {"module": "CP-4", "error": "ValueError: boom"}),
+    )
+    assert cpos_launch._review_lines(tmp_path) == (
+        (
+            "Review: CP-4 had a repair whose removed values could not be checked "
+            "(dropped_values_error in its review.json); compare the repair with the rejected "
+            "draft."
+        ),
+    )
+
+
+def test_a_failed_summary_and_an_unended_start_without_ids_are_two_summaries(tmp_path):
+    events_dir(
+        tmp_path,
+        ("context_compaction_started", {"module": "CP-5", "call_index": 1}),
+        ("context_compaction_started", {"module": "CP-5", "call_index": 2}),
+        ("context_compacted", {"module": "CP-5", "call_index": 3, "usd": "unknown"}),
+        (
+            "compaction_uncharged",
+            {"module": "CP-5", "call_index": 3, "reason": "failed, no usage reported"},
+        ),
+    )
+    assert cpos_launch._charge_notes(tmp_path) == (
+        (
+            "Charged excludes 2 context summaries with no reported charge (CP-5); "
+            "Copilot may bill them."
+        ),
+    )
+
+
+def test_the_launcher_prints_the_first_prompt_warning_while_the_run_goes_on(
+    tmp_path, monkeypatch, capsys, copilot_ruling
+):
+    monkeypatch.setenv("COPILOT_GITHUB_TOKEN", "ghp_" + "Z" * 36)
+    runtime = tmp_path / "copilot-runtime"
+    runtime.write_text("#!/bin/sh\n")
+    monkeypatch.setenv("COPILOT_CLI_PATH", str(runtime))
+
+    def fake_run(manifest, directory, **kwargs):
+        kwargs["on_notice"]("Context:  CP-8: first prompt about 231,000 tokens")
+        return directory / "delivery.json"
+
+    monkeypatch.setattr(cpos_launch, "run_live_handoffs", fake_run)
+    argv = copilot_argv(tmp_path, "copilot-sol-medium", "--live", "--ruling", str(copilot_ruling))
+    assert main(argv) == 0
+    assert "Context:  CP-8: first prompt about 231,000 tokens" in capsys.readouterr().out
+
+
+def test_a_note_for_the_separate_cp8_comparison_prints_the_same_review_line(tmp_path, capsys):
+    from deploy_workflow.owners import cpos
+
+    response = tmp_path / "requests/CP-8/fp/1.response.md"
+    response.parent.mkdir(parents=True)
+    response.write_text("x")
+    (response.parent / "1.compaction.json").write_text(json.dumps({"tokens_before": 259070}))
+    cpos.report_compaction(tmp_path, str(response.relative_to(tmp_path)), "CP-8")
+    assert capsys.readouterr().err.strip() == (
+        "Review: CP-8 was written after GitHub Copilot summarised its context (259,070 tokens "
+        "before); check its figures against the earlier modules."
+    )
+    cpos.report_compaction(tmp_path, "requests/CP-8/fp/2.response.md", "CP-8")
+    assert capsys.readouterr().err == ""
+
+
+def test_distinct_uncharged_starts_in_one_call_are_counted_apart_and_one_attempt_once(tmp_path):
+    base = {"module": "CP-5", "call_index": 3, "reason": "started, no completion reported"}
+    events_dir(
+        tmp_path,
+        ("compaction_uncharged", {**base, "attempt_id": "a"}),
+        ("compaction_uncharged", {**base, "attempt_id": "b"}),
+        ("compaction_uncharged", {**base, "attempt_id": "b"}),  # the same attempt again
+    )
+    (line,) = cpos_launch._charge_notes(tmp_path)
+    assert line.startswith("Charged excludes 2 context summaries")
+
+
+def test_a_malformed_late_amount_is_shown_as_unreadable_and_the_rest_still_totals(tmp_path):
+    late = {"module": "CP-8", "call_index": 1}
+    events_dir(
+        tmp_path,
+        ("compaction_charge_late", {**late, "usd": "unknown", "attempt_id": "a"}),
+        ("compaction_charge_late", {**late, "usd": "0.25", "attempt_id": "b"}),
+    )
+    (line,) = cpos_launch._charge_notes(tmp_path)
+    assert line == (
+        "Charged excludes USD 0.25 of context-summary charges reported after their module ended "
+        "(CP-8), and 1 amount that could not be read; they were not settled."
+    )
+
+
+def test_a_start_with_no_end_in_the_events_is_disclosed_though_the_run_was_killed(tmp_path):
+    began = {"module": "CP-8", "call_index": 2}
+    events_dir(
+        tmp_path,
+        ("context_compaction_started", {**began, "attempt_id": "a"}),
+        ("context_compaction_started", {**began, "attempt_id": "b"}),
+        ("context_compacted", {**began, "attempt_id": "b", "applied": True, "usd": "0.1"}),
+    )
+    (line,) = cpos_launch._charge_notes(tmp_path)
+    assert line == (
+        "Charged excludes 1 context summary with no reported charge (CP-8); Copilot may bill them."
+    )
+
+
+def test_a_start_already_disclosed_is_not_counted_again_from_its_start_event(tmp_path):
+    began = {"module": "CP-8", "call_index": 2, "attempt_id": "a"}
+    events_dir(
+        tmp_path,
+        ("context_compaction_started", began),
+        ("compaction_uncharged", {**began, "reason": "started, no completion reported"}),
+    )
+    (line,) = cpos_launch._charge_notes(tmp_path)
+    assert line.startswith("Charged excludes 1 context summary ")
+
+
+def test_a_start_reported_uncharged_then_charged_late_is_only_the_late_charge(tmp_path):
+    began = {"module": "CP-8", "call_index": 2, "attempt_id": "a"}
+    events_dir(
+        tmp_path,
+        ("context_compaction_started", began),
+        ("compaction_uncharged", {**began, "reason": "started, no completion reported"}),
+        ("compaction_charge_late", {**began, "usd": "0.1"}),
+    )
+    (line,) = cpos_launch._charge_notes(tmp_path)
+    assert line.startswith("Charged excludes USD 0.1 ")
+
+
+def test_attemptless_starts_are_matched_to_attemptless_ends_by_count(tmp_path):
+    began = {"module": "CP-8", "call_index": 2}
+    events_dir(
+        tmp_path,
+        ("context_compaction_started", began),
+        ("context_compaction_started", began),
+        ("context_compacted", {**began, "applied": True, "usd": "0.1"}),
+    )
+    (line,) = cpos_launch._charge_notes(tmp_path)
+    assert line.startswith("Charged excludes 1 context summary ")
+
+
+@pytest.mark.parametrize(
+    "unit",
+    [
+        "US$m (USD)",
+        "US$m (USD millions)",
+        "US$m, except per-share US$",
+        "US$m (ALL figures)",
+        "TOP line, US$m",
+        "US$m (MOP-linked pegs, ALL sourced)",
+    ],
+)
+def test_the_chart_units_own_currency_or_a_capitalised_word_is_not_another_currency(unit):
+    (issue,) = debt_stack_issues(DEBT_UNIT_ROW.format(unit))
+    assert "must be exactly `US$m`" in issue
+    assert "Not supplied: reported in" not in issue
+
+
+@pytest.mark.parametrize("unit", ["GBPm", "EUR millions", "£m", "US$m / GBPm", "US$m and EUR"])
+def test_a_cell_with_a_different_currency_in_a_currency_position_keeps_the_gap_advice(unit):
+    (issue,) = debt_stack_issues(DEBT_UNIT_ROW.format(unit))
+    assert f"write `Not supplied: reported in {unit}`" in issue

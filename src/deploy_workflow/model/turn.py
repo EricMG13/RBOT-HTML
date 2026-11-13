@@ -219,6 +219,33 @@ class Usage:
 
 
 @dataclass(frozen=True)
+class Compaction:
+    """One context compaction the Copilot runtime reported during a call: its
+    ``session.compaction_start`` or ``session.compaction_complete`` event.
+
+    ``tokens_before`` is the runtime's own count (a start: ``currentTokens``; a complete:
+    ``preCompactionTokens``), ``tokens_after`` is ``postCompactionTokens``. ``usd`` is the
+    summariser's own charge, ``copilotUsage.totalNanoAiu`` x 1E-11, on a complete event only;
+    None there means the runtime did not report a charge that can be read, never a zero."""
+
+    kind: Literal["start", "complete"]
+    attempt_id: str | None = None
+    tokens_before: int | None = None
+    tokens_after: int | None = None
+    token_limit: int | None = None
+    success: bool | None = None
+    usd: Decimal | None = None
+    # complete only: whether the event carried a usage block at all (``compactionTokensUsed``);
+    # a failed compaction with none was not charged, one whose block is unreadable is unknown
+    usage_reported: bool = False
+    request_count: int | None = None  # complete only: model requests the summary made
+
+    def __post_init__(self) -> None:
+        if self.usd is not None and (not self.usd.is_finite() or self.usd < 0):
+            raise TurnError("a compaction charge must be a finite non-negative Decimal or None")
+
+
+@dataclass(frozen=True)
 class TurnRequest:
     messages: tuple[Message, ...]
     tools: tuple[ToolSpec, ...]
