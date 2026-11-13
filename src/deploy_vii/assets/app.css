@@ -214,19 +214,21 @@ tr.row-memo th,tr.row-memo td{font-style:italic;color:var(--rb-ink-2)}
 .chart .grid{stroke:var(--rb-ch-grid);stroke-width:1}.chart .zero{stroke:var(--rb-ink-2)}
 .chart .ln{fill:none;stroke-width:2}
 .chart .pt{stroke-width:1.5}.chart .bar{stroke-width:1}
-.chart .k1{stroke:var(--rb-ch-1)}.chart .k2{stroke:var(--rb-ch-2)}.chart .k3{stroke:var(--rb-ch-3)}.chart .k4{stroke:var(--rb-ch-4)}.chart .k5{stroke:var(--rb-ch-5)}
+.chart .k1{stroke:var(--rb-ch-1-ln)}.chart .k2{stroke:var(--rb-ch-2-ln)}.chart .k3{stroke:var(--rb-ch-3-ln)}.chart .k4{stroke:var(--rb-ch-4-ln)}.chart .k5{stroke:var(--rb-ch-5-ln)}
 .chart .f1{fill:var(--rb-ch-1)}.chart .f2{fill:var(--rb-ch-2)}.chart .f3{fill:var(--rb-ch-3)}.chart .f4{fill:var(--rb-ch-4)}.chart .f5{fill:var(--rb-ch-5)}
-.chart .s1{fill:var(--rb-ch-1);stroke:var(--rb-ch-1)}.chart .s2{fill:var(--rb-ch-2);stroke:var(--rb-ch-2)}.chart .s3{fill:var(--rb-ch-3);stroke:var(--rb-ch-3)}.chart .s4{fill:var(--rb-ch-4);stroke:var(--rb-ch-4)}.chart .s5{fill:var(--rb-ch-5);stroke:var(--rb-ch-5)}
+.chart text.f1{fill:var(--rb-ch-1-ln)}.chart text.f2{fill:var(--rb-ch-2-ln)}.chart text.f3{fill:var(--rb-ink)}.chart text.f4{fill:var(--rb-ch-4-ln)}.chart text.f5{fill:var(--rb-ch-5-ln)}
+.chart pattern rect.f1{fill:var(--rb-ch-1-ln)}.chart pattern rect.f2{fill:var(--rb-ch-2-ln)}.chart pattern rect.f3{fill:var(--rb-ch-3-ln)}.chart pattern rect.f4{fill:var(--rb-ch-4-ln)}.chart pattern rect.f5{fill:var(--rb-ch-5-ln)}
+.chart .s1{fill:var(--rb-ch-1);stroke:var(--rb-ch-1-ln)}.chart .s2{fill:var(--rb-ch-2);stroke:var(--rb-ch-2-ln)}.chart .s3{fill:var(--rb-ch-3);stroke:var(--rb-ch-3-ln)}.chart .s4{fill:var(--rb-ch-4);stroke:var(--rb-ch-4-ln)}.chart .s5{fill:var(--rb-ch-5);stroke:var(--rb-ch-5-ln)}
 .chart .paper,.chart .paper-fill{fill:var(--rb-panel)}
-.chart .wf-total{fill:var(--rb-ch-3);stroke:var(--rb-ch-3)}.chart .wf-up{fill:var(--rb-ch-1);stroke:var(--rb-ch-1)}.chart .wf-down{fill:var(--rb-ch-2);stroke:var(--rb-ch-2)}.chart .wf-residual{fill:var(--rb-neg);stroke:var(--rb-neg)}
-.chart .wf-total-edge{stroke:var(--rb-ch-3)}.chart .wf-up-edge{stroke:var(--rb-ch-1)}.chart .wf-down-edge{stroke:var(--rb-ch-2)}.chart .wf-residual-edge{stroke:var(--rb-neg)}
+.chart .wf-total{fill:var(--rb-navy);stroke:var(--rb-navy)}.chart .wf-up{fill:var(--rb-ch-1);stroke:var(--rb-ch-1-ln)}.chart .wf-down{fill:var(--rb-ch-5);stroke:var(--rb-ch-5-ln)}.chart .wf-residual{fill:var(--rb-neg);stroke:var(--rb-neg)}
+.chart .wf-total-edge{stroke:var(--rb-navy)}.chart .wf-up-edge{stroke:var(--rb-ch-1-ln)}.chart .wf-down-edge{stroke:var(--rb-ch-5-ln)}.chart .wf-residual-edge{stroke:var(--rb-neg)}
 .chart .connector{stroke:var(--rb-ink-2);stroke-dasharray:2 2}
 .chart .na-box{fill:var(--rb-ch-track);stroke:var(--rb-ch-grid);stroke-dasharray:4 3}
 .chart .mark{outline:none}
 .chart .mark:focus-visible{outline:var(--rb-focus);outline-offset:1px}
 .legend{display:flex;flex-wrap:wrap;gap:var(--rb-s-1) var(--rb-s-4);font-size:var(--rb-fs-micro);color:var(--rb-ink-2)}
 .legend .sw{display:inline-block;width:9px;height:9px;margin-right:var(--rb-s-1);vertical-align:-1px}
-.sw1{background:var(--rb-ch-1)}.sw2{background:var(--rb-ch-2)}.sw3{background:var(--rb-ch-3)}.sw4{background:var(--rb-ch-4)}.sw5{background:var(--rb-ch-5)}
+.sw1{background:var(--rb-ch-1);box-shadow:inset 0 0 0 1px var(--rb-ch-1-ln)}.sw2{background:var(--rb-ch-2);box-shadow:inset 0 0 0 1px var(--rb-ch-2-ln)}.sw3{background:var(--rb-ch-3);box-shadow:inset 0 0 0 1px var(--rb-ch-3-ln)}.sw4{background:var(--rb-ch-4);box-shadow:inset 0 0 0 1px var(--rb-ch-4-ln)}.sw5{background:var(--rb-ch-5);box-shadow:inset 0 0 0 1px var(--rb-ch-5-ln)}
 .chart-twin{overflow:auto}
 .chart-figure .fig-id{font-size:var(--rb-fs-micro);color:var(--rb-ink-2);font-weight:400}
 .fig-strip{display:grid;grid-template-columns:repeat(var(--fig-count),minmax(0,1fr))}

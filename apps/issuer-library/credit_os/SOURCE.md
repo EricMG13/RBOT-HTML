@@ -245,3 +245,34 @@ The delivered report is retired from the library, so the copied report pages and
 | `store.py` | Each run gains `evidence` (`run_evidence`): supplied files with `readBy` and "Supplied, not used", handoff downloads, calculation and Model downloads, the run record (hashes, instructions, calls, cap), every value as stored | the Evidence page's four lists |
 | `update_library.py` | Writes `library/downloads/<run folder>/handoffs.zip` (delivered Markdown byte for byte) | "Download all" works from disk |
 | `web/views.js` | `evidenceView` replaces the retained-outputs inventory, status map and lanes; `activityView(live)` draws running and queued runs only; `libraryNotShown` holds the excluded folders and build issues, closed, at the end of the library page | decisions 9 and 10 |
+
+## Brand colours (brand application plan, Task 1, Rulings 1-3, 5, 6)
+
+| File | Change | Why |
+| --- | --- | --- |
+| `web/screen.css` | The three `:root` blocks take the brand token values; eight tokens `--series-1..4` and `--series-1..4-ln` are added; `a` uses `--blue-700`; literal greys become tokens; `.series-0..3`, `.path-N`, `.point-N`, `.path-key-N`, `.ledger-other`, `.outflow` and the stack rules use the series tokens (bright fills carry a 1px inset outline in their line value; legend swatches, lines and points use the line values); the select chevron is `#63676e`. Colours only: no font, size or spacing change | brand-spec.md; one commit with `docs/templates/context-form.html` because `tests/test_context_form.py` requires equal token values |
+| `web/screen.css` (fix round 1) | Hatched stack segments on the bright fills (`series-1..3`) draw their stripe in the series line value; `.path-2`, `.point-2`, `.path-key-2` use `--series-4-ln`; `.axis` uses `--navy`, `.gridline` uses `--gray-200`. Colours only | the white stripe vanished on bright fills; the upside path was too close to the amber downside path |
+| `web/static.test.cjs` | Brand tests: token values, no bright fill in `color`/`stroke`, retired values absent; hatch stripe, legend swatch and ledger state pins; upside path, axis and grid | covers the brand colours above |
+
+## Component look (brand application plan, Task 4)
+
+| File | Change | Why |
+| --- | --- | --- |
+| `web/screen.css` | Box properties only, no font change: `.badge`, `.grade`, `.forecast-built .code` and the live-run `.chip-*` take radius 6px (badge and grade padding `0 6px` / `1px 6px`); the current workspace tab is `--text-primary` under its 2px `--blue` underline, other tabs `--text-quaternary`, hover `--text-secondary`; `.tertiary-action` pads 12px; table header text is `--text-quaternary`; `.metric-label` and `.missing-state p` are `--text-quaternary`; `.empty-symbol` is 48px with radius 10px; `.caution` has radius 8px and an inset ring in `--amber-border`; `.run-strip` radius 8px; compact toolbar selects take radius 8px; module-step markers are white with a 1.5px ring, a completed step is `--gray-200` with a dark tick | the component reference (Untitled UI, Ant Design) as the look of the existing components |
+| `web/static.test.cjs` | A static test of the button, input, badge and tab values | covers the above |
+
+## Run activity redesign (brand application plan, Task 5; owner, 2026-11-12: "Yes, build it", "remove the run spend")
+
+| File | Change | Why |
+| --- | --- | --- |
+| `web/views.js` | `liveRunRow` becomes `liveRunCard` (name, one line, pathway tag, status badge, `<progress>`, module badges, foot); `liveWaitingRow` and a waiting `table` whose Issuer cell lists the run's files like the card (`liveRunFiles`); counts `dl`; `liveRunSpend` removed; the empty state gains an "Issuer library" link | the approved Run activity design; the page no longer shows spend |
+| `web/screen.css` | A Run activity block at the end (cards, badges, tag, progress, table, notice, counts, centred empty state, narrow and print rules). `.run-mods .chip-done` writes its ground as the literal `#e8fff4`; the library `:root` declares no `--green-bg` (the run start page owns that token). The empty-state `h2` and sentence keep their earlier font size, line height and weight (only margin, width and colour are set under `.activity-empty`). The old `.chip-done,.chip-running,.chip-waiting` rule is removed (nothing else emitted those classes). `.run-mods .chip` and `.run-badge` are in the forced-colours border rule | the same design; Red Hat faces as before |
+| `web/static.test.cjs`, `tests/test_library_page_browser.py`, `tests/browser_probe_run_activity.js` | Old row-markup and spend tests rewritten; tests added for progress, badges, the table, counts, escaping, layout at 1440 and 375, and an open file list across a reload | covers the above |
+
+## Run activity, whole-branch review fixes (brand application plan; owner, 2026-11-12)
+
+| File | Change | Why |
+| --- | --- | --- |
+| `web/views.js` | The empty-state link is `class="primary-action"` (was `run-primary`); `liveRunNotes` builds the reason and name-warning spans for the card and the waiting row, and the card joins them with " · "; the card's class is written `live-running` and its `kind` is removed (`LIVE_STATUSES` stays: `tests/test_context_form.py` reads it) | the hover label was lost to `a:hover`; the card ran two notes together; `kind` could only be `running` |
+| `web/screen.css` | `.run-primary` rules removed (`.activity-empty .primary-action{margin-top:20px}`); waiting table: header `vertical-align:middle`, card edge a 1px border, `overflow-wrap:break-word`; one `@media(forced-colors:active)` block after the Run activity rules (chip, card and table borders, `progress` appearance); dead rules and two stale comments removed, two comments corrected. No font declaration added or changed | the same findings |
+| `web/static.test.cjs`, `tests/test_library_page_browser.py`, `tests/browser_cdp_measure.cjs` | Static tests for the shared action class, the joined notes and the hatch stripe on the winning rule; browser tests (real hover and forced-colours emulation through the DevTools Protocol) for the label, borders, header and one-line pathway; the selector-text forced-colours test is replaced | covers the above |

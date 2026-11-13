@@ -331,9 +331,185 @@ def test_live_run_chips_show_their_state_colours(tmp_path):
     dom, console = visit(probe, "#CP-OS/activity")
     assert console == []
     seen = json.loads(html.unescape(re.search(r'<pre id="chips">(.*?)</pre>', dom, re.DOTALL)[1]))
-    assert seen["running"] == ["rgb(0, 5, 51)", "rgb(255, 255, 255)"]
-    assert seen["done"][0] == "rgb(246, 247, 250)"
-    assert seen["waiting"][1] == "rgb(74, 80, 104)"
+    # Module badges follow the component reference: running blue-700 on blue-50, done green on
+    # green-bg, waiting text-tertiary on gray-100.
+    assert seen["running"] == ["rgb(229, 232, 255)", "rgb(0, 18, 178)"]
+    assert seen["done"] == ["rgb(232, 255, 244)", "rgb(15, 128, 72)"]
+    assert seen["waiting"] == ["rgb(244, 244, 245)", "rgb(71, 74, 79)"]
+
+
+RUN_ACTIVITY_PROBE = (
+    Path(__file__).with_name("browser_probe_run_activity.js").read_text(encoding="utf-8")
+)
+LONG_FOLDER = (
+    "2026-11-12-a-very-long-issuer-folder-name-that-would-not-fit-a-narrow-card-without-wrapping"
+)
+
+
+def run_activity_library(tmp_path: Path, queued_pathway: str = "earnings_update") -> Path:
+    make_run(tmp_path, "run-a")
+    update_library.update_library(tmp_path)
+    modules = [
+        [f"Module {i}", s] for i, s in enumerate(["done"] * 3 + ["running"] + ["waiting"] * 4)
+    ]
+    activity = {
+        "updated": "2026-11-12T00:00:00Z",
+        "cap": "20",
+        "runs": [
+            {
+                "id": "r1",
+                "status": "running",
+                "issuer_name": "Northbridge Synthetic Group",
+                "pathway": "credit_snapshot",
+                "folder": LONG_FOLDER,
+                "submitted_by": "Dana Reyes",
+                "started_at": "2026-11-12T00:00:00Z",
+                "spent": "3.10",
+                "modules": modules,
+                "files": ["annual-report.pdf", "presentation.pdf"],
+                "reason": "reading",
+            },
+            {
+                "id": "q1",
+                "status": "queued",
+                "issuer_name": "Queued Issuer One",
+                "pathway": queued_pathway,
+                "folder": LONG_FOLDER + "-q1",
+                "files": ["queued-a.pdf", "queued-b.pdf"],
+            },
+            {
+                "id": "q2",
+                "status": "queued",
+                "issuer_name": "Queued Issuer Two",
+                "pathway": "credit_snapshot",
+                "folder": "q2",
+            },
+        ],
+    }
+    (tmp_path / "activity.js").write_text(
+        f"window.RUN_ACTIVITY={json.dumps(activity)};\n", encoding="utf-8"
+    )
+    return tmp_path / "library/index.html"
+
+
+def test_run_activity_puts_waiting_beside_running_on_a_wide_window(tmp_path):
+    page = run_activity_library(tmp_path)
+    seen = read_probe(page, "#CP-OS/activity", 1440, RUN_ACTIVITY_PROBE)
+    assert seen["waitingLeft"] > seen["runningRight"], seen
+    assert seen["progressName"] == "Modules done"
+    assert (seen["progressMax"], seen["progressValue"], seen["barHeight"]) == (8, 3, 8)
+    # A list opened before the reload is still open after it.
+    assert seen["openBefore"] is True and seen["openAfter"] is True and seen["changedShown"] is True
+    # A queued run's list, opened before the reload, is open after it too.
+    assert seen["queuedBefore"] is True and seen["queuedAfter"] is True
+
+
+def test_run_activity_has_no_horizontal_scroll_on_a_phone(tmp_path):
+    # Chrome will not open a window under 500px, so the page opens in a 375px frame.
+    page = run_activity_library(tmp_path)
+    (page.parent / "probe.js").write_text(RUN_ACTIVITY_PROBE, encoding="utf-8")
+    page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
+    wrapper = page.parent / "wrap.html"
+    wrapper.write_text(
+        '<iframe src="index.html#CP-OS/activity" width="375" height="800"></iframe><pre id="probe">'
+        "</pre><script>addEventListener('message', e => "
+        "{ document.getElementById('probe').textContent = e.data; });</script>",
+        encoding="utf-8",
+    )
+    dom, console = visit(wrapper, "", 1000)
+    assert console == []
+    seen = probe_json(dom)
+    assert seen["innerWidth"] == 375 and seen["scrollWidth"] <= 375, seen
+    assert seen["contentScroll"] <= seen["contentClient"], seen
+
+
+def cdp_measure(page: Path, route: str, measure: str, wait_for: str, options: dict | None = None):
+    """A JS expression's value after a real hover or an emulated media feature (DevTools Protocol).
+
+    options: width, hover (a selector to point at), features (media features to emulate)."""
+    job = {"width": 1440, "hover": None, "features": None, **(options or {})}
+    job |= {"url": page.as_uri() + route, "height": 900, "waitFor": wait_for, "measure": measure}
+    job_file = page.parent / "cdp-job.json"
+    job_file.write_text(json.dumps(job), encoding="utf-8")
+    script = Path(__file__).with_name("browser_cdp_measure.cjs")
+    done = subprocess.run(
+        ["node", str(script), chrome(), str(job_file)],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert done.returncode == 0, done.stderr
+    return json.loads(done.stdout)
+
+
+def test_the_empty_states_library_button_keeps_its_white_label_on_hover(tmp_path):
+    run_activity_library(tmp_path)
+    (tmp_path / "activity.js").write_text(
+        'window.RUN_ACTIVITY={"updated":"2026-11-12T00:00:00Z","runs":[]};\n', encoding="utf-8"
+    )
+    seen = cdp_measure(
+        tmp_path / "library/index.html",
+        "#CP-OS/activity",
+        '(() => { const e = document.querySelector(".activity-empty a");'
+        " return { hover: e.matches(':hover'), color: getComputedStyle(e).color }; })()",
+        ".activity-empty a",
+        {"hover": ".activity-empty a"},
+    )
+    assert seen == {"hover": True, "color": "rgb(255, 255, 255)"}
+
+
+def test_forced_colours_outline_the_run_cards_chips_and_table_and_keep_the_progress_bar(tmp_path):
+    page = run_activity_library(tmp_path)
+    seen = cdp_measure(
+        page,
+        "#CP-OS/activity",
+        "(() => { const style = s => getComputedStyle(document.querySelector(s));"
+        " return { chip: style('.run-mods .chip').borderTopStyle,"
+        " card: style('.run-card').borderTopStyle,"
+        " table: style('.run-table-wrap').borderTopStyle,"
+        " badge: style('.run-badge').borderTopStyle,"
+        " progress: style('.run-progress progress').appearance }; })()",
+        ".run-table",
+        {"features": [{"name": "forced-colors", "value": "active"}]},
+    )
+    assert seen == {
+        "chip": "solid",
+        "card": "solid",
+        "table": "solid",
+        "badge": "solid",
+        "progress": "auto",
+    }
+
+
+def test_the_waiting_tables_header_is_centred_and_its_card_keeps_a_top_edge(tmp_path):
+    page = run_activity_library(tmp_path)
+    seen = cdp_measure(
+        page,
+        "#CP-OS/activity",
+        "(() => { const t = document.querySelector('.run-table thead th');"
+        " const r = document.createRange(); r.selectNodeContents(t);"
+        " const x = r.getBoundingClientRect(), b = t.getBoundingClientRect();"
+        " return { above: Math.round(x.top - b.top), below: Math.round(b.bottom - x.bottom),"
+        " edge: getComputedStyle(document.querySelector('.run-table-wrap')).borderTopWidth }; })()",
+        ".run-table",
+    )
+    assert abs(seen["above"] - seen["below"]) <= 2, seen
+    assert seen["edge"] == "1px", seen
+
+
+def test_a_real_pathway_id_stays_on_one_line_in_the_waiting_table(tmp_path):
+    page = run_activity_library(tmp_path, queued_pathway="distressed_restructuring")
+    seen = cdp_measure(
+        page,
+        "#CP-OS/activity",
+        "(() => { const cell = [...document.querySelectorAll('.run-table tbody td')]"
+        ".find(td => td.textContent === 'distressed_restructuring');"
+        " const r = document.createRange(); r.selectNodeContents(cell);"
+        " return cell ? r.getClientRects().length : -1; })()",
+        ".run-table",
+    )
+    assert seen == 1
 
 
 def test_an_empty_library_says_so(tmp_path):
@@ -1384,7 +1560,7 @@ def test_the_run_chrome_navigator_and_columns_take_the_redesign_measures(tmp_pat
     # The navigator: 250px (220px at 1280), uppercase 11px group headings, the open entry in blue.
     assert abs(seen["navWidth"] - (250 if width == 1440 else 220)) <= 1
     assert (seen["headingTransform"], seen["headingSize"]) == ("uppercase", "11px")
-    assert (seen["itemBackground"], seen["itemWeight"]) == ("rgb(238, 240, 255)", "600")
+    assert (seen["itemBackground"], seen["itemWeight"]) == ("rgb(229, 232, 255)", "600")
     # The strip: the link to every run of the issuer at the right edge; the run code as stored.
     assert seen["allText"] == "All runs of this issuer" and 0 <= seen["allGap"] <= 30
     assert seen["codeTransform"] == "none" and seen["codeText"] == "RUN-A"
@@ -1396,7 +1572,7 @@ def test_the_run_chrome_navigator_and_columns_take_the_redesign_measures(tmp_pat
 MODULE_PAGE_PROBE = (
     Path(__file__).with_name("browser_probe_module_page.js").read_text(encoding="utf-8")
 )
-INK = "rgb(11, 16, 48)"  # --text-primary
+INK = "rgb(0, 5, 51)"  # --text-primary
 NEW_FORMAT_RUN = "synthetic-nbg-new-format-001"
 
 
@@ -1461,7 +1637,7 @@ def test_the_earlier_format_module_page_takes_the_redesign_layout(tmp_path):
         assert (line["size"], line["line"], line["color"], line["label"]) == (
             "13px",
             "18px",
-            "rgb(58, 64, 86)",
+            "rgb(56, 59, 63)",
             "600",
         )
     assert bottom["badgeClass"] == "badge badge-gray" and bottom["linkBorder"] == "0px"
@@ -1496,14 +1672,14 @@ def test_the_earlier_format_module_page_takes_the_redesign_layout(tmp_path):
     ]
     lead = seen["finding0"]
     assert (lead["size"], lead["line"], lead["weight"]) == ("15px", "24px", "600")
-    assert (lead["dotWidth"], lead["dotBg"], lead["border"]) == ("6px", "rgb(0, 23, 229)", "0px")
+    assert (lead["dotWidth"], lead["dotBg"], lead["border"]) == ("6px", "rgb(0, 26, 255)", "0px")
     assert (lead["impact"]["size"], lead["impact"]["line"]) == ("14px", "21px")
     # Limits: grey dot, 14px/21px secondary.
     limit = seen["limit"]
     assert (limit["size"], limit["line"], limit["color"], limit["dotWidth"]) == (
         "14px",
         "21px",
-        "rgb(58, 64, 86)",
+        "rgb(56, 59, 63)",
         "6px",
     )
     assert seen["fits"] is True
@@ -1545,7 +1721,7 @@ def test_the_new_format_module_page_and_its_inspector_take_the_redesign_layout(t
     assert bottom["firstText"].startswith("Creditors are exposed to refinancing risk")
     assert (bottom["first"]["size"], bottom["first"]["color"]) == ("22px", INK)
     assert seen["keyItem"]["size"] == "15px"
-    assert (seen["keyItem"]["dotWidth"], seen["keyItem"]["dotBg"]) == ("6px", "rgb(0, 23, 229)")
+    assert (seen["keyItem"]["dotWidth"], seen["keyItem"]["dotBg"]) == ("6px", "rgb(0, 26, 255)")
     assert (seen["prose"]["size"], seen["prose"]["line"]) == ("15px", "24px")
     assert seen["prose"]["width"] <= 660
     assert seen["cards"], "the new-format module page draws at least one chart card"
@@ -1558,7 +1734,7 @@ def test_the_new_format_module_page_and_its_inspector_take_the_redesign_layout(t
     assert fig["figure"]["size"] == "22px" and fig["figure"]["before"] is True
     assert fig["figure"]["text"] == "USD 1,390 million" and fig["h2"]["srOnly"] is True
     assert fig["card"] == "10px" and fig["fits"] is True
-    assert fig["context"]["size"] == "13px" and fig["context"]["color"] == "rgb(58, 64, 86)"
+    assert fig["context"]["size"] == "13px" and fig["context"]["color"] == "rgb(56, 59, 63)"
     for literal in (
         "Back to analysis",
         "Esc",
@@ -2178,3 +2354,59 @@ def test_a_chart_route_scrolls_its_card_into_view_and_no_chart_data_text_is_draw
     assert seen["outline"][-1] == "Evidence & audit"
     hidden = ("Chart data", "Events", "Request", "Next module")
     assert not any(entry.startswith(hidden) for entry in seen["outline"])
+
+
+COMPONENT_PROBE = """
+(async () => {
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  for (let i = 0; i < 100 && !document.querySelector('.badge'); i++) await sleep(50);
+  await sleep(300);
+  const button = document.querySelector('.primary-action');
+  const badge = document.querySelector('.badge');
+  const b = button && getComputedStyle(button), g = badge && getComputedStyle(badge);
+  const out = document.createElement('pre');
+  out.id = 'probe';
+  out.textContent = JSON.stringify({
+    button: b && [b.height, b.borderTopLeftRadius, b.fontWeight],
+    badge: g && [g.borderTopLeftRadius],
+    scrollWidth: document.documentElement.scrollWidth, inner: innerWidth});
+  document.body.appendChild(out);
+})();
+"""
+
+
+def test_the_primary_button_and_a_state_badge_have_the_component_reference_box(tmp_path):
+    make_run(tmp_path, "run-a", as_of="2024-12-31")
+    update_library.update_library(tmp_path)
+    seen = read_served_probe(
+        tmp_path / "library/index.html", "#W-Report/history?c=run-a", 1440, COMPONENT_PROBE
+    )
+    assert seen["button"] == ["40px", "8px", "600"], seen
+    assert seen["badge"] == ["6px"], seen
+
+
+def test_the_library_home_does_not_scroll_sideways_at_375px(tmp_path):
+    # Chrome will not open a window under 500px, so the library opens in a 375px frame, where
+    # its own media queries see 375px, and the framed page posts its measures to the wrapper.
+    make_run(tmp_path, "run-a", as_of="2024-12-31")
+    update_library.update_library(tmp_path)
+    page = tmp_path / "library/index.html"
+    (page.parent / "probe.js").write_text(
+        COMPONENT_PROBE.replace(
+            "document.body.appendChild(out);",
+            "parent.postMessage(out.textContent, '*');",
+        ),
+        encoding="utf-8",
+    )
+    page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
+    wrapper = page.parent / "wrap.html"
+    wrapper.write_text(
+        '<iframe src="index.html" width="375" height="800"></iframe><pre id="probe"></pre>'
+        "<script>addEventListener('message', e => "
+        "{ document.getElementById('probe').textContent = e.data; });</script>",
+        encoding="utf-8",
+    )
+    dom, console = visit(wrapper, "", 1000)
+    assert console == []
+    seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+    assert seen["inner"] == 375 and seen["scrollWidth"] <= 375, seen
