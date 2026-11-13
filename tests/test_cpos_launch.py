@@ -420,9 +420,21 @@ for _heading, (_module, _types, _) in MAPS.items():
     OWNER_TABLES.setdefault(_module, {})[_heading] = synthetic_table(
         EDGE_HEAD, f"| Synthetic A | Synthetic link | {_types[0]} | Synthetic B | Synthetic p.1 |"
     )
-SCORED = ("CP-1B", "CP-1C", "CP-1D", "CP-2A", "CP-2D", "CP-2E", "CP-2G", "CP-2H", "CP-3")
+SCORED = (
+    "CP-1A",
+    "CP-1B",
+    "CP-1C",
+    "CP-1D",
+    "CP-2",
+    "CP-2A",
+    "CP-2D",
+    "CP-2E",
+    "CP-2G",
+    "CP-2H",
+    "CP-3",
+)
 SCORED += ("CP-3D", "CP-4", "CP-4C", "CP-5", "CP-6", "CP-DR")
-UNSCORED = ("CP-0", "CP-1", "CP-1A", "CP-L10", "CP-2", "CP-3C", "CP-8")
+UNSCORED = ("CP-0", "CP-1", "CP-L10", "CP-3C", "CP-8")
 CONFIDENCE_ROWS = (
     "| Directly Sourced | 8 |\n| Calculated | 2 |\n| Assumption-Based | 2 |\n"
     "| Analyst Inference | 0 |\n| Weak Lineage | 0 |\n| Untraced | 0 |\n| Conflicting | 0 |\n"
@@ -1690,6 +1702,11 @@ BINDING_COMPANIONS = {
         "cp-1b-earnings-delta/SKILL.md",
         "cp-1b-earnings-delta/references/REF_CP-1B_STEPS.md",
     ),
+    "CP-1A": (
+        "cp-1a-business-transaction-fact-pack/references/REF_CP-1A_STEPS.md",
+        "cp-1a-business-transaction-fact-pack/references/REF_CP-2C_STEPS.md",
+    ),
+    "CP-2": ("cp-2-fundamental-credit-synthesizer/references/REF_CP-2_STEPS.md",),
     "CP-2A": ("cp-2a-downside-pathway/references/REF_CP-2A_STEPS.md",),
     "CP-3": (
         "cp-3-relative-value-security-selection/references/CP-3A_RUNBOOK.md",
@@ -1709,7 +1726,20 @@ BINDING_COMPANIONS = {
     "CP-DR": ("cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md",),
 }
 SKILL_MODULES = [
-    *("CP-1B", "CP-1C", "CP-1D", "CP-2A", "CP-2D", "CP-2E", "CP-2G", "CP-2H", "CP-3", "CP-3D"),
+    *(
+        "CP-1A",
+        "CP-1B",
+        "CP-1C",
+        "CP-1D",
+        "CP-2",
+        "CP-2A",
+        "CP-2D",
+        "CP-2E",
+        "CP-2G",
+        "CP-2H",
+        "CP-3",
+        "CP-3D",
+    ),
     *("CP-4", "CP-4C", "CP-5", "CP-6", "CP-DR"),
 ]
 
@@ -1718,6 +1748,52 @@ def test_each_module_is_sent_the_companions_its_method_calls_binding():
     for module, names in BINDING_COMPANIONS.items():
         for name in names:
             assert SKILLS + name in METHODS[module], (module, name)
+
+
+def selector_headings(text):
+    """The `### ...` headings of the selector list ("Report selectors, each exactly once")."""
+    block = text.partition("Report selectors, each exactly once")[2].partition(
+        cpos_launch.METHOD_MARK
+    )[0]
+    return re.findall(r"^- `(### [^`]+)`", block, flags=re.MULTILINE)
+
+
+def test_cp2_and_cp1a_run_the_deploy_v_skills_not_the_deploy_vii_stand_ins(tmp_path):
+    """Owner, 2026-11-13 ("Build rec. 1, then run"): the 18-step CP-2 skill and the CP-1A skill
+    with its CP-2C bundle are sent; the short JSON-transport stand-ins are not."""
+    cp2 = cpos_launch.method_text("CP-2")
+    for phrase in (
+        "# CP-2 \u2014 FundamentalCreditSynthesizer",
+        "#### Workflow \u2014 18 Steps",
+        "business profile vs typical leveraged-credit issuers in the sector",
+    ):
+        assert phrase in cp2, phrase
+    for phrase in (
+        "You receive no source text",
+        "no peer ranking",
+        "src/deploy_vii/methods/cp2.md",
+    ):
+        assert phrase not in cp2, phrase
+    cp1a = cpos_launch.method_text("CP-1A")
+    assert "# CP-1A Business Transaction Fact Pack" in cp1a
+    assert "## Absorbed phase \u2014 CP-2C, binding on every CP-1A run" in cp1a
+    assert "## REF_CP-2C_01_SourceGateReadiness.md" in cp1a  # a line of REF_CP-2C_STEPS.md
+    for phrase in ("src/deploy_vii/methods/cp1a.md", "Python owns every figure"):
+        assert phrase not in cp1a, phrase
+    # Selectors read from the prepared text before the change; Confidence inputs is the addition.
+    _, texts = all_instructions(tmp_path)
+    expected = {
+        "CP-2": ["### Map: credit-risk transmission"],
+        "CP-1A": [
+            "### Events: Issuer history",
+            "### Map: ownership and control",
+            "### Map: operating model to credit",
+        ],
+    }
+    for module, old in expected.items():
+        got = selector_headings(texts[module])
+        assert sorted(got) == sorted([*old, "### Confidence inputs"]), module
+        assert "`### Confidence inputs`" in texts[module].partition(cpos_launch.METHOD_MARK)[0]
 
 
 def test_cp1b_runs_the_deploy_v_method_not_the_structured_runtime_step():
@@ -1737,7 +1813,7 @@ def test_skill_modules_carry_the_confidence_score_rules_their_script_would_apply
         assert body.startswith("## CP_CONFIDENCE_SCORE.md\n")
         assert "score = clamp( (0.6 * E + 0.4 * C) * S - P , 0 , 100 )" in body
         assert "CP_LIMITATION_TAXONOMY" not in body  # the next canon section is not swept in
-    assert [name for name, _ in cpos_launch.method_sections("CP-2")][1:] == list(
+    assert [name for name, _ in cpos_launch.method_sections("CP-3C")][1:] == list(
         READER_LAYER_SECTIONS
     )
 
@@ -1804,14 +1880,16 @@ def test_every_module_is_told_what_stands_for_acceptance_scripts_and_questions(t
 # methods" when the text after METHOD_MARK differs, so the shared-text change must leave every
 # one of these as it was. CP-8 alone changed on main after that commit (36a4c52, 184bfbb, 1e46c49:
 # src/deploy_vii/methods/cp8.md, the withheld-difference rules); its pin is the merged text.
+# CP-1A and CP-2 changed on 2026-11-13 (owner: "Build rec. 1, then run"): they now send Deploy V's
+# skills, so runs made before it are correctly marked "Earlier methods" for these two modules.
 METHOD_TEXT_SHA256_AT_1B41E65 = {
     "CP-0": "ff1c92c296681a7dce3325f2ce588d7ff3af9a13c3a0aa8c21289642195873f7",
     "CP-1": "02477a91d582f6301b2dbfadd96572ea75f9845493de337d7160a55111b62170",
-    "CP-1A": "6a85341f7ce9d89189027ccba0a88504873819f2a6d498df2814f991120cbd6e",
+    "CP-1A": "22a05988055d96a44382d235e760d401b550c1e7c6ff868c6e49b9d3430dbadc",
     "CP-1B": "7cd20df691582416e0ffd069d9f7aa8f7ac64d30c7682383dd7b8134b8dfa763",
     "CP-1C": "9353afdbce820f59c2dcabc951fc1ff3813174b3c84e79b47bc22bea97f3bbe8",
     "CP-1D": "50cc8ec34ed140f22859fd384eb7f16d81acc3404728b0493f642d5ba4daf4b1",
-    "CP-2": "bef6d197f08b0b66ae137a209e056d553baf383b18dc40173c27fa734cff2de8",
+    "CP-2": "3b25a0a608a42902589a6b3151bde2bf6de7c81437088b8f2170af55e8cdb4f4",
     "CP-2A": "a594a8e8c7427f063274fc48961fbe2603b3bc0e032ff345222579fe57ef4c50",
     "CP-2D": "2f977243550b0c76f1cccf41d7d11e66061280e8743d2fe5454a9cacdf9b9d1a",
     "CP-2E": "4d730920f241c7f7d762a7606890aa2f0b567e1b85372ab3ff659a462ab5d4a7",

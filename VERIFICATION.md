@@ -4,6 +4,11 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-13 — CP-2 and CP-1A send Deploy V's full skills (branch `claude/cp2-cp1a-deploy-v-skills-054d09`, owner "Build rec. 1, then run")
+Scope: offline only, no model run, no provider. `cpos_launch._SELECTED` now sends CP-2 (SKILL, `REF_CP-2_STEPS.md`) and CP-1A (SKILL, `REF_CP-1A_STEPS.md`, `REF_CP-2C_STEPS.md`) from cp-os `b57a344` (hashes in the manifest) instead of the DEPLOY VII stand-ins; both now carry the Confidence Score rules and are asked for `### Confidence inputs`; their method hashes changed, so earlier runs show "Earlier methods" for these two. Prepared on `cases/context/primary-full.json` (no TDG context in the repo; fictional source file): CP-2.md 69,224 bytes, CP-1A.md 101,313 bytes, no stand-in path in either.
+Tests: new `test_cp2_and_cp1a_run_the_deploy_v_skills_not_the_deploy_vii_stand_ins` (failed before the change); `tests/test_cpos_launch.py` 665 passed; library, update-library and inbox tests 171 passed; quality gate 0 findings. Only the SCORED/UNSCORED lists, SKILL_MODULES, BINDING_COMPANIONS and the two method pins were updated.
+Not verified: a paid run; whether a model follows the 18-step workflow inside the reader-passage format; CP-2/CP-1A handoff length against the output limit; the Confidence inputs section for these two on a real draft.
+
 ## 2026-11-12 — CP-8 checker: a currency code glued to digits, more currency and scale forms, bond names (branch `claude/cp8-checker-currency`, owner "complete 1")
 Scope: offline, synthetic plus read-only reading of 974 retained `.md` handoffs; no provider. C1 `EUR437m`, `USD2010` read as figures; C2 `C$`/`A$`/`R$` prefixes, `mln`/`bln`, `'000`, 18 more currency codes (`_CODES` 22 to 40) around a year-shaped number; C3 `2029s` is a bond name, a year. Tests first: 29 of the new cases failed on the unchanged checker, all pass after; `counts_code_glued.py` flipped 1 to 0.
 Corpus (both `counts` modes, token level, old vs new): 1,559 token diffs, 59 files with different held sizes; every one is K-a (`USD`/`EUR` glued to digits, 502 tokens new in each mode: `USD710 million`, `EUR1,000m`, `USD35/share`, all real money; the old reading kept only the fragment `000` of `USD1,000m`, 270 and 265 fragments gone) or K-c (`EUR 2029s, 480bp`, 10 tokens gone, held 2029 lost). K-b (a year-shaped number with a C2 form) 0 tokens, K-d (`mln`/`bln` after a small number) 0 tokens. `gaps_real_run.py` output byte-identical before and after; every other probe exits as on main (three recorded limits unchanged).
@@ -950,48 +955,3 @@ functions); no provider call and no analytical run.
     read a blank cutoff.
 - **Not verified:** Firefox, Safari and real issuer folders. Whether CP-DR finds peers in a folder's
   filings: no live run. Whether the readiness forecast matches live outcomes.
-
-## 2026-11-10 — Context form proposal (branch `claude/optimistic-johnson-bmnwip`)
-
-Proposal only: `docs/templates/context-form-proposal.html` is new, and
-`docs/design/2026-11-10-context-form-proposal.md` holds the module review and the design.
-`context-form.html`, `context.py`, the inbox and the tests are unchanged. All checks below are
-offline browser and reader checks, run in headless Chromium 1.63. No provider was called and no
-analytical run was made with it.
-
-- **Same output as the current form.** Each of three fixture contexts was loaded into both forms with
-  `fill()` and written with `build()`. The two `context.json` files are byte-identical for each:
-  `cases/context/primary-full.json`, `cases/context/research-minimal.json` and
-  `cases/cpdr-context-cutoff/context.json`.
-- **End to end through the page.**
-  - Three files were made by clicking through the page and downloading: Earnings Update; Distressed
-    with TDG-like dates, a duplicate S&P row and stale peers; and a new issue on Credit Snapshot.
-  - Each loads in `context.load_context` and passes `inbox.drops.check` for its pathway.
-  - Each round-trips through `fill()` and `build()` byte for byte.
-  - The readiness panel showed what its own rules state, for example CP-2H Gap on two S&P rows and
-    CP-1C Gap on one admitted peer. This checks the page against its rules, not against a run.
-- **Inbox copies.** Copies made by the real `write_templates` lock the pathway (5 other cards
-  disabled). A loaded file naming another pathway is replaced, with a note.
-- **Newly caught.** `load_context` refuses a research question containing `|`, and an issuer name
-  with U+2028. The current form writes both; the proposal stops both before download.
-- **Defect found and fixed in the proposal.** A blur that adds a message moved the Next button
-  between mousedown and mouseup, and the click was lost. The current form uses the same pattern; not
-  verified there. After the fix, every stage advanced by click on desktop and by tap at iPhone 13
-  size, with no horizontal scroll at 390 px.
-- **Other checks.** Start over returns the page to a fresh build. No console errors in any run.
-  Quality gate exit 0, with no Python changed.
-- **Restyled in the Credit OS language after merging main `caeb622`.** All the checks above were
-  repeated on the restyled page with the same results: byte-identical output, three downloads loading
-  and accepted by the inbox, round-trips, every stage by click and by tap, and Start over.
-  - An inbox copy (from `write_templates`, beside a copy of the library's web folder at
-    `_engine/library`) loads Red Hat Display, Text and Mono from there, shows the rail links to the
-    library, and logs nothing. The repository copy loads the repository's fonts and hides those links.
-  - Compared by eye with the library built offline from the synthetic fixture run, shown in its empty
-    state because that run is not on the current methodology.
-  - Found and fixed while restyling: the yes/no inputs had no positioned parent, so their own hit
-    area sat outside their segment.
-- **Not verified:**
-  - Firefox and Safari, and the folder picker in them.
-  - Real issuer folders. The folder check guesses only from file names.
-  - Whether the readiness forecast matches what the modules actually do in a live run. It ports
-    `run_expectations.RULES` plus rules cited in the design note, but no run has been compared.

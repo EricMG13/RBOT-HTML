@@ -704,6 +704,24 @@ read-only into `docs/reuse/selected-methods/` and listed with hashes in its `man
   CP-2E after CP-1, CP-1A and CP-2; CP-1C and CP-2 after CP-DR. CP-DR joins a pathway that has
   CP-1C when the context's peer source is `cp_dr_public`.
 
+**Method selection of 2026-11-13 (owner: "Build rec. 1, then run").** CP-2 and CP-1A now run
+Deploy V's skills, copied from `~/Documents/cp-os` at `b57a344` (hashes in `manifest.json`):
+`cp-2-fundamental-credit-synthesizer/SKILL.md` and `references/REF_CP-2_STEPS.md`;
+`cp-1a-business-transaction-fact-pack/SKILL.md` with `references/REF_CP-1A_STEPS.md` and
+`references/REF_CP-2C_STEPS.md`. The DEPLOY VII stand-ins (`cp2.md`, `cp1a.md`) are no longer sent.
+
+- DEPLOY VII's CP-2 narrowing (no source text, no sector comparison, five tables instead of the
+  18-step workflow) was never recorded as a scope reduction in "Where newer also means narrower".
+- CP-2 may read sources and compare the business with typical leveraged issuers in its sector as
+  Analyst Interpretation. The skill still forbids a "standalone relative-value recommendation" and
+  a "formal recovery waterfall" (Prohibited Behaviors 3) and a "security recommendation"
+  (`prohibited_conclusions`).
+- CP-1B and CP-1C reach CP-2 as optional producers when they are in the run (registry, unchanged).
+  Liquidity (CP-2D) cannot be supplied to CP-2, because CP-2D requires CP-2.
+- cp-os `amendments/CP-2.md` and `amendments/CP-1A.md` exist and cp-os sent them as "binding"; they
+  are not applied here (reported to the owner).
+- Proven offline only.
+
 **Presets of 2026-11-11 (owner: decisions M1, M2, M5 in
 `docs/rulings/2026-11-11-module-presets-and-changes.md`).** CP-DR and CP-2E are now selected for every
 pathway; CP-1C needs CP-DR's peers and CP-2E follows CP-2. CP-8 leaves the portfolio_decision preset

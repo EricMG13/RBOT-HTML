@@ -150,7 +150,13 @@ _SCORE = "docs/reuse/selected-methods/CANON_SHARED.md § CP_CONFIDENCE_SCORE.md"
 _SELECTED: dict[str, tuple[str, ...]] = {
     "CP-0": (_VII + "cp0.md",),
     "CP-1": ("prompts/CP-1.md",),  # Plus CP1_STEPS; no standalone CP-1 method file exists.
-    "CP-1A": (_VII + "cp1a.md",),
+    # Owner, 2026-11-13 ("Build rec. 1, then run"): Deploy V's skill from cp-os b57a344 with the
+    # bundle its SKILL binds on every run. The DEPLOY VII stand-in (cp1a.md) is no longer sent.
+    "CP-1A": (
+        _SKILLS + "cp-1a-business-transaction-fact-pack/SKILL.md",
+        _SKILLS + "cp-1a-business-transaction-fact-pack/references/REF_CP-1A_STEPS.md",
+        _SKILLS + "cp-1a-business-transaction-fact-pack/references/REF_CP-2C_STEPS.md",
+    ),
     # Deploy V's skill: earnings_delta.md needs the structured runtime's `read_inputs` view, which
     # CP-OS does not give, so it blocked on every CP-OS run (2026-11-09, 2026-11-10).
     "CP-1B": (
@@ -164,7 +170,12 @@ _SELECTED: dict[str, tuple[str, ...]] = {
     "CP-1D": (_SKILLS + "cp-1d-earnings-quality/SKILL.md",),
     # Owner, 2026-11-11: the Short Credit Snapshot's one page, read from CP-1's handoff alone.
     "CP-L10": (_VII + "cpl10.md",),
-    "CP-2": (_VII + "cp2.md",),
+    # Owner, 2026-11-13 ("Build rec. 1, then run"): Deploy V's skill from cp-os b57a344 with the
+    # bundle its SKILL binds on every run. The DEPLOY VII stand-in (cp2.md) is no longer sent.
+    "CP-2": (
+        _SKILLS + "cp-2-fundamental-credit-synthesizer/SKILL.md",
+        _SKILLS + "cp-2-fundamental-credit-synthesizer/references/REF_CP-2_STEPS.md",
+    ),
     "CP-2A": (
         _SKILLS + "cp-2a-downside-pathway/SKILL.md",
         _SKILLS + "cp-2a-downside-pathway/references/REF_CP-2A_STEPS.md",
