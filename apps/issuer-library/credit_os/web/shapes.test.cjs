@@ -1,0 +1,75 @@
+'use strict';
+// shapes.js against the controller's answer key (fixtures/shape-key.json), which this file does not edit.
+// The key's shapes were assigned by section heading; Shapes.tableShape sees only the block.
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const path = require('node:path');
+const KEY = require(path.join(__dirname, '..', '..', 'fixtures', 'shape-key.json'));
+const Shapes = require('./shapes.js');
+
+const block = (headers, rows) => ({headers, rows: rows.map(cells => ({cells}))});
+
+test('sectionRole reproduces all section roles of the key', () => {
+  assert.equal(KEY.sections.length, 321);
+  const wrong = KEY.sections.filter(s => Shapes.sectionRole(s.chain, s.placement) !== s.role)
+    .map(s => `${s.module}#${s.index} ${s.chain.join(' > ')}: ${Shapes.sectionRole(s.chain, s.placement)} != ${s.role}`);
+  assert.deepEqual(wrong, []);
+});
+
+test('tableShape reproduces all table shapes of the key from headers and cells alone', () => {
+  assert.equal(KEY.tables.length, 41);
+  const wrong = KEY.tables.filter(t => Shapes.tableShape(block(t.headers, t.rows)) !== t.shape)
+    .map(t => `${t.module} ${t.heading}: ${Shapes.tableShape(block(t.headers, t.rows))} != ${t.shape}`);
+  assert.deepEqual(wrong, []);
+});
+
+test('hiddenColumns reproduces all hidden column indices of the key', () => {
+  const wrong = KEY.tables.filter(t => JSON.stringify(Shapes.hiddenColumns(t.headers, t.shape)) !== JSON.stringify(t.hidden))
+    .map(t => `${t.module} ${t.heading}: ${Shapes.hiddenColumns(t.headers, t.shape)} != ${t.hidden}`);
+  assert.deepEqual(wrong, []);
+});
+
+test('every note of the key is a note, and ordinary sentences are prose', () => {
+  assert.equal(KEY.notes.length, 5);
+  for (const n of KEY.notes) assert.equal(Shapes.blockRole(n.starts), 'note', n.starts);
+  for (const text of [
+    'The base period is FY2024, the only twelve-month period with a full fact set in CP-1.',
+    'The summary table shows that leverage crosses the watch levels long before cash flow or interest cover fails, in both analyst scenarios.',
+    'The control row s00 reconciles exactly to CP-1 calculations C05, C11, C12 and C31.',
+  ]) assert.equal(Shapes.blockRole(text), 'prose', text);
+});
+
+test('a zero-row table and an unrecognised header set are records, never dropped', () => {
+  const statement = KEY.tables.find(t => t.shape === 'statement');
+  assert.equal(Shapes.tableShape(block(statement.headers, [])), 'records');
+  assert.equal(Shapes.tableShape(block(['Widget', 'Colour', 'Mass'], [['a', 'b', 'c']])), 'records');
+  assert.equal(Shapes.tableShape(block([], [])), 'records');
+});
+
+test('headers differing only in case or outer spaces classify the same', () => {
+  for (const t of KEY.tables) {
+    const messy = t.headers.map((h, i) => (i % 2 ? ` ${h.toUpperCase()} ` : `  ${h.toLowerCase()}`));
+    assert.equal(Shapes.tableShape(block(messy, t.rows)), t.shape, `${t.module} ${t.heading}`);
+    assert.deepEqual(Shapes.hiddenColumns(messy, t.shape), t.hidden, `${t.module} ${t.heading}`);
+  }
+});
+
+test('a statement whose second period cell is "Not calculated" is still a statement', () => {
+  const t = KEY.tables.find(x => x.shape === 'statement');
+  const rows = t.rows.map(r => r.map((c, i) => (i === 2 ? 'Not calculated' : c)));
+  assert.equal(Shapes.tableShape(block(t.headers, rows)), 'statement');
+});
+
+test('columnKind and promoted', () => {
+  assert.equal(Shapes.columnKind('Source'), 'source');
+  assert.equal(Shapes.columnKind('Scenario ID'), 'id');
+  assert.equal(Shapes.columnKind('Use in this module'), 'intermodule');
+  assert.equal(Shapes.columnKind('FY2024'), 'period');
+  assert.equal(Shapes.columnKind('Hedge limitation'), 'limitation');
+  assert.equal(Shapes.columnKind('Creditor consequence'), 'consequence');
+  assert.equal(Shapes.columnKind('Moderate scenario'), 'case');
+  assert.equal(Shapes.columnKind('Exposure'), 'label');
+  assert.equal(Shapes.columnKind('Creditor view'), 'text');
+  for (const s of ['matrix', 'watch', 'dated']) assert.equal(Shapes.promoted(s), true);
+  assert.equal(Shapes.promoted('statement'), false);
+});
