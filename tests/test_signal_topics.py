@@ -107,6 +107,14 @@ def test_any_keyword_is_accepted_without_error(keyword):
         add_topic(db, "T", [keyword], [], "ak")
 
 
+def test_nul_in_a_keyword_is_plain_text_and_does_not_poison_matching(db_two_sources):
+    t0 = datetime(2026, 11, 13, 9, tzinfo=UTC)
+    add_topic(db_two_sources, "Nul", ["a\x00b"], [], "ak")
+    add_story(db_two_sources, 1, Entry("Authority review", "https://a.org/1", t0, ""), t0)
+    assert match_story(db_two_sources, 1) == []
+    add_topic(db_two_sources, "Nul again", ["a\x00b"], [], "ak")
+
+
 def test_follow_is_personal_and_idempotent(db_two_sources):
     tid = add_topic(db_two_sources, "Competition", ["review"], [], "ak")
     follow(db_two_sources, "ak", tid)

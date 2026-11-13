@@ -183,3 +183,19 @@ def test_topics_add_and_list(tmp_path):
 def test_topic_with_no_keywords_exits_2_with_one_line(tmp_path):
     code, out = run(tmp_path, "topics", "add", "X", "--keywords", "", "--by", "ak")
     assert code == 2 and len(out.splitlines()) == 1
+
+
+def test_kinds_with_spaces_after_commas_are_trimmed(tmp_path):
+    code, _ = run(
+        tmp_path,
+        "topics",
+        "add",
+        "T",
+        "--keywords",
+        "review",
+        "--kinds",
+        "regulator, news",
+        "--by",
+        "ak",
+    )
+    assert code == 0

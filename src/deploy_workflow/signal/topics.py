@@ -14,7 +14,7 @@ MAX_KEYWORD = 60
 
 def fts_phrase(text: str) -> str:
     """`text` as one quoted FTS5 phrase, so query syntax in it is plain text."""
-    return '"' + text.replace('"', '""') + '"'
+    return '"' + text.replace("\x00", " ").replace('"', '""') + '"'
 
 
 def _clean_keywords(keywords: Sequence[str]) -> list[str]:

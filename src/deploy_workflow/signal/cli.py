@@ -109,7 +109,7 @@ def _stories(db: sqlite3.Connection, limit: int) -> None:
 
 
 def _split(text: str) -> list[str]:
-    return [part for part in text.split(",") if part.strip()] if text.strip() else []
+    return [part.strip() for part in text.split(",") if part.strip()]
 
 
 def _topics(db: sqlite3.Connection, args: argparse.Namespace) -> None:
