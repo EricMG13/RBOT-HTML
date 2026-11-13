@@ -1089,7 +1089,11 @@ def _shape(line: str) -> str:
     return NUMBER.sub("#", line.strip())
 
 
-_LINE_LABEL = re.compile(r"\blines? (\d+(?:\s*(?:-|\u2013|to|and|&|,)\s*\d+)*)", re.IGNORECASE)
+# A number after the label's first one is another line unless it begins an amount: followed by a
+# decimal or thousands part, a percent sign or a word other than "and"/"to" (`line 2, 247 million`).
+_LINE_SEPARATOR = r"\s*(?:-|\u2013|to|and|&|,)\s*"
+_LINE_NUMBER = r"\d+(?!\d|,\d{3}\b|\.\d|\s*%|\s*(?!and\b|to\b)[a-z])"
+_LINE_LABEL = re.compile(rf"\blines? (\d+(?:{_LINE_SEPARATOR}{_LINE_NUMBER})*)", re.IGNORECASE)
 _LINE_RANGE = re.compile(r"(\d+)\s*(?:-|\u2013|to)\s*(\d+)", re.IGNORECASE)
 _MAX_RANGE = 10_000
 _QUOTED = re.compile(r'"([^"]*)"|`([^`]*)`')

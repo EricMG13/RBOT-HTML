@@ -16,7 +16,7 @@ import logging
 import re
 import time
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import asdict, replace
+from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from decimal import Decimal, DecimalException, localcontext
 from functools import partial
@@ -617,6 +617,23 @@ def _compaction_record(c: Compaction) -> CompactionRecord:
     )
 
 
+@dataclass
+class _Session:
+    """What a settled module run saw of its session's compactions, kept for ``drain_late``."""
+
+    task: HandoffTask
+    digest: str
+    last_call: int
+    starts: dict[str, tuple[int, int | None]]
+    ended: set[str]
+    reported: set[str]
+
+
+def _with_id(c: Compaction, fields: dict[str, int]) -> dict[str, str | int]:
+    """``fields`` plus the compaction's attempt id, when the runtime gave one."""
+    return {**fields, "attempt_id": c.attempt_id} if c.attempt_id else dict(fields)
+
+
 def _uncharged_failure(c: Compaction) -> bool:
     """A failed compaction whose event had no usage block: the runtime reported no charge for it
     and none was made that we can know of. Disclosed (``compaction_uncharged``), not stopped on."""
@@ -770,6 +787,9 @@ class HandoffExecutor:
         self._last_call = 0
         self._starts: dict[str, tuple[int, int | None]] = {}  # attempt -> (call, tokens at start)
         self._ended: set[str] = set()  # attempts that reported a completion (charged or not)
+        self._reported: set[str] = set()  # starts already disclosed as uncharged
+        # the settled module runs whose session the adapter keeps until it is closed
+        self._sessions: list[_Session] = []
         _put(
             directory / "loop.json",
             dump_json(
@@ -800,7 +820,7 @@ class HandoffExecutor:
 
     def _run(self, task: HandoffTask) -> bytes:
         self._digest, self._last_call = None, 0
-        self._starts, self._ended = {}, set()
+        self._starts, self._ended, self._reported = {}, set(), set()
         try:
             return self._run_module(task)
         finally:
@@ -992,7 +1012,7 @@ class HandoffExecutor:
                 if key not in self._starts:
                     self._starts[key] = (index, c.tokens_before)
                     name = "context_compaction_started"
-                    self._event(name, task, call_index=index, **tokens)
+                    self._event(name, task, call_index=index, **_with_id(c, tokens))
                 continue
             self._ended.add(key)
             if c.success is True and self.written_after_compaction is None:
@@ -1003,13 +1023,24 @@ class HandoffExecutor:
                 call_index=index,
                 applied=c.success is True,
                 usd="unknown" if c.usd is None else str(c.usd),
-                **tokens,
+                **_with_id(c, tokens),
             )
             if _uncharged_failure(c):
-                self._uncharged(task, index, c.tokens_before, "failed, no usage reported")
+                self._uncharged(
+                    task, index, c.tokens_before, "failed, no usage reported", c.attempt_id
+                )
 
-    def _uncharged(self, task: HandoffTask, index: int, tokens: int | None, reason: str) -> None:
-        extra = {} if tokens is None else {"tokens_before": tokens}
+    def _uncharged(
+        self,
+        task: HandoffTask,
+        index: int,
+        tokens: int | None,
+        reason: str,
+        attempt_id: str | None,
+    ) -> None:
+        extra: dict[str, str | int] = {} if tokens is None else {"tokens_before": tokens}
+        if attempt_id:
+            extra["attempt_id"] = attempt_id
         self._event("compaction_uncharged", task, call_index=index, reason=reason, **extra)
 
     def _fresh(self, reply: AdapterReply) -> AdapterReply:
@@ -1031,25 +1062,42 @@ class HandoffExecutor:
         calls.jsonl row is invented: it is a ``compaction_charge_late`` event with its amount, and
         the launcher totals it beside ``Charged:``. A start never seen to complete is a
         ``compaction_uncharged`` event. The drain is advisory: a failure is logged, never raised
-        over the module's own outcome."""
+        over the module's own outcome. The session stays open until the adapter is closed, so
+        ``drain_late`` takes what arrives after this."""
         if self._digest is None:
             return
+        self._settle(task)
+        self._sessions.append(
+            _Session(task, self._digest, self._last_call, self._starts, self._ended, self._reported)
+        )
+
+    def drain_late(self) -> None:
+        """Before the adapter is closed: drain each settled module's session once more, for a
+        summary that was still running when its module ended, and disclose it as the module's end
+        does (events already written are not written again). Advisory, like the module's drain."""
+        for s in self._sessions:
+            self._digest, self._last_call = s.digest, s.last_call
+            self._starts, self._ended, self._reported = s.starts, s.ended, s.reported
+            self._settle(s.task)
+
+    def _settle(self, task: HandoffTask) -> None:
         drain = getattr(self.adapter, "drain_compactions", None)
         late: Sequence[Compaction] = ()
-        if callable(drain):
+        if callable(drain) and self._digest is not None:
             try:
                 late = drain(self._digest)
-            except Exception as error:  # noqa: BLE001 -- advisory, see the docstring
+            except Exception as error:  # noqa: BLE001 -- advisory, see _finish_module
                 log.warning("could not drain %s's compaction events: %s", task.module_id, error)
         for c in late:
             key = c.attempt_id or f"call-{self._last_call}"
             if c.kind == "start":
                 self._starts.setdefault(key, (self._last_call, c.tokens_before))
-            elif key not in self._ended:
+            # a completion with no id cannot be matched to one already seen: it is disclosed
+            elif c.attempt_id is None or key not in self._ended:
                 self._ended.add(key)
                 if c.usd is None:
                     reason = "completed after the module ended, no readable charge"
-                    self._uncharged(task, self._last_call, c.tokens_before, reason)
+                    self._uncharged(task, self._last_call, c.tokens_before, reason, c.attempt_id)
                 else:
                     self._event(
                         "compaction_charge_late",
@@ -1059,8 +1107,10 @@ class HandoffExecutor:
                         attempt_id=c.attempt_id or "",
                     )
         for key, (index, tokens) in self._starts.items():
-            if key not in self._ended:
-                self._uncharged(task, index, tokens, "started, no completion reported")
+            if key not in self._ended and key not in self._reported:
+                self._reported.add(key)
+                attempt = None if key.startswith("call-") else key
+                self._uncharged(task, index, tokens, "started, no completion reported", attempt)
 
     def _fault_text(self, failure: BaseException | str) -> str:
         """Redacted text of a failure. A redactor that itself fails yields a fixed message (the

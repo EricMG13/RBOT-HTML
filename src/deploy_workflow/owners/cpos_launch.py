@@ -2970,24 +2970,65 @@ def _review_lines(directory: Path) -> tuple[str, ...]:
     return tuple(lines)
 
 
+def _attempt(event: Mapping[str, Any]) -> str:
+    value = event.get("attempt_id")
+    return value if isinstance(value, str) else ""
+
+
+def _uncharged_summaries(events: Sequence[Mapping[str, Any]]) -> dict[Any, tuple[Any, Any]]:
+    """The context summaries with no reported charge, key -> (module, call). One attempt is one
+    summary however many events name it; an event with no attempt id is one summary of its own.
+    A start that never ended is counted from its events too (a killed run wrote no disclosure),
+    and a summary charged late is only that charge."""
+    found: dict[Any, tuple[Any, Any]] = {}
+    started: dict[Any, tuple[Any, Any]] = {}
+    ended: set[Any] = set()
+    anonymous: dict[Any, list[int]] = {}  # module -> [starts, ends, disclosed], no attempt id
+    for number, e in enumerate(events):
+        name, module, call = e.get("event"), e.get("module"), e.get("call_index")
+        attempt = _attempt(e)
+        counts = anonymous.setdefault(module, [0, 0, 0])
+        if name == "compaction_uncharged":
+            found[(module, attempt) if attempt else (module, number)] = (module, call)
+            counts[2] += not attempt
+        elif name == "context_compaction_started":
+            if attempt:
+                started[(module, attempt)] = (module, call)
+            else:
+                counts[0] += 1
+        elif name in {"context_compacted", "compaction_charge_late"}:
+            if attempt:
+                ended.add((module, attempt))
+            else:
+                counts[1] += 1
+    for key, where in started.items():
+        if key not in ended:
+            found.setdefault(key, where)
+    for module, (starts, ends, disclosed) in anonymous.items():
+        for extra in range(max(0, starts - ends - disclosed)):
+            found[(module, "unmatched", extra)] = (module, None)
+    late = {
+        (e.get("module"), _attempt(e)) for e in events if e.get("event") == "compaction_charge_late"
+    }
+    return {k: v for k, v in found.items() if k not in late}
+
+
 def _charge_notes(directory: Path) -> tuple[str, ...]:
     """What ``Charged:`` leaves out, from the run's events, each compaction counted once (a
     relaunch reads the same events and cannot count one again): context summaries with no
     reported charge, and charges the runtime reported after their module ended (not settled)."""
     events, _ = _run_events(directory)
-    uncharged = {
-        (e.get("module"), e.get("call_index"), e.get("reason"))
-        for e in events
-        if e.get("event") == "compaction_uncharged"
-    }
+    uncharged = _uncharged_summaries(events)
     late = {
-        (e.get("module"), e.get("attempt_id"), e.get("call_index")): e.get("usd")
-        for e in events
+        (e.get("module"), _attempt(e) or number, e.get("call_index")): e.get("usd")
+        for number, e in enumerate(events)
         if e.get("event") == "compaction_charge_late"
     }
     notes = []
     if uncharged:
-        modules = ", ".join(dict.fromkeys(str(m) for m, _, _ in sorted(uncharged, key=_order)))
+        modules = ", ".join(
+            dict.fromkeys(str(m) for m, _ in sorted(uncharged.values(), key=_order))
+        )
         count = len(uncharged)
         noun = "summary" if count == 1 else "summaries"
         notes.append(
@@ -2995,16 +3036,29 @@ def _charge_notes(directory: Path) -> tuple[str, ...]:
             "Copilot may bill them."
         )
     if late:
-        total = exact_sum(Decimal(str(usd)) for usd in late.values())
+        amounts, unreadable = [], 0
+        for usd in late.values():
+            try:
+                amounts.append(Decimal(str(usd)))
+            except InvalidOperation:  # a hand-edited or damaged event: shown, not hidden
+                unreadable += 1
         named = ", ".join(dict.fromkeys(str(m) for m, _, _ in late))
+        total = f"USD {exact_sum(amounts)} " if amounts else ""
+        more = ""
+        if unreadable:
+            more = (
+                f", and {unreadable} amount{'s' if unreadable > 1 else ''} that could not be read"
+                if amounts
+                else f"{unreadable} amount{'s' if unreadable > 1 else ''} that could not be read "
+            )
         notes.append(
-            f"Charged excludes USD {total} of context-summary charges reported after their "
-            f"module ended ({named}); they were not settled."
+            f"Charged excludes {total}of context-summary charges reported after their "
+            f"module ended ({named}){more}; they were not settled."
         )
     return tuple(notes)
 
 
-def _order(item: tuple[Any, Any, Any]) -> tuple[int, str]:
+def _order(item: tuple[Any, Any]) -> tuple[int, str]:
     return (item[1] if isinstance(item[1], int) else 0, str(item[0]))
 
 

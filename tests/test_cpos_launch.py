@@ -5825,7 +5825,7 @@ def test_a_claude_run_under_a_ruling_that_lists_web_search_runs_with_search_off(
 
     monkeypatch.setattr(handoff, "HandoffExecutor", recording)
     monkeypatch.setattr(cpos, "live_adapter_for", lambda *args: object())
-    monkeypatch.setattr(cpos, "_release", lambda adapter: None)
+    monkeypatch.setattr(cpos, "_release", lambda adapter, executor: None)
     prepared = prepare(
         context_file(tmp_path),
         issuer_folder(tmp_path),
@@ -7059,13 +7059,18 @@ def events_dir(tmp_path, *records):
 
 
 def test_uncharged_summaries_are_counted_once_each_and_modules_listed_once(tmp_path):
-    same = {"module": "CP-5", "call_index": 1, "reason": "started, no completion reported"}
+    same = {
+        "module": "CP-5",
+        "call_index": 1,
+        "reason": "started, no completion reported",
+        "attempt_id": "a",
+    }
     events_dir(
         tmp_path,
         ("compaction_uncharged", same),
-        ("compaction_uncharged", same),  # the same event recorded again
-        ("compaction_uncharged", {**same, "module": "CP-8", "call_index": 3}),
-        ("compaction_uncharged", {**same, "module": "CP-8", "call_index": 5}),
+        ("compaction_uncharged", same),  # the same attempt recorded again
+        ("compaction_uncharged", {**same, "module": "CP-8", "call_index": 3, "attempt_id": "b"}),
+        ("compaction_uncharged", {**same, "module": "CP-8", "call_index": 5, "attempt_id": "c"}),
     )
     assert cpos_launch._charge_notes(tmp_path) == (
         (
@@ -7139,3 +7144,78 @@ def test_a_note_for_the_separate_cp8_comparison_prints_the_same_review_line(tmp_
     )
     cpos.report_compaction(tmp_path, "requests/CP-8/fp/2.response.md", "CP-8")
     assert capsys.readouterr().err == ""
+
+
+def test_distinct_uncharged_starts_in_one_call_are_counted_apart_and_one_attempt_once(tmp_path):
+    base = {"module": "CP-5", "call_index": 3, "reason": "started, no completion reported"}
+    events_dir(
+        tmp_path,
+        ("compaction_uncharged", {**base, "attempt_id": "a"}),
+        ("compaction_uncharged", {**base, "attempt_id": "b"}),
+        ("compaction_uncharged", {**base, "attempt_id": "b"}),  # the same attempt again
+    )
+    (line,) = cpos_launch._charge_notes(tmp_path)
+    assert line.startswith("Charged excludes 2 context summaries")
+
+
+def test_a_malformed_late_amount_is_shown_as_unreadable_and_the_rest_still_totals(tmp_path):
+    late = {"module": "CP-8", "call_index": 1}
+    events_dir(
+        tmp_path,
+        ("compaction_charge_late", {**late, "usd": "unknown", "attempt_id": "a"}),
+        ("compaction_charge_late", {**late, "usd": "0.25", "attempt_id": "b"}),
+    )
+    (line,) = cpos_launch._charge_notes(tmp_path)
+    assert line == (
+        "Charged excludes USD 0.25 of context-summary charges reported after their module ended "
+        "(CP-8), and 1 amount that could not be read; they were not settled."
+    )
+
+
+def test_a_start_with_no_end_in_the_events_is_disclosed_though_the_run_was_killed(tmp_path):
+    began = {"module": "CP-8", "call_index": 2}
+    events_dir(
+        tmp_path,
+        ("context_compaction_started", {**began, "attempt_id": "a"}),
+        ("context_compaction_started", {**began, "attempt_id": "b"}),
+        ("context_compacted", {**began, "attempt_id": "b", "applied": True, "usd": "0.1"}),
+    )
+    (line,) = cpos_launch._charge_notes(tmp_path)
+    assert line == (
+        "Charged excludes 1 context summary with no reported charge (CP-8); Copilot may bill them."
+    )
+
+
+def test_a_start_already_disclosed_is_not_counted_again_from_its_start_event(tmp_path):
+    began = {"module": "CP-8", "call_index": 2, "attempt_id": "a"}
+    events_dir(
+        tmp_path,
+        ("context_compaction_started", began),
+        ("compaction_uncharged", {**began, "reason": "started, no completion reported"}),
+    )
+    (line,) = cpos_launch._charge_notes(tmp_path)
+    assert line.startswith("Charged excludes 1 context summary ")
+
+
+def test_a_start_reported_uncharged_then_charged_late_is_only_the_late_charge(tmp_path):
+    began = {"module": "CP-8", "call_index": 2, "attempt_id": "a"}
+    events_dir(
+        tmp_path,
+        ("context_compaction_started", began),
+        ("compaction_uncharged", {**began, "reason": "started, no completion reported"}),
+        ("compaction_charge_late", {**began, "usd": "0.1"}),
+    )
+    (line,) = cpos_launch._charge_notes(tmp_path)
+    assert line.startswith("Charged excludes USD 0.1 ")
+
+
+def test_attemptless_starts_are_matched_to_attemptless_ends_by_count(tmp_path):
+    began = {"module": "CP-8", "call_index": 2}
+    events_dir(
+        tmp_path,
+        ("context_compaction_started", began),
+        ("context_compaction_started", began),
+        ("context_compacted", {**began, "applied": True, "usd": "0.1"}),
+    )
+    (line,) = cpos_launch._charge_notes(tmp_path)
+    assert line.startswith("Charged excludes 1 context summary ")
