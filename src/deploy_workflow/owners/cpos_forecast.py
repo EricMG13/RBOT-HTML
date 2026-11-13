@@ -742,19 +742,24 @@ def model_files(
             for key, o in inputs.base.items()
         }
     )
-    # Owner, 2026-11-10: CP-2G's own cases are computed from their changed drivers; CP-2A's shock
-    # is a separate case on base drivers, never compounded with CP-2G's downside.
+    # Owner ruling docs/rulings/2026-11-13-downside-follows-forward-model.md (reverses the owner
+    # ruling of 2026-11-10, which kept CP-2A's shock on base drivers): the stress case is the shock
+    # over the forward model's own downside drivers, or over the base drivers when it sets none.
     base = inputs.base_drivers
+    stress_basis = base if inputs.downside_drivers is None else inputs.downside_drivers.over(base)
     cases: dict[str, tuple[cp2g.BaseDrivers, tuple[Decimal, Decimal] | None]] = {
         "REFERENCE": (base, None)
     }
     if inputs.upside_drivers is not None:
         cases["UPSIDE"] = (inputs.upside_drivers.over(base), None)
     if inputs.downside_drivers is not None:
-        cases["DOWNSIDE_DRIVERS"] = (inputs.downside_drivers.over(base), None)
+        cases["DOWNSIDE_DRIVERS"] = (stress_basis, None)
     if inputs.downside_shock is not None:
         shock = inputs.downside_shock
-        cases["DOWNSIDE"] = (base, (Decimal(shock.ebitda_decline), Decimal(shock.rate_increase)))
+        cases["DOWNSIDE"] = (
+            stress_basis,
+            (Decimal(shock.ebitda_decline), Decimal(shock.rate_increase)),
+        )
     facilities = inputs.facilities
     plan = None if facilities is None else schedule(facilities)
     totals = None if plan is None else plan.totals()
@@ -800,6 +805,13 @@ def model_files(
             # byte for byte.
             **_stated("upside_drivers", inputs.upside_drivers),
             **_stated("downside_drivers", inputs.downside_drivers),
+            # Written only when the shock was applied over downside drivers, so a block without
+            # either is byte for byte what it was.
+            **(
+                {"downside_basis": "downside_drivers"}
+                if inputs.downside_shock is not None and inputs.downside_drivers is not None
+                else {}
+            ),
             "outputs": outputs,
             **detail,
             # Written only when the block states `scale`, so a block without it is byte for byte
