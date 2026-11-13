@@ -29,7 +29,6 @@ from typing import Any, TextIO, get_args
 
 from deploy_vii.business_context import Category
 from deploy_vii.contracts import DEACTIVATED_MESSAGE, DEACTIVATED_PATHWAYS, PATHWAY_MODULES, Run
-from deploy_vii.live.prompts import STEP_CONTRACTS
 from deploy_vii.registry import dependencies, modules, plan
 from deploy_vii.report_view import _spec_of, pathways
 from deploy_workflow import confidence, platform_io
@@ -163,7 +162,17 @@ _SELECTED: dict[str, tuple[str, ...]] = {
         _SKILLS + "cp-0-source-readiness/SKILL.md",
         _SKILLS + "cp-0-source-readiness/references/REF_CP-0_STEPS.md",
     ),
-    "CP-1": ("prompts/CP-1.md",),  # Plus CP1_STEPS; no standalone CP-1 method file exists.
+    # Owner, 2026-11-13 (CP-1 moves to the Deploy V method): caos-databricks dfff264's skill,
+    # runbook and step file with named edits (no workbook step, no routing, host section layout,
+    # carrying-value debt, reported EBITDA first; manifest.json lists them). The schema and
+    # system references are archived, not sent. prompts/CP-1.md stays: its amendments are project
+    # rules. The 26 KB of STEP_CONTRACTS written for the JSON runtime is no longer sent.
+    "CP-1": (
+        _SKILLS + "cp-1-canonical-data-foundation/SKILL.md",
+        _SKILLS + "cp-1-canonical-data-foundation/references/CP-1_RUNBOOK.md",
+        _SKILLS + "cp-1-canonical-data-foundation/references/REF_CP-1_STEPS.md",
+        "prompts/CP-1.md",
+    ),
     # Owner, 2026-11-13 ("Build rec. 1, then run"): Deploy V's skill from cp-os b57a344 with the
     # bundle its SKILL binds on every run. The DEPLOY VII stand-in (cp1a.md) is no longer sent.
     "CP-1A": (
@@ -291,7 +300,6 @@ METHODS: dict[str, tuple[str, ...]] = {
     )
     for module, paths in _SELECTED.items()
 }
-CP1_STEPS = ("source_context", "financials", "narrative", "readiness", "quality")
 # Report sections whose registered producer is the Model or nothing: the first module present in
 # the run writes them. Everything else uses the section's registered producers. The order follows
 # the routes the retained pathway reports actually published.
@@ -679,20 +687,19 @@ NET_DEBT = OwnerTable(
     ("Gross debt", "Cash", "Net debt"),
     "US$m",
     rules=(
-        "Gross debt is the total debt principal as the issuer reports it, and the Basis and "
-        "limitation cell says what gross debt includes (for example securitization, finance "
-        "leases). Cash is the same figure as the Cash column of the `Chart data: liquidity` table "
-        "for that period. Net debt is gross debt less cash, worked with `calculate` and listed in "
-        "`## Calculations`. Write one row per period you state, at least the latest balance-sheet "
-        "date. `Period` is `FY2024 / 2024-09-30` for a fiscal year end (fiscal year, space, "
-        "slash, space, the year-end date) and the date alone (`2025-06-30`) for an interim "
-        "balance sheet: one form for every row of the table, each "
-        "period once, and no other word in the cell (say `pro forma` or `reported` in the Basis "
-        "and limitation cell). A row whose three figures are all stated is refused if net debt "
-        "differs from gross "
-        "debt less cash by any amount, and a row is refused if its cash differs from the "
-        "liquidity table's for the same period; a figure you cannot state is "
-        "`Not supplied: <reason>`."
+        "Gross debt is total debt at balance-sheet carrying value (current plus long-term, net of"
+        " issuance costs and discounts), not principal, and the Basis and limitation cell says "
+        "what gross debt includes (for example securitization) and states the principal total "
+        "beside it. Cash is the same figure as the Cash column of the `Chart data: liquidity` "
+        "table for that period. Net debt is gross debt less cash, worked with `calculate` and "
+        "listed in `## Calculations`. Write one row per period you state, at least the latest "
+        "balance-sheet date. `Period` is `FY2024 / 2024-09-30` for a fiscal year end (fiscal "
+        "year, space, slash, space, the year-end date) and the date alone (`2025-06-30`) for an "
+        "interim balance sheet: one form for every row of the table, each period once, and no "
+        "other word in the cell (say `pro forma` or `reported` in the Basis and limitation cell)."
+        " A row whose three figures are all stated is refused if net debt differs from gross debt"
+        " less cash by any amount, and a row is refused if its cash differs from the liquidity "
+        "table's for the same period; a figure you cannot state is `Not supplied: <reason>`."
     ),
 )
 
@@ -2172,10 +2179,7 @@ def method_sections(module: str) -> list[tuple[str, str]]:
     Each section is written into the instructions under a ``=== name sha256 hex ===`` heading, so
     a run's retained instructions record exactly which method it ran.
     """
-    sections = [(name, _method_file(name)) for name in METHODS[module]]
-    if module == "CP-1":
-        sections += [(f"STEP_CONTRACTS[{step}]", STEP_CONTRACTS[step]) for step in CP1_STEPS]
-    return sections
+    return [(name, _method_file(name)) for name in METHODS[module]]
 
 
 def _method_file(name: str) -> str:

@@ -459,19 +459,14 @@ def test_a_run_cpos_completed_with_a_fake_provider_is_listed(tmp_path, monkeypat
     monkeypatch.setattr(cpos_launch, "method_sections", amended)
     library = build_library(tmp_path / "ws", tmp_path / "ws/library", current_method())
     assert library.excluded == []
-    assert [r["method_changes"] for r in library.runs] == [
-        [
-            "CP-1: prompts/CP-1.md, "
-            + ", ".join(f"STEP_CONTRACTS[{s}]" for s in cpos_launch.CP1_STEPS)
-            + " changed"
-        ]
-    ]
+    names = [name for name, _ in sections("CP-1")]
+    assert [r["method_changes"] for r in library.runs] == [[f"CP-1: {', '.join(names)} changed"]]
 
-    # And once a step it was sent is dropped from the method (a scope reduction).
-    monkeypatch.setattr(cpos_launch, "method_sections", sections)
-    monkeypatch.setattr(cpos_launch, "CP1_STEPS", cpos_launch.CP1_STEPS[:-1])
+    # And once a section it was sent is dropped from the method (a scope reduction).
+    def reduced(module):
+        return sections(module)[1:] if module == "CP-1" else sections(module)
+
+    monkeypatch.setattr(cpos_launch, "method_sections", reduced)
     library = build_library(tmp_path / "ws", tmp_path / "ws/library", current_method())
     assert library.excluded == []
-    assert [r["method_changes"] for r in library.runs] == [
-        ["CP-1: STEP_CONTRACTS[quality] no longer selected"]
-    ]
+    assert [r["method_changes"] for r in library.runs] == [[f"CP-1: {names[0]} no longer selected"]]

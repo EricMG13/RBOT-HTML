@@ -453,6 +453,7 @@ for _heading, (_module, _types, _) in MAPS.items():
     )
 SCORED = (
     "CP-0",
+    "CP-1",
     "CP-1A",
     "CP-1B",
     "CP-1C",
@@ -467,7 +468,7 @@ SCORED = (
     "CP-3C",
 )
 SCORED += ("CP-3D", "CP-4", "CP-4C", "CP-5", "CP-6", "CP-DR")
-UNSCORED = ("CP-1", "CP-L10", "CP-8")
+UNSCORED = ("CP-L10", "CP-8")
 CONFIDENCE_ROWS = (
     "| Directly Sourced | 8 |\n| Calculated | 2 |\n| Assumption-Based | 2 |\n"
     "| Analyst Inference | 0 |\n| Weak Lineage | 0 |\n| Untraced | 0 |\n| Conflicting | 0 |\n"
@@ -1901,6 +1902,10 @@ SKILLS = "docs/reuse/selected-methods/skills/"
 # phase", "they bind every run", "Read ...; materialize its run-specific brief"), not from METHODS.
 BINDING_COMPANIONS = {
     "CP-0": ("cp-0-source-readiness/references/REF_CP-0_STEPS.md",),
+    "CP-1": (
+        "cp-1-canonical-data-foundation/references/REF_CP-1_STEPS.md",
+        "cp-1-canonical-data-foundation/references/CP-1_RUNBOOK.md",
+    ),
     "CP-1B": (
         "cp-1b-earnings-delta/SKILL.md",
         "cp-1b-earnings-delta/references/REF_CP-1B_STEPS.md",
@@ -1935,6 +1940,7 @@ BINDING_COMPANIONS = {
 SKILL_MODULES = [
     *(
         "CP-0",
+        "CP-1",
         "CP-1A",
         "CP-1B",
         "CP-1C",
@@ -2344,6 +2350,251 @@ def test_cp3_blocklists_no_longer_refuse_not_assessable(tmp_path):
         )
 
 
+CP1_DIR = ROOT / "docs/reuse/selected-methods/skills/cp-1-canonical-data-foundation"
+CP1_FILES = (
+    "SKILL.md",
+    "references/CP-1_RUNBOOK.md",
+    "references/REF_CP-1_STEPS.md",
+    "references/CP-1_SCHEMA_REFERENCE.md",
+    "references/CP-1_SYSTEM_REFERENCE.md",
+)
+# The byte-for-byte copies of caos-databricks vendor/deploy-v at dfff264 (the answer key for the
+# `source_sha256` of every edited entry); the schema and system references stay unedited.
+CP1_SOURCE_SHA256 = dict(
+    zip(
+        CP1_FILES,
+        (
+            "35b865705f9cb4a001c8a227767319bc3f34d274c3659164176ab2e70bf3a345",
+            "7934e8c562832b8320243cbf08e84b16575a0d2e4974fd918bf094b300fcd4ad",
+            "e9552f0d2b128cbe27ec58cdc2360e0e67c96a9f6ec21a140854f310de201bc1",
+            "356e87cb37a5ed86c96b15a913f42b8aafee544cd70e4f8f2fde01ce58cc7b72",
+            "7af64a9047ffa05e996dbb4cb1741b9a815744ecb7eb7bd3b134a4bccf9d2cd0",
+        ),
+        strict=True,
+    )
+)
+CP1_SENT = CP1_FILES[:3]
+
+
+def cp1_method() -> str:
+    return "\n".join((CP1_DIR / name).read_text(encoding="utf-8") for name in CP1_SENT)
+
+
+def test_cp1_runs_the_deploy_v_method_not_the_structured_runtime_stand_ins():
+    """Owner, 2026-11-13: CP-1 is sent caos dfff264's skill, runbook and step file (edited), not
+    the 26 KB of STEP_CONTRACTS written for the JSON runtime."""
+    text = cpos_launch.method_text("CP-1")
+    for heading in (
+        "# CP-1 Canonical Data Foundation",
+        "# CP-1 runbook",
+        *(f"## REF_CP-1_{n}" for n in ("01_", "02_", "03_", "04_", "05_", "06_", "07_")),
+        *(f"## REF_CP-1_{n}" for n in ("08_", "09_", "10_", "11_", "12_")),
+        "## Anti-patterns",
+        "## Discipline",
+        "## Calculation status (8 values)",
+        "## Evidence hierarchy",
+        "## Null and derived-period rules",
+        "## Event and liability discipline",
+        "## Metrics",
+    ):
+        assert heading in text, heading
+    for phrase in (
+        "Every `amount` is a JSON number",
+        "STEP_CONTRACTS",
+        "source_context",
+    ):
+        assert phrase not in text, phrase
+    assert [n for n, _ in cpos_launch.method_sections("CP-1")][: len(CP1_SENT) + 1] == [
+        *(SKILLS + "cp-1-canonical-data-foundation/" + name for name in CP1_SENT),
+        "prompts/CP-1.md",
+    ]
+
+
+def test_cp1_method_has_no_workbook_routing_script_or_front_matter_text():
+    text = cp1_method()
+    for phrase in (
+        "REF_CP-1_13",
+        "Model Workbook",
+        "orkbook",
+        "CP-MODEL",
+        "T4.14",
+        "T4.15",
+        "T4.18",
+        "T4.19",
+        "table-id",
+        "cp1.",
+        "DEBT_TOTAL_EX_LEASES",
+        ".xlsx",
+        "Run CP-1",
+        "recommended next command",
+        "CREDIT_OS_V_MODULE_CATALOG",
+        "prepare_invocation",
+        "validate_handoff",
+        "completeness_check",
+        "confidence_score.py",
+        "credit_metrics.py",
+        "Automated QA validation",
+        "qa_status",
+        "Confidence Score",
+        "Microsoft 365",
+        "Feeds CP-1B",
+        "Downstream Module",
+        "CP-1B",
+        "CP-2G",
+        "CP-4A",
+        "CP-5A",
+        "cpdr.adoptions",
+        "CP_DR_RESEARCH_BRIEF",
+        "[SubjectKey]",
+        "Audit Summary",
+        "QA Validation",
+        "Gaps & Conflicts",
+        "Analytical appendix",
+    ):
+        assert phrase not in text, phrase
+    # The null spelling the host's system prompt bars (method wrote `null`, `—`, empty cells).
+    for phrase in ("write `null`", "Store **null**", "Store null", "explicit null", "null + gap"):
+        assert phrase not in text, phrase
+    # CP-OS, not the method, orders modules and writes the next-module section.
+    assert "Run command" not in text and "Dependencies" not in text
+
+
+def test_cp1_method_states_the_project_conventions_the_checks_hold():
+    text = cp1_method()
+    for phrase in (
+        "`Not supplied: <reason>`",
+        "`Not calculable: <reason>`",
+        "never `null`, an empty cell or a dash",
+        "no snake_case or capitalised underscore tokens, no register ids",
+        'not the words "canonical" or "handoff"',
+        "Each register below is a `###` heading inside `## Findings`; gaps go under `## Gaps`",
+        "CP-1 is a data module: `### Bottom line` opens `## Findings`",
+        "T4.7 is retired",
+        "This method does not rename, merge or drop any of them",
+    ):
+        assert phrase in text, phrase
+    for kept in (
+        "`Chart data:` tables",
+        "`Net debt data`",
+        "`Post-balance-sheet adjustments`",
+        "`### Financials and credit metrics`",
+        "the Period table",
+        "`### Confidence inputs`",
+    ):
+        assert kept in text, kept
+    # Every editing-out of the method's wording leaves the sentence rules to the sentences only.
+    assert "Debt principal to carrying value" not in text  # the launcher block names that table
+
+
+def test_cp1_method_names_the_operand_tables_the_check_reads():
+    text = cp1_method()
+    for heading in (
+        "### T4.4 Income statement",
+        "### T4.5 Cash flow statement",
+        "### T4.6 Balance sheet",
+        "### T4.9 Calculation register",
+    ):
+        assert f"`{heading}`" in text or f"Output `{heading}`" in text, heading
+    assert "The first column is headed `Line item`" in text
+    assert "`Unit` (the currency code and `millions` or `thousands`" in text
+    for row in (
+        "`EBITDA (Reported)`",
+        "`EBITDA (Adjusted)`",
+        "`Net Cash from Operating Activities`",
+        "`Net Cash from Investing Activities`",
+        "`Net Cash from Financing Activities`",
+        "`Net Cash Change`",
+        "`Opening Cash`",
+        "`Closing Cash`",
+        "`Cash Interest Paid`",
+        "`FX Effect on Cash`",
+        "`Total Assets`",
+        "`Total Liabilities`",
+        "`Total Equity`",
+        "`Total Debt`",
+        "`Cash & Equivalents`",
+        "`Temporary Equity`",
+    ):
+        assert row in text, row
+    assert (
+        "`Metric Name` | `Formula` | `Numerator Value` | `Numerator Source` | "
+        "`Denominator Value` | `Denominator Source` | `Period` | `Currency` | `Unit` | "
+        "`Calculated Value` | `Calculation Status` | `Evidence Quality Tier` | `Limitations`"
+    ) in text
+    for name in (
+        "`Total debt / EBITDA`",
+        "`Net debt / EBITDA`",
+        "`EBITDA / cash interest`",
+        "`Total debt / adjusted EBITDA`",
+        "`Net debt / adjusted EBITDA`",
+        "`Adjusted EBITDA / cash interest`",
+    ):
+        assert name in text, name
+    assert "`Unit` is `US$m`" in text
+    assert (
+        "`Net Cash Change` excludes nothing: it is operating plus investing plus financing" in text
+    )
+    assert "plus the FX effect" in text
+    # T4.7 stays retired: no table by that name is asked for.
+    assert "### T4.7" not in text
+
+
+def test_cp1_method_states_the_debt_and_ebitda_basis():
+    text = cp1_method()
+    for phrase in (
+        "debt totals use carrying values",
+        "Principal and commitment are kept separately and are not substitutes",
+        "A lease liability is not in total debt",
+        "Reported EBITDA is the primary denominator",
+        "adjusted EBITDA beside it, labelled, when the issuer states it",
+        "gross principal is never the leverage denominator",
+        "The carrying-against-principal difference is always one row here",
+    ):
+        assert phrase.lower() in text.lower(), phrase
+    # The method no longer prefers or treats adjusted EBITDA as the primary denominator.
+    assert "adjusted_ebitda when present" not in text
+    assert "Adjusted EBITDA is primary" not in text
+
+
+def test_cp1_method_files_are_archived_with_hashes_and_named_edits():
+    manifest = json.loads((ROOT / "docs/reuse/selected-methods/manifest.json").read_text())
+    entries = {e["archive_path"]: e for e in manifest["files"]}
+    for name in CP1_FILES:
+        entry = entries[f"docs/reuse/selected-methods/skills/cp-1-canonical-data-foundation/{name}"]
+        data = (CP1_DIR / name).read_bytes()
+        assert entry["sha256"] == hashlib.sha256(data).hexdigest(), name
+        if name in CP1_SENT:
+            assert entry["edited_copy_of"].endswith(
+                "caos-databricks/vendor/deploy-v/skills/cp-1-canonical-data-foundation/" + name
+            ), name
+            assert entry["exact_copy_found_at"] is None
+            assert entry["source_sha256"] == CP1_SOURCE_SHA256[name], name
+            assert entry["source_sha256"] != entry["sha256"], name
+            edit = entry["edit"]
+            assert "dfff264" in edit and "source_sha256" in edit, name
+        else:  # archived, not sent: byte-for-byte
+            assert entry["sha256"] == CP1_SOURCE_SHA256[name], name
+            assert entry["exact_copy_found_at"].endswith(name), name
+            assert "edited_copy_of" not in entry
+    edits = " ".join(entries[f"{CP1_DIR.relative_to(ROOT)}/{n}"]["edit"] for n in CP1_SENT)
+    for named in (
+        "(a) workbook",
+        "(b) routing",
+        "(c) runbook",
+        "(d) project conventions",
+        "(e) operand tables",
+        "(f) debt basis and EBITDA",
+    ):
+        assert named in edits, named
+
+
+def test_cp1_sent_method_fits_the_size_the_pathway_budgets_leave():
+    """The answer key: the sent skill files total at most 33,000 characters, so the launcher
+    block that follows (about 3,500) and the score section (2,172) keep every pathway inside its
+    ceiling (the pathway budget test itself is the size-budget test above)."""
+    assert len(cp1_method()) <= 33_000
+
+
 def test_cp1b_runs_the_deploy_v_method_not_the_structured_runtime_step():
     """Live runs 2026-11-09 and 2026-11-10: CP-1B blocked both times for want of a `read_inputs`
     view with `pairs`, which only the older structured runtime gives."""
@@ -2458,9 +2709,12 @@ def test_every_module_is_told_what_stands_for_acceptance_scripts_and_questions(t
 # CP-8 pin recomputed on 2026-11-13 (merge of origin/main into claude/deploy-v-methods): it is the
 # merge of main's CP-8 method change (cp8.md redesign) with this branch's appendix section. Every
 # other pin is this branch's value; main changed no other method text.
+# CP-1 changed on 2026-11-13 (CP-1 moves to the Deploy V method): it now sends the edited caos
+# dfff264 skill, runbook and step file, not the STEP_CONTRACTS sections, so runs made before it are
+# correctly marked "Earlier methods" for CP-1. The score section follows, as for every skill module.
 METHOD_TEXT_SHA256_AT_1B41E65 = {
     "CP-0": "e8d3e77bc48bc98e2fd8595e7b46ee7fc786e859591cf244325f3508b7d5dac9",
-    "CP-1": "02477a91d582f6301b2dbfadd96572ea75f9845493de337d7160a55111b62170",
+    "CP-1": "e14d4e6c44c5c7b0c8661a365bef007ada2cebafc76a9190b74f45e4fa2ab9f3",
     "CP-1A": "4c8efcfafe748cd01e6c856041349397c77384c3c82566b1f36a429535c01639",
     "CP-1B": "38d9fa7b075d1ce5d0cd21bcc216f57f37369cd4db395b3f1fb65498697a509f",
     "CP-1C": "9353afdbce820f59c2dcabc951fc1ff3813174b3c84e79b47bc22bea97f3bbe8",
@@ -6267,9 +6521,12 @@ def test_every_pathway_asks_cp1_for_the_net_debt_table_and_states_every_rule_the
     text = (tmp_path / "out" / prepared.plan.instructions["CP-1"].path).read_text()
     assert text.count("`### Net debt data`") == 1
     assert NET_DEBT_HEADER in text
+    assert "total debt principal as the issuer reports it" not in text
     for stated in (
-        "total debt principal as the issuer reports it",
-        "what gross debt includes",
+        "Gross debt is total debt at balance-sheet carrying value (current plus long-term",
+        "net of issuance costs and discounts), not principal",
+        "what gross debt includes (for example securitization) and states the principal total",
+        "beside it. Cash is",
         "the same figure as the Cash column of the `Chart data: liquidity` table",
         "Net debt is gross debt less cash, worked with `calculate`",
         "is refused if net debt differs from gross debt less cash by any amount",
