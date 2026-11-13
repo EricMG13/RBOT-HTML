@@ -593,14 +593,14 @@
   }
 
   // ---- sided: C7, two columns chosen from the cell's own side word
-  const OPPOSING_SIDES = [['bull', 'bear'], ['support', 'contradict'], ['supports', 'contradicts'], ['for', 'against'], ['positive', 'negative'], ['upside', 'downside']];
+  const OPPOSING_SIDES = [['bull', 'bear'], ['support', 'contradict'], ['for', 'against'], ['positive', 'negative'], ['upside', 'downside']];
   function sidedBoard(block, ctx) {
     const cols = visibleColumns(block, 'sided', ctx), sideCol = cols.find(col => /^side\b/.test(labelNorm(col))), labelCol = cols.find(col => col !== sideCol);
     if (!sideCol || !labelCol || !block.rows.length) return recordCards(block, ctx);
     const figCol = cols.find(col => col !== sideCol && col !== labelCol && numericLike(block, col.at)), rest = cols.filter(col => ![sideCol, labelCol, figCol].includes(col));
     const entries = block.rows.map(row => {
       const text = cellText(row, sideCol.at), {word, qualifier} = withQualifier(text), wordHtml = word === '' ? '' : fieldHtml(word, ctx);
-      return {row, word: wordHtml === '' ? '' : word, wordHtml, qualifier, key: wordHtml === '' ? '' : plain(word).toLowerCase()};
+      return {row, word: wordHtml === '' ? '' : word, wordHtml, qualifier, key: wordHtml === '' ? '' : plain(word).toLowerCase().replace(/^(support|contradict)s$/, '$1')};  // support and supports are one side word
     });
     const tally = new Map();
     entries.filter(entry => entry.key !== '').forEach(entry => tally.set(entry.key, {key: entry.key, n: (tally.get(entry.key)?.n ?? 0) + 1, first: tally.get(entry.key)?.first ?? entry}));
@@ -621,8 +621,10 @@
   // Only a cell that is one part (no `;` or `,`) of the form "<words> (CP-x)" and names no calculation or file; any other cell is read by findingCell like every cell.
   const MODULE_NAME = /^[^;,]*\S\s*\(CP-[0-9A-Z]+\)$/, FILE_NAME = /\.(?:jsonl|htm|html|pdf|xlsx?|csv|md|json|txt)\b/i;
   function subjectHtml(text, ctx) {
-    const cell = findingCell(text, ctx), raw = String(text).trim();
-    return cell.omitted && !cell.inEvidence && MODULE_NAME.test(raw) && !FILE_NAME.test(raw) && !calculationId().test(raw) ? readerText().richText(raw) : fieldHtml(text, ctx);
+    const cell = findingCell(text, ctx), raw = String(text).trim(), words = raw.slice(0, raw.lastIndexOf('('));
+    // The words before the bracket hold no identifier of the module, no bare calculation-ID-shaped word and no file name, or the cell stays as findingCell read it.
+    const plainName = tokensIn(words, ctx.tokens).length === 0 && !/\b[A-Z]{1,2}\d{2}\b/.test(words) && !FILE_NAME.test(raw) && !calculationId().test(raw);
+    return cell.omitted && !cell.inEvidence && MODULE_NAME.test(raw) && plainName ? readerText().richText(raw) : fieldHtml(text, ctx);
   }
 
   // ---- moduleState: C20, tiles; a state that repeats collapses to one tile with the state, the count and the rows in a <details>
@@ -636,7 +638,7 @@
     for (const row of block.rows) {
       const key = stateKey(row), title = cellText(row, nameCol.at);
       if (!repeated(key)) {
-        tiles.push(`<article class="ms-tile"><div class="ms-head"><p class="ms-title">${subjectHtml(title, ctx)}</p>${traceFor(ctx, row, rowLabelOf(block, ctx, row, title))}</div>$${stateBadge(cellText(row, stateCol.at), ctx)}${fieldList(row, rest, ctx)}${extraList(block, row, ctx)}</article>`);
+        tiles.push(`<article class="ms-tile"><div class="ms-head"><p class="ms-title">${subjectHtml(title, ctx)}</p>${traceFor(ctx, row, rowLabelOf(block, ctx, row, title))}</div>${stateBadge(cellText(row, stateCol.at), ctx)}${fieldList(row, rest, ctx)}${extraList(block, row, ctx)}</article>`);
       } else if (!done.has(key)) {
         done.add(key);
         const same = block.rows.filter(other => stateKey(other) === key);

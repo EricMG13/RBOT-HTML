@@ -928,7 +928,7 @@ test('fix 2: a title cell findingCell held back is not drawn in a trace label; t
     const html = C.render(shape, block, ctx), attrs = (html.match(/(?:title|aria-label)="[^"]*"/g) || []);
     assert.deepEqual(attrs.filter(a => /EV-9|calculation C05|\.htm/.test(a)), [], `${shape}: a held-back cell is in an attribute`);
     for (const n of [2, 3, 4]) assert.ok(html.includes(`aria-label="Row ${n}: where it comes from"`), `${shape}: Row ${n}`);
-    assert.ok(attrs.some(a => /^aria-label="Fine\??: where it comes from"|^aria-label="Fine[^"]*: where it comes from"/.test(a) || /Row 1/.test(a)), `${shape}: the first row is labelled`);
+    assert.ok(attrs.includes(`aria-label="${shape === 'qa' ? 'Fine?' : 'Fine'}: where it comes from"`), `${shape}: the first row is labelled with its title`);
   }
 });
 
@@ -1040,4 +1040,27 @@ test('a calculation reference-only cell uses the one shared pattern: "Calculatio
   assert.deepEqual(C.findingCell('Calculation FY24', {}), { html: 'Calculation FY24' });
   assert.deepEqual(C.findingCell('Calculations C21, C22', {}), { omitted: true });
   assert.deepEqual(C.findingCell('Calculation D17', {}), { omitted: true });
+});
+
+// ---- Task 6 fix round 2
+test('fix A: a moduleState tile draws exactly its words, no stray character (compared whole, tags stripped)', () => {
+  const html = C.moduleStateTiles({ headers: ['Module', 'Status'], rows: [{ line: 1, cells: ['Alpha', 'Ready'] }, { line: 2, cells: ['Beta', 'Pending'] }] }, { key: quietKey });
+  assert.equal(textOf(html).replace(/\s+/g, ' ').trim(), 'AlphaReadyBetaPending');
+  const grouped = C.moduleStateTiles({ headers: ['Module', 'Status', 'Why'], rows: [{ line: 1, cells: ['Alpha', 'New', 'w1'] }, { line: 2, cells: ['Beta', 'New', 'w2'] }] }, { key: quietKey });
+  assert.equal(textOf(grouped).replace(/\s+/g, ' ').trim(), 'New2 · ModuleAlphaWhyw1BetaWhyw2');
+});
+
+test('fix B: the module-name bypass refuses a name holding an identifier of the module, a bare calculation-ID-shaped word or a file name', () => {
+  const ctx = { key: quietKey, evidenceHref: '#e', tokens: ['EV-9', 's00'] };
+  const draw = name => textOf(C.moduleStateTiles({ headers: ['Module', 'Status'], rows: [{ line: 1, cells: [name, 'Ready'] }] }, ctx));
+  for (const [name, held] of [['EV-9 review (CP-4)', 'EV-9'], ['s00 (CP-4)', 's00'], ['C05 (CP-4)', 'C05'], ['report.pdf (CP-4)', 'report.pdf']]) assert.ok(!draw(name).includes(held), name);
+  assert.ok(C.moduleStateTiles({ headers: ['Module', 'Status'], rows: [{ line: 1, cells: ['EV-9 review (CP-4)', 'Ready'] }] }, ctx).includes('class="basis-link trace-row"'), 'a held-back name (findingCell omits it) leaves the row reachable by its trace control');
+  assert.ok(draw('Gate review (CP-4)').includes('Gate review (CP-4)'), 'a plain module name is drawn as written');
+  assert.ok(draw('EV-90 review (CP-4)').includes('EV-90 review (CP-4)'), 'whole words only');
+});
+
+test('fix C: support and supports, contradict and contradicts, are one pair; the heading is the word as first written', () => {
+  const heads = words => [...C.sidedBoard({ headers: ['Driver', 'Side'], rows: words.map((s, i) => ({ line: i + 1, cells: [`D${i}`, s] })) }, { key: quietKey }).matchAll(/<p class="sd-hs sd-s\d">.*?<\/i>(.*?)<b/g)].map(m => m[1]).join('|');
+  assert.equal(heads(['Neutral', 'Neutral', 'Supports', 'Contradict']), 'Supports|Contradict');
+  assert.equal(heads(['Contradicts', 'Support', 'Neutral', 'Supports']), 'Support|Contradicts', 'left is the pair\'s first word, as first written');
 });
