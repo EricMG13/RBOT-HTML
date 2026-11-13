@@ -1422,15 +1422,36 @@ def _stated_gap(cell: str) -> bool:
 CURRENCY_CODES = ISO_4217  # the repo's one list of real codes; LTM, PIK, RCF, TTM are not in it
 
 
+_AMOUNT_WORD = r"(?:m|mn|bn|k|thousands?|millions?|billions?|amounts?)"
+_SYMBOL_CODE = {"$": "USD", "\u20ac": "EUR", "\u00a3": "GBP", "\u00a5": "JPY"}
+
+
+def _other_currency(rest: str, chart_unit: str) -> bool:
+    """Whether `rest` (a unit cell without the chart unit) names a currency other than the chart
+    unit's own: a code or symbol of another currency. A code counts in a currency position only:
+    next to an amount word or unit (`GBPm`, `EUR millions`, `m EUR`), or standing alone (`(ILS)`,
+    `and EUR`). A capitalised word that is also a code (`ALL figures`, `TOP line`) does not."""
+    own_symbols = [s for s in _SYMBOL_CODE if s in chart_unit]
+    own = {c for c in CURRENCY_CODES if re.search(rf"\b{c}", chart_unit)}
+    own |= {_SYMBOL_CODE[s] for s in own_symbols}
+    code = "(?:" + "|".join(sorted(CURRENCY_CODES - own)) + ")"
+    alone = rf"(?:^|[(/;,&]|\band\b|\bor\b)\s*{code}\s*(?=$|[)/;,&])"
+    beside = rf"\b{code}\s*{_AMOUNT_WORD}\b|\b{_AMOUNT_WORD}\s+{code}\b"
+    symbols = "".join(s for s in _SYMBOL_CODE if s not in own_symbols)
+    return bool(re.search(f"{alone}|{beside}|[{symbols}]", rest))
+
+
 def _unit_advice(spec: OwnerTable, unit: str) -> str:
-    """What to do about a unit cell that is not the chart unit. A cell that begins with the chart
-    unit and adds other words is a unit cell holding more than the unit: its amounts are sound, so
-    the advice is to cut the cell, never to replace the amounts with gaps. When the rest names
-    another currency code or symbol the amounts may really be in it, so the gap advice stays."""
-    rest = unit.removeprefix(spec.chart_unit)
-    codes = "|".join(sorted(CURRENCY_CODES))
-    other_currency = re.search(rf"\b(?:{codes})\b|[$\u20ac\u00a3\u00a5]", rest)
-    if rest != unit and rest[:1] and not rest[:1].isalnum() and not other_currency:
+    """What to do about a unit cell that is not the chart unit. A cell that holds the chart unit
+    and adds other words is a unit cell holding more than the unit: its amounts are sound, so the
+    advice is to cut the cell, never to replace the amounts with gaps. When the rest names another
+    currency (`_other_currency`) the amounts may really be in it, so the gap advice stays."""
+    own = re.compile(rf"{re.escape(spec.chart_unit)}(?!\w)")
+    if (
+        spec.chart_unit
+        and own.search(unit)
+        and not _other_currency(own.sub("", unit), spec.chart_unit)
+    ):
         return (
             f"the Reporting unit must be exactly `{spec.chart_unit}` (the Amount's unit only); "
             "move the rest to Basis and limitation."

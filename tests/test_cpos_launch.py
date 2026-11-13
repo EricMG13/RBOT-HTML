@@ -7313,3 +7313,26 @@ def test_attemptless_starts_are_matched_to_attemptless_ends_by_count(tmp_path):
     )
     (line,) = cpos_launch._charge_notes(tmp_path)
     assert line.startswith("Charged excludes 1 context summary ")
+
+
+@pytest.mark.parametrize(
+    "unit",
+    [
+        "US$m (USD)",
+        "US$m (USD millions)",
+        "US$m, except per-share US$",
+        "US$m (ALL figures)",
+        "TOP line, US$m",
+        "US$m (MOP-linked pegs, ALL sourced)",
+    ],
+)
+def test_the_chart_units_own_currency_or_a_capitalised_word_is_not_another_currency(unit):
+    (issue,) = debt_stack_issues(DEBT_UNIT_ROW.format(unit))
+    assert "must be exactly `US$m`" in issue
+    assert "Not supplied: reported in" not in issue
+
+
+@pytest.mark.parametrize("unit", ["GBPm", "EUR millions", "£m", "US$m / GBPm", "US$m and EUR"])
+def test_a_cell_with_a_different_currency_in_a_currency_position_keeps_the_gap_advice(unit):
+    (issue,) = debt_stack_issues(DEBT_UNIT_ROW.format(unit))
+    assert f"write `Not supplied: reported in {unit}`" in issue
