@@ -396,12 +396,11 @@ def test_run_activity_puts_waiting_beside_running_on_a_wide_window(tmp_path):
     page = run_activity_library(tmp_path)
     seen = read_probe(page, "#CP-OS/activity", 1440, RUN_ACTIVITY_PROBE)
     assert seen["waitingLeft"] > seen["runningRight"], seen
-    assert seen["progressName"] == "Modules done"
-    assert (seen["progressMax"], seen["progressValue"], seen["barHeight"]) == (8, 3, 8)
-    # A list opened before the reload is still open after it.
-    assert seen["openBefore"] is True and seen["openAfter"] is True and seen["changedShown"] is True
-    # A queued run's list, opened before the reload, is open after it too.
-    assert seen["queuedBefore"] is True and seen["queuedAfter"] is True
+    # Eight modules as C13 steps in the data's order, one loader (the run mark), two queued rows.
+    assert seen["stepStates"] == ["done"] * 3 + ["running"] + ["waiting"] * 4, seen
+    assert seen["loaders"] == 1 and seen["queued"] == 2, seen
+    # A changed snapshot is drawn again.
+    assert seen["changedShown"] is True
 
 
 def test_run_activity_has_no_horizontal_scroll_on_a_phone(tmp_path):

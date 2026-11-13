@@ -115,9 +115,9 @@ const viewsPart = (from, to, returns) => {
   const text = read('views.js');
   const start = text.indexOf(from), end = text.indexOf(to);
   assert.ok(start >= 0 && end > start, `${from} not found`);
-  return new Function('esc', 'icon', `${text.slice(start, end)}; return ${returns};`)(esc, n => `<img src="icons/${n}.svg">`);
+  return new Function('esc', 'icon', 'window', `${text.slice(start, end)}; return ${returns};`)(esc, n => `<img src="icons/${n}.svg">`, { Components: require('./components.js') });
 };
-const activityView = () => viewsPart('function activityView(', 'function workspaceView(', 'activityView');
+const activityView = () => viewsPart('// Run activity (ruling decision 10)', 'function workspaceView(', 'activityView');
 const libraryNotShown = () => viewsPart('function libraryNotShown(', 'function libraryView(', 'libraryNotShown');
 
 // The Evidence page: views.js gathers the run's data and evidence.js draws it. The helper runs the real slice of views.js and the real evidence.js
@@ -1708,147 +1708,204 @@ test('navigator (decision 5): nothing collapses and nothing persists: no expande
 // A module with saved outputs and no default (two unnumbered variants): counted, listed as a choose line, never given an output by the page.
 const CP0_TWO = modules => ({ ...modules, 'CP-0': { outputs: [`${RUN}/deliveries/d1/CP-0-a.md`, `${RUN}/deliveries/d1/CP-0-b.md`], default: null } });
 
-// Live run activity: pull the live functions (between activityView and workspaceView) out of views.js.
+// Live run activity: pull the live functions (from the Run activity comment to workspaceView) out of views.js.
 const liveFns = () => {
   const text = read('views.js');
-  const start = text.indexOf('function activityView('), end = text.indexOf('function workspaceView(');
+  const start = text.indexOf('// Run activity (ruling decision 10)'), end = text.indexOf('function workspaceView(');
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  return new Function('esc', 'icon', `${text.slice(start, end)}; return {liveActivityView, nextActivityReload, swapActivityScript, activityView};`)(esc, n => `<img src="icons/${n}.svg">`);
+  return new Function('esc', 'icon', 'window', `${text.slice(start, end)}; return {liveActivityView, nextActivityReload, swapActivityScript, activityView, activityEnded, refreshElapsed, elapsedLabel};`)(esc, n => `<img src="icons/${n}.svg">`, { Components: require('./components.js') });
 };
-const { liveActivityView, nextActivityReload, swapActivityScript, activityView: activityViewLive } = liveFns();
+const { liveActivityView, nextActivityReload, swapActivityScript, activityView: activityViewLive, activityEnded, refreshElapsed, elapsedLabel } = liveFns();
 
-test('live run activity draws cards with progress and module badges, escapes names, and shows no spend', () => {
-  const html = liveActivityView({cap:'20', held:'', runs:[
-    {id:'a', status:'running', pathway:'earnings_update', folder:'<img src=x onerror=1>', issuer_name:'Acme',
-     started_at:'2026-11-09T13:41:00Z', spent:'3.10', files:['a.pdf'], modules:[['CP-0','done'],['CP-1','running'],['Report','waiting']]},
-    {id:'b', status:'finished', pathway:'credit_snapshot', folder:'x', issuer_name:'Initech', spent:'8.42',
-     report:'issuers/Initech (ini)/2026-11-09 credit_snapshot.html'},
-    {id:'c', status:'running', pathway:'credit_snapshot', folder:'y', issuer_name:'Z', spent:null, modules:[]}]});
-  assert.ok(!html.includes('<img'));
-  assert.ok(html.includes('chip-done') && html.includes('chip-running') && html.includes('chip-waiting'));
+// ---- Run activity (library redesign, Task 12): C13 steps and C31 marks per run, a clock on the running module only, C23 when a run ends, C32 states.
+const NOW = Date.parse('2026-11-09T14:00:00Z');
+const STARTED = '2026-11-09T13:41:00Z'; // 19 minutes before NOW
+const running = (extra = {}) => ({ id: 'r1', status: 'running', issuer_name: 'Acme', pathway: 'credit_snapshot', submitted_by: 'Dana', started_at: STARTED, folder: 'acme-2026-11-09-abc', files: ['a.pdf', 'b.pdf', 'c.pdf'], modules: [['CP-0', 'done'], ['CP-1', 'running'], ['CP-2', 'waiting']], ...extra });
+
+test('live run activity draws one card per running run: name, pathway, submitter, start, the run mark, then the steps; escapes names; draws no finished run or link to a report', () => {
+  const html = liveActivityView({ runs: [running({ issuer_name: '<img src=x onerror=1>' }), { id: 'b', status: 'finished', issuer_name: 'Initech' }] }, NOW);
+  assert.ok(!html.includes('<img') && html.includes('&lt;img'));
   assert.ok(!html.includes('Initech') && !html.includes('<a '), 'a finished run is not drawn, and no run links to a report');
+  assert.strictEqual(countOf(html, /<li class="run-card /g), 1);
+  const card = html.slice(html.indexOf('<li class="run-card'));
+  assert.ok(card.includes('credit_snapshot') && card.includes('<span class="run-by">submitted by Dana</span>') && card.includes(`<span class="run-time">started ${STARTED}</span>`));
+  assert.ok(card.indexOf('rmark running') < card.indexOf('class="steps-w"'), 'the run mark comes before the steps');
+  assert.ok(!card.includes('<progress'), 'C13 steps replace the progress bar');
 });
-test('a running run with 6 modules, 3 done, draws a progress element and "3 of 6 done"; with no modules, none', () => {
-  const six = ['done', 'done', 'done', 'running', 'waiting', 'waiting'].map((s, i) => [`M${i}`, s]);
-  const html = liveActivityView({ runs: [{ id: 'a', status: 'running', folder: 'f', modules: six }] });
-  assert.ok(html.includes('<progress') && html.includes('max="6"') && html.includes('value="3"'), html);
-  assert.ok(html.includes('aria-label="Modules done"') && html.includes('3 of 6 done'));
-  assert.ok(!liveActivityView({ runs: [{ id: 'a', status: 'running', folder: 'f', modules: [] }] }).includes('<progress'));
-  assert.ok(!liveActivityView({ runs: [{ id: 'a', status: 'running', folder: 'f' }] }).includes('<progress'));
+test('the steps are the run modules in the data order; only the running module carries the loader and the elapsed time', () => {
+  const html = liveActivityView({ runs: [running()] }, NOW);
+  assert.deepEqual([...html.matchAll(/<li class="step (\w+)"/g)].map(m => m[1]), ['done', 'running', 'waiting']);
+  const segments = html.match(/<ol class="steps".*?<\/ol>/)[0];
+  assert.ok(!segments.includes('lat') && !segments.includes('steps-el'), 'done and waiting modules carry neither a loader nor a clock');
+  assert.strictEqual(countOf(html, /class="lat"/g), 1, 'one loader');
+  assert.strictEqual(countOf(html, /class="steps-el"/g), 1, 'one clock');
+  assert.ok(html.includes('<span class="steps-k">Running</span> CP-1<span class="steps-el" data-since="2026-11-09T13:41:00Z"> · 19 min into the run</span>'), html);
 });
-test('the status badge says Running, or Running · stalled', () => {
-  const badge = run => liveActivityView({ runs: [{ id: 'a', status: 'running', folder: 'f', ...run }] }).match(/<span class="run-badge[^"]*">(.*?)<\/span>(?:<\/span>)?/);
-  assert.ok(badge({ stalled: true })[0].includes('Running · stalled'));
-  assert.ok(badge({})[0].includes('>Running') && !badge({})[0].includes('stalled'));
-  assert.ok(liveActivityView({ runs: [{ status: 'running', folder: 'f', stalled: true }] }).includes('run-badge-stalled'));
+test('no start time, or one that is not a dated time with a zone: no elapsed time, and nothing reads NaN, undefined or 0', () => {
+  for (const started_at of [undefined, null, '', 'yesterday', '1', 5, {}, '2026-11-09T13:41:00', '2026-11-09T14:30:00Z']) {
+    const html = liveActivityView({ runs: [running({ started_at, files: [], folder: undefined })] }, NOW);
+    assert.ok(html.includes('class="step running"'), String(started_at));
+    assert.ok(!html.includes('steps-el') && !html.includes('data-since'), `${started_at}: no clock`);
+    for (const word of ['NaN', 'undefined', 'null', 'Infinity']) assert.ok(!html.includes(word), `${started_at}: ${word}`);
+    assert.ok(!/(?:^|[^\d])0(?:[^\d]|$)/.test(html.replace(/<dl.*?<\/dl>/, '').replace(/<[^>]*>/g, ' ')), `${started_at}: a bare 0 outside the counts`);
+  }
+  assert.strictEqual(elapsedLabel('2026-11-09T13:59:30Z', NOW), 'under a minute');
+  assert.strictEqual(elapsedLabel('2026-11-09T12:55:00Z', NOW), '1 h 5 min');
+  assert.strictEqual(elapsedLabel('2026-11-09T13:00:00Z', NOW), '1 h');
+  assert.strictEqual(elapsedLabel('2026-11-09T13:41:00+00:00', NOW), '19 min');
+  assert.strictEqual(elapsedLabel('2026-11-09 13:41:00+00:00', NOW), '19 min');
+  assert.strictEqual(elapsedLabel('not a time', NOW), '');
 });
-test('the page shows no spend or cap for a run whose spent is a string, null or absent', () => {
+test('a run with no module running draws no clock, and the clock moves on a re-load without drawing the page again', () => {
+  assert.ok(!liveActivityView({ runs: [running({ modules: [['CP-0', 'waiting']] })] }, NOW).includes('steps-el'));
+  const el = { textContent: ' · 19 min into the run', getAttribute: () => STARTED };
+  refreshElapsed({ querySelectorAll: sel => (sel === '[data-since]' ? [el] : []) }, NOW + 5 * 60000);
+  assert.strictEqual(el.textContent, ' · 24 min into the run');
+  assert.ok(!read('views.js').includes('setInterval') && !read('screen.js').includes('setInterval'), 'no per-second timer');
+});
+test('a stalled running run carries the Stalled mark in words and no loader; a healthy one carries the loader', () => {
+  const stalled = liveActivityView({ runs: [running({ stalled: true })] }, NOW);
+  assert.ok(stalled.includes('rmark stalled') && stalled.includes('<span class="state-w">Stalled</span>') && !stalled.includes('rmark running') && !stalled.includes('class="lat"'));
+  assert.ok(liveActivityView({ runs: [running()] }, NOW).includes('rmark running'));
+});
+test('the page shows no spend, cap, held amount or cost for any shape of those fields', () => {
   for (const spent of ['3.10', null, undefined, 3.1, '<b>']) {
     for (const status of ['running', 'queued']) {
-      const html = liveActivityView({ cap: '20', held: '', runs: [{ id: 'a', status, folder: 'f', issuer_name: 'N', pathway: 'p', spent, modules: [['M', 'done']] }] });
-      for (const word of ['USD', 'spend', 'run-spend', '3.10', ' of 20']) assert.ok(!html.includes(word), `${status} ${spent}: ${word}`);
+      const html = liveActivityView({ cap: '20', held: 'daily limit of 20 runs reached', cost: '1.2', runs: [running({ status, spent, cost: spent, held: spent })] }, NOW);
+      const text = html.replace(/<svg.*?<\/svg>/g, '').replace(/<[^>]*>/g, ' ').toLowerCase();
+      for (const word of ['usd', 'spend', 'spent', 'cap', 'held', 'cost', 'limit', '3.10', ' of 20']) assert.ok(!text.includes(word), `${status} ${spent}: ${word}`);
     }
   }
-  assert.ok(!read('views.js').includes('liveRunSpend') && !read('screen.css').includes('run-spend'));
+  assert.ok(!read('views.js').includes('liveRunSpend') && !read('screen.css').includes('run-spend') && !read('screen.css').includes('.run-held'));
 });
-test('waiting runs are one table with a caption, two column headers and a row each; the held notice is above it', () => {
-  const html = liveActivityView({ held: 'daily limit reached', runs: [
-    { id: 'q1', status: 'queued', pathway: 'credit_snapshot', folder: 'f1', issuer_name: 'Qone', submitted_by: 'Dana', reason: 'waiting for a slot' },
-    { id: 'q2', status: 'queued', pathway: 'earnings_update', folder: 'f2', issuer_name: 'Qtwo' },
-    { id: 'r', status: 'running', folder: 'g', issuer_name: 'Runner' }] });
-  assert.strictEqual(countOf(html, /<table/g), 1);
-  assert.ok(html.includes('<caption class="run-vh">Waiting runs</caption>'));
-  assert.ok(html.includes('<th scope="col">Issuer</th>') && html.includes('<th scope="col">Pathway</th>'));
-  assert.strictEqual(countOf(html, /<th scope="row">/g), 2);
-  assert.strictEqual(countOf(html, /<tr class="live-run live-queued">/g), 2);
-  assert.ok(html.includes('<span class="run-by">submitted by Dana</span>') && html.includes('waiting for a slot') && html.includes('credit_snapshot'));
-  assert.ok(html.indexOf('role="note"') > 0 && html.indexOf('daily limit reached') < html.indexOf('<table'));
-  assert.ok(html.indexOf('Runner') < html.indexOf('<table'), 'Running comes first');
+test('no run folder, run code, run id or source file name is drawn; the file count is the number of files listed', () => {
+  const html = liveActivityView({ runs: [running({ files: ['one.pdf', 'two.xlsx', 'three.pdf', 'four.pdf', 'five.pdf', 'six.pdf', 'seven.pdf', null, { a: 1 }] }), { id: 'q-77', status: 'queued', issuer_name: 'Qone', folder: 'qone-2026-folder', files: ['only.pdf'] }] }, NOW);
+  for (const gone of ['acme-2026-11-09-abc', 'qone-2026-folder', 'one.pdf', 'seven.pdf', 'only.pdf', 'q-77', 'r1', 'data-run', '<details', 'class="code"']) assert.ok(!html.includes(gone), gone);
+  assert.ok(html.includes('7 source files') && html.includes('1 source file<'), html);
+  const bare = liveActivityView({ runs: [running({ files: undefined, issuer_name: undefined })] }, NOW);
+  assert.ok(!bare.includes('source file') && !bare.includes('acme-2026') && bare.includes('Issuer not named'));
 });
-test('the counts show running and waiting as numbers under their labels; empty runs give 0 and 0 and the empty state with one link', () => {
-  const run = (status, n) => Array.from({ length: n }, (_, i) => ({ id: `${status}${i}`, status, folder: 'f', issuer_name: `N${i}` }));
-  const html = liveActivityView({ runs: [...run('running', 2), ...run('queued', 3), ...run('finished', 4)] });
+test('waiting runs are a compact list: the queued mark, name, pathway and submitter; a stalled one carries the word Stalled', () => {
+  const html = liveActivityView({ runs: [
+    { id: 'q1', status: 'queued', pathway: 'credit_snapshot', issuer_name: 'Qone', submitted_by: 'Dana', reason: 'waiting for a slot' },
+    { id: 'q2', status: 'queued', pathway: 'earnings_update', issuer_name: 'Qtwo', stalled: true },
+    running({ issuer_name: 'Runner' })] }, NOW);
+  assert.ok(!html.includes('<table') && !html.includes('<th'), 'a list, not a grid');
+  const rows = html.split('<li class="live-run live-queued').slice(1);
+  assert.strictEqual(rows.length, 2);
+  assert.ok(rows[0].includes('rmark queued') && rows[0].includes('Qone') && rows[0].includes('credit_snapshot') && rows[0].includes('submitted by Dana') && rows[0].includes('waiting for a slot') && !rows[0].includes('Stalled'));
+  assert.ok(rows[1].includes('rmark stalled') && rows[1].includes('<span class="state-w">Stalled</span>') && !rows[1].includes('rmark queued'));
+  assert.ok(html.indexOf('Runner') < html.indexOf('Qone'), 'Running comes first');
+});
+test('the counts show running and waiting as numbers under their labels', () => {
+  const run = (status, n) => Array.from({ length: n }, (_, i) => ({ id: `${status}${i}`, status, issuer_name: `N${i}` }));
+  const html = liveActivityView({ runs: [...run('running', 2), ...run('queued', 3), ...run('finished', 4)] }, NOW);
   assert.ok(html.includes('<dl class="run-tally"><div><dt>Running</dt><dd>2</dd></div><div><dt>Waiting</dt><dd>3</dd></div></dl>'), html);
-  const empty = activityViewLive({ runs: [] });
+});
+test('nothing running or waiting is the C32 empty state with the one library link; the counts stay', () => {
+  const empty = activityViewLive({ runs: [{ status: 'finished', issuer_name: 'Finisher' }] }, NOW);
+  assert.ok(empty.includes('<div class="empty-state"') && empty.includes('class="es-t">No run in progress') && !empty.includes('Finisher'));
   assert.ok(empty.includes('<dt>Running</dt><dd>0</dd>') && empty.includes('<dt>Waiting</dt><dd>0</dd>'));
-  assert.ok(empty.includes('No run in progress') && empty.includes('No run is running or waiting. Finished runs are in the Issuer library.'));
+  assert.ok(empty.includes('No run is running or waiting. Finished runs are in the Issuer library.'));
   assert.strictEqual(countOf(empty, /<a /g), 1);
   assert.ok(empty.includes('<a class="primary-action" href="#W-Library/cases">Issuer library</a>'));
-  const unread = activityViewLive(null);
-  assert.ok(unread.includes('Run activity could not be read') && !unread.includes('<a ') && !unread.includes('<dl'));
+});
+test('unreadable run activity is the C32 empty state: it says to reload, points at the library, and claims nothing about runs', () => {
+  const unread = activityViewLive(null, NOW);
+  assert.ok(unread.includes('<div class="empty-state"') && unread.includes('class="es-t">Run activity could not be read</p>'));
+  assert.ok(/Reload this page/.test(unread) && unread.includes('Finished runs are in the Issuer library.') && unread.includes('href="#W-Library/cases"'));
+  assert.ok(!unread.includes('<dl') && !unread.includes('No run in progress') && !/is running|are running/.test(unread));
+  assert.ok(!read('views.js').includes('No live run data was supplied'), 'the old wording is gone');
 });
 test('a column holding no run is not drawn, and a single column takes the full width', () => {
-  const only = status => liveActivityView({ runs: [{ id: 'a', status, folder: 'f' }] });
+  const only = status => liveActivityView({ runs: [{ id: 'a', status, issuer_name: 'N' }] }, NOW);
   assert.ok(only('running').includes('class="activity-cols one"') && !only('running').includes('<h2>Waiting</h2>'));
   assert.ok(only('queued').includes('class="activity-cols one"') && !only('queued').includes('<h2>Running</h2>'));
-  const both = liveActivityView({ runs: [{ status: 'running', folder: 'f' }, { status: 'queued', folder: 'g' }] });
-  assert.ok(both.includes('class="activity-cols"'));
+  assert.ok(liveActivityView({ runs: [{ status: 'running' }, { status: 'queued' }] }, NOW).includes('class="activity-cols"'));
 });
-test('malformed runs and script strings in every text field never reach the page as markup', () => {
+test('malformed input of each kind throws nothing and draws no invented state', () => {
   const x = '<script>alert(1)</script>';
-  const html = liveActivityView({ updated: x, cap: x, held: x, runs: [null, 3, 'r', [], { status: 'running', id: x, issuer_name: x, pathway: x, folder: x, submitted_by: x,
-    started_at: x, reason: x, name_differs: true, files: [x, { a: 1 }, null], modules: [[x, 'done'], [x, x], 'bad', [x], null, [{ a: 1 }, 'running']] },
-  { status: 'queued', id: x, issuer_name: x, pathway: x, folder: x, submitted_by: x, reason: x }] });
-  assert.ok(!html.includes('<script') && html.includes('&lt;script&gt;'));
-  for (const bad of [null, 5, 'x', [], {}, { runs: 'no' }, { runs: {} }]) assert.doesNotThrow(() => activityViewLive(bad));
+  for (const bad of [null, undefined, 5, 'x', [], {}, { runs: 'no' }, { runs: {} }, { runs: null }]) {
+    assert.doesNotThrow(() => activityViewLive(bad, NOW), String(bad));
+    assert.strictEqual(liveActivityView(bad, NOW), '', String(bad));
+    const html = activityViewLive(bad, NOW);
+    assert.ok(!html.includes('rmark') && !html.includes('run-card') && !html.includes('class="steps"'), `${bad}: no state drawn`);
+  }
+  const odd = liveActivityView({ updated: x, runs: [null, 3, 'r', [], { status: 'running', issuer_name: x, pathway: x, submitted_by: x, started_at: x, reason: x, name_differs: true, files: [x, { a: 1 }, null],
+    modules: [[x, 'done'], [x, x], 'bad', [x], null, [{ a: 1 }, 'running'], [], [7, 'running']] }, { status: 'queued', issuer_name: x, pathway: x, submitted_by: x, reason: x }] }, NOW);
+  assert.ok(!odd.includes('<script') && odd.includes('&lt;script&gt;'));
+  assert.ok(!odd.includes('NaN') && !odd.includes('undefined') && !odd.includes('[object'));
+  for (const status of [undefined, null, 'paused', 'RUNNING', 7, {}, ['running']]) {
+    const html = liveActivityView({ runs: [running({ status })] }, NOW);
+    assert.ok(!html.includes('<li') && !html.includes('rmark') && !html.includes('steps-w'), `status ${JSON.stringify(status)} is not a live run`);
+  }
+  assert.ok(liveActivityView({ runs: [running({ modules: 'CP-0' }), running({ modules: [null, 4, 'x'] })] }, NOW).includes('rmark running'), 'a run with no usable module list is its mark alone');
+  assert.ok(!liveActivityView({ runs: [running({ modules: [null, 4, 'x'] })] }, NOW).includes('steps-w'));
 });
-test('Run activity styles take the component reference values (card, badge, tag, progress, table, notice, button)', () => {
+test('a run that was running on the previous load and has ended on this one gives exactly one toast in the words the data supports', () => {
+  const was = activityEnded(null, { runs: [running(), running({ id: 'r2', issuer_name: 'Beta' }), running({ id: 'r3', issuer_name: 'Gamma' }), running({ id: 'r4', issuer_name: 'Delta' })] });
+  assert.deepEqual(was.toasts, [], 'the first load toasts nothing');
+  assert.deepEqual(was.running.map(r => r.id), ['r1', 'r2', 'r3', 'r4']);
+  const next = activityEnded(was.running, { runs: [running({ status: 'finished' }), running({ id: 'r2', status: 'failed', issuer_name: 'Beta' }), running({ id: 'r3', issuer_name: 'Gamma' }), running({ id: 'r4', status: 'capped', issuer_name: 'Delta' }), { id: 'q', status: 'queued', issuer_name: 'Zed' }] });
+  assert.deepEqual(next.toasts, [
+    { text: 'Acme: run finished. It is in the Issuer library.', link: { href: '#W-Library/cases', label: 'Issuer library' } },
+    { text: 'Beta: run failed.' },
+    { text: 'Delta: run did not finish.' }]);
+  assert.deepEqual(next.running.map(r => r.id), ['r3'], 'the previous set is replaced by this load\'s');
+  assert.deepEqual(activityEnded(next.running, { runs: [running({ id: 'r3', issuer_name: 'Gamma' })] }).toasts, [], 'a run still running gives none');
+  assert.deepEqual(activityEnded(next.running, { runs: [{ id: 'r3', status: 'finished', issuer_name: 'Gamma' }, { id: 'r3', status: 'finished', issuer_name: 'Gamma' }] }).toasts.length, 1, 'one toast per run');
+  assert.deepEqual(activityEnded(next.running, { runs: [] }).toasts, [], 'a run that left the data is not claimed finished');
+  assert.deepEqual(activityEnded([{ id: 'r9', name: '' }], { runs: [{ id: 'r9', status: 'finished' }] }).toasts.map(t => t.text), ['Run finished. It is in the Issuer library.']);
+});
+test('malformed data on a re-load keeps the previous running set and toasts nothing', () => {
+  const prior = [{ id: 'r1', name: 'Acme' }];
+  for (const bad of [null, undefined, [], { runs: 'no' }, 5]) {
+    const out = activityEnded(prior, bad);
+    assert.deepEqual(out.toasts, []);
+    assert.strictEqual(out.running, prior);
+  }
+  assert.deepEqual(activityEnded(prior, { runs: [null, 3, { status: 'finished' }] }).toasts, [], 'a run with no id is never matched');
+});
+test('screen.js raises each toast through Components.toast and moves the clock on a re-load', () => {
+  const screen = read('screen.js');
+  const handler = screen.slice(screen.indexOf('window.onRunActivity='), screen.indexOf("window.addEventListener('hashchange',syncActivityTimer)"));
+  assert.ok(handler.includes('activityEnded(previousRunning,live)') && handler.includes('window.Components.toast(') && handler.includes('refreshElapsed('));
+  assert.ok(screen.includes('let previousRunning=null;'), 'the previous set is in memory only');
+  assert.ok(!/localStorage|sessionStorage/.test(handler));
+});
+test('motion: every animation on the page sits inside the reduced-motion no-preference query, and only the running mark and the running step move', () => {
+  const css = read('screen.css');
+  const blocks = [];
+  let outside = '', at = 0;
+  for (const open of css.matchAll(/@media\s*\(prefers-reduced-motion:\s*no-preference\)\s*\{/g)) {
+    if (open.index < at) continue;
+    let depth = 1, i = open.index + open[0].length;
+    while (depth && i < css.length) depth += css[i] === '{' ? 1 : css[i] === '}' ? -1 : 0, i++;
+    blocks.push(css.slice(open.index + open[0].length, i - 1));
+    outside += css.slice(at, open.index);
+    at = i;
+  }
+  outside += css.slice(at);
+  assert.ok(blocks.length >= 3, 'the no-preference blocks were found');
+  for (const sel of ['.lat', '.step', '.rmark', '.steps', '.run-card', '.run-queue', '.steps-el']) {
+    const hit = cssRules(outside).filter(r => r.selector.includes(sel) && /(?:^|[;\s])animation(?:-name)?\s*:\s*(?!none)/.test(r.body));
+    assert.deepEqual(hit, [], `${sel} animates outside the no-preference query`);
+  }
+  const inside = blocks.join('\n');
+  assert.ok(/\.rmark\.running \.lat i\{animation:lat-orbit/.test(inside) && /\.step\.running\{animation:step-pulse/.test(inside), 'the loader and the running step animate in the query');
+  assert.ok(!/\.(?:run-card|run-queue|run-who|empty-state|steps-el)[^{]*\{[^}]*animation:(?!none)/.test(inside), 'nothing else on the page moves');
+  assert.ok(/\.run-card\.stalled \.step\.running\{animation:none\}/.test(inside), 'a stalled run does not pulse');
+});
+test('Run activity styles: a bordered card, a queue of rows, a wrapped line at 390px, a focus ring on the library link', () => {
   const css = read('screen.css');
   const rule = sel => { const m = css.match(new RegExp(`(?:^|\\n)${sel.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}\\{([^}]*)\\}`)); assert.ok(m, sel); return m[1]; };
   assert.ok(/border-radius:12px/.test(rule('.run-card')) && rule('.run-card').includes('var(--shadow-xs)') && rule('.run-card').includes('var(--border-secondary)'));
-  assert.ok(/height:24px/.test(rule('.run-badge')) && /padding:2px 8px 2px 6px/.test(rule('.run-badge')) && /500 14px\/20px/.test(rule('.run-badge')));
-  assert.ok(/height:22px/.test(rule('.run-tag')) && /padding:0 7px/.test(rule('.run-tag')) && /border-radius:4px/.test(rule('.run-tag')));
-  assert.ok(/height:8px/.test(rule('.run-progress progress')) && /border-radius:6px/.test(rule('.run-progress progress')));
-  assert.ok(/height:44px/.test(rule('.run-table thead th')) && /600 12px\/18px/.test(rule('.run-table thead th')));
-  assert.ok(/padding:8px 12px/.test(rule('.run-held')) && /border-radius:8px/.test(rule('.run-held')) && rule('.run-held').includes('var(--amber-bg)'));
-  assert.ok(/margin-top:20px/.test(rule('.activity-empty .primary-action')) && !css.includes('.run-primary'), 'the empty-state link is the shared primary action, spaced 20px');
+  assert.ok(rule('.run-queue').includes('list-style:none') && /min-width:0/.test(rule('.run-queue li')));
   assert.ok(css.includes('grid-template-columns:minmax(0,1fr) 440px'));
-  assert.ok(/\.run-mods \.chip-done\{[^}]*background:#e8fff4/.test(css), 'done badge ground is the literal #e8fff4');
-  assert.ok(!/:root\{[^}]*--green-bg/.test(css), 'the library :root declares no --green-bg (the run start page owns it)');
+  const who = cssRules(css).filter(r => r.selector.split(',').some(s => ['.run-who', '.run-who strong'].includes(s.trim())));
+  assert.ok(who.some(r => r.selector === '.run-who' && /min-width:0/.test(r.body)) && who.some(r => r.selector === '.run-who strong' && /overflow-wrap:anywhere/.test(r.body)), '390px: a long name wraps');
+  assert.ok(/@media\(max-width:720px\)\{[^\n]*\.run-queue li\{grid-template-columns:minmax\(0,1fr\)/.test(css), 'a queue row is one column on a phone');
   assert.ok(!/run-(badge|tag|tally|done|primary)[^{]*\{[^}]*Red Hat Display/.test(css), 'Red Hat Text only');
-});
-test('each module badge carries its state as text, not colour alone', () => {
-  const html = liveActivityView({ runs: [{ id: 'a', status: 'running', folder: 'f', modules: [['One', 'done'], ['Two', 'running'], ['Three', 'waiting'], ['Four', 'odd']] }] });
-  const badges = [...html.matchAll(/<span class="chip chip-[^"]*">.*?<\/span><\/span>/g)].map(m => m[0]);
-  assert.strictEqual(badges.length, 4);
-  assert.ok(badges[0].includes('One') && badges[0].includes(', done'));
-  assert.ok(badges[1].includes('Two') && badges[1].includes(', running'));
-  assert.ok(badges[2].includes('Three') && badges[2].includes(', waiting'));
-  assert.ok(badges[3].includes('Four') && badges[3].includes(', waiting') && badges[3].includes('chip-waiting'));
-});
-test('a running card shows its reason, the name warning and its start time', () => {
-  const html = liveActivityView({ runs: [{ id: 'r', status: 'running', folder: 'f', issuer_name: 'Runner', started_at: 'T', reason: 'reading the filing', name_differs: true }] });
-  assert.ok(html.includes('<span class="run-reason">reading the filing</span>'));
-  assert.ok(html.includes('<span class="run-note">issuer name differs from earlier runs</span>'));
-  assert.ok(html.includes('<span class="run-time">started T</span>'));
-});
-test('a waiting row lists its files in the Issuer cell, with data-run, when it has any', () => {
-  const html = liveActivityView({ runs: [
-    { id: 'q1', status: 'queued', pathway: 'p', folder: 'f1', issuer_name: 'Qone', files: ['a.pdf', 'b <i>.pdf'] },
-    { id: 'q2', status: 'queued', pathway: 'p', folder: 'f2', issuer_name: 'Qtwo' },
-    { id: 'q3', status: 'queued', pathway: 'p', folder: 'f3', issuer_name: 'Qthree', files: [] }] });
-  const rows = html.split('<tr class="live-run live-queued">').slice(1);
-  assert.strictEqual(rows.length, 3);
-  assert.ok(rows[0].includes('<details class="run-files" data-run="q1"><summary>2 files read</summary>') && rows[0].includes('<li>a.pdf</li>') && rows[0].includes('b &lt;i&gt;.pdf'));
-  assert.ok(rows[0].indexOf('<details') < rows[0].indexOf('</th>'), 'the list is in the Issuer cell');
-  assert.ok(!rows[1].includes('<details') && !rows[2].includes('<details'));
-  assert.ok(liveActivityView({ runs: [{ id: 'q', status: 'queued', folder: 'f', files: ['one.pdf'] }] }).includes('1 file read'));
-});
-test('the empty-state heading and sentence set no font property', () => {
-  const rules = cssRules(read('screen.css')).filter((r) => r.selector.split(',').some((s) => /\.missing-state\.activity-empty\s+(h2|p)\b/.test(s)));
-  assert.ok(rules.length >= 2);
-  for (const r of rules) assert.ok(!/(?:^|;)\s*(font|font-size|line-height|font-weight|font-family)\s*:/.test(r.body), `${r.selector} sets a font property`);
-});
-test('a running card joins its reason and the name warning with a middle dot, as a waiting row does', () => {
-  const html = liveActivityView({ runs: [{ id: 'r', status: 'running', folder: 'f', reason: 'reading the filing', name_differs: true }] });
-  assert.ok(html.includes('<span class="run-reason">reading the filing</span> · <span class="run-note">issuer name differs from earlier runs</span>'), html);
-});
-test('live run activity names who submitted a run, as text', () => {
-  const html = liveActivityView({cap:'20', held:'', runs:[
-    {id:'a', status:'queued', pathway:'credit_snapshot', folder:'x', submitted_by:'Dana <b>Reyes</b>'},
-    {id:'b', status:'queued', pathway:'credit_snapshot', folder:'y'}]});
-  assert.ok(html.includes('<span class="run-by">submitted by Dana &lt;b&gt;Reyes&lt;/b&gt;</span>'));
-  assert.strictEqual(countOf(html, /run-by/g), 1);
 });
 test('no live activity adds nothing', () => { assert.strictEqual(liveActivityView(undefined), ''); });
 
@@ -1858,12 +1915,12 @@ test('malformed live activity shows nothing and does not throw', () => {
   assert.ok(html.includes('Waiting'));
 });
 
-test('live sections: waiting shows held and the name warning, all escaped; an ended run is not drawn', () => {
+test('live sections: waiting shows the reason and the name warning, all escaped; an ended run is not drawn; the held note is not drawn', () => {
   const html = liveActivityView({ cap: '20', held: 'daily limit <b>reached</b>', runs: [
     { id: 'q', status: 'queued', pathway: 'p', folder: 'f', issuer_name: 'Q', reason: '<script>x</script>', name_differs: true, stalled: true },
-    { id: 'e', status: 'failed', pathway: 'p', folder: 'f', issuer_name: 'E', ended_at: 'T' }] });
-  assert.ok(html.includes('daily limit &lt;b&gt;reached') && !html.includes('<b>') && !html.includes('<script>'));
-  assert.ok(html.includes('&lt;script&gt;x') && html.includes('issuer name differs from earlier runs') && html.includes('stalled'));
+    { id: 'e', status: 'failed', pathway: 'p', folder: 'f', issuer_name: 'E', ended_at: 'T' }] }, NOW);
+  assert.ok(!html.includes('daily limit') && !html.includes('<b>') && !html.includes('<script>'));
+  assert.ok(html.includes('&lt;script&gt;x') && html.includes('issuer name differs from earlier runs') && html.includes('<span class="state-w">Stalled</span>'));
   assert.ok(!html.includes('>E<') && !html.includes('Ended') && !html.includes('run-status'));
 });
 
@@ -1916,70 +1973,29 @@ test('the live section says how old the snapshot is, and the view re-loads at on
 });
 
 test('a status adds no class names to the row; only running and queued runs have one', () => {
-  const rows = status => [...liveActivityView({ runs: [{ status, folder: 'f' }] }).matchAll(/<(?:li|tr) class="([^"]*)"/g)].map(m => m[1]);
+  const rows = status => [...liveActivityView({ runs: [{ status, folder: 'f' }] }).matchAll(/<(?:li|tr) class="((?:run-card|live-run)[^"]*)"/g)].map(m => m[1]);
   assert.deepEqual(rows('running'), ['run-card live-run live-running']);
   assert.deepEqual(rows('queued'), ['live-run live-queued']);
   for (const other of ['x sr-only skip', '__proto__', 'finished', 'failed', 'capped', 'rejected', 'interrupted']) assert.deepEqual(rows(other), [], other);
 });
 
-// The re-render helpers live in screen.js between these two markers; they take a root and the focused element.
-const rerenderFns = () => {
-  const text = read('screen.js');
-  const block = text.slice(text.indexOf('function recordActivityView('), text.indexOf('window.onRunActivity='));
-  return new Function(`${block}; return {recordActivityView, restoreActivityView};`)();
-};
-const stubEl = (tagName, run, extra = {}) => ({ tagName, open: false, focused: false, attrs: run === undefined ? {} : { 'data-run': run }, children: [], parentElement: null,
-  getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; }, focus() { this.focused = true; },
-  querySelector(sel) { return this.children.find(c => c.tagName.toLowerCase() === sel) || null; }, ...extra });
-const stubRoot = els => ({ querySelectorAll: () => els.filter(e => e.attrs['data-run'] !== undefined), contains: el => els.includes(el) || els.some(e => e.children.includes(el)) });
-const withSummary = details => { const s = stubEl('SUMMARY'); s.parentElement = details; details.children.push(s); return s; };
-
-test('a re-render keeps opened lists open and the focused control focused', () => {
-  const { recordActivityView, restoreActivityView } = rerenderFns();
-  const oldA = stubEl('DETAILS', 'a"1'), oldB = stubEl('DETAILS', 'b'), oldLink = stubEl('A', 'a"1');
-  oldA.open = true; const oldSummary = withSummary(oldB); oldB.open = true;
-  const oldRoot = stubRoot([oldA, oldB, oldLink]);
-  const kept = recordActivityView(oldRoot, oldSummary);
-  const newA = stubEl('DETAILS', 'a"1'), newB = stubEl('DETAILS', 'b'), newLink = stubEl('A', 'a"1'), newSummary = withSummary(newB), other = stubEl('DETAILS', 'c');
-  restoreActivityView(stubRoot([newA, newB, newLink, other]), kept);
-  assert.deepEqual([newA.open, newB.open, other.open], [true, true, false]);
-  assert.ok(newSummary.focused && !newLink.focused, 'focus returns to the summary of the same run');
-  const linkKept = recordActivityView(oldRoot, oldLink);
-  const link2 = stubEl('A', 'a"1'), details2 = stubEl('DETAILS', 'a"1');
-  restoreActivityView(stubRoot([details2, link2]), linkKept);
-  assert.ok(link2.focused && !details2.focused, 'the same tag with the same run');
-});
-
-test('re-render helpers cope with nothing open, nothing focused and runs that have gone', () => {
-  const { recordActivityView, restoreActivityView } = rerenderFns();
-  const kept = recordActivityView(stubRoot([stubEl('DETAILS', 'a')]), undefined);
-  assert.deepEqual(kept, { open: [], focus: null });
-  assert.doesNotThrow(() => restoreActivityView(stubRoot([]), { open: ['gone'], focus: { run: 'gone', tag: 'A' } }));
-  assert.doesNotThrow(() => restoreActivityView({}, kept));
-  const outside = stubEl('A', 'a');
-  assert.strictEqual(recordActivityView(stubRoot([]), outside).focus, null, 'focus outside the view is not recorded');
-});
-
-test('rows carry the run id for restoring, and unchanged data is not re-rendered', () => {
-  const html = liveActivityView({ runs: [{ id: 'r"1', status: 'running', folder: 'f', files: ['a'] }, { status: 'running', folder: 'g', files: ['b'] }] });
-  assert.strictEqual([...html.matchAll(/<details class="run-files" data-run="r&quot;1">/g)].length, 1);
-  assert.strictEqual([...html.matchAll(/data-run=/g)].length, 1, 'a run without an id gets no attribute');
+test('unchanged data is not re-rendered; the clock and the snapshot time still move; a changed run list is drawn again', () => {
   const screen = read('screen.js');
   const handler = screen.slice(screen.indexOf('window.onRunActivity='), screen.indexOf("window.addEventListener('hashchange',syncActivityTimer)"));
-  assert.ok(handler.includes('JSON.stringify') && handler.includes('recordActivityView(') && handler.includes('restoreActivityView('));
-  // Run the real handler against stubs: same runs and held again => no replacement, only the stamp text changes.
-  const content = { scrollTop: 0, writes: 0, stamp: { textContent: '' }, set innerHTML(v) { this.writes++; }, get innerHTML() { return ''; }, querySelector: () => content.stamp };
-  const win = { RUN_ACTIVITY: { updated: 'T1', held: '', runs: [{ id: 'a' }] } };
-  const fn = new Function('window', 'document', '$', 'moduleBody', 'nameCodes', 'nextActivityReload', 'state', 'keepsCodes',
+  assert.ok(handler.includes('JSON.stringify'));
+  assert.ok(!screen.includes('recordActivityView') && !screen.includes('restoreActivityView'), 'no file lists are drawn, so none is restored');
+  // Run the real handler against stubs: same runs again => no replacement, only the stamp text and the clock change.
+  const content = { scrollTop: 0, writes: 0, stamp: { textContent: '' }, set innerHTML(v) { this.writes++; }, get innerHTML() { return ''; }, querySelector: () => content.stamp, querySelectorAll: () => [] };
+  const win = { RUN_ACTIVITY: { updated: 'T1', runs: [{ id: 'a' }] }, Components: { toast: () => {} } };
+  const clock = [];
+  const fn = new Function('window', 'document', '$', 'moduleBody', 'nameCodes', 'nextActivityReload', 'state', 'keepsCodes', 'activityEnded', 'refreshElapsed', 'Date',
     `${screen.slice(screen.indexOf('let lastActivity'), screen.indexOf('window.onRunActivity=')).replace(/\bcurrent\b/g, 'state.current')}${handler.replace(/\bcurrent\b/g, 'state.current')}; return window.onRunActivity;`)(
-    win, {}, () => content, () => 'body', () => {}, () => 30000, { current: { module: 'CP-OS' } }, () => false);
+    win, {}, () => content, () => 'body', () => {}, () => 30000, { current: { module: 'CP-OS' } }, () => false, (previous, live) => ({ toasts: [], running: live.runs }), (root, now) => clock.push(now), { now: () => 99 });
   fn(); assert.strictEqual(content.writes, 1);
-  win.RUN_ACTIVITY = { updated: 'T2', held: '', runs: [{ id: 'a' }] }; fn();
-  assert.strictEqual(content.writes, 1, 'unchanged runs: no replacement'); assert.strictEqual(content.stamp.textContent, 'T2');
-  win.RUN_ACTIVITY = { updated: 'T3', held: '', runs: [{ id: 'a', status: 'running' }] }; fn();
+  win.RUN_ACTIVITY = { updated: 'T2', runs: [{ id: 'a' }] }; fn();
+  assert.strictEqual(content.writes, 1, 'unchanged runs: no replacement'); assert.strictEqual(content.stamp.textContent, 'T2'); assert.deepEqual(clock, [99], 'the clock moves on the re-load');
+  win.RUN_ACTIVITY = { updated: 'T3', runs: [{ id: 'a', status: 'running' }] }; fn();
   assert.strictEqual(content.writes, 2, 'changed runs: replaced');
-  win.RUN_ACTIVITY = { updated: 'T4', cap: '20', held: '', runs: [{ id: 'a', status: 'running' }] }; fn();
-  assert.strictEqual(content.writes, 3, 'a changed cap with the same runs: replaced');
 });
 
 // Design pass 2026-11-10 (docs/design/2026-11-10-impeccable-pass.md).

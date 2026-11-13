@@ -83,8 +83,8 @@
     return true;
   }
 
-  // C23: one status host fixed bottom-right; each message removes itself after 3 seconds.
-  const TOAST_MS = 3000;
+  // C23: one status host fixed bottom-right; each message removes itself after 3 seconds, or after 8 when it carries a link (time to reach it), or at once on Escape.
+  const TOAST_MS = 3000, TOAST_LINK_MS = 8000;
   // The host is made empty at load (and on first use if it was not), so a screen reader already watches it when the first message arrives.
   function toastHost() {
     let host = document.getElementById('toast-host');
@@ -97,13 +97,22 @@
     }
     return host;
   }
-  function toast(text) {
+  function toast(text, link = null) {
     const host = toastHost();
     const message = document.createElement('p');
     message.className = 'toast';
     message.textContent = text;
+    if (link) {
+      const anchor = document.createElement('a');
+      anchor.href = link.href;
+      anchor.textContent = link.label;
+      message.append(' ', anchor);
+    }
     host.append(message);
-    setTimeout(() => message.remove(), TOAST_MS);
+    setTimeout(() => message.remove(), link ? TOAST_LINK_MS : TOAST_MS);
+  }
+  function dismissToasts() {
+    for (const message of [...toastHost().children]) message.remove();
   }
 
   // C24: a control that names itself by `data-tip` always also carries the same text as its accessible name; the bubble is CSS only.
@@ -736,22 +745,25 @@
     return first ? first.show(...firstSentence(first.body).lead) : '';
   }
   // C31 (Task 11): the mark of a run's status. A running run shows a small lattice loader, which moves only inside the stylesheet's no-preference media query; every status has its word.
-  const RUN_MARKS = {running: ['new', 'Running'], queued: ['same', 'Waiting'], done: ['ok', 'Done'], failed: ['bad', 'Failed']};
+  // A stalled run (running or waiting) is a warning mark with its word, never colour alone, and no loader.
+  const RUN_MARKS = {running: ['new', 'Running'], queued: ['same', 'Waiting'], done: ['ok', 'Done'], failed: ['bad', 'Failed'], stalled: ['warn', 'Stalled']};
   const LATTICE = `<span class="lat" aria-hidden="true">${'<i></i>'.repeat(9)}</span>`;
   function runMark(status, note = '') {
     if (!Object.hasOwn(RUN_MARKS, status)) return '';
-    const [tone, word] = RUN_MARKS[status], glyph = {running: LATTICE, queued: icon('history'), done: icon('circle-check'), failed: icon('x')}[status];
+    const [tone, word] = RUN_MARKS[status], glyph = {running: LATTICE, queued: icon('history'), done: icon('circle-check'), failed: icon('x'), stalled: icon('triangle-alert')}[status];
     return `<span class="state ${tone} rmark ${status}">${glyph}<span class="state-w">${word}${note ? ` · ${escapeHtml(note)}` : ''}</span></span>`;
   }
   // C13 (Task 11): a run's progress as connected steps, one segment per module in the order given. `steps` are {title, state} with state done, running or waiting (anything else waits).
   // Under the segments: the module(s) running now and how many are done of how many (counts of listed items). Only the running segment moves, by the stylesheet's own rule.
+  // A running step may carry `note` (a clock reading, drawn after its name; `since` is the start time the page's re-load measures it from); done and waiting steps never draw one.
   const STEP_WORDS = {done: 'done', running: 'running', waiting: 'waiting'};
   function runSteps(steps) {
     if (!steps.length) return '';
     const kind = step => (Object.hasOwn(STEP_WORDS, step.state) ? step.state : 'waiting'), done = steps.filter(step => kind(step) === 'done').length;
-    const running = steps.filter(step => kind(step) === 'running').map(step => step.title);
+    const running = steps.filter(step => kind(step) === 'running');
+    const runningName = step => `${escapeHtml(step.title)}${step.note ? `<span class="steps-el"${step.since ? ` data-since="${escapeHtml(step.since)}"` : ''}> · ${escapeHtml(step.note)}</span>` : ''}`;
     const segment = step => `<li class="step ${kind(step)}" ${tipAttributes(`${step.title}: ${STEP_WORDS[kind(step)]}`)}></li>`;
-    return `<div class="steps-w"><ol class="steps" aria-label="Modules, ${done} of ${steps.length} done">${steps.map(segment).join('')}</ol><p class="steps-t">${running.length ? `<span class="steps-now"><span class="steps-k">Running</span> ${running.map(escapeHtml).join(', ')}</span>` : ''}<span class="steps-n">${done} of ${steps.length} done</span></p></div>`;
+    return `<div class="steps-w"><ol class="steps" aria-label="Modules, ${done} of ${steps.length} done">${steps.map(segment).join('')}</ol><p class="steps-t">${running.length ? `<span class="steps-now"><span class="steps-k">Running</span> ${running.map(runningName).join(', ')}</span>` : ''}<span class="steps-n">${done} of ${steps.length} done</span></p></div>`;
   }
   // Where a block on the Overview comes from: a link to the module page that holds it.
   const attribution = ({title, href}) => `<p class="from"><a href="${escapeHtml(href)}">From ${escapeHtml(title)}${icon('arrow-right')}</a></p>`;
@@ -1110,8 +1122,11 @@
     return `<nav class="sec-rail" aria-label="On this page"><p class="eyebrow">On this page</p>${items.map(link).join('')}</nav>`;
   }
 
-  const Components = {stateOf, stateBadge, moduleDots, firstSentenceOf, runMark, runSteps, icon, traceButton, traceRow, headerChips, placePill, toast, toastHost, tipAttributes, verdictPanel, findingsFeed, callout, limitationsBlock, recordCards, findingCell, render, casesBlock, caseRowsBlock, rankedLadder, statementCard, metricTiles, measureTiles, changeCards, statusChecklist, sidedBoard, moduleStateTiles, hasDatedEvent, metricStrip, moduleTiles, attribution, qaAccordion, factList, riskMatrix, watchList, datedTimeline, pathwayFlow, emptyState, gapState, chartTable, viewToggle, pane, visibleColumns, loopNote, mapLayers, pathwayDiagram, foldsForPrint, paragraphText, handleClick, sectionRail, ICON_PATHS};
+  const Components = {stateOf, stateBadge, moduleDots, firstSentenceOf, runMark, runSteps, icon, traceButton, traceRow, headerChips, placePill, toast, dismissToasts, toastHost, tipAttributes, verdictPanel, findingsFeed, callout, limitationsBlock, recordCards, findingCell, render, casesBlock, caseRowsBlock, rankedLadder, statementCard, metricTiles, measureTiles, changeCards, statusChecklist, sidedBoard, moduleStateTiles, hasDatedEvent, metricStrip, moduleTiles, attribution, qaAccordion, factList, riskMatrix, watchList, datedTimeline, pathwayFlow, emptyState, gapState, chartTable, viewToggle, pane, visibleColumns, loopNote, mapLayers, pathwayDiagram, foldsForPrint, paragraphText, handleClick, sectionRail, ICON_PATHS};
   if (typeof window !== 'undefined') window.Components = Components;
-  if (typeof document !== 'undefined' && document.body) toastHost();
+  if (typeof document !== 'undefined' && document.body) {
+    toastHost();
+    document.addEventListener('keydown', event => { if (event.key === 'Escape') dismissToasts(); });
+  }
   if (typeof module !== 'undefined') module.exports = Components;
 })();

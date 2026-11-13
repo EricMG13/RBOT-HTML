@@ -1280,6 +1280,38 @@ test('runSteps (C13): one segment per module in order, the running module and do
   assert.equal(C.runSteps([]), '');
 });
 
+test('runMark: a stalled run is a warning icon and the word Stalled, with no loader', () => {
+  const stalled = C.runMark('stalled');
+  assert.ok(stalled.startsWith('<span class="state warn rmark stalled"><svg class="i"') && stalled.endsWith('<span class="state-w">Stalled</span></span>') && !stalled.includes('class="lat"'));
+});
+
+test('runSteps: a running step may carry a clock reading after its name; done and waiting steps never draw one; the note is escaped', () => {
+  const html = C.runSteps([{ title: 'A', state: 'done', note: '5 min' }, { title: 'B', state: 'running', note: '7 <min>', since: '2026-11-09T13:41:00Z' }, { title: 'C', state: 'waiting', note: '1 min' }]);
+  assert.equal((html.match(/steps-el/g) || []).length, 1);
+  assert.ok(html.includes('B<span class="steps-el" data-since="2026-11-09T13:41:00Z"> · 7 &lt;min&gt;</span>'), html);
+  assert.ok(!C.runSteps([{ title: 'B', state: 'running' }]).includes('steps-el'));
+});
+
+test('toast: a message with a link carries it, stays 8 seconds, and Escape (dismissToasts) removes every message at once', t => {
+  const doc = fakeDocument();
+  global.document = doc;
+  t.after(() => { delete global.document; });
+  t.mock.timers.enable({apis: ['setTimeout']});
+  C.toast('Acme: run finished.', {href: '#W-Library/cases', label: 'Issuer library'});
+  C.toast('Plain');
+  const [one, two] = doc.body.children[0].children;
+  assert.equal(one.children.length, 2);
+  assert.equal(one.children[0], ' ');
+  assert.deepEqual([one.children[1].href, one.children[1].textContent], ['#W-Library/cases', 'Issuer library']);
+  t.mock.timers.tick(3000);
+  assert.ok(!one.removed && two.removed, 'the linked message outlasts the plain one');
+  t.mock.timers.tick(5000);
+  assert.ok(one.removed);
+  C.toast('Again');
+  C.dismissToasts();
+  assert.ok(doc.body.children[0].children.every(m => m.removed));
+});
+
 test('viewToggle takes the option on view; the default is the first', () => {
   const two = [['cards', 'Cards'], ['list', 'List']];
   assert.ok(C.viewToggle('Issuers', two).includes('data-i="0"') && C.viewToggle('Issuers', two).includes('data-view-pick="cards" aria-pressed="true"'));

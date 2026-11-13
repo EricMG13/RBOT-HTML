@@ -1716,69 +1716,106 @@ function runReport(context) {
   const why=feed||side?`<section class="overview-part g24" id="overview-why" aria-label="Why, and what would change the view">${feed?`<div class="${both?'c14':'c24'}"><div class="rd-card"><h2 class="rd-h">Key findings</h2>${feed}</div></div>`:''}${side?`<div class="${both?'c10':'c24'} ov-side">${side}</div>`:''}</section>`:'';
   return `<div class="overview-page">${html+overviewBoard(tables)+why+overviewModules(context)+overviewLimitations(lead,entries,context)}</div>`;
 }
-// Run activity (ruling decision 10): only what is in progress and the queue. A finished run is reached from the library; the folders the
-// library does not show and the build's issues are on the library page.
-function activityView(live) {
-  const top=liveActivityView(live);
-  if(!live||typeof live!=='object'||Array.isArray(live)||!Array.isArray(live.runs))return '<div class="missing-state activity-empty"><div class="empty-symbol">'+icon('file-text')+'</div><h2>Run activity could not be read</h2><p>No live run data was supplied, so nothing is claimed about runs in progress or waiting.</p></div>';
-  if(!top.includes('<section'))return top+'<div class="missing-state activity-empty"><div class="empty-symbol">'+icon('file-text')+'</div><h2>No run in progress</h2><p>No run is running or waiting. Finished runs are in the Issuer library.</p><a class="primary-action" href="#W-Library/cases">Issuer library</a></div>';
-  return top;
-}
-// Live runs from _engine/activity.js (window.RUN_ACTIVITY). Every field may be missing and the whole object may be malformed:
-// then nothing live is shown. Each value passes through esc. Only runs that are running or queued are drawn.
+// Run activity (ruling decision 10): only what is in progress and the queue. A finished run is reached from the library, and a run that ends while the page
+// is open is announced once by a toast. The state comes first (counts, then the run cards), detail after. Spend, run folders, run codes and file names are not shown.
+// Live runs come from _engine/activity.js (window.RUN_ACTIVITY). Every field may be missing and the whole object may be malformed: then nothing live is shown
+// (the documented rule: unreadable data is said to be unreadable, never filled in). Each value passes through esc. Only runs that are running or queued are drawn.
 const ACTIVITY_RELOAD_MS=30000;
+const LIBRARY_HOME='#W-Library/cases';
 // Statuses of runs that have ended: not drawn here (decision 10); the list stays so a test can check it against the run start service's statuses.
 const ENDED_STATUSES=['finished','failed','capped','rejected','interrupted'];
 // Only strings and finite numbers reach the page; any other value in a field renders as empty text.
-function liveText(value) {return esc(typeof value==='string'||(typeof value==='number'&&Number.isFinite(value))?value:'');}
+const livePlain=value=>typeof value==='string'||(typeof value==='number'&&Number.isFinite(value))?String(value):'';
+function liveText(value) {return esc(livePlain(value));}
 const LIVE_STATUSES=['queued','running','finished','failed','capped','rejected','interrupted']; // read only by tests/test_context_form.py, which holds it to the run start service's statuses
 const servedOverHttp=()=>typeof window!=='undefined'&&/^https?:$/.test(window.location?.protocol); // a page with no location (the node tests) is not served
-const MODULE_STATES=['done','running','waiting'];
-// What a run's head and a waiting row say about it: each part that has text, joined with " · ".
-function liveRunLine(run,extra=[]) {
+const liveReadable=live=>Boolean(live)&&typeof live==='object'&&!Array.isArray(live)&&Array.isArray(live.runs);
+const liveRuns=live=>live.runs.filter(run=>run&&typeof run==='object'&&!Array.isArray(run));
+// The clock reading since a start time, in words. Only a dated time with a zone counts; any other text, or a time still to come, gives no clock.
+const START_TIME=/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})$/;
+function elapsedLabel(since,now) {
+  if(typeof since!=='string'||!START_TIME.test(since))return '';
+  const ms=now-Date.parse(since);
+  if(!Number.isFinite(ms)||ms<0)return '';
+  const minutes=Math.floor(ms/60000),hours=Math.floor(minutes/60);
+  if(minutes<1)return 'under a minute';
+  return hours?`${hours} h${minutes%60?` ${minutes%60} min`:''}`:`${minutes} min`;
+}
+// The clock is drawn once per render; the page's existing re-load moves it in place (no timer of its own).
+function refreshElapsed(root,now) {
+  for(const el of root.querySelectorAll('[data-since]')){
+    const label=elapsedLabel(el.getAttribute('data-since'),now);
+    if(label)el.textContent=` · ${label} into the run`;
+  }
+}
+// What a run's head and a queue row say about it: each part that has text, joined with " · ".
+function liveRunLine(run) {
   const part=(value,html)=>liveText(value)?html:'';
-  return [part(run.submitted_by,`<span class="run-by">submitted by ${liveText(run.submitted_by)}</span>`),part(run.started_at,`<span class="run-time">started ${liveText(run.started_at)}</span>`),part(run.folder,`<span class="code">${liveText(run.folder)}</span>`),...extra].filter(Boolean).join(' · ');
+  return [part(run.pathway,`<span class="run-path">${liveText(run.pathway)}</span>`),part(run.submitted_by,`<span class="run-by">submitted by ${liveText(run.submitted_by)}</span>`),part(run.started_at,`<span class="run-time">started ${liveText(run.started_at)}</span>`)].filter(Boolean).join(' · ');
 }
-function liveRunProgress(modules) {
-  if(!modules.length)return '';
-  const done=modules.filter(m=>m[1]==='done').length;
-  const badges=modules.map(([name,state])=>{const kind=MODULE_STATES.includes(state)?state:'waiting';return `<span class="chip chip-${kind}">${liveText(name)}<span class="run-vh">, ${kind}</span></span>`;}).join('');
-  return `<div class="run-progress"><progress max="${modules.length}" value="${done}" aria-label="Modules done"></progress><span class="run-done">${done} of ${modules.length} done</span></div><div class="run-mods">${badges}</div>`;
+// The run's modules as C13 steps, in the data's order; the data carries one start time, the run's, and the clock is drawn on the running module only.
+function liveSteps(run,now) {
+  const since=elapsedLabel(run.started_at,now)?run.started_at:'';
+  const steps=(Array.isArray(run.modules)?run.modules:[]).filter(item=>Array.isArray(item)&&livePlain(item[0])!=='').map(([name,state])=>{
+    const step={title:livePlain(name),state};
+    return state==='running'&&since?{...step,note:`${elapsedLabel(since,now)} into the run`,since}:step;
+  });
+  return window.Components.runSteps(steps);
 }
-function liveRunFiles(run) {
-  const files=Array.isArray(run.files)?run.files:[];
-  const has=typeof run.id==='string'&&run.id||typeof run.id==='number'&&Number.isFinite(run.id),tag=has?` data-run="${liveText(run.id)}"`:'';
-  return files.length?`<details class="run-files"${tag}><summary>${files.length} file${files.length===1?'':'s'} read</summary><ul>${files.map(f=>`<li>${liveText(f)}</li>`).join('')}</ul></details>`:'';
+// The number of source files the data lists for a run (a count of listed names, nothing else); the names are audit material.
+function liveFileCount(run) {
+  const count=(Array.isArray(run.files)?run.files:[]).filter(file=>livePlain(file)!=='').length;
+  return count?`<span class="run-files">${window.Components.icon('files')}${count} source file${count===1?'':'s'}</span>`:'';
 }
-// The reason a run is not progressing and the name warning, as spans: the card and the waiting row both show them.
+// The reason a run is not progressing and the name warning, as spans: the card and the queue row both show them.
 function liveRunNotes(run) {
   return [run.reason&&liveText(run.reason)?`<span class="run-reason">${liveText(run.reason)}</span>`:'',run.name_differs?'<span class="run-note">issuer name differs from earlier runs</span>':''].filter(Boolean);
 }
-function liveRunCard(run) {
-  const modules=Array.isArray(run.modules)?run.modules.filter(Array.isArray):[];
-  const line=liveRunLine(run),pathway=liveText(run.pathway);
-  const notes=liveRunNotes(run).join(' · ');
-  const list=liveRunFiles(run);
-  const badge=run.stalled?'<span class="run-badge run-badge-stalled">Running · stalled</span>':'<span class="run-badge run-badge-running">Running</span>';
-  return `<li class="run-card live-run live-running"><div class="run-head"><div class="run-who"><strong>${liveText(run.issuer_name||run.folder||run.id)}</strong>${line?`<p>${line}</p>`:''}</div><div class="run-marks">${pathway?`<span class="run-tag">${pathway}</span>`:''}${badge}</div></div>${liveRunProgress(modules)}${list||notes?`<div class="run-foot">${list}${notes?`<span class="run-foot-notes">${notes}</span>`:''}</div>`:''}</li>`;
+const liveName=run=>liveText(run.issuer_name)||'Issuer not named';
+function liveRunCard(run,now) {
+  const line=liveRunLine(run),notes=liveRunNotes(run).join(' · '),files=liveFileCount(run);
+  const mark=window.Components.runMark(run.stalled?'stalled':'running');
+  return `<li class="run-card live-run live-running${run.stalled?' stalled':''}"><div class="run-head"><div class="run-who"><strong>${liveName(run)}</strong>${line?`<p>${line}</p>`:''}</div><div class="run-marks">${mark}</div></div>${liveSteps(run,now)}${files||notes?`<div class="run-foot">${files}${notes?`<span class="run-foot-notes">${notes}</span>`:''}</div>`:''}</li>`;
 }
 function liveWaitingRow(run) {
-  const extra=[...liveRunNotes(run),...(run.stalled?['<span class="run-stalled">stalled</span>']:[])];
-  const line=liveRunLine({submitted_by:run.submitted_by,folder:run.folder},extra);
-  return `<tr class="live-run live-queued"><th scope="row"><span class="run-name">${liveText(run.issuer_name||run.folder||run.id)}</span>${line?`<span class="run-sub">${line}</span>`:''}${liveRunFiles(run)}</th><td>${liveText(run.pathway)}</td></tr>`;
+  const line=[liveRunLine(run),...liveRunNotes(run)].filter(Boolean).join(' · '),files=liveFileCount(run);
+  return `<li class="live-run live-queued"><span class="rq-mark">${window.Components.runMark(run.stalled?'stalled':'queued')}</span><div class="rq-who"><span class="run-name">${liveName(run)}</span>${line?`<span class="run-sub">${line}</span>`:''}</div>${files}</li>`;
 }
-function liveActivityView(live) {
-  if(!live||typeof live!=='object'||Array.isArray(live)||!Array.isArray(live.runs))return '';
-  const runs=live.runs.filter(r=>r&&typeof r==='object'&&!Array.isArray(r));
+function liveActivityView(live,now=Date.now()) {
+  if(!liveReadable(live))return '';
+  const runs=liveRuns(live);
   const running=runs.filter(r=>r.status==='running'),waiting=runs.filter(r=>r.status==='queued');
-  const held=live.held&&liveText(live.held)?`<p class="run-held" role="note">${liveText(live.held)}</p>`:'';
-  const runningHtml=running.length?`<section class="activity-running"><h2>Running</h2><ul class="run-cards">${running.map(liveRunCard).join('')}</ul></section>`:'';
-  const table=waiting.length?`<div class="run-table-wrap"><table class="run-table"><caption class="run-vh">Waiting runs</caption><thead><tr><th scope="col">Issuer</th><th scope="col">Pathway</th></tr></thead><tbody>${waiting.map(liveWaitingRow).join('')}</tbody></table></div>`:'';
-  const waitingHtml=waiting.length||held?`<section class="activity-waiting"><h2>Waiting</h2>${held}${table}</section>`:'';
-  const stamp=`<p class="run-updated">Updated <span class="run-updated-at">${liveText(live.updated)}</span></p>`;
+  const runningHtml=running.length?`<section class="activity-running"><h2>Running</h2><ul class="run-cards">${running.map(run=>liveRunCard(run,now)).join('')}</ul></section>`:'';
+  const waitingHtml=waiting.length?`<section class="activity-waiting"><h2>Waiting</h2><ul class="run-queue">${waiting.map(liveWaitingRow).join('')}</ul></section>`:'';
+  const stamp=liveText(live.updated)?`<p class="run-updated">Updated <span class="run-updated-at">${liveText(live.updated)}</span></p>`:'';
   const counts=`<dl class="run-tally"><div><dt>Running</dt><dd>${running.length}</dd></div><div><dt>Waiting</dt><dd>${waiting.length}</dd></div></dl>`;
   const cols=runningHtml&&waitingHtml?'':' one';
   return `<div class="run-activity-head">${stamp}${counts}</div>${runningHtml||waitingHtml?`<div class="activity-cols${cols}">${runningHtml}${waitingHtml}</div>`:''}`;
+}
+// C32: the page's two empty states, both with the one link to the library.
+function activityEmpty(title,reasons) {
+  return `<div class="activity-empty">${window.Components.emptyState(title,reasons,`<a class="primary-action" href="${LIBRARY_HOME}">Issuer library</a>`)}</div>`;
+}
+function activityView(live,now=Date.now()) {
+  if(!liveReadable(live))return activityEmpty('Run activity could not be read',['Reload this page to read it again. Nothing is claimed about runs in progress or waiting.','Finished runs are in the Issuer library.']);
+  const top=liveActivityView(live,now);
+  return top.includes('<section')?top:top+activityEmpty('No run in progress',['No run is running or waiting. Finished runs are in the Issuer library.']);
+}
+// C23: what the toast says when a run that was running on the previous load has ended on this one. `previous` is the earlier load's running set
+// ([{id,name}], kept in memory only; null before the first load). Returns the toasts to raise and this load's running set. Data that cannot be read
+// changes nothing: the earlier set is kept and nothing is announced. A run with no id cannot be matched and a run that left the data is not claimed finished.
+function activityEnded(previous,live) {
+  if(!liveReadable(live))return {toasts:[],running:previous};
+  const byId=new Map(liveRuns(live).filter(run=>livePlain(run.id)!=='').map(run=>[livePlain(run.id),run]));
+  const running=[...byId].filter(([,run])=>run.status==='running').map(([id,run])=>({id,name:livePlain(run.issuer_name)}));
+  const toasts=(previous||[]).flatMap(({id,name})=>{
+    const run=byId.get(id);
+    if(!run||!ENDED_STATUSES.includes(run.status))return [];
+    const who=livePlain(run.issuer_name)||name,lead=who?`${who}: run`:'Run';
+    if(run.status==='finished')return [{text:`${lead} finished. It is in the Issuer library.`,link:{href:LIBRARY_HOME,label:'Issuer library'}}];
+    return [{text:run.status==='failed'?`${lead} failed.`:`${lead} did not finish.`}];
+  });
+  return {toasts,running};
 }
 // The Run activity view re-loads activity.js every 30 s while it is showing; no other view schedules anything.
 function nextActivityReload(route) {return route&&route.module==='CP-OS'?ACTIVITY_RELOAD_MS:null;}
