@@ -89,8 +89,8 @@ the launcher's reading disagrees with are Limited for the whole run.
 - **At boot:** Task Scheduler, "At startup", under a service account whose environment holds the
   key, running `Start run page.cmd <root> <address>`. Only the service's account writes `_engine\`,
   `issuers\` and `library.html`.
-- **Run activity** on the library page re-loads every 30 s while it is showing. A running run's
-  spend counts a call in flight at its full reserved amount, so it can read slightly high.
+- **Run activity** on the library page re-loads every 30 s while it is showing.
+  Run activity does not show spend; the USD 20 cap is shown on the run start page before Submit, and a finished run's provider cap and settled amounts are on its Evidence page.
 - **Known limits:** Windows and browsers other than Chrome are not verified; whether the Relative
   value and Committee modules honour the new mode settings is not proven until a paid run; two IDs
   for one issuer make two folders; a run can end slightly above USD 20 after one overrunning call;

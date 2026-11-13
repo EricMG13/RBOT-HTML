@@ -415,3 +415,48 @@ sub-agents, no provider call. Record and dispositions: `docs/design/2026-11-10-s
 - Not verified: phone and tablet widths; Windows and Edge; a library with many issuers or with an
   accepted report (fixture only); a live run's activity view; the delivered report's own layout
   inside the frame, which belongs to the delivery renderer; no independent review of this pass.
+
+## 2026-11-10 — Context form proposal (branch `claude/optimistic-johnson-bmnwip`)
+
+Proposal only: `docs/templates/context-form-proposal.html` is new, and
+`docs/design/2026-11-10-context-form-proposal.md` holds the module review and the design.
+`context-form.html`, `context.py`, the inbox and the tests are unchanged. All checks below are
+offline browser and reader checks, run in headless Chromium 1.63. No provider was called and no
+analytical run was made with it.
+
+- **Same output as the current form.** Each of three fixture contexts was loaded into both forms with
+  `fill()` and written with `build()`. The two `context.json` files are byte-identical for each:
+  `cases/context/primary-full.json`, `cases/context/research-minimal.json` and
+  `cases/cpdr-context-cutoff/context.json`.
+- **End to end through the page.**
+  - Three files were made by clicking through the page and downloading: Earnings Update; Distressed
+    with TDG-like dates, a duplicate S&P row and stale peers; and a new issue on Credit Snapshot.
+  - Each loads in `context.load_context` and passes `inbox.drops.check` for its pathway.
+  - Each round-trips through `fill()` and `build()` byte for byte.
+  - The readiness panel showed what its own rules state, for example CP-2H Gap on two S&P rows and
+    CP-1C Gap on one admitted peer. This checks the page against its rules, not against a run.
+- **Inbox copies.** Copies made by the real `write_templates` lock the pathway (5 other cards
+  disabled). A loaded file naming another pathway is replaced, with a note.
+- **Newly caught.** `load_context` refuses a research question containing `|`, and an issuer name
+  with U+2028. The current form writes both; the proposal stops both before download.
+- **Defect found and fixed in the proposal.** A blur that adds a message moved the Next button
+  between mousedown and mouseup, and the click was lost. The current form uses the same pattern; not
+  verified there. After the fix, every stage advanced by click on desktop and by tap at iPhone 13
+  size, with no horizontal scroll at 390 px.
+- **Other checks.** Start over returns the page to a fresh build. No console errors in any run.
+  Quality gate exit 0, with no Python changed.
+- **Restyled in the Credit OS language after merging main `caeb622`.** All the checks above were
+  repeated on the restyled page with the same results: byte-identical output, three downloads loading
+  and accepted by the inbox, round-trips, every stage by click and by tap, and Start over.
+  - An inbox copy (from `write_templates`, beside a copy of the library's web folder at
+    `_engine/library`) loads Red Hat Display, Text and Mono from there, shows the rail links to the
+    library, and logs nothing. The repository copy loads the repository's fonts and hides those links.
+  - Compared by eye with the library built offline from the synthetic fixture run, shown in its empty
+    state because that run is not on the current methodology.
+  - Found and fixed while restyling: the yes/no inputs had no positioned parent, so their own hit
+    area sat outside their segment.
+- **Not verified:**
+  - Firefox and Safari, and the folder picker in them.
+  - Real issuer folders. The folder check guesses only from file names.
+  - Whether the readiness forecast matches what the modules actually do in a live run. It ports
+    `run_expectations.RULES` plus rules cited in the design note, but no run has been compared.
