@@ -941,7 +941,7 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules, more
   const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag', 'eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'eventTicks', 'eventAsOf', 'eventStack', 'eventRoom', 'earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes', 'matchesHeading', 'readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml', 'eventTimeline', '$', 'appDestinations', 'document'];
   const eventTimeline = realEventTimeline(esc, rich);
   const args = [{ ratingScope: 'issuer' }, libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head', sections: more.sections?.[id] || [] }])), contexts, more.store || {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => '', ...['eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'eventTicks', 'eventAsOf', 'eventStack', 'eventRoom'].map(name => require('./calendar.js')[name]), ...['earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes'].map(name => require('./reader.js')[name]), (heading, prefix) => (prefix.startsWith('=') ? heading === prefix.slice(1) : heading.startsWith(prefix)), ...['readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml'].map(name => require('./reader.js')[name]), eventTimeline, more.dom?.$, new Set(['W-Library', 'CP-OS']), more.dom?.document];
-  return new Function(...names, `${src}; return {runReport, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, moduleHead, headerChipMarkup, traceHref, drawerFoot, updateWorkspaceChrome, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, chartIndex, moduleReport, reportParts, outlineMarkup, navigatorView, issuerMeta, startRunHref, startRunLink, drawnAnchors, defaultOutput, firstSection, cashflowSection, modelOptionLabels};`)(...args);
+  return new Function(...names, `${src}; return {runReport, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, moduleHead, headerChipMarkup, traceHref, drawerFoot, runName, updateWorkspaceChrome, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, chartIndex, moduleReport, reportParts, outlineMarkup, navigatorView, issuerMeta, startRunHref, startRunLink, drawnAnchors, defaultOutput, firstSection, cashflowSection, modelOptionLabels};`)(...args);
 }
 const countOf = (html, re) => (html.match(re) || []).length;
 
@@ -3457,19 +3457,19 @@ const HASH_1 = 'a1b2c3d4'.repeat(8), HASH_2 = 'e5f6a7b8'.repeat(8);
 
 test('model picker: one delivery reads run date, pathway and run id, with no hash', () => {
   const models = [pickModel(HASH_1)];
-  assert.deepEqual(pickPage(models).modelOptionLabels(models), ['31 March 2025 · Credit snapshot · Run A']);
+  assert.deepEqual(pickPage(models).modelOptionLabels(models), ['31 March 2025 · Credit snapshot']);
 });
 
 test('model picker: two deliveries of one run differ by the first eight characters of the delivery id', () => {
   const models = [pickModel(HASH_1), pickModel(HASH_2)];
-  assert.deepEqual(pickPage(models).modelOptionLabels(models), ['31 March 2025 · Credit snapshot · Run A · a1b2c3d4', '31 March 2025 · Credit snapshot · Run A · e5f6a7b8']);
+  assert.deepEqual(pickPage(models).modelOptionLabels(models), ['31 March 2025 · Credit snapshot · a1b2c3d4', '31 March 2025 · Credit snapshot · e5f6a7b8']);
 });
 
 test('model picker: the relationship is appended only when recorded', () => {
   const models = [pickModel(HASH_1, { previous: HASH_2 }), pickModel(HASH_2)];
   const [first, second] = pickPage(models).modelOptionLabels(models);
-  assert.equal(first, `31 March 2025 · Credit snapshot · Run A · a1b2c3d4 · supersedes 31 March 2025 · Credit snapshot · Run A · e5f6a7b8`);
-  assert.equal(second, `31 March 2025 · Credit snapshot · Run A · e5f6a7b8 · superseded by 31 March 2025 · Credit snapshot · Run A · a1b2c3d4`);
+  assert.equal(first, `31 March 2025 · Credit snapshot · a1b2c3d4 · supersedes 31 March 2025 · Credit snapshot · e5f6a7b8`);
+  assert.equal(second, `31 March 2025 · Credit snapshot · e5f6a7b8 · superseded by 31 March 2025 · Credit snapshot · a1b2c3d4`);
   assert.ok(!pickPage([pickModel(HASH_1)]).modelOptionLabels([pickModel(HASH_1)])[0].includes('relationship'));
 });
 
@@ -3482,12 +3482,12 @@ test('model picker: with no run context the run folder is named, then the delive
 
 test('model picker: a relationship names a listed delivery by its label and an unlisted one by its id', () => {
   const models = [pickModel(HASH_1, { previous: HASH_2 })];
-  assert.equal(pickPage(models).modelOptionLabels(models)[0], `31 March 2025 · Credit snapshot · Run A · supersedes ${HASH_2}`);
+  assert.equal(pickPage(models).modelOptionLabels(models)[0], `31 March 2025 · Credit snapshot · supersedes ${HASH_2}`);
 });
 
 test('model picker: ids that share their first eight characters read with the whole id', () => {
   const models = [pickModel('tdg-forecast-005'), pickModel('tdg-forecast-006')];
-  assert.deepEqual(pickPage(models).modelOptionLabels(models), ['31 March 2025 · Credit snapshot · Run A · tdg-forecast-005', '31 March 2025 · Credit snapshot · Run A · tdg-forecast-006']);
+  assert.deepEqual(pickPage(models).modelOptionLabels(models), ['31 March 2025 · Credit snapshot · tdg-forecast-005', '31 March 2025 · Credit snapshot · tdg-forecast-006']);
 });
 
 test('model picker: a delivery for a run the library does not list is named by its own run folder, not the page run', () => {
@@ -3689,7 +3689,7 @@ test('motion: the pill, the drawer, the backdrop and the toast move only under p
     assert.ok(shell.includes(word), word);
     assert.ok(!outside.includes(word), `${word} sits outside the motion query`);
   }
-  assert.ok(shell.includes('@media print{.toast-host,.drawer-backdrop{display:none!important}*{transition:none!important;animation:none!important}}'));
+  assert.ok(shell.includes('@media print{.toast-host,.drawer-backdrop,.basis-link{display:none!important}*{transition:none!important;animation:none!important}}'));
 });
 
 test('the tooltip: [data-tip] shows its text after 400ms on hover and focus, with CSS only', () => {
@@ -3702,4 +3702,44 @@ test('components.js is loaded after shapes.js and before reader.js, which calls 
   const boot = read('static-boot.js');
   const list = boot.slice(boot.indexOf('for(const name of ['), boot.indexOf(']', boot.indexOf('for(const name of [')));
   assert.ok(list.indexOf("'shapes.js'") < list.indexOf("'components.js'") && list.indexOf("'components.js'") < list.indexOf("'reader.js'"), list);
+});
+
+// ---- Fix round 1 (review of the shell): the drawer slides, the row trace control's state and focus, no run code on findings pages, toast host, print.
+test('S1: the closed drawer stays laid out off-screen so it can slide; the global [hidden] rule is beaten, and it is not readable while closed', () => {
+  const css = read('screen.css');
+  assert.match(css, /\.inspector\[hidden\]\{display:flex!important;visibility:hidden;transform:translateX\(100%\)\}/);
+  assert.ok(css.includes('[hidden]{display:none!important}'), 'the global rule is still there; the drawer rule is more specific');
+  const motion = css.slice(css.indexOf('@media(prefers-reduced-motion:no-preference){', css.indexOf('/* ---- Library redesign, shell')));
+  assert.match(motion, /\.inspector\{transition:transform \.3s/);
+  assert.match(motion, /\.inspector\[hidden\]\{transition:transform \.3s[^}]*visibility 0s linear \.3s\}/);
+});
+
+test('Q1 and Q2: the row trace control is cleared when the drawer closes and is the opener of a routed row', () => {
+  const screen = read('screen.js');
+  assert.ok(screen.includes(".chip[aria-pressed],.trace-row[aria-pressed],[data-paragraph][aria-pressed]"), 'the close branch clears the row control');
+  assert.ok(screen.includes('const opener=`.chip[data-evidence="${CSS.escape(next.evidence)}"],.trace-row[data-evidence="${CSS.escape(next.evidence)}"],[data-paragraph="${CSS.escape(next.evidence)}"]`'));
+  assert.ok(!screen.includes("$('inspector').scrollIntoView"), 'a fixed drawer does not scroll into view');
+});
+
+test('dead has-evidence rules are gone', () => {
+  assert.ok(!read('screen.css').includes('has-evidence') && !read('screen.js').includes('has-evidence'));
+});
+
+test('Q3: findings pages name a run by date and pathway, never by its code: other-runs links, the model picker and the route announcement', () => {
+  const page = histPage();
+  const src = read('views.js'), screen = read('screen.js');
+  assert.ok(!/unavailableView[\s\S]*?\$\{esc\(run\.run\)\}/.test(src.slice(src.indexOf('function unavailableView('), src.indexOf('function unavailableView(') + 900)), 'the other-runs link text is not the run code');
+  assert.ok(src.slice(src.indexOf('function unavailableView(')).includes('esc(runName(run))'));
+  assert.equal(page.runName(HIST.contexts['run-b']), '31 March 2025 · Credit snapshot');
+  assert.ok(!screen.includes('${contexts[next.context].run}, '), 'the announcement does not read the run code');
+  assert.ok(screen.includes('${runName(contexts[next.context])}, '));
+});
+
+test('Q4: the toast host is a role=status element that exists before the first message', () => {
+  const src = read('components.js');
+  assert.ok(src.includes('function toastHost()') && src.includes('toastHost();'), 'the host is made at load');
+});
+
+test('Q5: trace icons do not print', () => {
+  assert.match(read('screen.css'), /@media print\{[^@]*\.basis-link[^@]*display:none!important/);
 });

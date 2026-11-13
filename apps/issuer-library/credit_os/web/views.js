@@ -141,10 +141,10 @@ function modelRelationship(model,models,name) {
   const successor=models.find(m=>m.previous===model.id);
   return model.previous?`supersedes ${name(model.previous)}`:successor?`superseded by ${name(successor.id)}`:null;
 }
-// A delivery in the Model select reads "<run date> · <pathway> · <run id>" from its own run, then its run folder, then its delivery id. Two deliveries that
+// A delivery in the Model select reads "<run date> · <pathway>" from its own run, then its run folder, then its delivery id. Two deliveries that
 // read alike each add the first eight characters of the delivery id, or the whole id when those still tie; a relationship is added only when one is recorded.
 function modelOptionLabels(models) {
-  const base=models.map(m=>{const ctx=Object.values(contexts).find(run=>sameIssuer(m.issuerKey,run.issuerKey)&&(run.folder===m.runFolder||run.folder===m.runId));return ctx?`${runDate(ctx)} · ${runPathway(ctx)} · ${ctx.run}`:m.runFolder||m.id;});
+  const base=models.map(m=>{const ctx=Object.values(contexts).find(run=>sameIssuer(m.issuerKey,run.issuerKey)&&(run.folder===m.runFolder||run.folder===m.runId));return ctx?`${runName(ctx)}`:m.runFolder||m.id;});
   const tagged=models.map((m,i)=>base.filter(text=>text===base[i]).length>1?`${base[i]} · ${m.id.slice(0,8)}`:base[i]);
   const names=models.map((m,i)=>tagged.filter(text=>text===tagged[i]).length>1&&tagged[i]!==base[i]?`${base[i]} · ${m.id}`:tagged[i]);
   const listed=id=>{const at=models.findIndex(m=>m.id===id);return at<0?id:names[at];};
@@ -764,7 +764,7 @@ function outlineMarkup(id) {
 function unavailableView(module) {
   const ctx=contexts[current.context];
   const others=Object.entries(contexts).filter(([key,run])=>key!==current.context&&sameIssuer(run.issuerKey,ctx.issuerKey)&&run.modules[module]?.outputs.length);
-  return `<div class="missing-state"><div class="empty-symbol">${icon('file-text')}</div><h2>${NO_OUTPUT}</h2></div>${others.length?`<div class="available-case"><h3>Other ${esc(ctx.issuer)} runs with this module</h3>${others.map(([key,run])=>`<p><a class="text-action" href="${routeHref(module,firstSection(module,key),null,key)}">${esc(run.run)}${icon('arrow-right')}</a></p>`).join('')}</div>`:''}`;
+  return `<div class="missing-state"><div class="empty-symbol">${icon('file-text')}</div><h2>${NO_OUTPUT}</h2></div>${others.length?`<div class="available-case"><h3>Other ${esc(ctx.issuer)} runs with this module</h3>${others.map(([key,run])=>`<p><a class="text-action" href="${routeHref(module,firstSection(module,key),null,key)}">${esc(runName(run))}${icon('arrow-right')}</a></p>`).join('')}</div>`:''}`;
 }
 function outputChooser(module) {
   const ctx=contexts[current.context],files=moduleEntry(module,current.context).outputs;
@@ -955,6 +955,8 @@ const EARLIER_METHODS_BADGE='<span class="badge badge-gray earlier-methods">Earl
 const earlierMethods=run=>(run.methodChanges||[]).length>0;
 const runDate=run=>run.asOf?displayDate(run.asOf):'Not recorded';
 const runPathway=run=>pathwayTitle(run.pathway)||'Not recorded';
+// A findings page names a run by its date and pathway in words, never by its code (the Evidence page's to show).
+const runName=run=>`${runDate(run)} · ${runPathway(run)}`;
 // The header's meta line under the issuer title: the ticker and sector the catalogue holds for this run and the number of the issuer's runs it holds (the runs
 // the store joins to the same issuer, this one included). A part the catalogue lacks is left out; with none the line is not drawn.
 function issuerMeta(context) {

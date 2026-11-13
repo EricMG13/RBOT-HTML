@@ -77,7 +77,8 @@
 
   // C23: one status host fixed bottom-right; each message removes itself after 3 seconds.
   const TOAST_MS = 3000;
-  function toast(text) {
+  // The host is made empty at load (and on first use if it was not), so a screen reader already watches it when the first message arrives.
+  function toastHost() {
     let host = document.getElementById('toast-host');
     if (!host) {
       host = document.createElement('div');
@@ -86,6 +87,10 @@
       host.setAttribute('role', 'status');
       document.body.append(host);
     }
+    return host;
+  }
+  function toast(text) {
+    const host = toastHost();
     const message = document.createElement('p');
     message.className = 'toast';
     message.textContent = text;
@@ -98,7 +103,8 @@
     return `data-tip="${escapeHtml(text)}" aria-label="${escapeHtml(text)}"`;
   }
 
-  const Components = {icon, traceButton, traceRow, headerChips, placePill, toast, tipAttributes, ICON_PATHS};
+  const Components = {icon, traceButton, traceRow, headerChips, placePill, toast, toastHost, tipAttributes, ICON_PATHS};
   if (typeof window !== 'undefined') window.Components = Components;
+  if (typeof document !== 'undefined' && document.body) toastHost();
   if (typeof module !== 'undefined') module.exports = Components;
 })();

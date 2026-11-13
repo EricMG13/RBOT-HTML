@@ -383,7 +383,6 @@ function showInspector(key,chipIndex=null) {
     if(el.dataset.paragraph===key&&mode===chipIndex)el.setAttribute('aria-pressed','true');else el.removeAttribute('aria-pressed');
   });
   if(returnTrigger) {
-    if(window.innerWidth<=1050) $('inspector').scrollIntoView({block:'start'});
     $('back-analysis').focus({preventScroll:true});
   }
 }
@@ -573,7 +572,7 @@ function renderRoute() {
   }
   if(next.evidence) {
     // A route to a row inside a folded part (a link, a reload) opens the part holding its trigger; Esc then returns to that trigger.
-    const opener=`.chip[data-evidence="${CSS.escape(next.evidence)}"],[data-paragraph="${CSS.escape(next.evidence)}"]`;
+    const opener=`.chip[data-evidence="${CSS.escape(next.evidence)}"],.trace-row[data-evidence="${CSS.escape(next.evidence)}"],[data-paragraph="${CSS.escape(next.evidence)}"]`;
     const trigger=reportPage(next)||next.module==='W-Overview'?($(next.section)||$('content')).querySelector(opener)||$('content').querySelector(opener):null;
     if(trigger) {
       openFolds(trigger);
@@ -584,7 +583,7 @@ function renderRoute() {
   else {
     $('inspector').hidden=true;
     document.querySelectorAll('.source-selected').forEach(el=>el.classList.remove('source-selected'));
-    document.querySelectorAll('.chip[aria-pressed],[data-paragraph][aria-pressed]').forEach(el=>el.removeAttribute('aria-pressed'));
+    document.querySelectorAll('.chip[aria-pressed],.trace-row[aria-pressed],[data-paragraph][aria-pressed]').forEach(el=>el.removeAttribute('aria-pressed'));
     if(previous?.evidence&&!changed) {
       $('content').scrollTop=returnContentScroll;
       if(window.innerWidth<=1050) window.scrollTo(0,returnScroll);
@@ -593,7 +592,7 @@ function renderRoute() {
   }
   if(hashed&&!changed)updateLibrary(true);
   if(next.module==='W-Library')writeLibraryHash();
-  const named=contexts[next.context]&&!appDestinations.has(next.module)?`${contexts[next.context].title}, ${contexts[next.context].run}, `:'';
+  const named=contexts[next.context]&&!appDestinations.has(next.module)?`${contexts[next.context].title}, ${runName(contexts[next.context])}, `:'';
   $('announcement').textContent=`${named}${moduleNames[next.module]}, ${namedText(next.label)}${next.evidence?', evidence open':''}`;
 }
 document.addEventListener('change',event=>{

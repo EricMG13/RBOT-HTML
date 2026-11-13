@@ -80,6 +80,17 @@ test('toast: one role=status host; each message is a child that removes itself a
   assert.ok(hosts[0].children.every(c => c.removed));
 });
 
+test('toastHost: the role=status host exists, empty, before the first message and is reused', t => {
+  const doc = fakeDocument();
+  global.document = doc;
+  t.after(() => { delete global.document; });
+  const host = C.toastHost();
+  assert.equal(host.attrs.role, 'status');
+  assert.equal(host.children.length, 0);
+  assert.equal(C.toastHost(), host);
+  assert.equal(doc.body.children.length, 1);
+});
+
 test('placePill: the pill follows the active tab through custom properties; no measured tab, no pill', () => {
   const set = {}, classes = new Set();
   const box = active => ({querySelector: () => active, style: {setProperty: (k, v) => { set[k] = v; }}, classList: {add: c => classes.add(c), remove: c => classes.delete(c)}});
