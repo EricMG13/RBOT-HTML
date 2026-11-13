@@ -31,14 +31,16 @@ const Shapes = (() => {
   const KIND_RULES = [
     ['id', /^id$|\bid$|^linked pathway row$/],                                  // before source: "Evidence ID" is an id
     ['source', /^(?:(?:sources?|evidence)(?:\s*\/\s*clause|\s+(?:trace|locator|register|document|file|sha|hash|page|reference|ref|link)s?)?|sha256)$/],
-    ['intermodule', /^(supplied handoff|use in this module|effect on this module|downstream use|consumer|downstream module|receiving module|responsible module|command|required consumer action|consumer module id|escalation consequence)$|^consequence for cp-/],
+    ['intermodule', /^(supplied handoff|use in this module|effect on this module|consumer|downstream module|receiving module|responsible module|command|required consumer action|escalation consequence)$|^consequence for cp-/],
     ['limitation', /limitation/],
     ['consequence', /creditor consequence|effect on the credit view/],
     ['period', /^(?:(?:fy|cy|ltm|pf|[hq][1-4])\s*)?\d{4}[ae]?\b|^(?:fy|cy)\s*\d{2}[ae]?\b/],
     ['case', /\b(scenario|case|downside|upside|base|severe|moderate|stress)\b/],
     ['label', /^(line|metric|item|driver|exposure|from|to|question|gate item|decision driver|security group|rank|break)\b|\bmeasure$/],
   ];
-  const columnKind = header => (KIND_RULES.find(([, rx]) => rx.test(norm(header))) || ['text'])[0];
+  // The two machine names keep their underscore: "downstream_use" addresses another module, "Downstream Use" (a source register's column) does not.
+  const MACHINE_INTERMODULE = /^(?:downstream_use|consumer_module_id)$/i;
+  const columnKind = header => (MACHINE_INTERMODULE.test(String(header ?? '').trim()) ? 'intermodule' : (KIND_RULES.find(([, rx]) => rx.test(norm(header))) || ['text'])[0]);
   const HIDDEN_KINDS = new Set(['source', 'id', 'intermodule']);
   // A plain "Module" header says which module a row concerns, so it is not inter-module; `shape` is kept for the interface.
   const hiddenColumns = (headers, shape) => headers

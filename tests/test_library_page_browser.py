@@ -1362,7 +1362,7 @@ NARROW_PROBE = (
     ("route", "tables"),
     [
         ("#W-Overview?c=synthetic-nbg-new-format-001", 1),
-        ("#W-Evidence?c=synthetic-nbg-new-format-001", 4),
+        ("#W-Evidence/registers?c=synthetic-nbg-new-format-001&m=CP-1", 2),
     ],
 )
 def test_wide_tables_scroll_in_their_own_region_on_a_narrow_page(tmp_path, route, tables):
@@ -1390,19 +1390,21 @@ def test_wide_tables_scroll_in_their_own_region_on_a_narrow_page(tmp_path, route
 
 
 def test_evidence_keeps_file_names_as_stored_and_says_when_no_supplied_file_is_recorded(tmp_path):
-    """R6: the Hashes table labels a module-named file by its module's name (the hash stays); a run
-    record with no supplied-file list does not claim every supplied file was used."""
+    """R6: the Input hashes list labels a module-named file by its module's name (the hash stays); a
+    run record with no supplied-file list does not claim every supplied file was used."""
     make_run(tmp_path, "run-a")
     update_library.update_library(tmp_path)
-    dom, console = visit(tmp_path / "library/index.html", "#W-Evidence/sources?c=run-a")
+    dom, console = visit(tmp_path / "library/index.html", "#W-Evidence/record?c=run-a")
     assert console == []
-    cells = re.findall(r"<td>([^<]*instructions)</td>", dom)
+    cells = re.findall(r'<div class="ev-nm">([^<]*instructions)</div>', dom)
     assert cells == ["Source readiness instructions", "Financial foundation instructions"]
-    assert "The run record lists no supplied files." in dom
-    assert "Every supplied file is named" not in dom
     # Each handoff and instruction link stays inside library/, where the served page can open it.
     assert 'href="downloads/run-a/CP-0.md" download' in dom
     assert 'href="downloads/run-a/instructions/CP-0.md" download' in dom
+    dom, console = visit(tmp_path / "library/index.html", "#W-Evidence/sources?c=run-a")
+    assert console == []
+    assert "The run record lists no supplied files." in dom
+    assert "Every supplied file is named" not in dom
 
 
 def served_dom(root: Path, route: str, width: int = 1280) -> str:

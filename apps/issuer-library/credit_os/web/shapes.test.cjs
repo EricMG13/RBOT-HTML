@@ -122,3 +122,10 @@ test('note matching is case-insensitive except SKILL', () => {
   assert.equal(Shapes.blockRole('module status: Completed with Limitations.'), 'note');
   assert.equal(Shapes.blockRole('Management skill is evident.'), 'prose');
 });
+
+test('inter-module: the machine name downstream_use addresses another module; a register column headed "Downstream Use" is kept', () => {
+  assert.equal(Shapes.columnKind('downstream_use'), 'intermodule');
+  assert.equal(Shapes.columnKind('consumer_module_id'), 'intermodule');
+  assert.notEqual(Shapes.columnKind('Downstream Use'), 'intermodule');
+  assert.deepEqual(Shapes.hiddenColumns(['Source', 'Downstream Use', 'downstream_use']), [0, 2]);
+});

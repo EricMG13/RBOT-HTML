@@ -309,7 +309,9 @@ function parseRoute() {
   const keyChips=window.CREDIT_OS_DATA?.chips?.[key]||[],requestedChip=params.get('chip')??'';
   // `p` opens a paragraph's or row's Basis; `f<n>` its n-th figure (reader.js paragraphView).
   const chip=/^\d+$/.test(requestedChip)&&Number(requestedChip)<keyChips.length?Number(requestedChip):requestedChip==='gaps'&&keyChips.some(unresolvedGap)?'gaps':/^(p|f\d+)$/.test(requestedChip)?requestedChip:null;
-  return {module,output,file,section:selected[0],label:selected[1],context,evidence:permitted?key:null,chip:permitted?chip:null,part};
+  // The Evidence page's tab is its route section and its module filter the `m` parameter, read the way `c` is; evidence.js owns both.
+  const evidencePage=module==='W-Evidence'?window.Evidence.parseHash(location.hash,Object.keys(contexts[context]?.modules||{})):null;
+  return {module,output,file,section:selected[0],label:selected[1],context,evidence:permitted?key:null,chip:permitted?chip:null,part,tab:evidencePage?.tab??null,evidenceModule:evidencePage?.module??null};
 }
 function go(module,section,key=null,file,chip=null) {location.hash=file===undefined?routeHref(module,section,key,current?.context,undefined,chip):routeHref(module,section,key,current?.context,file,chip);}
 // The source-page part of the inspector for the chip that opened it. The excerpt, flags and reasons are the build's; nothing is judged here.
@@ -507,7 +509,7 @@ function renderRoute() {
   const next=parseRoute(), previous=current;
   // Moving between the parts of one report scrolls; it draws nothing again.
   const sameReport=reportPage(next)&&reportPage(previous)&&next.module===previous.module&&next.output===previous.output&&next.context===previous.context;
-  const changed=!current||next.module!==current.module||next.output!==current.output||(next.section!==current.section&&!sameReport)||next.context!==current.context;
+  const changed=!current||next.module!==current.module||next.output!==current.output||(next.section!==current.section&&!sameReport)||next.context!==current.context||next.tab!==current.tab||next.evidenceModule!==current.evidenceModule;
   const partMove=sameReport&&next.section!==previous.section;
   const focused=document.activeElement,focusId=focused?.id,focusHref=focused?.getAttribute('href'),hashed=next.module==='W-Library'&&readLibraryHash();
   if(changed&&previous)readingPositions.set(positionKey(previous),$('content').scrollTop);
@@ -606,6 +608,7 @@ document.addEventListener('change',event=>{
 });
 document.addEventListener('click',event=>{
   if(event.target.closest('#rail-search')){focusSearch();return;}
+  if(window.Evidence.handleClick(event.target))return;
   const searchHit=event.target.closest('.search-hit');
   if(searchHit){returnTrigger=$('module-search');showNavigator(false);if(searchHit.hash===location.hash)$('canvas').focus();}
   if(libraryClick(event.target))return;
@@ -628,7 +631,7 @@ document.addEventListener('click',event=>{
   const step=event.target.closest('#next-section')?1:event.target.closest('#previous-section')?-1:0;
   if(step){const sections=navigationSections(current.module,current.context),index=sections.findIndex(s=>s[0]===current.section);if(sections[index+step])go(current.module,sections[index+step][0]);}
 });
-document.addEventListener('input',event=>{if(event.target.matches('input[data-library-filter]'))readLibraryFilters();});
+document.addEventListener('input',event=>{if(event.target.matches('input[data-library-filter]'))readLibraryFilters();if(event.target.id==='ev-q')window.Evidence.handleSearch(event.target);});
 document.addEventListener('submit',event=>{if(event.target.id==='library-filters')event.preventDefault();});
 $('module-search').addEventListener('input',()=>renderNavigator(current.module));
 $('module-search-clear').addEventListener('click',()=>{$('module-search').value='';renderNavigator(current.module);$('module-search').focus();});
