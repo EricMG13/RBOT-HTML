@@ -134,20 +134,35 @@ earlier (`effective_cutoff`). Each retained page has one status.
 | `later-event` | stated date after the cutoff | take no figure from it; cite it only as a labelled later event; its `## Sources` row carries the words "Later event" |
 | `undated` | no stated date found | its row says "Undated", and a `## Gaps` item says so in words with the id on its Basis line |
 
-A page is dated by the later of its published and its modified date. The sources read, from
-`weblookup._html_date` and `_stated_date`: in an HTML page, `<meta>` tags named
-`article:published_time`, `datePublished`, `date`, `DC.date`, `DCTERMS.date` or `pubdate`
-(published) and `article:modified_time`, `og:updated_time`, `dateModified`, `DCTERMS.modified` or
-`last-modified` (modified); JSON-LD `datePublished` and `dateModified`, used for a side the meta
-tags leave empty; and a `<time>` element, only when neither gave a date. When the HTML gives no
-date, a `Published: YYYY-MM-DD` line in the body of an HTML or text page is read. The status
-follows the later date; on a tie the published source is named. An SEC filing document (final URL
-on `sec.gov` or `www.sec.gov`) is dated by its filing date when a filing list retained in this run
-(`sec_filing_list`) names its accession, whatever its body states; otherwise it is dated as any
-page. SEC JSON stays undated at page level; each filing and fact carries its own filing date, and
-the cutoff applies to each one (a later one is marked "[after the cutoff: a later event, not a
-source of figures]" in the tool result). A `Last-Modified` header is not a stated date: it is
-recorded as a source and never dates a page.
+A page is dated by the later of its published and its modified date; the status follows that date.
+The sources read are in `weblookup._html_date` and `_stated_date`:
+
+- The published date is the first found, in this order: an HTML `<meta>` tag named
+  `article:published_time`, `datePublished`, `date`, `DC.date`, `DCTERMS.date` or `pubdate`; JSON-LD
+  `datePublished`; a `Published: YYYY-MM-DD` line in the body of an HTML or text page; the first
+  `<time datetime>` element.
+- The modified date is the latest of every modified date the page states: each value of each
+  `<meta>` tag named `article:modified_time`, `og:updated_time`, `dateModified`, `DCTERMS.modified`
+  or `last-modified`, and each JSON-LD `dateModified` in every node of every block.
+- `page_date` is the later of the two (either may be absent) and `page_date_source` names the
+  source of the date used; on a tie the published source is named. So a published date after the
+  cutoff is never overridden by an earlier modified date, and a page that states any update after
+  the cutoff is a later event.
+- An SEC filing document (final URL on `sec.gov` or `www.sec.gov`, the host compared as the
+  allowlist compares it) is dated by its filing date when a retained filing list names an
+  accession found in its percent-decoded path, whatever its body states; when the path names
+  several accessions that the lists date, the latest filing date is used. A filing list is a row
+  made by `sec_filing_list` or one whose address is `https://data.sec.gov/submissions/CIK` and ten
+  digits and `.json`, whatever tool fetched it, read as `sec_filing_list` reads it. If the document
+  was retained before such a list, fetching its address again appends one new index row for the
+  same body with the filing date, the source `sec:filingDate` and the new status; no request is
+  made, no second body file is written and the page and byte budget count each body once. The
+  strictest status among the rows of one id then applies to the handoff checks. A document no list
+  dates is dated as any page.
+- SEC JSON stays undated at page level; each filing and fact carries its own filing date, and
+  the cutoff applies to each one (a later one is marked "[after the cutoff: a later event, not a
+  source of figures]" in the tool result). A `Last-Modified` header is not a stated date: it is
+  recorded as a source and never dates a page.
 
 Consequence of the modified date, stated plainly: a site that bumps its modified date after the
 cutoff makes the page a later event, even when its text was published before the cutoff.

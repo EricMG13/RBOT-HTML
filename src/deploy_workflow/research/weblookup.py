@@ -24,12 +24,12 @@ import os
 import re
 import time
 from collections.abc import Callable, Container, Mapping, Sequence
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, date, datetime
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 from deploy_workflow.prose_checks import LIST_MARKER
 from deploy_workflow.research import webfetch
@@ -59,6 +59,7 @@ ACCEPT = "text/html, application/xhtml+xml, text/plain, application/json"
 STATUS_USABLE = "usable"
 STATUS_LATER = "later-event"
 STATUS_UNDATED = "undated"
+FILING_DATE_SOURCE = "sec:filingDate"
 
 # ponytail: no PDFs; pypdf cannot be bounded on hostile input in-process. Add a sandboxed,
 # time-limited extractor to support them.
@@ -304,10 +305,11 @@ def _parse_html(body: bytes, content_type: str | None) -> _PageParser:
     return parser
 
 
-def _json_ld_dates(blocks: list[str]) -> tuple[date | None, date | None]:
-    """The first ``datePublished`` and the first ``dateModified`` found in any block."""
+def _json_ld_dates(blocks: list[str]) -> tuple[date | None, list[date]]:
+    """The first ``datePublished`` found in any block and every ``dateModified`` found in any node
+    of any block."""
     published: date | None = None
-    modified: date | None = None
+    modified: list[date] = []
     for block in blocks:
         try:
             stack: list[Any] = [json.loads(block)]
@@ -317,44 +319,68 @@ def _json_ld_dates(blocks: list[str]) -> tuple[date | None, date | None]:
             node = stack.pop()
             if isinstance(node, dict):
                 published = published or _iso_date(node.get("datePublished"))
-                modified = modified or _iso_date(node.get("dateModified"))
+                found = _iso_date(node.get("dateModified"))
+                if found:
+                    modified.append(found)
                 stack.extend(reversed(list(node.values())))
             elif isinstance(node, list):
                 stack.extend(reversed(node))
     return published, modified
 
 
-def _meta_date(parser: _PageParser, names: tuple[str, ...]) -> tuple[date | None, str | None]:
+def _meta_dates(parser: _PageParser, names: tuple[str, ...]) -> list[tuple[date, str]]:
+    """Every valid date of the named meta tags, in the order of ``names`` then of the page."""
+    found: list[tuple[date, str]] = []
     for name in names:
         for value in parser.metas.get(name, []):
-            found = _iso_date(value)
-            if found:
-                return found, f"meta:{name}"
-    return None, None
+            stated = _iso_date(value)
+            if stated:
+                found.append((stated, f"meta:{name}"))
+    return found
 
 
-def _html_date(parser: _PageParser) -> tuple[date | None, str | None]:
-    """The later of the page's published and modified dates, and the source of the one used.
+def _latest(found: Sequence[tuple[date, str]]) -> tuple[date | None, str | None]:
+    """The latest date and its source; of equal dates, the first listed."""
+    best: tuple[date, str] | None = None
+    for candidate in found:
+        if best is None or candidate[0] > best[0]:
+            best = candidate
+    return best if best else (None, None)
 
-    On a tie the published date's source is named. ``<time>`` is read only when neither the meta
-    tags nor JSON-LD state a date.
-    """
-    ld_published, ld_modified = _json_ld_dates(parser.json_ld)
-    published = _meta_date(parser, _META_NAMES)
-    if published[0] is None and ld_published:
-        published = (ld_published, "json-ld:datePublished")
-    modified = _meta_date(parser, _MODIFIED_NAMES)
-    if modified[0] is None and ld_modified:
-        modified = (ld_modified, "json-ld:dateModified")
-    if published[0] and (modified[0] is None or published[0] >= modified[0]):
-        return published
-    if modified[0]:
-        return modified
+
+def _published_date(
+    parser: _PageParser, ld_published: date | None, line: date | None
+) -> tuple[date | None, str | None]:
+    """The first found of: the published meta names, JSON-LD ``datePublished``, the body
+    ``Published:`` line, the first ``<time datetime>``."""
+    metas = _meta_dates(parser, _META_NAMES)
+    if metas:
+        return metas[0]
+    if ld_published:
+        return ld_published, "json-ld:datePublished"
+    if line:
+        return line, webfetch.SOURCE_BODY
     for value in parser.times:
         found = _iso_date(value)
         if found:
             return found, "html:time"
     return None, None
+
+
+def _html_date(parser: _PageParser, line: date | None) -> tuple[date | None, str | None]:
+    """The later of the page's published date and its latest stated modified date, and the source
+    of the one used (the published date's on a tie). ``line`` is the body ``Published:`` line."""
+    ld_published, ld_modified = _json_ld_dates(parser.json_ld)
+    published = _published_date(parser, ld_published, line)
+    modified = _latest(
+        [
+            *_meta_dates(parser, _MODIFIED_NAMES),
+            *((day, "json-ld:dateModified") for day in ld_modified),
+        ]
+    )
+    if published[0] and (modified[0] is None or published[0] >= modified[0]):
+        return published
+    return modified
 
 
 def _stated_date(
@@ -365,15 +391,38 @@ def _stated_date(
     ``record.published_*`` is ``webfetch.locate_published``'s answer: a body ``Published:`` line,
     or ``Last-Modified``, which is not a stated date and only ever recorded as its source.
     """
+    from_body = record.published_source == webfetch.SOURCE_BODY
+    line = _iso_date(record.published_located) if from_body else None
     if kind == "html":
-        found, source = _html_date(_parse_html(body, content_type))
+        found, source = _html_date(_parse_html(body, content_type), line)
         if found:
             return found.isoformat(), source
-    if kind in ("html", "txt") and record.published_source == webfetch.SOURCE_BODY:
-        return record.published_located, record.published_source
+    elif kind == "txt" and line:
+        return line.isoformat(), webfetch.SOURCE_BODY
     if record.published_source == webfetch.SOURCE_HEADER:
         return None, webfetch.SOURCE_HEADER
     return None, None
+
+
+def _body_name(sha256: str, content_type: str | None) -> str:
+    """The file a retained body is kept in: its hash and the extension its content type gives."""
+    return f"{sha256}.{_EXTENSIONS.get(_media_type(content_type), 'txt')}"
+
+
+def _spent_bytes(rows: list[dict[str, Any]]) -> int:
+    """The bytes retained: each body once, however many rows name it."""
+    return sum({row["sha256"]: int(row["bytes"]) for row in rows}.values())
+
+
+_LIST_URL = re.compile(r"https://data\.sec\.gov/submissions/CIK[0-9]{10}\.json")
+
+
+def _is_filing_list(row: dict[str, Any]) -> bool:
+    """A row retained by ``sec_filing_list``, or whose address is a company's submissions list."""
+    return row.get("tool") == "sec_filing_list" or any(
+        isinstance(row.get(key), str) and _LIST_URL.fullmatch(row[key])
+        for key in ("url", "final_url")
+    )
 
 
 def _status(page_date: str | None, cutoff: date) -> str:
@@ -541,13 +590,13 @@ class WebLookup:
         except _IndexDamaged as error:
             return Refused(str(error) or "the retained web index is damaged")
         if cached is not None:
-            return cached
+            return self._redated(cached)
         # ponytail: no lock; one caller at a time per run. Add a file lock if tools ever run
         # concurrently.
         problem = self._sec_problem(split.host) or self._budget_problem(rows)
         if problem:
             return Refused(problem)
-        return self._download(url, tool, sum(int(row["bytes"]) for row in rows))
+        return self._download(url, tool, _spent_bytes(rows))
 
     def page_text(self, item: Retained) -> list[str]:
         """The retained page as text pages for the paging tools (delimiters neutralised)."""
@@ -570,7 +619,8 @@ class WebLookup:
         return host_allowed(host, self._domains, self._case_hosts)
 
     def _cached(self, rows: list[dict[str, Any]], url: str) -> Retained | None:
-        for row in rows:
+        """The latest row for ``url`` (a page re-dated by a filing list has two)."""
+        for row in reversed(rows):
             if row.get("url") == url:
                 try:
                     clean = _clean_content_type(row.get("content_type"))
@@ -579,6 +629,22 @@ class WebLookup:
                 return _retained_row({**row, "content_type": clean})
         return None
 
+    def _redated(self, item: Retained) -> Retained:
+        """A retained page, or, when a filing list retained since now gives its filing date a
+        different date than its row states, a new row for the same body with that date. No request
+        is made and no second body file is written."""
+        filed = self._filing_date(item.final_url)
+        if filed is None or (item.page_date, item.page_date_source) == (filed, FILING_DATE_SOURCE):
+            return item
+        updated = replace(
+            item,
+            page_date=filed,
+            page_date_source=FILING_DATE_SOURCE,
+            status=_status(filed, self._cutoff),
+        )
+        self._append_row(updated)
+        return updated
+
     def _sec_agent(self) -> str | None:
         return usable_user_agent(self._runtime.env)
 
@@ -586,9 +652,10 @@ class WebLookup:
         return _SEC_MESSAGE if is_sec_host(host) and self._sec_agent() is None else None
 
     def _budget_problem(self, rows: list[dict[str, Any]]) -> str | None:
-        if len(rows) >= MAX_PAGES:
+        """The budget counts bodies (a ``sha256`` once, however many rows name it)."""
+        if len({row["sha256"] for row in rows}) >= MAX_PAGES:
             return f"the run's web budget of {MAX_PAGES} retained pages is spent"
-        if sum(int(row["bytes"]) for row in rows) >= MAX_TOTAL_BYTES:
+        if _spent_bytes(rows) >= MAX_TOTAL_BYTES:
             return f"the run's web budget of {MAX_TOTAL_BYTES} retained bytes is spent"
         return None
 
@@ -654,7 +721,7 @@ class WebLookup:
         page_date, source = _stated_date(kind, body, media, answer.record)
         filed = self._filing_date(answer.final_url)
         if filed:
-            page_date, source = filed, "sec:filingDate"
+            page_date, source = filed, FILING_DATE_SOURCE
         item = Retained(
             source_id=f"web-{digest[:12]}",
             url=answer.url,
@@ -674,35 +741,41 @@ class WebLookup:
         return item
 
     def _filing_date(self, final_url: str) -> str | None:
-        """The filing date of an SEC filing document, from a filing list retained in this run.
+        """The filing date of an SEC filing document, from the filing lists retained in this run.
 
+        A list is a row of ``sec_filing_list`` or one fetched from a submissions address. When
+        the address names several accessions that the lists date, the latest date is used.
         ``None`` when the address is not a document under an accession number, or no retained
-        ``sec_filing_list`` names that accession with a valid date. A list that cannot be read is
-        skipped (and logged): it dates nothing.
+        list names one with a valid date. A list that cannot be read is skipped (and logged).
         """
         split = urlsplit(final_url)
-        if (split.hostname or "").lower() not in ("sec.gov", "www.sec.gov"):
+        if _normal(split.hostname or "") not in ("sec.gov", "www.sec.gov"):
             return None
-        wanted = _accessions(split.path)
+        wanted = _accessions(unquote(split.path))
         if not wanted:
             return None
         try:
             rows = _read_index(self._folder / "index.jsonl")
         except _IndexDamaged:
-            return None  # fetch_page read this index a moment ago; a fresh failure dates nothing
+            log.warning("the retained web index is damaged, so no filing is dated from a list")
+            return None
+        found: list[str] = []
         for row in rows:
-            if row.get("tool") != "sec_filing_list":
+            if not _is_filing_list(row):
                 continue
             try:
-                raw = (self._folder / f"{row['sha256']}.json").read_bytes()
-                dates = _filing_dates(json.loads(_decode(raw, row.get("content_type"))))
+                dates = _filing_dates(self._read_list(row))
             except (OSError, ValueError, RecursionError) as error:
                 log.warning("a retained filing list could not be used to date a filing: %s", error)
                 continue
-            for number in wanted:
-                if number in dates:
-                    return dates[number]
-        return None
+            found += [dates[number] for number in wanted if number in dates]
+        return max(found) if found else None
+
+    def _read_list(self, row: dict[str, Any]) -> object:
+        """A retained filing list's JSON, its file named as ``_json`` names it."""
+        kind = row.get("content_type")
+        raw = self._folder / _body_name(row["sha256"], kind if isinstance(kind, str) else None)
+        return json.loads(_decode(raw.read_bytes(), kind if isinstance(kind, str) else None))
 
     def _write(self, name: str, body: bytes, item: Retained) -> None:
         """The body first, then its index row, so a crash cannot leave a row without a body."""
@@ -712,6 +785,9 @@ class WebLookup:
             temporary = self._folder / f".{name}.tmp"
             temporary.write_bytes(body)
             os.replace(temporary, target)
+        self._append_row(item)
+
+    def _append_row(self, item: Retained) -> None:
         index = self._folder / "index.jsonl"
         row = json.dumps(asdict(item), ensure_ascii=False) + "\n"
         if index.exists() and not index.read_bytes().endswith(b"\n") and index.stat().st_size:
@@ -780,8 +856,7 @@ class WebLookup:
         return EdgarResult(got.source_id, _summary([head, *lines]))
 
     def _json(self, item: Retained) -> object:
-        ext = _EXTENSIONS.get(_media_type(item.content_type), "txt")
-        raw = (self._folder / f"{item.sha256}.{ext}").read_bytes()
+        raw = (self._folder / _body_name(item.sha256, item.content_type)).read_bytes()
         try:
             return json.loads(_decode(raw, item.content_type))
         except (ValueError, RecursionError):

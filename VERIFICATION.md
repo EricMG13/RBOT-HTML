@@ -16,10 +16,10 @@ set `DEPLOY_WORKFLOW_SEC_USER_AGENT` and is a separate paid action.
   cutoff; fail-closed acceptance checks on CP-DR's handoff; `--web-lookup` and `--web-host`.
 - Commands, each run on the tree of the commit that carries this entry (second pass, Task 5, on top
   of the Task 4 commit 72c868b):
-  - `uv run pytest tests/test_weblookup.py tests/test_web_lookup_tools.py tests/test_web_search_scope.py tests/test_handoff_loop.py -q`: 569 passed, exit=0.
+  - `uv run pytest tests/test_weblookup.py tests/test_web_lookup_tools.py tests/test_web_search_scope.py tests/test_handoff_loop.py -q`: 589 passed, exit=0 (fix round 1).
   - `uv run pytest tests/test_run_start_submissions.py tests/test_run_start_page.py tests/test_run_start_service.py -q`: 375 passed, exit=0 (headless Chrome; two earlier runs under load lost one or two Chrome launches each, exit status 2, and those tests pass alone).
   - `uv run pytest tests/test_cpos_launch.py -q`: 806 passed, 1 skipped (the paid test), exit=0.
-  - `uv run python tools/quality_gate.py`: 0 findings in 25 changed files, exit=0.
+  - `uv run python tools/quality_gate.py`: 0 findings in 28 changed files, exit=0 (fix round 1).
 - Scope of the acceptance tests (fix round 3): 15 cases (five `test_rt_*` tests) run the launcher's real checker on a CP-DR handoff in the method's register layout (TDR.1 to
   TDR.6, the house Basis-line citation form); the remaining acceptance tests call
   `web_handoff_issues` directly or a stub checker (unit scope). Two launcher tests cover the
@@ -42,8 +42,16 @@ set `DEPLOY_WORKFLOW_SEC_USER_AGENT` and is a separate paid action.
   summary carries the launcher's own `Lookup:` and `SEC:` lines, drawn on the research module's row
   (`tests/test_run_start_submissions.py`, `test_run_start_page.py`). W3 (URLs that carry run material
   are flagged, not refused) was answered, not changed: the ruling gives the reason. Commits on this
-  branch for the pass: 72c868b and the Task 5 code and docs commits (`git log --oneline
+  branch for the pass: 72c868b, then the Task 5 code and docs commits (`git log --oneline
   e76625c..HEAD` also lists the merged-in main commits).
+- Security review of 72c868b, fix round 1 (the commit after c0220c8; `git log --oneline
+  c0220c8..HEAD`): an unreadable retained page gives the plain sentence on a repeated `fetch_page`
+  too; a filing list is recognised by its submissions address as well as its tool, and a document
+  retained before its list is re-dated by a new index row on the next fetch of its address (no
+  request, budgets count each body once); the published date is the first found (meta, JSON-LD,
+  body line, `<time>`) and the modified date the latest stated, `page_date` the later of the two;
+  the filing-date lookup compares the host as the allowlist does, decodes the path, uses the latest
+  of several accessions, reads a list through the content-type extension and logs a damaged index.
 - Relaunch rule: a relaunch compares the recorded lookup setting with what the flag settles to for
   the run's modules and case kind (a run without CP-DR started with `--web-lookup on` records `off`
   and relaunches with the same flag).
@@ -51,11 +59,11 @@ set `DEPLOY_WORKFLOW_SEC_USER_AGENT` and is a separate paid action.
   accepted (owner point open); the dropped checks are governed by instruction only.
 - Merge with `claude/quality-defects-appendix-cpdr` (67 commits): both records kept; on the merged tree
   the web lookup, launcher and handoff-loop tests, `test_cpos_launch.py` and the quality gate exit 0.
-- Reader check: not done. The run-start review gained one note per lookup line on the research
-  module's row (a presentation change); it was checked in headless Chrome on a synthetic case only,
-  not read against a real run and the September VMO2 reference.
+- Run-start summary change (the `Lookup:` and `SEC:` notes on the research module's row): its
+  fidelity check is `tests/test_run_start_submissions.py` and `tests/test_run_start_page.py`
+  (headless Chrome, synthetic case).
 - Not verified: live network behaviour; real SEC responses, headers, encodings and content types; real model use of the
-  tools and its citations; a reader check of the run-start review against a real run; the full suite; concurrent writers to one run's web folder.
+  tools and its citations; the full suite; concurrent writers to one run's web folder.
 
 ## 2026-11-13 — Quality-defects appendix: Published rule, context-summary charges, dropped values on repair (branch `claude/quality-defects-appendix-cpdr`, whole-branch review and fix wave, origin/main merged at `0b46fa5`)
 Scope: OFFLINE only. Tests, reviewer probes (`.superpowers/sdd/quality-defects/probes/`) and a replay of the retained raw bodies of four Copilot runs and one opus run; no provider or model call, no live Copilot run. No instruction or checker changed here has been sent to a live model. T1: the Published rule is stated once and checked once, the unit and second-table messages are specific, and the library accepts a Published equal to the event date and a stated gap; no page layout changed, so no reader check is claimed (if the owner reads the Calendar change as presentational, T1 is built, not accepted). T2: a repair's dropped sourced values are listed; replay of 34 rejected-then-rewritten pairs reports only CP-6 USD 247 million and USD 755 million. T3: three completed context summaries (USD 0.353237 in all) sit inside their calls' settlements; four starts with no completion are disclosed, not charged; a late charge is disclosed beside `Charged:`, not settled or capped. Fix wave after the whole-branch review: the launcher prints a `Review:` line for an accepted repair that dropped values and for a failed check (M1); an unquoted, line-less issue no longer excuses a value through a number already on its line (L1); the unit advice recognises any ISO 4217 code (`prose_checks.ISO_4217`) or currency symbol as another currency, so LTM, PIK, RCF and TTM do not (L2, widened from a 24-code list after the PR review); id-less failed summaries no longer hide an unended start (L3).

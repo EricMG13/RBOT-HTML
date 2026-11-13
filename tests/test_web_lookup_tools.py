@@ -1911,3 +1911,55 @@ def test_w5_a_run_that_retained_no_page_has_no_index_and_is_not_damaged(tmp_path
     assert issues == ()
     cites = bare_executor(tmp_path).web_issues(cpdr_task(), cited("web-000000000000"))
     assert cites and not any("could not be read" in i for i in cites)
+
+
+def test_fetching_a_retained_page_whose_file_is_gone_is_a_plain_message(tmp_path):
+    first, _ = tools_for(tmp_path)
+    sid = source_id(first.call("fetch_page", {"url": PAGE}))
+    for body in (tmp_path / "run" / "web").glob("*.html"):
+        body.unlink()
+    second, net = tools_for(tmp_path, FakeNet())
+    result = second.call("fetch_page", {"url": PAGE})
+    assert result == f"ERROR: the retained page {sid} could not be read"
+    assert str(tmp_path) not in result and "KeyError" not in result
+    assert not net.requests
+
+
+# Task 4 fix round 1: M2 (a) ------------------------------------------------------------------
+
+
+def test_m2a_a_redated_row_reaches_the_handoff_checks_without_a_web_event(tmp_path):
+    doc_path = "/Archives/edgar/data/320193/000032019325000079/a10k.htm"
+    listing = {
+        "filings": {
+            "recent": {
+                "form": ["10-K"],
+                "filingDate": ["2025-08-15"],
+                "accessionNumber": ["0000320193-25-000079"],
+            }
+        }
+    }
+    net = FakeNet(
+        {
+            ("data.sec.gov", "/submissions/CIK0000320193.json"): ok(
+                json.dumps(listing).encode(), "application/json"
+            ),
+            ("www.sec.gov", doc_path): ok(dated("2025-06-28", "<p>Annual report</p>")),
+        }
+    )
+    tools, _ = tools_for(tmp_path, net, env={UA_ENV: UA_VALUE})
+    url = f"https://www.sec.gov{doc_path}"
+    sid = source_id(tools.call("fetch_page", {"url": url}))
+    tools.call("sec_filing_list", {"cik": "320193"})
+    events = len(read_events(tmp_path / "events" / EVENTS))
+    again = tools.call("fetch_page", {"url": url})
+    assert "status=later-event" in again and "stated_date=2025-08-15" in again
+    assert (
+        len(read_events(tmp_path / "events" / EVENTS)) == events
+    )  # no request, no web_fetch event
+    statuses = [row.status for row in tools._known_pages().rows if row.source_id == sid]
+    assert statuses == ["usable", "later-event"]
+    md = handoff_md(f"| {sid} | Annual report | usable |")
+    assert any(
+        "Later event" in issue for issue in weblookup.web_handoff_issues(md, tools._known_pages())
+    )

@@ -556,6 +556,7 @@ class ModuleTools:
         self.web: dict[str, Retained] = {}  # each page by source_id (its first row)
         self.web_rows: list[Retained] = []  # every index row seen: two URLs may share one id
         self._indexed: set[str] = set()  # the url of every index row already looked at
+        self._seen_rows = 0  # how many index rows are registered (the index only grows)
         self._unreadable: set[str] = set()  # retained pages whose body file could not be read
         if lookup is not None and lookup_dir is not None:
             self._register_retained(lookup, lookup_dir)
@@ -600,6 +601,7 @@ class ModuleTools:
         except ResearchError as exc:
             log.warning("the run's web index is damaged, so no retained page is listed: %s", exc)
             return
+        self._seen_rows = len(items)
         for item in items:
             self._indexed.add(item.url)
             try:
@@ -684,11 +686,15 @@ class ModuleTools:
         if self.lookup_dir is None:
             raise ValueError("lookup is not offered to this module")
         rows = retained_rows(self.lookup_dir)
-        for fresh in (row for row in rows if row.url not in self._indexed):
+        for fresh in rows[self._seen_rows :]:
             self._register(self._lookup(), fresh)
+            if fresh.url not in self._indexed:  # a row for an address already held made no request
+                self._web_event(host, source_id=fresh.source_id)
             self._indexed.add(fresh.url)
-            self._web_event(host, source_id=fresh.source_id)
+        self._seen_rows = len(rows)
         item = result if isinstance(result, Retained) else _row_of(rows, result.source_id)
+        if (message := self._unreadable_page(item.source_id)) is not None:
+            return message
         return web_frame(
             item,
             len(self.sources[item.source_id]["pages"]),
