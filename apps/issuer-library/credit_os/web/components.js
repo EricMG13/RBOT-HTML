@@ -103,7 +103,88 @@
     return `data-tip="${escapeHtml(text)}" aria-label="${escapeHtml(text)}"`;
   }
 
-  const Components = {icon, traceButton, traceRow, headerChips, placePill, toast, toastHost, tipAttributes, ICON_PATHS};
+  // ---- The module page (Task 4). The text helpers are reader.js's: node requires the file, the page already holds its globals.
+  const readerText = () => (typeof module !== 'undefined' ? require('./reader.js') : {richText, figureSpans, figuredHtml, paragraphBody});
+  const shapes = () => (typeof module !== 'undefined' ? require('./shapes.js') : window.Shapes);
+  // One paragraph of a passage: its body as read (Basis line, list marker and line breaks gone) and `show(from, to)`, the inline HTML of a stretch of it.
+  // A figure is the page's own control when `figure(line, index, text)` gives one, else its exact text.
+  function prose(entry, figure) {
+    const reader = readerText();
+    const {body} = reader.paragraphBody(entry.text);
+    const figures = reader.figureSpans(body);
+    const show = (from, to) => reader.figuredHtml(body, figures, from, to, (i, text) => (figure && figure(entry.line, i, text)) || escapeHtml(text));
+    return {body, show};
+  }
+  const paragraphs = (texts, figure) => texts.map(entry => ({entry, ...prose(entry, figure)})).filter(p => p.body.trim() !== '');
+  const traceOf = (trace, entry) => (trace ? trace(entry.line) : '');
+  // A sentence ends at ". " before a capital letter or at the end of the text; the first one is whole, never cut.
+  function firstSentence(body) {
+    const end = /\.\s+(?=[A-Z])/.exec(body);
+    return end ? {lead: [0, end.index + 1], rest: [end.index + end[0].length, body.length]} : {lead: [0, body.length], rest: [body.length, body.length]};
+  }
+
+  // C2: the Bottom line. The first sentence of the first paragraph is the large lead; what follows is at body size, a trace button ends each paragraph.
+  function verdictPanel(texts, trace, figure) {
+    const [first, ...later] = paragraphs(texts, figure);
+    if (!first) return '';
+    const cut = firstSentence(first.body), hasRest = cut.rest[1] > cut.rest[0];
+    const row = (inner, entry) => `<div class="row-end"><p class="verdict-body">${inner}</p>${traceOf(trace, entry)}</div>`;
+    const lead = `<div class="row-end"><p class="verdict-lead">${first.show(...cut.lead)}</p>${hasRest ? '' : traceOf(trace, first.entry)}</div>`;
+    const rest = hasRest ? row(first.show(...cut.rest), first.entry) : '';
+    return `<div class="verdict"><h4 class="eyebrow">Bottom line</h4>${lead}${rest}${later.map(p => row(p.show(0, p.body.length), p.entry)).join('')}</div>`;
+  }
+
+  // C5: Key findings as a numbered list. A block is one finding: a `**bold lead**` is its title and the rest its body, else the first sentence is the title.
+  function findingsFeed(texts, trace, figure) {
+    const items = paragraphs(texts, figure).map((p, at) => {
+      const bold = /^\*\*(.+?)\*\*\s*/.exec(p.body);
+      const title = bold ? [2, 2 + bold[1].length] : firstSentence(p.body).lead, rest = bold ? [bold[0].length, p.body.length] : firstSentence(p.body).rest;
+      const body = rest[1] > rest[0] ? `<p class="feed-body">${p.show(...rest)}</p>` : '';
+      return `<li class="feed-item"><span class="feed-num">${at + 1}</span><div><div class="feed-title">${p.show(...title)}</div>${body}</div>${traceOf(trace, p.entry)}</li>`;
+    });
+    return items.length ? `<ol class="feed">${items.join('')}</ol>` : '';
+  }
+
+  // C6: the left-rule callout for "what would change the view".
+  function callout(title, texts, trace, figure) {
+    const items = paragraphs(texts, figure).map(p => `<p>${p.show(0, p.body.length)}${traceOf(trace, p.entry)}</p>`);
+    return items.length ? `<div class="callout"><h4>${icon('git-compare')}${escapeHtml(title)}</h4>${items.join('')}</div>` : '';
+  }
+
+  // The Limitations: a compact list, and beside it the count of gaps the module records, with the way to them in Evidence. No gap, no signal.
+  function limitationsBlock(texts, gapCount, evidenceHref, trace, figure) {
+    const items = paragraphs(texts, figure).map(p => `<li>${icon('triangle-alert')}<span>${p.show(0, p.body.length)}</span>${traceOf(trace, p.entry)}</li>`);
+    if (!items.length) return '';
+    const signal = gapCount > 0
+      ? `<div class="gapsig"><div class="gapsig-n" data-count>${gapCount}</div><div class="gapsig-w">${gapCount === 1 ? 'gap' : 'gaps'} recorded</div><a class="gapsig-link" href="${escapeHtml(evidenceHref)}">Open in Evidence${icon('arrow-right')}</a></div>`
+      : '';
+    return `<div class="lim-row"><ul class="lim-compact">${items.join('')}</ul>${signal}</div>`;
+  }
+
+  // The fallback for a table nothing else recognises: one card per row, the first visible column its title, the other visible columns label and value.
+  // Source, id and inter-module columns are left out; the trace icon opens the row, source cells included, in the drawer. A cell with no text has nothing to show.
+  function recordCards(block, ctx) {
+    const reader = readerText(), hidden = new Set(shapes().hiddenColumns(block.headers, 'records'));
+    const shown = block.headers.map((header, at) => at).filter(at => !hidden.has(at));
+    if (!shown.length || !block.rows.length) return '';
+    const [titleAt, ...otherAt] = shown;
+    const cards = block.rows.map(row => {
+      const title = String(row.cells[titleAt] ?? '').trim();
+      const fields = otherAt.filter(at => String(row.cells[at] ?? '').trim() !== '').map(at => `<div><dt>${escapeHtml(block.headers[at])}</dt><dd>${reader.richText(String(row.cells[at]).trim())}</dd></div>`).join('');
+      const label = `Row ${title || row.line}: where it comes from`;
+      return `<article class="rec-card"><div class="rec-head">${title ? `<p class="rec-title">${reader.richText(title)}</p>` : '<span></span>'}${traceRow(ctx.key(row), label)}</div>${fields ? `<dl class="rec-fields">${fields}</dl>` : ''}</article>`;
+    });
+    return `<div class="rec-cards"${ctx.caption ? ` role="group" aria-label="${escapeHtml(ctx.caption)}"` : ''}>${cards.join('')}</div>`;
+  }
+
+  // C33: the in-page index. `items` are {id, label, count?, href?}; the page marks the current one (screen.js) and a link without an href stays on the page.
+  function sectionRail(items) {
+    if (!items.length) return '';
+    const link = ({id, label, count, href}) => `<a class="rail-item" data-part="${escapeHtml(id)}" href="${escapeHtml(href ?? `#${id}`)}">${escapeHtml(label)}${count === undefined || count === null ? '' : `<span class="rail-count">${escapeHtml(count)}</span>`}</a>`;
+    return `<nav class="sec-rail" aria-label="On this page"><p class="eyebrow">On this page</p>${items.map(link).join('')}</nav>`;
+  }
+
+  const Components = {icon, traceButton, traceRow, headerChips, placePill, toast, toastHost, tipAttributes, verdictPanel, findingsFeed, callout, limitationsBlock, recordCards, sectionRail, ICON_PATHS};
   if (typeof window !== 'undefined') window.Components = Components;
   if (typeof document !== 'undefined' && document.body) toastHost();
   if (typeof module !== 'undefined') module.exports = Components;

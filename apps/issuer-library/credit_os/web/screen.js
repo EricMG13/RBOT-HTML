@@ -504,6 +504,32 @@ function scrollToPart(part) {
 function openFolds(target) {
   for(let fold=target.closest('details');fold;fold=fold.parentElement?.closest('details'))fold.open=true;
 }
+// The section rail (a new-format module page): the item of the part at the top of the canvas is the current one. A part is current while it crosses the top
+// 30% of the canvas, the first one in page order when several do; the last part is current once it is wholly in view, since a short last part never reaches the top.
+function markRail(rail,part) {
+  for(const link of rail.querySelectorAll('a.rail-item')) {
+    const on=link.dataset.part===part;
+    link.classList.toggle('on',on);
+    if(on)link.setAttribute('aria-current','location');else link.removeAttribute('aria-current');
+  }
+}
+let railObservers=[];
+function watchRail() {
+  for(const observer of railObservers)observer.disconnect();
+  railObservers=[];
+  const content=$('content'),rail=content.querySelector('.sec-rail');
+  // Without IntersectionObserver the rail stays a list of working links; nothing is marked.
+  if(!rail||typeof IntersectionObserver==='undefined')return;
+  const parts=[...rail.querySelectorAll('a.rail-item')].map(link=>document.getElementById(link.dataset.part)).filter(Boolean);
+  if(!parts.length)return;
+  const crossing=new Set();
+  let atEnd=false;
+  const show=()=>{const shown=atEnd?parts.at(-1):parts.find(part=>crossing.has(part));if(shown)markRail(rail,shown.id);};
+  railObservers.push(new IntersectionObserver(entries=>{for(const entry of entries)(entry.isIntersecting?crossing.add(entry.target):crossing.delete(entry.target));show();},{root:content,rootMargin:'0px 0px -70% 0px'}));
+  railObservers.push(new IntersectionObserver(entries=>{atEnd=entries.at(-1).intersectionRatio>=0.99;show();},{root:content,threshold:[0,0.99,1]}));
+  for(const part of parts)railObservers[0].observe(part);
+  railObservers[1].observe(parts.at(-1));
+}
 function renderRoute() {
   const next=parseRoute(), previous=current;
   // Moving between the parts of one report scrolls; it draws nothing again.
@@ -532,6 +558,7 @@ function renderRoute() {
     updateWorkspaceChrome(next.module);
     nameCodes($('context-bar'));
     $('content').innerHTML=moduleBody(next);
+    watchRail();
     // watchFrame returns the callback that stops its timer; the previous model's timer must not fire against a detached element.
     if(cancelModelFrame)cancelModelFrame();
     cancelModelFrame=null;
@@ -620,7 +647,7 @@ document.addEventListener('click',event=>{
   if(gaps){event.preventDefault();returnTrigger=gaps;returnScroll=window.scrollY;returnContentScroll=$('content').scrollTop;go(current.module,current.section,gaps.dataset.gaps,undefined,'gaps');return;}
   const audit=event.target.closest('.audit-open');
   if(audit){openAuditSection(audit);return;}
-  const part=event.target.closest('a.section-item');
+  const part=event.target.closest('a.section-item,a.rail-item');
   if(part&&reportPage(current)&&part.hash===location.hash){event.preventDefault();scrollToPart(current.section);return;}
   const source=event.target.closest('[data-evidence]');
   if(source){event.preventDefault();returnTrigger=source;returnScroll=window.scrollY;returnContentScroll=$('content').scrollTop;go(current.module,current.section,source.dataset.evidence);return;}

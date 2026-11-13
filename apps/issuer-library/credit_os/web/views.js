@@ -460,8 +460,8 @@ const drawn=(id,where)=>data[id].sections.filter((section,i)=>data[id].placement
 const DRAWN_PLACEMENTS=['view','reference','calculations','limits'];
 // The routable section anchors of an output: the sections a part draws (audit and consumed sections open from the audit list instead).
 const drawnAnchors=id=>{
-  const {rest,audit,drawings}=isNewFormat(data[id].sections)?newFormatSplit(id):{rest:DRAWN_PLACEMENTS.flatMap(where=>drawn(id,where)),audit:[],drawings:[]};
-  return new Set([...rest,...audit,...drawings].map(section=>`s-${section.line}`));
+  const {rest,drawings}=isNewFormat(data[id].sections)?newFormatSplit(id):{rest:DRAWN_PLACEMENTS.flatMap(where=>drawn(id,where)),drawings:[]};
+  return new Set([...rest,...drawings].map(section=>`s-${section.line}`));
 };
 // What a chip draws, from the chip dict as the library build emits it. An upstream chip with no module names register codes of the row's own module.
 // Only an issuer-page chip has an avatar (its source key); a module is named in the label, never coded.
@@ -624,25 +624,22 @@ function reportParts(id) {
   parts.push(['audit',reportAudit(id)]);
   return parts.filter(([,html])=>html).map(([anchor,html])=>[anchor,anchor===HANDOFF_TEXT[0]?HANDOFF_TEXT[1]:label(anchor),html]);
 }
-// ---- The module page of a new-format handoff (ruling H1, H4): the reader passages first, each under its own heading and drawn by the one paragraph
-// renderer (passageHtml); then the module's charts, maps and timeline; then every other section of the handoff, unchanged, in handoff order.
-const PASSAGE_ANCHORS={bottom:'bottom-line',key:'key-findings',contrary:'contrary-evidence',limits:'limitations'};
-// The reading style each passage is drawn in (screen.css, `.reading-*`): the headline, the findings list, prose, the limitations list.
-const PASSAGE_STYLES={bottom:'headline',key:'findings',contrary:'prose',limits:'limits'};
+// ---- The module page of a new-format handoff (ruling H1, H4; library redesign, Task 4). The page draws sections by role (Shapes.sectionRole): the four passages as
+// components (Bottom line, Key findings beside What would change the view, Limitations with the gap signal), the module's `finding` and `drawing` sections in handoff
+// order, and nothing else. Sources, Calculations, Gaps, registers, method notes and the sections written for other modules are the Evidence page's (or drawn nowhere).
 const passageSections=id=>Object.values(readerPassages(data[id].sections)).filter(Boolean);
+// A finding section has something to draw when it holds a prose block that is not a note, or a table with a row and a column the reader sees.
+const drawsSomething=section=>section.blocks.some(block=>block.type==='table'?block.rows.length>0&&window.Shapes.hiddenColumns(block.headers,'records').length<block.headers.length:window.Shapes.blockRole(block.text)!=='note');
 // Ruling 2026-11-12, decisions 1 and 2. A chart, map or timeline is drawn once, in its panel: the `Chart data:`, `Map:` or `Events:` section the store drew is `drawings`
-// (its numbers are the drawing's Table form, its prose the caption). `## Request`, `## Next module`, front matter and what sits under them are `audit`. The rest is the page body.
-// A drawing section the store could not draw has no drawing, so it stays in the body. The sections are told apart by name, not by placement: Sources is placed audit and stays.
-const AUDIT_HEADINGS=['Request','Next module','Front matter'];
+// (its numbers are the drawing's Table form, its prose the caption). A drawing section the store could not draw has no drawing, so it stays in the body with the
+// findings. A section that is not a passage, finding or drawing (its role says Evidence or nowhere) is in neither list.
 function newFormatSplit(id) {
   const held=new Set(passageSections(id)),drawnTables=new Set([...(data[id].charts||[]),...(data[id].chartGaps||[]),...(data[id].maps||[]),...(data[id].events||[])].map(drawing=>drawing.table));
-  const split={rest:[],audit:[],drawings:[]};
-  let parent='';
-  for(const section of data[id].sections) {
-    if(section.level<=2)parent=section.level===2&&(section.heading!=='Front matter'||section===data[id].sections[0])?section.heading:'';
+  const split={rest:[],drawings:[]};
+  for(const {section,role} of window.Evidence.classify(data[id].sections,data[id].placement)) {
     if(held.has(section)||!section.blocks.length)continue;
-    if(CHART_HEADING.test(section.heading)&&section.blocks.some(block=>block.type==='table'&&drawnTables.has(block.line)))split.drawings.push(section);
-    else split[AUDIT_HEADINGS.includes(parent)?'audit':'rest'].push(section);
+    if(role==='drawing'&&section.blocks.some(block=>block.type==='table'&&drawnTables.has(block.line)))split.drawings.push(section);
+    else if(['finding','drawing','passage'].includes(role)&&drawsSomething(section))split.rest.push(section);
   }
   return split;
 }
@@ -672,38 +669,61 @@ function reportTimeline(id) {
   const table=eventTable(data[id].sections);
   return table?`<section class="part" id="timeline">${eventTimeline(id,table,'h3')}</section>`:'';
 }
-// The handoff's own heading levels: its H2 sections are h3 (the page's h2 is the module), their H3 children h4, capped at h6.
-const newFormatTag=section=>'h'+Math.min(6,3+section.level-2);
 // What a paragraph's drawing needs of the page: its output, the chips the build holds for a key, and the table caption without a method code.
 const bodyContext=(id,tables)=>({id,tables,chips:key=>(window.CREDIT_OS_DATA?.chips?.[key]||[]).length,chipList:key=>window.CREDIT_OS_DATA?.chips?.[key]||[],caption:heading=>plain(heading).replace(METHOD_CODE,'')});
-const newFormatSection=(id,section)=>`<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,newFormatTag(section))}${sectionBodyHtml(section,bodyContext(id,true))}</div>`;
-// Front matter is drawn as its stated lines. Its `filename` line names the handoff with a module code, and the download carries the file, so it is not drawn.
-const frontMatter=(section,sections)=>section===sections[0]&&section.level===2&&section.heading==='Front matter';
-const frontMatterView=section=>`<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,newFormatTag(section))}<ul class="front-matter">${section.blocks.filter(block=>block.type==='text').flatMap(block=>block.text.split('\n')).map(line=>line.trim()).filter(line=>line&&!/^filename\s*:/i.test(line)).map(line=>`<li>${esc(line)}</li>`).join('')}</ul></div>`;
+// The handoff's own heading levels: its H2 sections are h3 (the page's h2 is the module), their H3 children h4, capped at h6.
+const newFormatTag=section=>'h'+Math.min(6,3+section.level-2);
+// A finding section of the module page: its prose as written (a method or status note is Evidence's) and each table as record cards until its own component lands.
+const findingSection=(id,section)=>{
+  const ctx={...bodyContext(id,true),skip:block=>block.type==='text'&&window.Shapes.blockRole(block.text)==='note',table:(block,at)=>window.Components.recordCards(block,{key:row=>`${id}:${row.line}`,caption:plain(at.heading).replace(METHOD_CODE,'')})};
+  return `<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,newFormatTag(section))}${sectionBodyHtml(section,ctx)}</div>`;
+};
+const passageTexts=section=>(section?section.blocks.filter(block=>block.type==='text').map(block=>({text:block.text,line:block.line})):[]);
+// The gaps the module records: the rows of the tables of its Gaps sections, counted as the Evidence page lists them.
+const recordedGaps=id=>window.Evidence.classify(data[id].sections,data[id].placement).filter(({role})=>role==='gaps').reduce((total,{section})=>total+section.blocks.filter(block=>block.type==='table'&&window.Evidence.tableView(block)).reduce((rows,block)=>rows+block.rows.length,0),0);
+const tableRows=section=>section.blocks.filter(block=>block.type==='table').reduce((rows,block)=>rows+block.rows.length,0);
+// The line of the first section that holds one of a drawing's tables: where in the handoff the drawing stood.
+const drawingLine=(id,drawings)=>Math.min(...(drawings||[]).map(drawing=>drawingSection(id,drawing.table)?.line??Infinity));
+// A part is [anchor, label, html, count?]; `count` is the number of listed items the rail shows beside the label.
 function newFormatParts(id) {
-  const out=data[id],passages=readerPassages(out.sections);
+  const out=data[id],passages=readerPassages(out.sections),texts=Object.fromEntries(Object.entries(passages).map(([key,section])=>[key,passageTexts(section)]));
+  const controls=key=>passageControls(texts[key],bodyContext(id,false));
   const parts=[['head','Module',reportHead(id)]];
+  // The Findings heading above the passages stays in the page for headings and screen readers (sr-only).
   const findings=out.sections.find(section=>section.level===2&&section.heading==='Findings');
-  // The bottom line is the page's headline: its heading, and the Findings heading above it, stay in the page for headings and screen readers (sr-only).
-  let heading=findings&&!findings.blocks.length?`<h3${passages.bottom?' class="sr-only"':''}>${rich(findings.heading)}</h3>`:'';
-  for(const [key,anchor] of Object.entries(PASSAGE_ANCHORS))if(passages[key]) {
-    parts.push([anchor,passages[key].heading,`<section class="part reading-${PASSAGE_STYLES[key]}" id="${anchor}">${heading}${headingView(passages[key].heading,newFormatTag(passages[key]),key==='bottom'?'sr-only':'')}${passageHtml(passages[key],id)}</section>`]);
-    heading='';
+  const verdict=window.Components.verdictPanel(texts.bottom,controls('bottom').trace,controls('bottom').figure);
+  if(verdict)parts.push(['bottom-line','Bottom line',`<section class="part" id="bottom-line">${findings&&!findings.blocks.length?`<h3 class="sr-only">${rich(findings.heading)}</h3>`:''}${verdict}</section>`]);
+  const feed=window.Components.findingsFeed(texts.key,controls('key').trace,controls('key').figure);
+  const change=window.Components.callout('What would change the view',texts.contrary,controls('contrary').trace,controls('contrary').figure);
+  if(feed||change) {
+    const both=Boolean(feed&&change);
+    parts.push(['key-findings',feed?'Key findings':'What would change the view',`<section class="part key-row g24" id="key-findings">${feed?`<div class="${both?'c14':'c24'}"><div class="rd-card"><h4 class="rd-h">Key findings</h4>${feed}</div></div>`:''}${change?`<div class="${both?'c10':'c24'}" id="contrary-evidence">${change}</div>`:''}</section>`,texts.key.length]);
   }
-  const charts=newFormatChartCards(id),maps=reportMaps(id),timeline=reportTimeline(id);
-  if(charts)parts.push(['charts','Charts',`<section class="part" id="charts"><h3>Charts</h3>${charts}</section>`]);
-  if(timeline)parts.push(['timeline','Timeline',timeline]);
-  if(maps)parts.push(['maps','Maps',maps]);
-  const {rest,audit}=newFormatSplit(id);
-  for(const section of rest)parts.push([`s-${section.line}`,plain(section.heading.replace(METHOD_CODE,'')),`<section class="part">${newFormatSection(id,section)}</section>`]);
-  if(audit.length)parts.push(['audit','Evidence & audit',fold('audit','Evidence & audit',plural(audit.length,'section'),audit.map(section=>frontMatter(section,data[id].sections)?frontMatterView(section):newFormatSection(id,section)).join(''))]);
+  // Charts, timeline and maps keep their renderers; each stands where its section stood in the handoff, among the finding sections.
+  const body=[],charts=newFormatChartCards(id),maps=reportMaps(id),timeline=reportTimeline(id);
+  if(charts)body.push([drawingLine(id,[...(out.charts||[]),...(out.chartGaps||[])]),['charts','Charts',`<section class="part" id="charts"><h3>Charts</h3>${charts}</section>`]]);
+  if(timeline)body.push([drawingLine(id,out.events),['timeline','Timeline',timeline]]);
+  if(maps)body.push([drawingLine(id,out.maps),['maps','Maps',maps]]);
+  for(const section of newFormatSplit(id).rest) {
+    const rows=tableRows(section);
+    body.push([section.line,[`s-${section.line}`,plain(section.heading.replace(METHOD_CODE,'')),`<section class="part">${findingSection(id,section)}</section>`,...(rows?[rows]:[])]]);
+  }
+  parts.push(...body.sort((a,b)=>(a[0]<b[0]?-1:a[0]>b[0]?1:0)).map(([,part])=>part));
+  const limits=window.Components.limitationsBlock(texts.limits,recordedGaps(id),window.Evidence.href('gaps',out.module,out.run),controls('limits').trace,controls('limits').figure);
+  if(limits)parts.push(['limitations','Limitations',`<section class="part" id="limitations"><div class="rd-card"><h4 class="rd-h">Limitations</h4>${limits}</div></section>`,texts.limits.length]);
   return parts;
 }
-const moduleReport=id=>reportParts(id).map(part=>part[2]).join('');
-// What the outline and the section list show: each present part's anchor and label. Presence depends on the data only, so it is built once per output.
+// The module page: the head, then (new format) the section rail beside the parts. An earlier-format page is its parts in a row, as it always was.
+const railItems=id=>reportOutline(id).filter(([anchor])=>anchor!=='head').map(([anchor,label,,count])=>({id:anchor,label,count,href:routeHref(data[id].module,anchor,null,data[id].run)}));
+function moduleReport(id) {
+  const parts=reportParts(id);
+  if(!isNewFormat(data[id].sections)||parts.length<2)return parts.map(part=>part[2]).join('');
+  return `${parts[0][2]}<div class="g24 module-grid"><div class="c5 module-rail">${window.Components.sectionRail(railItems(id))}</div><div class="c19 module-main">${parts.slice(1).map(part=>part[2]).join('')}</div></div>`;
+}
+// What the outline and the section list show: each present part's anchor and label (and its count, where the page shows one). Presence depends on the data only, so it is built once per output.
 const outlineCache=new Map();
 function reportOutline(id) {
-  if(!outlineCache.has(id))outlineCache.set(id,reportParts(id).map(([anchor,label])=>[anchor,label,[]]));
+  if(!outlineCache.has(id))outlineCache.set(id,reportParts(id).map(([anchor,label,,count])=>(count===undefined?[anchor,label,[]]:[anchor,label,[],count])));
   return outlineCache.get(id);
 }
 function galleryVisual(module,section) {
@@ -758,6 +778,7 @@ function drawerFoot(moduleId,context=current?.context) {
   return `<div class="drawer-foot"><a class="text-action" href="${esc(traceHref(moduleId,context))}">Open in Evidence${icon('arrow-right')}</a></div>`;
 }
 function outlineMarkup(id) {
+  if(isNewFormat(data[id].sections))return ''; // the page's own section rail is its outline
   const module=data[id].module||id;
   return `<nav class="section-outline" aria-label="On this page"><p class="outline-heading" aria-hidden="true">On this page</p><ol>${reportOutline(id).map(([part,label])=>`<li><a class="section-item" href="${routeHref(module,part)}" ${current.section===part?'aria-current="location"':''}>${esc(label)}</a></li>`).join('')}</ol></nav>`;
 }

@@ -254,3 +254,10 @@ test('search: the first rows that match are shown, up to the limit, and the rest
 test('a run with no evidence record says so', () => {
   assert.ok(Evidence.view(input({run: {...input().run, evidence: null}}), {tab: 'trace', module: null}).includes('No evidence record was read'));
 });
+
+test('classify is the one helper that gives each section its heading chain from the level-2 ancestor and its role (the module page uses it too)', () => {
+  const E = require('./evidence.js');
+  const sec = (heading, level) => ({ heading, level, line: 1, blocks: [] });
+  const out = E.classify([sec('CP-9 handoff', 1), sec('Findings', 2), sec('Bottom line', 3), sec('Events: Dates', 3), sec('Gaps', 2)], []);
+  assert.deepEqual(out.map(o => [o.chain, o.role]), [[[], 'registers'], [['Findings'], 'finding'], [['Findings', 'Bottom line'], 'passage'], [['Findings', 'Events: Dates'], 'drawing'], [['Gaps'], 'gaps']]);
+});

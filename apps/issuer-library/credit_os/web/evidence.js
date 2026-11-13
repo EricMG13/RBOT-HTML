@@ -352,7 +352,7 @@
     applyFilter(input.closest('.ev'));
   }
 
-  const api = {TABS, parseHash, href, tableView, traceRows, traceBody, view, visibleFlags, handleClick, handleSearch};
+  const api = {TABS, parseHash, href, tableView, classify, traceRows, traceBody, view, visibleFlags, handleClick, handleSearch};
   if (typeof window !== 'undefined') window.Evidence = api;
   if (typeof module !== 'undefined') module.exports = api;
 })();

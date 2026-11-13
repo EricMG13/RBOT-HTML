@@ -595,3 +595,25 @@ test('figureSpans (whole-branch L1): a text that starts with a number or a negat
   }
   assert.deepEqual(figureSpans('-5% margin.'), [{start: 0, end: 3, text: '-5%'}]);
 });
+
+const {figuredHtml, passageControls} = require('./reader.js');
+
+test('figuredHtml: a stretch of the body keeps the figures inside it, numbered over the whole body; bold may span a figure', () => {
+  const body = 'Net debt is USD 1,390 million at 4.2x. **Cover is 3.1x.** Done.';
+  const figures = figureSpans(body);
+  assert.deepEqual(figures.map(f => f.text), ['USD 1,390 million', '4.2x', '3.1x']);
+  const button = (i, text) => `[${i}:${text}]`;
+  assert.equal(figuredHtml(body, figures, 0, 38, button), 'Net debt is [0:USD 1,390 million] at [1:4.2x].');
+  assert.equal(figuredHtml(body, figures, 39, body.length, button), '<strong>Cover is [2:3.1x].</strong> Done.');
+  assert.equal(figuredHtml('A < B', [], 0, 5, button), 'A &lt; B');
+});
+
+test('passageControls: a paragraph with Basis items has a trace button and figure buttons on its key; one with neither has none; a chip alone makes the controls', () => {
+  const texts = [{ text: 'Debt is 4.2x.\nBasis: Q4.pdf, page 7', line: 10 }, { text: 'No reference here, 5.5x.', line: 12 }, { text: 'Chip only 6.5x.', line: 14 }];
+  const c = passageControls(texts, { id: 'o', chips: key => (key === 'o:14' ? 1 : 0) });
+  assert.ok(c.trace(10).startsWith('<button type="button" class="basis-link" data-paragraph="o:10" data-basis="[&quot;Q4.pdf, page 7&quot;]" aria-label="Basis for paragraph: Debt is 4.2x.">'));
+  assert.equal(c.figure(10, 0, '4.2x'), '<button type="button" class="figure" data-paragraph="o:10" data-basis="[&quot;Q4.pdf, page 7&quot;]" data-figure="0">4.2x</button>');
+  assert.equal(c.trace(12), '');
+  assert.equal(c.figure(12, 0, '5.5x'), '');
+  assert.ok(c.trace(14).includes('data-paragraph="o:14"') && c.trace(14).includes('data-basis="[]"') && c.figure(14, 0, '6.5x').includes('data-figure="0"'));
+});

@@ -320,6 +320,27 @@ function paragraphBody(text, earlier = false) {
   return {item, body: (item ? split.body.slice(2) : split.body).replace(/\n/g, ' '), items: split.items};
 }
 
+// The inline HTML of `body` between two offsets. Each figure lying inside becomes `button(index, text)` (the index counts the figures of the whole body),
+// the rest is richText. Each figure is replaced by a sentinel first so the **bold** / `code` markup can still span it. The sentinel character is the
+// first private-use character the body does not itself contain, so no text of the handoff can be mistaken for one.
+function figuredHtml(body, figures, from, to, button) {
+  let sentinel = 0xE000;
+  while (body.includes(String.fromCharCode(sentinel))) sentinel += 1;
+  const mark = String.fromCharCode(sentinel);
+  let marked = '', at = from;
+  figures.forEach((figure, i) => {
+    if (figure.start < from || figure.end > to) return;
+    marked += `${body.slice(at, figure.start)}${mark}${i}${mark}`;
+    at = figure.end;
+  });
+  marked += body.slice(at, to);
+  return richText(marked).replace(new RegExp(`${mark}(\\d+)${mark}`, 'g'), (_, i) => button(Number(i), figures[Number(i)].text));
+}
+// A figure of a referenced paragraph: a button on the paragraph's key and Basis items wrapping the figure's exact text.
+const figureButton = (key, items, i, text) => `<button type="button" class="figure" data-paragraph="${escapeHtml(key)}" data-basis="${escapeHtml(JSON.stringify(items))}" data-figure="${i}">${escapeHtml(text)}</button>`;
+// The accessible name of a paragraph's trace button: its first words.
+const paragraphLabel = body => `Basis for paragraph: ${plainText(body).split(/\s+/).slice(0, 8).join(' ')}`;
+
 // One prose paragraph's inline HTML. New format (decision 7): the Basis line is never printed; each figure of a paragraph that has Basis items or
 // chips is a button wrapping the figure's exact text; a paragraph with no figure gets one quiet Basis button at its end. Earlier format
 // (decision 14, H7): the wording stays, its trailing citations sit behind one Basis button; an earlier paragraph with no citation and no chip in the build gets none (decision 7: nothing when neither).
@@ -328,18 +349,20 @@ function paragraphView(text, key, {earlier = false, chips = 0} = {}) {
   const {item, body, items} = paragraphBody(text, earlier);
   const referenced = items.length > 0 || chips > 0;
   const figures = !earlier && referenced ? figureSpans(body) : [];
-  // Each figure is replaced by a sentinel so the **bold** / `code` markup can still span it. The sentinel character is the first private-use
-  // character the paragraph does not itself contain, so no text of the handoff can be mistaken for one.
-  let sentinel = 0xE000;
-  while (body.includes(String.fromCharCode(sentinel))) sentinel += 1;
-  const mark = String.fromCharCode(sentinel);
-  let marked = '', at = 0;
-  figures.forEach((figure, i) => { marked += `${body.slice(at, figure.start)}${mark}${i}${mark}`; at = figure.end; });
-  marked += body.slice(at);
-  const attributes = `data-paragraph="${escapeHtml(key)}" data-basis="${escapeHtml(JSON.stringify(items))}"`;
-  let html = richText(marked).replace(new RegExp(`${mark}(\\d+)${mark}`, 'g'), (_, i) => `<button type="button" class="figure" ${attributes} data-figure="${i}">${escapeHtml(figures[Number(i)].text)}</button>`);
-  if (referenced && !figures.length) html += ` ${basisButton(key, items, `Basis for paragraph: ${plainText(body).split(/\s+/).slice(0, 8).join(' ')}`)}`;
+  let html = figuredHtml(body, figures, 0, body.length, (i, figure) => figureButton(key, items, i, figure));
+  if (referenced && !figures.length) html += ` ${basisButton(key, items, paragraphLabel(body))}`;
   return {item, html};
+}
+
+// The controls the module page gives the paragraphs of one passage, which it draws as components: `trace(line)` is the paragraph's trace button and
+// `figure(line, index, text)` a figure's button; both are empty for a paragraph with no Basis item and no chip. `texts` are {text, line}; `ctx` is {id, chips(key)}.
+function passageControls(texts, ctx) {
+  const held = new Map(texts.map(entry => [entry.line, entry.text]));
+  const referenced = line => { const items = splitBasis(held.get(line)).items; return items.length > 0 || ctx.chips(`${ctx.id}:${line}`) > 0 ? items : null; };
+  return {
+    trace: line => { const items = referenced(line); return items ? basisButton(`${ctx.id}:${line}`, items, paragraphLabel(paragraphBody(held.get(line)).body)) : ''; },
+    figure: (line, i, text) => { const items = referenced(line); return items ? figureButton(`${ctx.id}:${line}`, items, i, text) : ''; },
+  };
 }
 
 // The index (among the row's chips) of the first source-page chip that one Source-cell item names: `<file>, page(s) <list>` (a full stop may end it)
@@ -384,11 +407,12 @@ function fencedBlockHtml(text) {
 }
 
 // A new-format section's content: prose paragraphs (list items grouped in one list) and, when `ctx.tables`, its tables.
-// ctx: {id (the output), tables, chips(key) -> count, caption(heading) -> text}.
+// ctx: {id (the output), tables, chips(key) -> count, caption(heading) -> text}; optional: skip(block) -> true leaves a block out, table(block, section) -> HTML draws a table in place of tableView.
 function sectionBodyHtml(section, ctx) {
   let html = '', open = false;
   const close = () => { if (open) html += '</ul>'; open = false; };
   for (const block of section.blocks) {
+    if (ctx.skip && ctx.skip(block)) continue;
     if (block.type === 'text' && block.text.startsWith('```')) {
       close();
       const key = `${ctx.id}:${block.line}`;
@@ -398,7 +422,7 @@ function sectionBodyHtml(section, ctx) {
     if (block.type === 'table') {
       if (!ctx.tables) continue;
       close();
-      html += tableView(ctx.caption(section.heading), block, ctx);
+      html += ctx.table ? ctx.table(block, section) : tableView(ctx.caption(section.heading), block, ctx);
       continue;
     }
     const key = `${ctx.id}:${block.line}`;
@@ -485,4 +509,4 @@ function nearestDates(items, asOf, n = 5) {
   return entries.sort(order).slice(0, n).map(entry => entry.item);
 }
 
-if (typeof module !== 'undefined') module.exports = {escapeHtml, plainText, richText, chartNumber, numericColumn, cellView, basisButton, writtenCell, paragraphBody, paragraphView, tableView, sectionBodyHtml, calculationRow, readerPassages, isNewFormat, earlierFormatRun, blocked, splitBasis, basisItem, inspectorItem, inspectorItems, inspectorItemHtml, inspectorBasisBlock, uniqueChips, figureSpans, normaliseLimitation, earlierBasis, historyRows, pathwayTitle, runModuleCodes, nearestDates};
+if (typeof module !== 'undefined') module.exports = {escapeHtml, plainText, richText, chartNumber, numericColumn, cellView, basisButton, writtenCell, paragraphBody, figuredHtml, figureButton, paragraphLabel, passageControls, paragraphView, tableView, sectionBodyHtml, calculationRow, readerPassages, isNewFormat, earlierFormatRun, blocked, splitBasis, basisItem, inspectorItem, inspectorItems, inspectorItemHtml, inspectorBasisBlock, uniqueChips, figureSpans, normaliseLimitation, earlierBasis, historyRows, pathwayTitle, runModuleCodes, nearestDates};
