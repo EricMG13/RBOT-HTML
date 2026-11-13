@@ -31,6 +31,11 @@ set `DEPLOY_WORKFLOW_SEC_USER_AGENT` and is a separate paid action.
   commits: 2b34e1a, 0315d23, 0c61069, 73e5490, then the whole-branch review's fix round 3 (the
   check's citation form, list-item units, TDR.6 one-hop evidence, hosted-search URLs and the
   relaunch rule; see `git log --oneline 82b17f3..HEAD`).
+- Relaunch rule: a relaunch compares the recorded lookup setting with what the flag settles to for
+  the run's modules and case kind (a run without CP-DR started with `--web-lookup on` records `off`
+  and relaunches with the same flag).
+- Ruling points: with hosted `web_search` also on, a `## Sources` URL that was not fetched is
+  accepted (owner point open); the dropped checks are governed by instruction only.
 - No reader check applies: no presentation change.
 - Not verified: live network behaviour; real SEC responses and field names; real model use of the
   tools and its citations; the full suite; concurrent writers to one run's web folder.

@@ -1786,6 +1786,12 @@ def test_settled_web_lookup_table(tmp_path):
     assert settle("on", ["CP-DR"], "private", None) == "on"
     assert settle("default", ["CP-DR"], "public", "off") == "off"
     assert settle("off", ["CP-DR"], "public", "off") == "off"
+    # No CP-DR: a forced "on" settles to off, which is what such a folder recorded.
+    assert settle("on", ["CP-4"], "public", "off") == "off"
+    assert settle("on", ["CP-4"], "private", "off") == "off"
+    assert settle("on", ["CP-DR"], "private", "on") == "on"
+    with pytest.raises(ValueError, match="when this run folder was started"):
+        settle("on", ["CP-4"], "public", "on")
     for setting, recorded in (("on", "off"), ("off", "on")):
         with pytest.raises(ValueError, match="when this run folder was started"):
             settle(setting, ["CP-DR"], "public", recorded)

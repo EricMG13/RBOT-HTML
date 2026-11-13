@@ -7260,6 +7260,18 @@ def test_a_run_started_with_lookup_off_keeps_it_off_on_relaunch(tmp_path, provid
     assert provider.calls == sent
 
 
+def test_an_identical_on_relaunch_of_a_run_without_cp_dr_resumes(tmp_path, provider):
+    argv = launch(tmp_path, "--modules", "CP-4", "--live", "--ruling", str(RULING))
+    with_case_kind(tmp_path / "context.json", "public")
+    routes = prepare_routes(tmp_path, "sol-medium")
+    provider.answer = lambda context: answer(context, routes)
+    command = [*argv, "--web-lookup", "on"]
+    assert main(command) == 0  # settles to off: no research module in this run
+    sent = list(provider.calls)
+    assert main(command) == 0  # the same command again compares what it settles to, not the flag
+    assert provider.calls == sent
+
+
 @pytest.mark.parametrize(
     "bad",
     [

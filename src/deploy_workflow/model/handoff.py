@@ -166,23 +166,24 @@ def settled_web_lookup(
     setting: str, module_ids: Sequence[str], case_kind: str, recorded: str | None
 ) -> str:
     """``on`` or ``off`` for a run: what its folder recorded when it was started, else the setting
-    settled against the run's modules and case kind. A setting that contradicts the record is
-    refused: the folder's loop.json holds it and a relaunch may not change it."""
+    settled against the run's modules and case kind. A setting that would settle differently from
+    the record is refused: the folder's loop.json holds it and a relaunch may not change it. The
+    comparison is with what the setting settles to (what a fresh folder would record), not with the
+    raw flag: a run without CP-DR started with ``--web-lookup on`` recorded ``off``."""
     if setting not in WEB_LOOKUP_SETTINGS:
         raise ValueError(
             f"web_lookup must be one of {', '.join(WEB_LOOKUP_SETTINGS)}, not {setting!r}"
         )
-    if recorded is not None:
-        if setting not in ("default", recorded):
-            raise ValueError(
-                f"web lookup was {recorded} when this run folder was started: relaunch it with "
-                f"--web-lookup {recorded} or without the flag, or start a new run folder"
-            )
-        return recorded
     module = next((m for m in WEB_LOOKUP_MODULES if m in module_ids), None)
-    if module is None:
-        return "off"
-    return "on" if web_lookup_offered(setting, module, case_kind) else "off"
+    fresh = "on" if module and web_lookup_offered(setting, module, case_kind) else "off"
+    if recorded is None:
+        return fresh
+    if setting != "default" and fresh != recorded:
+        raise ValueError(
+            f"web lookup was {recorded} when this run folder was started: relaunch it with "
+            f"--web-lookup {recorded} or without the flag, or start a new run folder"
+        )
+    return recorded
 
 
 # Source type values of a web row in ``## Sources`` (owner, 2026-11-12: rely primarily on reputable
