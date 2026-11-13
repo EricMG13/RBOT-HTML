@@ -75,7 +75,9 @@ written "to stop the model from self validation and calculation"; CP-OS runs non
 ## Consequences
 
 - A CP-1 handoff retained from before the check does not pass it and is not resumable: a relaunch
-  into such a run folder is refused at CP-1 and needs a new run. Both retained TDG handoffs fail
+  into a run folder prepared before this change is refused at launch (the folder holds a different
+  request), and a retained CP-1 replayed into a new run is refused by the check. Either way it
+  needs a new run. Both retained TDG handoffs fail
   (none of the six required tables; ladders of 24,319 and 24,806 against a stated principal of
   25,068, short by 749 and 262; leverage on principal over adjusted EBITDA).
 - Earlier runs state leverage on principal over adjusted EBITDA (TDG FY2024: 6.01x total, 4.51x
@@ -87,3 +89,26 @@ written "to stop the model from self validation and calculation"; CP-OS runs non
 - CP-1 now carries the confidence score section and owes `### Confidence inputs`.
 - T7 (`run_script`) builds on the `calculate` change; the check's fixed row names are the
   interface a script would read.
+
+## Open after the whole-branch review (for the owner; the check has used its three fix rounds)
+
+- Defect: when an interim balance sheet is stated, the net debt rule makes Period cells date-only and
+  the calculation register copies them, but the leverage and cover charts may still say `FY2024`.
+  The chart tie matches by the form of the cell, not by the Period table's dates, so a correct
+  handoff is refused, with a message that wrongly says the register value is not stated
+  (probe `probe_branch_chart_fy_form_vs_dated_register.py`). Fix: match chart rows to register rows
+  by the Period-table fiscal year, as the statement ties already do.
+- Decision: a non-USD issuer can no longer state leverage. The US$m net debt cells are gaps for
+  such an issuer, and the two-sided tie then refuses a stated ratio. Either tie the numerator to
+  the balance sheet's `Total Debt` when the net debt cell is a currency gap, or accept the loss and
+  say so in the launcher block and `run_expectations.py`. The reference issuer VMO2 reports in GBP.
+- Lower: the Period table has no heading rule (ask for `### Period table`); a blocked CP-1 still
+  has to write a period column header and a `Unit`; a second table under a statement heading is
+  not read; a register header one letter off hides the register's other issues until the next
+  write; an `LTM` statement column is refused and nothing says it belongs in the derived-period
+  table; the Changes page cannot read free cash flow from the statement tables' `Unit` column;
+  the manifest's SKILL edit string still says T4.18 was removed; two `calculate` tests are weaker
+  than they should be (one accepts either an error or a null; one uses `sum` as its oracle).
+- Size: the check module is about 1,150 lines and the branch about 3,600 added lines, over the
+  800-line guideline. The rewrite tournament's verdict was to keep the design; its optional
+  simplifications remove about 85 lines.
