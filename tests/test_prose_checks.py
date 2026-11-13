@@ -197,8 +197,9 @@ def test_check_6_whole_token_only() -> None:
     assert prose_issues(bottom("Cases AC-1 and C-12 differ.", CALCULATIONS)) == ()
 
 
-def test_check_6_a_calculations_first_column_id_is_refused_outside_calculations_not() -> None:
-    # Owner 2026-11-11 (L1): an ID in `## Calculations` is its first column's letter+digit cell.
+def test_check_6_a_first_column_cell_under_another_header_is_not_an_id() -> None:
+    # Controller 2026-11-13 (E7, supersedes L1): an ID is a cell of a column headed `ID`
+    # or ending ` ID`; a first-column cell under any other header is not one.
     table = "\n## Calculations\n\n| Calculation | Value |\n| --- | --- |\n| C3 | 5 |\n"
     assert prose_issues(bottom("See C3 for it.", table)) == ()
     elsewhere = "\n## Gaps\n\n| Metric | Value |\n| --- | --- |\n| M2 | 5 |\n"
