@@ -93,7 +93,7 @@ T2E.4: `Driver`|`Evidence`|`Expected Cash Impact`|`Risk Mechanic`|`Credit Implic
 6. Flag any row where status is Provisional, Management-guided, or Analyst estimate.
 
 ## Output
-T2E.5: `Bridge Item`|`Amount`|`Source / Calculation`|`Status`|`Credit Comment`|`Source Trace`
+T2E.5: `Bridge Item`|`Amount`|`Currency and Scale`|`Source / Calculation`|`Status`|`Credit Comment`|`Source Trace`
 </step_reference>
 ## REF_CP-2D_06_MonthsToEmptyCalculation.md
 <!-- REF_CP-2D_06 (T2) | 2026-06-03 -->
@@ -110,7 +110,7 @@ T2E.5: `Bridge Item`|`Amount`|`Source / Calculation`|`Status`|`Credit Comment`|`
 6. If unsupported, state [Insufficient Information] and list each missing input.
 
 ## Output
-T2E.6: Months to Empty result (numeric) + calculation basis narrative, OR [Insufficient Information] with missing-input list.
+T2E.6: `Calculation`|`Result`|`Formula / Inputs`|`Cash-Burn Basis`|`Status`|`Source Trace` — one `Months to Empty` row. `Result` is the months figure; where either input is unsupported it is `[Insufficient Information] — ` followed by the missing inputs, which `Formula / Inputs` lists; where the period is cash-generative (average monthly burn at or below zero) there is no runway to exhaust and `Result` is `Not Calculable`, with that stated in `Cash-Burn Basis`. `Cash-Burn Basis` states the burn's source period and whether it is recurring, seasonal or distorted; `Status` takes a Liquidity Data Status label.
 </step_reference>
 ## REF_CP-2D_07_LiquidityMitigantsConstraints.md
 <!-- REF_CP-2D_07 (T2) | 2026-06-03 -->

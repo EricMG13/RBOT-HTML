@@ -7,6 +7,7 @@ import os
 import re
 import types
 import typing
+from collections import Counter
 from decimal import Decimal
 from fractions import Fraction
 from pathlib import Path
@@ -48,7 +49,7 @@ from deploy_workflow.owners.cpos_launch import (
     prepare,
     without_for,
 )
-from deploy_workflow.run_expectations import Item
+from deploy_workflow.run_expectations import RULES, Item
 
 ROOT = Path(__file__).resolve().parents[1]
 RULING = ROOT / "docs/rulings/2026-11-05-live-loop-tests.md"  # configs: sol-medium
@@ -421,6 +422,7 @@ for _heading, (_module, _types, _) in MAPS.items():
         EDGE_HEAD, f"| Synthetic A | Synthetic link | {_types[0]} | Synthetic B | Synthetic p.1 |"
     )
 SCORED = (
+    "CP-0",
     "CP-1A",
     "CP-1B",
     "CP-1C",
@@ -432,9 +434,10 @@ SCORED = (
     "CP-2G",
     "CP-2H",
     "CP-3",
+    "CP-3C",
 )
 SCORED += ("CP-3D", "CP-4", "CP-4C", "CP-5", "CP-6", "CP-DR")
-UNSCORED = ("CP-0", "CP-1", "CP-L10", "CP-3C", "CP-8")
+UNSCORED = ("CP-1", "CP-L10", "CP-8")
 CONFIDENCE_ROWS = (
     "| Directly Sourced | 8 |\n| Calculated | 2 |\n| Assumption-Based | 2 |\n"
     "| Analyst Inference | 0 |\n| Weak Lineage | 0 |\n| Untraced | 0 |\n| Conflicting | 0 |\n"
@@ -542,6 +545,7 @@ def provider(monkeypatch):
         calls.append((context["module_id"], self.config_id, request.effort))
         if any(hosted_kind(t) for t in request.tools):
             provider.searched.append(context["module_id"])
+        provider.systems.setdefault(context["module_id"], request.messages[0].text)
         # The real provider body builder must accept what the handoff loop sends this model.
         provider.models.add(json.loads(build(self._model, request, "not-a-real-key").body)["model"])
         turn = Turn(
@@ -568,6 +572,7 @@ def provider(monkeypatch):
     monkeypatch.setattr(LiveAdapter, "complete", complete)
     provider.calls = calls
     provider.searched = []
+    provider.systems = {}
     provider.models = set()
     provider.reported = "fake"
     provider.answer = lambda context: pytest.fail("no answer set")
@@ -1504,6 +1509,7 @@ READER_LAYER_SECTIONS = (
     "docs/reuse/selected-methods/CANON_SHARED.md § Reader-facing research layer",
     "docs/reuse/selected-methods/CANON_SHARED.md § Credit-research reading order",
 )
+CANON_APPENDIX_SECTION = "docs/reuse/selected-methods/CANON_SHARED.md § Analytical appendix"
 
 
 def all_texts(tmp_path: Path) -> dict[str, str]:
@@ -1698,6 +1704,7 @@ SKILLS = "docs/reuse/selected-methods/skills/"
 # Written from each SKILL.md's own words ("mandatory, not optional", "binding method for the ...
 # phase", "they bind every run", "Read ...; materialize its run-specific brief"), not from METHODS.
 BINDING_COMPANIONS = {
+    "CP-0": ("cp-0-source-readiness/references/REF_CP-0_STEPS.md",),
     "CP-1B": (
         "cp-1b-earnings-delta/SKILL.md",
         "cp-1b-earnings-delta/references/REF_CP-1B_STEPS.md",
@@ -1708,6 +1715,10 @@ BINDING_COMPANIONS = {
     ),
     "CP-2": ("cp-2-fundamental-credit-synthesizer/references/REF_CP-2_STEPS.md",),
     "CP-2A": ("cp-2a-downside-pathway/references/REF_CP-2A_STEPS.md",),
+    "CP-3C": (
+        "cp-3c-refinancing-lme-risk/references/REF_CP-3C_STEPS.md",
+        "cp-3c-refinancing-lme-risk/references/CP-3C_RUNBOOK.md",
+    ),
     "CP-3": (
         "cp-3-relative-value-security-selection/references/CP-3A_RUNBOOK.md",
         "cp-3-relative-value-security-selection/references/CP-3B_RUNBOOK.md",
@@ -1727,6 +1738,7 @@ BINDING_COMPANIONS = {
 }
 SKILL_MODULES = [
     *(
+        "CP-0",
         "CP-1A",
         "CP-1B",
         "CP-1C",
@@ -1738,6 +1750,7 @@ SKILL_MODULES = [
         "CP-2G",
         "CP-2H",
         "CP-3",
+        "CP-3C",
         "CP-3D",
     ),
     *("CP-4", "CP-4C", "CP-5", "CP-6", "CP-DR"),
@@ -1796,6 +1809,345 @@ def test_cp2_and_cp1a_run_the_deploy_v_skills_not_the_deploy_vii_stand_ins(tmp_p
         assert "`### Confidence inputs`" in texts[module].partition(cpos_launch.METHOD_MARK)[0]
 
 
+def test_cp3c_runs_the_deploy_v_skill_not_the_deploy_vii_stand_in():
+    """The stand-in (cp3c.md) forced the liability-management path to Insufficient Information
+    and barred every digit from text; the Deploy V skill assesses legal capacity, sponsor
+    willingness, the path taxonomy and a scenario map."""
+    text = cpos_launch.method_text("CP-3C")
+    for heading in (
+        "# CP-3C Refinancing and Liability-Management Risk",
+        "## REF_CP-3C_04_LegalCapacityForLME.md",
+        "## REF_CP-3C_05_SponsorGovernanceWillingness.md",
+        "## Refinancing / LME Path Taxonomy (12 paths)",
+        "## REF_CP-3C_10_ScenarioMap.md",
+    ):
+        assert heading in text, heading
+    for phrase in (
+        "Text carries no figure and no digit",
+        "The liability-management path is Insufficient Information",
+        "src/deploy_vii/methods/cp3c.md",
+    ):
+        assert phrase not in text, phrase
+    # The r17 edit: register T3D.2 carries Scale, in the skill and in the step file.
+    assert "Currency`|`Scale`|`Maturity Date`" in text
+    assert "        - Currency\n        - Scale\n        - Maturity Date\n" in text
+
+
+def test_cp0_runs_the_deploy_v_skill_not_the_json_stand_in(tmp_path):
+    """The stand-in (cp0.md) asks for a ReadinessReview matching a JSON Schema and applies a
+    digit rule to `analysis[].text`; this transport is Markdown. CP-0 now gets Deploy V's skill
+    and its step file, and a project block that says what the launcher already did."""
+    _, texts = all_instructions(tmp_path, modules=("CP-0", "CP-1", "CP-2A"))
+    text = texts["CP-0"]
+    head, _, method = text.partition(cpos_launch.METHOD_MARK)
+    for heading in (
+        "## Runbook \u2014 binding method, inline",
+        "#### Source hierarchy",
+        # run_expectations cites this sentence as the source of its management-claims rule.
+        (
+            "1 \u2014 controlling/primary filings, executed legal documents and official "
+            "schedules; 2 \u2014 issuer/agency releases, presentations, certificates and reports;"
+        ),
+        "#### T8 recommended-run command contract",
+        (
+            "- **required_register_ids**: T1; T2; T3; T4; T5; T6; T7; T8; "
+            "P1; P2; P3; P4; P5; P6; P7; P8"
+        ),
+        "## REF_CP-0_I_DownstreamReadiness.md",
+        "**Recommended Run Command Sheet**",
+    ):
+        assert heading in method, heading
+    for phrase in ("ReadinessReview", "JSON Schema", "src/deploy_vii/methods/cp0.md"):
+        assert phrase not in text, phrase
+    # The management-claims expectation cites the sentence the CP-0 method text sent carries,
+    # not the stand-in's wording: the citation and the sent text must agree.
+    cited = next(r for r in RULES if r.key == "run-financials-management-claims").basis
+    source_hierarchy = (
+        "1 \u2014 controlling/primary filings, executed legal documents and official "
+        "schedules; 2 \u2014 issuer/agency releases, presentations, certificates and reports;"
+    )
+    assert source_hierarchy in cited
+    assert source_hierarchy in method
+    assert "cp0.md" not in cited
+    # The project block: sent to CP-0 only, in the head before the method.
+    for words in (
+        "already listed, hashed and pinned the sources",
+        "Do not write the registers P1, P2, P4, P6, P7 and P8",
+        "Write P3 and P5",
+        "T1 input gate, T2 source register, T3 source hierarchy",
+        "T8 recommended run command sheet",
+        "the minimum missing documents",
+        "only for a source the effective-source set does not carry",
+        "never a readiness ground and never a `CONDITIONAL` condition",
+        "The package, parse and hash checks were done by the launcher: record no result for them",
+        "the objective is the selected pathway's use case",
+        "record it in T1",
+    ):
+        assert words in head, words
+    assert all(
+        "already listed, hashed and pinned" not in t.partition(cpos_launch.METHOD_MARK)[0]
+        for name, t in texts.items()
+        if name != "CP-0"
+    )
+    assert "HOST SOURCE PREPARATION" not in text
+    # CP-0 is a data module and is now scored: it owes the bottom line and the confidence inputs.
+    assert "`### Confidence inputs`" in head
+
+
+CPDR_QUESTIONS = (
+    "`competition`",
+    "`metric-definitions`",
+    "`valuation-context`",
+    "`market-demand`",
+    "`industry-structure`",
+    "`regulation`",
+)
+OPEN_WEB_SENTENCE = "There is no open-web discovery in this host. Never substitute"
+PACK_TOOLS_ONLY_QUOTE = "returned by `read_pages` or `search_source`; `period_end`"
+PACK_TOOLS_ONLY_READ = "read only with `list_sources`, `read_pages` and `search_source`. Item text"
+
+
+def test_cpdr_runs_one_method_text_the_cp_os_version_2_skill():
+    """The versions report (CP-DR, conflicts 1-7): the v1 skill plus `cpdr.md` disagreed on who
+    writes the tables, the tool names and the answer states. One text now: cp-os version 2.0."""
+    text = cpos_launch.method_text("CP-DR")
+    assert "src/deploy_vii/methods/cpdr.md" not in text
+    assert "Version: 2.0 | Date: 2026-11-04 | Method cp-dr/2026-10-31" in text
+    at = [text.index(question) for question in CPDR_QUESTIONS]
+    assert at == sorted(at)
+    assert "Never type an amount that is not inside the quote" in text
+    for phrase in ("Python composes the tables", "search_pack", "answered/partly/not_found"):
+        assert phrase not in text, phrase
+    # Named edit 2b (caos-databricks vendor/deploy-v): a gap row is typed `gap`, and missing
+    # evidence is Complete with Gaps, never Blocked; the step bundle says the same.
+    assert "whose `claim_type` is `gap`" in text
+    assert "whose `claim_type` is `source_characterisation`" not in text
+    assert "Missing evidence makes a question UNRESOLVED and the run Complete with Gaps" in text
+    assert "Missing evidence alone is never `Blocked`." in text
+    assert "a gap row, which records a search that found nothing, takes `gap`" in text
+
+
+def test_cpdr_open_web_limit_is_conditional_on_the_web_search_rules(tmp_path, provider):
+    """Named edit 2a. The skill said there is no open-web discovery in this host while the project
+    offers `web_search` with WEB_SEARCH_RULES appended to the system text. The condition is named as
+    the model receives it: the paragraph that begins "web_search reaches public web pages"."""
+    from deploy_workflow.model.handoff import WEB_SEARCH_RULES
+
+    assert WEB_SEARCH_RULES.lstrip().startswith("web_search reaches public web pages")
+    assert OPEN_WEB_SENTENCE not in cpos_launch.method_text("CP-DR")
+    root = tmp_path / "rulings"
+    root.mkdir()
+    for name, configs in (("on.md", "sol-medium, web-search"), ("off.md", "sol-medium")):
+        lines = (
+            "lifts: live-provider-pause",
+            "by: user",
+            "date: 2026-11-10",
+            f"configs: {configs}",
+        )
+        (root / name).write_text("\n".join(lines) + "\n")
+    assert main(launch(tmp_path, "--ruling", str(RULING), pathway="relative_value")) == 0
+    routes = prepare_routes(tmp_path, "sol-medium", modules=None)
+    provider.answer = lambda context: answer(context, routes)
+    manifest = tmp_path / "out/workflow.json"
+    layout = HandoffPlan.model_validate_json(manifest.read_bytes()).layout
+    systems = {}
+    for name in ("on.md", "off.md"):
+        provider.systems.clear()
+        cpos_launch.run_live_handoffs(
+            manifest,
+            tmp_path / name,
+            ruling=root / name,
+            check=checker(layout),
+            max_turns=4,
+            max_output_tokens=cpos_launch.MAX_OUTPUT_TOKENS,
+            rulings_root=root,
+        )
+        systems[name] = provider.systems["CP-DR"]
+    for name, granted in (("on.md", True), ("off.md", False)):
+        system = systems[name]
+        assert (WEB_SEARCH_RULES in system) is granted
+        assert OPEN_WEB_SENTENCE not in system
+        condition = "unless this run's instruction carries the paragraph that begins \"web_search"
+        assert condition in system
+        for question in CPDR_QUESTIONS:
+            assert question in system
+        assert "Never type an amount that is not inside the quote" in system
+        # Named edit 2a-4: the reading and TDR.6 quote clauses no longer name pack tools alone.
+        assert PACK_TOOLS_ONLY_QUOTE not in system
+        assert PACK_TOOLS_ONLY_READ not in system
+        assert 'or, when the paragraph that begins "web_search reaches' in system
+        assert "Python composes the tables" not in system
+        assert "search_pack" not in system
+
+
+# ---- Deploy V methods plan, Task 5A (2026-11-13): CP-2D, CP-4 and CP-4C send the caos-databricks
+# versions (vendor/deploy-v, repo HEAD dfff264) with named edits: the `qa_status` map sentence of
+# common rule 10 (all three) and CP-4C's LITE profile text are removed. Each module: one sentence
+# of the new text is in the built instruction, one sentence of the old text and each removed
+# sentence are not.
+def test_cp2d_instruction_carries_the_six_column_months_to_empty_register(tmp_path):
+    text = instruction_text(tmp_path, "CP-2D")
+    assert (
+        "T2E.6: `Calculation`|`Result`|`Formula / Inputs`|`Cash-Burn Basis`|`Status`|`Source Trace`"
+        in text
+    )
+    assert (
+        "where the period is cash-generative (average monthly burn at or below zero) there is no "
+        "runway to exhaust and `Result` is `Not Calculable`" in text
+    )
+    assert (
+        "T2E.5: `Bridge Item`|`Amount`|`Currency and Scale`|`Source / Calculation`|`Status`"
+        "|`Credit Comment`|`Source Trace`" in text
+    )
+    assert "T2E.6: Months to Empty result (numeric) + calculation basis narrative" not in text
+    assert "`qa_status` follows the run's own status" not in text  # the named edit
+
+
+def test_cp4_instruction_asks_for_the_reason_form_of_the_placeholder(tmp_path):
+    text = instruction_text(tmp_path, "CP-4")
+    assert (
+        "write `[Insufficient Information] — ` and name the missing document (for example "
+        "`[Insufficient Information] — intercreditor agreement not in the source set`), never "
+        "the bare placeholder" in text
+    )
+    assert "`[Insufficient Information]` where the document is not provided." not in text
+    assert "`qa_status` follows the run's own status" not in text  # the named edit
+
+
+def test_cp4c_instruction_answers_no_distress_gate_with_not_applicable(tmp_path):
+    text = instruction_text(tmp_path, "CP-4C")
+    assert (
+        "Without a documented distress gate the module builds no restructuring scenario and "
+        "returns `Not Applicable` (Phase 1), which is a complete answer; only an unresolved "
+        "scope holds the run." in text
+    )
+    assert "Requires a validated handoff from CP-0, CP-1, CP-2A, CP-2G and CP-4" in text  # E4
+    # Named edit E4 (2026-11-13): the profile distinction no longer exists in the text.
+    assert "In FULL_CREDIT_32, requires" not in text
+    assert "in both profiles" not in text
+    assert "Optional upstream, used when present: CP-2A, CP-2G, CP-4." not in text
+    for gone in (  # the named edits: caos-only profile text and the qa_status map
+        "LITE_CREDIT_22",
+        "UPGRADE",
+        "`qa_status` follows the run's own status",
+    ):
+        assert gone not in text, gone
+
+
+def test_a_handoff_in_the_new_register_shapes_passes_the_chart_checks():
+    """Nothing in the CP-OS checker reads T2E.5, `Months to Empty` or a CP-4C `Not Applicable`
+    answer: `chart_issues` reads only the `### Chart data:` tables. A cash-generative CP-2D and a
+    CP-4C with no distress gate state every chart amount as `Not supplied: <reason>`."""
+    gap = "Not supplied: the period is cash-generative, there is no runway"
+    text = "### Chart data: liquidity bridge\n\n" + synthetic_table(
+        ALLOCATION_HEAD,
+        f"| Opening liquidity | {gap} | US$m | S. |",
+        f"| Closing liquidity | {gap} | US$m | S. |",
+    )
+    bridge = next(t for t in cpos_launch.OWNER_TABLES["CP-2D"])
+    assert cpos_launch.chart_issues(text, bridge) == ()
+    na = "Not supplied: no documented distress gate, CP-4C returned Not Applicable"
+    recovery = f"### {RECOVERY}\n\n" + synthetic_table(
+        RECOVERY_HEAD, f"| {na} | {na} | {na} | {na} | {na} | US$m | S. |"
+    )
+    spec = next(t for t in cpos_launch.OWNER_TABLES["CP-4C"] if t.heading == RECOVERY)
+    assert cpos_launch.chart_issues(recovery, spec) == ()
+
+
+# ---- Deploy V methods plan, Task 5B (2026-11-13): seven sent skills take one small named
+# correction each from caos-databricks vendor/deploy-v (repo HEAD dfff264) or cp-os 115f664. Each
+# module: one sentence of the new text is in the built instruction and the sentence it replaced is
+# not. Nothing in the CP-OS checker reads a T2.10 Direction, a T2H.3 `case`, a T1D `NONE` row or
+# the skills' critical-cell blocklist (`chart_issues` reads only the `### Chart data:` tables).
+def blocklist_lines(text: str) -> list[str]:
+    return [line for line in text.splitlines() if "critical_cell_values_casefold" in line]
+
+
+def test_cp5_instruction_says_cp6_runs_after_cp5_and_is_not_its_input(tmp_path):
+    text = instruction_text(tmp_path, "CP-5")
+    assert (
+        "**Downstream (QA gate):** CP-6 and CP-6A run only after this handoff is accepted (the "
+        "catalog's CP-5 \u2192 CP-6 QA gate); they are never CP-5's input" in text
+    )
+    assert "CP-6 and CP-6A run after CP-5 and are not its input" in text
+    for gone in (  # the sentences that said CP-5 reads CP-6 and CP-6A
+        "All analytical modules (CP-1 through CP-4A, CP-6, CP-6A), CP-5A QA output",
+        "all analytical modules (CP-1 through CP-4A, CP-6, CP-6A)",
+        "(especially CP-3, CP-6, CP-6A)",
+    ):
+        assert gone not in text, gone
+
+
+def test_cp6_instruction_says_its_qa_gate_is_cp5_upstream_of_it(tmp_path):
+    text = instruction_text(tmp_path, "CP-6")
+    assert (
+        "Its QA gate is CP-5: CP-6 runs only after CP-5's handoff is accepted (Passed or "
+        "Restricted), so CP-5 is upstream of CP-6 and never its consumer." in text
+    )
+    assert (
+        "**Upstream (QA gate):** CP-5, CP-5A (accepted before this module runs; "
+        "CP-5 is never its consumer)" in text
+    )
+    assert "UP (QA gate): CP-5, CP-5A | DOWN (Analytical): CP-6A" in text
+    assert "UP (QA gate): CP-5, CP-5A | DOWN (Analytical): (terminal L6 module)" in text
+    assert "**Downstream (QA):** CP-5, CP-5A" not in text  # the stale header lines
+    assert "DOWN (QA): CP-5, CP-5A" not in text
+
+
+def test_cp2_instruction_splits_a_mixed_direction_and_gives_none_supported_a_row(tmp_path):
+    text = instruction_text(tmp_path, "CP-2")
+    assert (
+        "A driver that cuts both ways is split into a Positive row and a Negative row, each "
+        "with its own `Credit Implication` (canon: Mixed->split); `Mixed` is never a Direction."
+        in text
+    )
+    assert "`Driver` `None supported`, `Evidence` naming what was reviewed" in text
+    assert "- Direction: Positive / Negative / Mixed" not in text
+    assert "**values**: Positive; Negative; Mixed" not in text
+
+
+def test_cp1d_instruction_gives_an_empty_cp1_bridge_one_none_row_per_register(tmp_path):
+    prepared, *_ = good_task(tmp_path, "CP-1D", "earnings_update")  # CP-1D's pathway
+    text = (tmp_path / "out" / prepared.plan.instructions["CP-1D"].path).read_text()
+    assert (
+        "T1D.1\u2013T1D.4 then each carry one row stating that no add-back exists (`Add-Back ID` "
+        "`NONE`" in text
+    )
+    assert "T1D.4 bridges reported EBITDA to itself, and Steps 5\u20137 still run." in text
+    assert "present in T1D.1 (one `NONE` row when the bridge is empty); achievability" in text
+    assert "present in T1D.1; achievability" not in text
+
+
+def test_cp2g_instruction_says_the_assumption_register_carries_base_and_downside_rows(tmp_path):
+    text = instruction_text(tmp_path, "CP-2G")
+    assert (
+        "In the assumption register (T2H.3) each row's `case` is `base`, `upside` or `downside` "
+        "(any capitalisation, and the word may lead a longer label such as `Base case`), and the "
+        "register carries rows for both `base` and `downside`." in text
+    )
+    assert "or `analyst_judgment`. Store exact source and locator" not in text
+
+
+def test_cp2h_blocklist_no_longer_refuses_unknown(tmp_path):
+    (line,) = blocklist_lines(instruction_text(tmp_path, "CP-2H"))
+    assert "unknown" not in line
+    assert line.endswith(
+        "; n/a; tbd; not calculable from provided materials; not assessable; unavailable"
+    )
+
+
+def test_cp3_blocklists_no_longer_refuse_not_assessable(tmp_path):
+    text = instruction_text(tmp_path, "CP-3")
+    # CP-3's own list and the CP-3A and CP-3B copies, each a value line of the method text
+    lines = [x for x in text.splitlines() if "[insufficient information]; insufficient" in x]
+    assert len(lines) == 3
+    for line in lines:
+        assert "not assessable" not in line
+        assert line.endswith(
+            "; n/a; tbd; unknown; not calculable from provided materials; unavailable"
+        )
+
+
 def test_cp1b_runs_the_deploy_v_method_not_the_structured_runtime_step():
     """Live runs 2026-11-09 and 2026-11-10: CP-1B blocked both times for want of a `read_inputs`
     view with `pairs`, which only the older structured runtime gives."""
@@ -1813,9 +2165,10 @@ def test_skill_modules_carry_the_confidence_score_rules_their_script_would_apply
         assert body.startswith("## CP_CONFIDENCE_SCORE.md\n")
         assert "score = clamp( (0.6 * E + 0.4 * C) * S - P , 0 , 100 )" in body
         assert "CP_LIMITATION_TAXONOMY" not in body  # the next canon section is not swept in
-    assert [name for name, _ in cpos_launch.method_sections("CP-3C")][1:] == list(
-        READER_LAYER_SECTIONS
-    )
+    assert [name for name, _ in cpos_launch.method_sections("CP-L10")][1:] == [
+        *READER_LAYER_SECTIONS,
+        CANON_APPENDIX_SECTION,
+    ]
 
 
 def test_the_method_archive_lists_every_sent_file_with_its_hash():
@@ -1880,31 +2233,58 @@ def test_every_module_is_told_what_stands_for_acceptance_scripts_and_questions(t
 # methods" when the text after METHOD_MARK differs, so the shared-text change must leave every
 # one of these as it was. CP-8 alone changed on main after that commit (36a4c52, 184bfbb, 1e46c49:
 # src/deploy_vii/methods/cp8.md, the withheld-difference rules); its pin is the merged text.
+# CP-1D, CP-2, CP-2G, CP-2H, CP-3, CP-5 and CP-6 changed on 2026-11-13 (Deploy V methods plan,
+# Task 5B): each takes one small named correction, so runs made before it are correctly marked
+# "Earlier methods" for these seven modules.
+# CP-2D, CP-4 and CP-4C changed on 2026-11-13 (Deploy V methods plan, Task 5A): they now send the
+# caos-databricks versions with named edits, so runs made before it are correctly marked "Earlier
+# methods" for these three modules.
+# CP-4C changed again on 2026-11-13 (minors batch, named edit E4): the two phrases that pointed at
+# the removed profile distinction (`In FULL_CREDIT_32, ` and ` in both profiles`) are cut.
+# CP-3C changed on 2026-11-13 (Deploy V methods plan, Task 2): it now sends Deploy V's skill, so
+# runs made before it are correctly marked "Earlier methods" for CP-3C.
+# CP-0 changed on 2026-11-13 (Deploy V methods plan, Task 3): it now sends Deploy V's skill, so
+# runs made before it are correctly marked "Earlier methods" for CP-0.
+# CP-DR changed on 2026-11-13 (Deploy V methods plan, Task 4): it now sends the cp-os version 2.0
+# skill with two named edits and no longer sends cpdr.md, so runs made before it are correctly
+# marked "Earlier methods" for CP-DR.
 # CP-1A and CP-2 changed on 2026-11-13 (owner: "Build rec. 1, then run"): they now send Deploy V's
 # skills, so runs made before it are correctly marked "Earlier methods" for these two modules.
+# Every prose module changed on 2026-11-13 (Deploy V methods plan, Task 6): the canon's Analytical
+# appendix section is now sent after the reader-layer sections. The data modules (CP-0, CP-1,
+# CP-1C, CP-PARSE) are unchanged.
+# CP-6 changed again on 2026-11-13 (Task 5B fix round 1): its four stale `Downstream (QA)` header
+# lines now say CP-5 is its upstream QA gate (caos wording).
+# CP-2A changed again on 2026-11-13 (Deploy V methods plan, Task 6): it now sends the CP-OS-only
+# copy of the short stress text (tables T2DS.n, two stale statements removed) instead of cp2a.md.
+# CP-2A pin changed again on 2026-11-13 (final fix wave): the copy's line-1 comment now says it is
+# the CP-OS copy of cp2a.md; nothing else in the file changed.
+# CP-8 pin recomputed on 2026-11-13 (merge of origin/main into claude/deploy-v-methods): it is the
+# merge of main's CP-8 method change (cp8.md redesign) with this branch's appendix section. Every
+# other pin is this branch's value; main changed no other method text.
 METHOD_TEXT_SHA256_AT_1B41E65 = {
-    "CP-0": "ff1c92c296681a7dce3325f2ce588d7ff3af9a13c3a0aa8c21289642195873f7",
+    "CP-0": "e8d3e77bc48bc98e2fd8595e7b46ee7fc786e859591cf244325f3508b7d5dac9",
     "CP-1": "02477a91d582f6301b2dbfadd96572ea75f9845493de337d7160a55111b62170",
-    "CP-1A": "22a05988055d96a44382d235e760d401b550c1e7c6ff868c6e49b9d3430dbadc",
-    "CP-1B": "7cd20df691582416e0ffd069d9f7aa8f7ac64d30c7682383dd7b8134b8dfa763",
+    "CP-1A": "4c8efcfafe748cd01e6c856041349397c77384c3c82566b1f36a429535c01639",
+    "CP-1B": "38d9fa7b075d1ce5d0cd21bcc216f57f37369cd4db395b3f1fb65498697a509f",
     "CP-1C": "9353afdbce820f59c2dcabc951fc1ff3813174b3c84e79b47bc22bea97f3bbe8",
-    "CP-1D": "50cc8ec34ed140f22859fd384eb7f16d81acc3404728b0493f642d5ba4daf4b1",
-    "CP-2": "3b25a0a608a42902589a6b3151bde2bf6de7c81437088b8f2170af55e8cdb4f4",
-    "CP-2A": "a594a8e8c7427f063274fc48961fbe2603b3bc0e032ff345222579fe57ef4c50",
-    "CP-2D": "2f977243550b0c76f1cccf41d7d11e66061280e8743d2fe5454a9cacdf9b9d1a",
-    "CP-2E": "4d730920f241c7f7d762a7606890aa2f0b567e1b85372ab3ff659a462ab5d4a7",
-    "CP-2G": "6d15e5eee90a18410466fad2d60efb05740f7eb0972595ceae8116ba1f0db76f",
-    "CP-2H": "e98d0b0c5c84059ef7f10e595c270c4532cf29246c612bb0f108809010c3e3a8",
-    "CP-3": "144798da83e3aab842f8a2e187008a95ecc5c7b387f9e5bc1b31b92ffdf20f1c",
-    "CP-3C": "51efb56c61d6f8051d134efbfcdc76aa8eb2af3c3a7331b449c093d24279803e",
-    "CP-3D": "e43f2d5d73d7e15e24d53e302d84d8eca543e14848656dc3a3dc7fb85fde25f8",
-    "CP-4": "fb2e764ed645f3d65112aebe8db12feb215763ffdaca25e6d70a627250d1c6bc",
-    "CP-4C": "2e70ce4fd894deba7bc2a6234953689f898d73c0ac093336806d70fd16815d8e",
-    "CP-5": "a0b02519822dbd84ba928f026b0e3aa8a7a82ba71604059e9f7ceec9f395bb90",
-    "CP-6": "32fdd06787a47c6351924f1371b90a8b6937c11fbfcb04404eb6590de0ec3b0b",
-    "CP-8": "5f847e42e65147f6bc0f9d14f5d12931b026fda7a7487620b62f3d75382c7a51",
-    "CP-DR": "54a57f559181087df17e476d271b71c67b00f38e87288f95c7831cbd3e3a056e",
-    "CP-L10": "527d90f10ce7c541cc15f2e702f73502199f6628335c95e66b64920e7cfba18d",
+    "CP-1D": "d4d1ee4507d743cdb9d98bffd865ca3d012a4b4fb79a92a275cfc6a796bff453",
+    "CP-2": "f925b66f13cff7bd7801d1c3cf7120eb1317126c8605bf1ff1875ce62ed3c162",
+    "CP-2A": "5caf04f5b39bae89726bcd5929e8f17ca14b7d753f1ac718d58eda27baf9569f",
+    "CP-2D": "fe39c49f842c99f6ffd390bd409cbb44adbbe397720d0a0d4d935b52a34a8fda",
+    "CP-2E": "ab111a4fb0bd201b84dbec916ccdba6e5df92f60671b2d419949ca34d6118e34",
+    "CP-2G": "268a85d82da39c9b7b66474b4052eb23b310f7fc5ce0c9d7efa25766a5699cf2",
+    "CP-2H": "f500af91511584f3dda4d0dd10180766dabe19d81de7df12a99b6da2d92e89b4",
+    "CP-3": "b84b8a08baa01a24a12f9f5e92a24dc735129a9dfec1449b4d8329833deef123",
+    "CP-3C": "d1038d5097955d6bf47ccae01fee07bdc1db0b2e49eb7b77d0153c07b48768ac",
+    "CP-3D": "a35a8a1d6f1b7aaecf7e98613e80a04c4c158f9163f315edbd004647463aa698",
+    "CP-4": "a769b7456e5661d70cb25388fc4acb444cfd0aecd8f778554f98369ebadc7f7e",
+    "CP-4C": "1d96547563190f89b909c37ea47969ecb04a2c794c5971b6db8f7c94c836b1f8",
+    "CP-5": "9ac221698cc36a06473ce8cd9c2128c1705da362b289163d4ab54fda0d418d76",
+    "CP-6": "115d07e8934f049b920e497834bcf61d53c6fe0cdd0266daf56b87d18d5e1f26",
+    "CP-8": "0a0b339a9f9a284328b9a6fb50513a9bd03f2aa58dd45a387fe057b6ce2612c3",
+    "CP-DR": "83aa5447c37db42db2e3df91cdd0cfaf491f37c0436fc8257c0d5fb43e735353",
+    "CP-L10": "5b0e904dd62e1d1b341ec3d7d1717500d68ce1aee734b347e0dbbdfbe696b006",
 }
 
 
@@ -2001,7 +2381,8 @@ def test_cp2a_is_told_which_method_governs_the_stress_sizes(tmp_path):
     tdg-forecast-005: CP-2A gave no shock, so no stress case was computed."""
     _, texts = all_instructions(tmp_path, modules=("CP-0", "CP-1", "CP-2A", "CP-2G"))
     head = texts["CP-2A"].partition(cpos_launch.METHOD_MARK)[0]
-    assert "`src/deploy_vii/methods/cp2a.md` governs" in head
+    assert "`CP-2A_STRESS_DESIGN_CPOS.md` governs" in head
+    assert "cp2a.md" not in head
     assert "labelled analyst assumptions" in head and "anchored to a stated figure" in head
     assert "an EBITDA decline and a cash-interest rate increase" in head
     assert "at most four decimal places" in head
@@ -2086,6 +2467,11 @@ def test_cpdr_is_asked_for_the_peer_pack_cp1c_reads_by_default(
         for phrase in ("TDR.4", "TDR.5", "TDR.6", "`revenue`, `ebitda`, `debt`, `interest`, `ffo`"):
             assert phrase in research, phrase
         assert "Name no peer and type no figure from memory" in research
+        assert "cpdr.md" not in research  # CP-DR is no longer sent that file
+        assert "as your method's PEER PACK section describes them" in research
+        assert "that row cites its TDR.2 gap row" in research
+        assert "whose `peer_id` is `none` (row header `none.none`)" in research
+        assert "still write the three tables" in research
         benchmark = texts["CP-1C"].partition(cpos_launch.METHOD_MARK)[0]
         assert "take the peer set and its figures from the CP-DR handoff's TDR.4" in benchmark
         assert "You own inclusion, comparability, normalisation and every statistic" in benchmark
@@ -5879,6 +6265,105 @@ def test_the_forecast_instruction_sentences_say_what_python_does():  # whole-bra
         assert "`row` and `column`" not in block
     assert "(your `Chart data:` tables and `Net debt data`)" in cpos_launch.LAYER1_FORECAST_BLOCK
     assert "(CP-1's `Chart data:` tables" in cpos_launch.FORECAST_BLOCK
+
+
+APPENDIX_RULE = (
+    "Place all complete canonical registers below\n"
+    "`### Analytical appendix — complete canonical registers` inside\n"
+    "`## Analysis`."
+)
+
+
+def test_prose_modules_are_sent_the_canon_analytical_appendix_rule_data_modules_not(tmp_path):
+    """The reader-layer canon section stops at the next `####` heading, so the appendix rule that
+    PROSE_PASSAGES says "still applies" was cut off and never sent (Task 6, item 1)."""
+    for module, text in all_texts(tmp_path).items():
+        method = text.partition(cpos_launch.METHOD_MARK)[2]
+        assert (APPENDIX_RULE in method) == (module not in DATA_MODULE_IDS), module
+        if module not in DATA_MODULE_IDS:
+            assert "#### Analytical appendix\n" in method, module
+
+
+APPENDIX_HEADING_NOTE = (
+    "Where the canon's Analytical appendix section says `## Analysis`, this handoff's section is "
+    "`## Findings`: write the appendix heading as a `###` heading there, after `### Limitations`; "
+    "the other required `###` headings stay `###` and are not nested under it.\n\n"
+)
+
+
+def test_the_appendix_heading_note_goes_with_the_appendix_section_only(tmp_path):
+    for module, text in all_texts(tmp_path).items():
+        head = text.partition(cpos_launch.METHOD_MARK)[0]
+        sent = CANON_APPENDIX_SECTION in METHODS[module]
+        assert (APPENDIX_HEADING_NOTE in head) == sent == (module not in DATA_MODULE_IDS), module
+        assert APPENDIX_HEADING_NOTE not in text.partition(cpos_launch.METHOD_MARK)[2], module
+
+
+TABLE_ID = r"T2[A-Z]*\.[0-9]+"
+OLD_CP2A_STALE = ("no r14 CP-2A text exists in the repo", "computed in Python")
+
+
+def cp2a_table_definitions(tmp_path) -> list[str]:
+    """Each table ID the sent CP-2A texts define: a bold `**ID Name:**` heading (the step files)
+    or an `ID name` item of a `## Tables` list line (the short stress text)."""
+    # "/cp2a.md" is the structured runtime's copy, whose T2B.n collide with the step file's: it
+    # must not come back.
+    sections = {
+        name: text
+        for name, text in cpos_launch.method_sections("CP-2A")
+        if name.endswith(".md") and ("downside-pathway" in name or name.endswith("/cp2a.md"))
+    }
+    defined = []
+    for text in sections.values():
+        defined += re.findall(rf"^\*\*({TABLE_ID}) ", text, re.MULTILINE)
+        for line in re.findall(r"^## Tables\n(.*)$", text, re.MULTILINE):
+            defined += re.findall(rf"(?:^|, )({TABLE_ID}) [a-z]", line)
+    return defined
+
+
+def test_the_cp2a_instruction_defines_each_table_id_once(tmp_path):
+    defined = cp2a_table_definitions(tmp_path)
+    assert [i for i, n in Counter(defined).items() if n > 1] == []
+    assert {f"T2B.{n}" for n in range(1, 10)} <= set(defined)  # the step file's nine
+    assert {f"T2DS.{n}" for n in range(1, 10)} <= set(defined)  # the short text's nine
+
+
+def test_the_cp2a_instruction_no_longer_carries_the_short_texts_stale_statements():
+    assert "cp2a.md" not in [n.rsplit("/", 1)[-1] for n, _ in cpos_launch.method_sections("CP-2A")]
+    text = cpos_launch.method_text("CP-2A")
+    for stale in OLD_CP2A_STALE:
+        assert stale not in text
+
+
+def _appendix_handoff_issues(tmp_path, as_h2: bool):
+    """The answer with a register under the canon's appendix heading: as a `###` heading after
+    `### Limitations` (what the note tells the model), or as the `## Analysis` H2 the canon says."""
+    prepared, task, context = good_task(tmp_path, "CP-2")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    findings, calc = raw.split("\n## Calculations", 1)
+    calc = "\n## Calculations" + calc
+    register = (
+        "### Analytical appendix — complete canonical registers\n\n"
+        "| Register row | Value | Source |\n| --- | --- | --- |\n| Observed | 1 | annual.txt |\n\n"
+    )
+    if as_h2:
+        raw = findings + "\n## Analysis\n\n" + register + calc
+    else:
+        head, rest = findings.split("### Limitations", 1)
+        limitations, sep, tail = rest.partition("\n### ")
+        raw = head + "### Limitations" + limitations + "\n" + register + (sep + tail).lstrip("\n")
+        raw += calc
+    return _checked_handoff(task, raw.encode(), checker(prepared.layout))
+
+
+def test_the_appendix_as_a_findings_h3_is_accepted_and_as_an_analysis_h2_is_refused(tmp_path):
+    """Review probe t6a: the note's reading of the canon passes CP-OS's checks; the canon's own
+    `## Analysis` does not (no earlier test exercised either)."""
+    (tmp_path / "h3").mkdir()
+    (tmp_path / "h2").mkdir()
+    assert _appendix_handoff_issues(tmp_path / "h3", as_h2=False) == ()
+    issues = _appendix_handoff_issues(tmp_path / "h2", as_h2=True)
+    assert issues and "exactly these six H2 headings" in issues[0]
 
 
 NET_DEBT_PERIOD_SENTENCE = (
