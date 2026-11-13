@@ -83,7 +83,7 @@
     return true;
   }
 
-  // C23: one status host fixed bottom-right; each message removes itself after 3 seconds, or after 8 when it carries a link (time to reach it), or at once on Escape.
+  // C23: one status host fixed bottom-right; each message removes itself after 3 seconds, or after 8 when it carries a control (time to reach it), or at once on Escape.
   const TOAST_MS = 3000, TOAST_LINK_MS = 8000;
   // The host is made empty at load (and on first use if it was not), so a screen reader already watches it when the first message arrives.
   function toastHost() {
@@ -97,19 +97,21 @@
     }
     return host;
   }
-  function toast(text, link = null) {
+  // `action` is {label, onClick}: a button that runs onClick (for a message the reader may act on).
+  function toast(text, action = null) {
     const host = toastHost();
     const message = document.createElement('p');
     message.className = 'toast';
     message.textContent = text;
-    if (link) {
-      const anchor = document.createElement('a');
-      anchor.href = link.href;
-      anchor.textContent = link.label;
-      message.append(' ', anchor);
+    if (action) {
+      const button = document.createElement('button');
+      button.setAttribute('type', 'button');
+      button.textContent = action.label;
+      button.onclick = action.onClick;
+      message.append(' ', button);
     }
     host.append(message);
-    setTimeout(() => message.remove(), link ? TOAST_LINK_MS : TOAST_MS);
+    setTimeout(() => message.remove(), action ? TOAST_LINK_MS : TOAST_MS);
   }
   function dismissToasts() {
     for (const message of [...toastHost().children]) message.remove();
@@ -758,12 +760,17 @@
   // Under the segments: the module(s) running now and how many are done of how many (counts of listed items). Only the running segment moves, by the stylesheet's own rule.
   // A running step may carry `note` (a clock reading, drawn after its name; `since` is the start time the page's re-load measures it from); done and waiting steps never draw one.
   const STEP_WORDS = {done: 'done', running: 'running', waiting: 'waiting'};
-  function runSteps(steps) {
+  // `options.labelled` draws each step as its module name with its C31 mark (a check, the loader or the queued mark, each with its word), so state reads without colour or hover;
+  // the steps wrap. Without it the segments are unlabelled (the library home's compact row). A running step's note then sits on that step, and the caption keeps only the count.
+  function runSteps(steps, options = {}) {
     if (!steps.length) return '';
     const kind = step => (Object.hasOwn(STEP_WORDS, step.state) ? step.state : 'waiting'), done = steps.filter(step => kind(step) === 'done').length;
     const running = steps.filter(step => kind(step) === 'running');
     const runningName = step => `${escapeHtml(step.title)}${step.note ? `<span class="steps-el"${step.since ? ` data-since="${escapeHtml(step.since)}"` : ''}> · ${escapeHtml(step.note)}</span>` : ''}`;
     const segment = step => `<li class="step ${kind(step)}" ${tipAttributes(`${step.title}: ${STEP_WORDS[kind(step)]}`)}></li>`;
+    const clock = step => (step.note ? `<span class="steps-el"${step.since ? ` data-since="${escapeHtml(step.since)}"` : ''}> · ${escapeHtml(step.note)}</span>` : '');
+    const labelled = step => `<li class="step ${kind(step)}"><span class="st-n">${escapeHtml(step.title)}</span>${runMark({done: 'done', running: step.stalled ? 'stalled' : 'running', waiting: 'queued'}[kind(step)])}${kind(step) === 'running' ? clock(step) : ''}</li>`;
+    if (options.labelled) return `<div class="steps-w"><ol class="steps steps-l" aria-label="Modules, ${done} of ${steps.length} done">${steps.map(labelled).join('')}</ol><p class="steps-t"><span class="steps-n">${done} of ${steps.length} done</span></p></div>`;
     return `<div class="steps-w"><ol class="steps" aria-label="Modules, ${done} of ${steps.length} done">${steps.map(segment).join('')}</ol><p class="steps-t">${running.length ? `<span class="steps-now"><span class="steps-k">Running</span> ${running.map(runningName).join(', ')}</span>` : ''}<span class="steps-n">${done} of ${steps.length} done</span></p></div>`;
   }
   // Where a block on the Overview comes from: a link to the module page that holds it.

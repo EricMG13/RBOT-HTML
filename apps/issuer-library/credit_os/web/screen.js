@@ -746,11 +746,11 @@ window.onRunActivity=()=>{
   const content=$('content'),live=window.RUN_ACTIVITY,top=content.scrollTop;
   const ended=activityEnded(previousRunning,live);
   previousRunning=ended.running;
-  for(const note of ended.toasts)window.Components.toast(note.text,note.link);
-  const seen=JSON.stringify(live?.runs);
+  for(const note of ended.toasts)window.Components.toast(note.text,note.action&&{label:note.action.label,onClick:()=>{location.hash=note.action.href;location.reload();}});
+  const seen=JSON.stringify([live?.runs,live?.held]);
   if(seen===lastActivity){ // same runs: leave the page as the reader has it; only the snapshot's own time moves
     const stamp=content.querySelector?.('.run-updated-at');
-    if(stamp&&typeof live?.updated==='string')stamp.textContent=live.updated;
+    if(stamp&&typeof live?.updated==='string')stamp.textContent=liveStampText(live.updated);
     refreshElapsed(content,Date.now());
     return;
   }
@@ -761,4 +761,5 @@ window.onRunActivity=()=>{
 };
 window.addEventListener('hashchange',syncActivityTimer);
 renderRoute();
+previousRunning=activityEnded(null,window.RUN_ACTIVITY).running; // the file loaded with the page is the first load
 syncActivityTimer(true);

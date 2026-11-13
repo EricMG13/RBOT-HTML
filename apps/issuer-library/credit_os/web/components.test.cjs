@@ -1293,19 +1293,23 @@ test('runSteps: a running step may carry a clock reading after its name; done an
   assert.ok(!C.runSteps([{ title: 'B', state: 'running' }]).includes('steps-el'));
 });
 
-test('toast: a message with a link carries it, stays 8 seconds, and Escape (dismissToasts) removes every message at once', t => {
+test('toast: a message with an action carries a button, stays 8 seconds, runs the action on activation, and dismissToasts removes every message at once', t => {
   const doc = fakeDocument();
   global.document = doc;
   t.after(() => { delete global.document; });
   t.mock.timers.enable({apis: ['setTimeout']});
-  C.toast('Acme: run finished.', {href: '#W-Library/cases', label: 'Issuer library'});
+  let ran = 0;
+  C.toast('Acme: run finished.', {label: 'Reload', onClick: () => { ran += 1; }});
   C.toast('Plain');
   const [one, two] = doc.body.children[0].children;
   assert.equal(one.children.length, 2);
   assert.equal(one.children[0], ' ');
-  assert.deepEqual([one.children[1].href, one.children[1].textContent], ['#W-Library/cases', 'Issuer library']);
+  const button = one.children[1];
+  assert.deepEqual([button.tag, button.attrs.type, button.textContent], ['button', 'button', 'Reload']);
+  button.onclick();
+  assert.equal(ran, 1);
   t.mock.timers.tick(3000);
-  assert.ok(!one.removed && two.removed, 'the linked message outlasts the plain one');
+  assert.ok(!one.removed && two.removed, 'the message with a control outlasts the plain one');
   t.mock.timers.tick(5000);
   assert.ok(one.removed);
   C.toast('Again');

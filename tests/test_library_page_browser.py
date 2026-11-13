@@ -396,9 +396,10 @@ def test_run_activity_puts_waiting_beside_running_on_a_wide_window(tmp_path):
     page = run_activity_library(tmp_path)
     seen = read_probe(page, "#CP-OS/activity", 1440, RUN_ACTIVITY_PROBE)
     assert seen["waitingLeft"] > seen["runningRight"], seen
-    # Eight modules as C13 steps in the data's order, one loader (the run mark), two queued rows.
+    # Eight modules as C13 steps in the data's order; two loaders (run mark, running
+    # module); two queued rows.
     assert seen["stepStates"] == ["done"] * 3 + ["running"] + ["waiting"] * 4, seen
-    assert seen["loaders"] == 1 and seen["queued"] == 2, seen
+    assert seen["loaders"] == 2 and seen["queued"] == 2, seen
     # A changed snapshot is drawn again.
     assert seen["changedShown"] is True
 

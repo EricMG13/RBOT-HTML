@@ -1759,15 +1759,25 @@ const LIVE_STATUSES=['queued','running','finished','failed','capped','rejected',
 const servedOverHttp=()=>typeof window!=='undefined'&&/^https?:$/.test(window.location?.protocol); // a page with no location (the node tests) is not served
 const liveReadable=live=>Boolean(live)&&typeof live==='object'&&!Array.isArray(live)&&Array.isArray(live.runs);
 const liveRuns=live=>live.runs.filter(run=>run&&typeof run==='object'&&!Array.isArray(run));
-// The clock reading since a start time, in words. Only a dated time with a zone counts; any other text, or a time still to come, gives no clock.
+// The clock reading since a start time, in words. Only a dated time with a zone counts; any other text gives no clock. A start up to five minutes ahead of this
+// clock (the service's and the browser's clocks differ) reads under a minute; further ahead gives none.
+const CLOCK_SKEW_MS=5*60000;
 const START_TIME=/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})$/;
 function elapsedLabel(since,now) {
   if(typeof since!=='string'||!START_TIME.test(since))return '';
   const ms=now-Date.parse(since);
-  if(!Number.isFinite(ms)||ms<0)return '';
+  if(!Number.isFinite(ms)||ms<-CLOCK_SKEW_MS)return '';
   const minutes=Math.floor(ms/60000),hours=Math.floor(minutes/60);
-  if(minutes<1)return 'under a minute';
+  if(ms<60000)return 'under a minute';
   return hours?`${hours} h${minutes%60?` ${minutes%60} min`:''}`:`${minutes} min`;
+}
+// A start or snapshot time as the page writes it: "13 November 2026, 07:56 UTC", the date as displayDate gives it and the time and zone as the data writes them
+// (Z is UTC, an offset stays as written); no conversion to local time. Any value that is not a dated time is returned as it is.
+function liveStampText(value) {
+  const m=typeof value==='string'&&START_TIME.test(value)&&/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})(?::\d{2}(?:\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/.exec(value);
+  if(!m)return value;
+  const date=displayDate(m[1]);
+  return date===m[1]?value:`${date}, ${m[2]} ${m[3]==='Z'?'UTC':m[3]}`;
 }
 // The clock is drawn once per render; the page's existing re-load moves it in place (no timer of its own).
 function refreshElapsed(root,now) {
@@ -1779,16 +1789,17 @@ function refreshElapsed(root,now) {
 // What a run's head and a queue row say about it: each part that has text, joined with " · ".
 function liveRunLine(run) {
   const part=(value,html)=>liveText(value)?html:'';
-  return [part(run.pathway,`<span class="run-path">${liveText(run.pathway)}</span>`),part(run.submitted_by,`<span class="run-by">submitted by ${liveText(run.submitted_by)}</span>`),part(run.started_at,`<span class="run-time">started ${liveText(run.started_at)}</span>`)].filter(Boolean).join(' · ');
+  const pathway=livePlain(run.pathway)?pathwayTitle(livePlain(run.pathway)):'';
+  return [pathway&&`<span class="run-path">${esc(pathway)}</span>`,part(run.submitted_by,`<span class="run-by">submitted by ${liveText(run.submitted_by)}</span>`),part(run.started_at,`<span class="run-time">started ${esc(liveStampText(livePlain(run.started_at)))}</span>`)].filter(Boolean).join(' · ');
 }
 // The run's modules as C13 steps, in the data's order; the data carries one start time, the run's, and the clock is drawn on the running module only.
 function liveSteps(run,now) {
   const since=elapsedLabel(run.started_at,now)?run.started_at:'';
   const steps=(Array.isArray(run.modules)?run.modules:[]).filter(item=>Array.isArray(item)&&livePlain(item[0])!=='').map(([name,state])=>{
-    const step={title:livePlain(name),state};
+    const step={title:livePlain(name),state,...(run.stalled?{stalled:true}:{})};
     return state==='running'&&since?{...step,note:`${elapsedLabel(since,now)} into the run`,since}:step;
   });
-  return window.Components.runSteps(steps);
+  return window.Components.runSteps(steps,{labelled:true});
 }
 // The number of source files the data lists for a run (a count of listed names, nothing else); the names are audit material.
 function liveFileCount(run) {
@@ -1815,10 +1826,12 @@ function liveActivityView(live,now=Date.now()) {
   const running=runs.filter(r=>r.status==='running'),waiting=runs.filter(r=>r.status==='queued');
   const runningHtml=running.length?`<section class="activity-running"><h2>Running</h2><ul class="run-cards">${running.map(run=>liveRunCard(run,now)).join('')}</ul></section>`:'';
   const waitingHtml=waiting.length?`<section class="activity-waiting"><h2>Waiting</h2><ul class="run-queue">${waiting.map(liveWaitingRow).join('')}</ul></section>`:'';
-  const stamp=liveText(live.updated)?`<p class="run-updated">Updated <span class="run-updated-at">${liveText(live.updated)}</span></p>`:'';
+  const stamp=liveText(live.updated)?`<p class="run-updated">Updated <span class="run-updated-at">${esc(liveStampText(livePlain(live.updated)))}</span></p>`:'';
+  // The service's reason the queue or the ended runs are held (a daily limit, a library that could not be rebuilt): text, not an amount.
+  const held=typeof live.held==='string'&&live.held.trim()?`<p class="run-held" role="note">${window.Components.icon('triangle-alert')}<span>${liveText(live.held)}</span></p>`:'';
   const counts=`<dl class="run-tally"><div><dt>Running</dt><dd>${running.length}</dd></div><div><dt>Waiting</dt><dd>${waiting.length}</dd></div></dl>`;
   const cols=runningHtml&&waitingHtml?'':' one';
-  return `<div class="run-activity-head">${stamp}${counts}</div>${runningHtml||waitingHtml?`<div class="activity-cols${cols}">${runningHtml}${waitingHtml}</div>`:''}`;
+  return `<div class="run-activity-head">${stamp}${counts}</div>${held}${runningHtml||waitingHtml?`<div class="activity-cols${cols}">${runningHtml}${waitingHtml}</div>`:''}`;
 }
 // C32: the page's two empty states, both with the one link to the library.
 function activityEmpty(title,reasons) {
@@ -1840,7 +1853,7 @@ function activityEnded(previous,live) {
     const run=byId.get(id);
     if(!run||!ENDED_STATUSES.includes(run.status))return [];
     const who=livePlain(run.issuer_name)||name,lead=who?`${who}: run`:'Run';
-    if(run.status==='finished')return [{text:`${lead} finished. It is in the Issuer library.`,link:{href:LIBRARY_HOME,label:'Issuer library'}}];
+    if(run.status==='finished')return [{text:`${lead} finished. Reload to see it in the Issuer library.`,action:{label:'Reload',href:LIBRARY_HOME}}]; // the open page loaded the library once: only a reload lists the new run
     return [{text:run.status==='failed'?`${lead} failed.`:`${lead} did not finish.`}];
   });
   return {toasts,running};
