@@ -630,6 +630,23 @@ def _cell(value: cp2g.Val) -> dict[str, str | None]:
     return {"amount": amount, "reason": value.reason}
 
 
+NEGATIVE_CASH = "Not calculable: cash is negative before funding"
+_NET_OF_CASH = ("net_debt", "net_leverage", "liquidity")
+
+
+def _published(year: cp2g.Year) -> dict[str, dict[str, str | None]]:
+    """A forecast year's cells as published. Negative closing cash is an unfunded gap, not cash:
+    netting it against debt or adding undrawn facilities to it states figures the module calls
+    not calculable, so those three are published missing. The computed year is not changed."""
+    cash = year.closing_cash.amount
+    gap = cash is not None and cash < 0
+    return {
+        f.name: _cell(cp2g.Val(None, NEGATIVE_CASH) if gap and f.name in _NET_OF_CASH else value)
+        for f in fields(cp2g.Year)
+        for value in (getattr(year, f.name),)
+    }
+
+
 def _stated(key: str, case: CaseDrivers | None) -> dict[str, object]:
     return {} if case is None else {key: case.model_dump(mode="json", exclude_none=True)}
 
@@ -779,7 +796,7 @@ def model_files(
                     "year": span.year,
                     "planning_start": span.start,
                     "planning_end": span.end,
-                    **{f.name: _cell(getattr(year, f.name)) for f in fields(cp2g.Year)},
+                    **_published(year),
                 }
                 for span, year in zip(inputs.years, result.years, strict=True)
             ]

@@ -10,7 +10,7 @@
   "AGENTS.md": "fdb9b92b4148f91c725308a9a78fc33e54633e71",
   "METHODOLOGY-REVIEW.md": "72342dedc792306a001b27f244425450f7bee7d1",
   "README.md": "1fd3352f4b147b38f0a7f73a1bf2be3bb67c7f95",
-  "VERIFICATION.md": "8c296f1c76b4b4097b549057be3a391f036d0b23",
+  "VERIFICATION.md": "1ce21ea343d90aeb848f563afacef37e493ef215",
   "apps/issuer-library/README.md": "f776e07a39ac8965f66d2256054d61bfa2214f09",
   "apps/issuer-library/credit_os/SOURCE.md": "a88ec9a069c4e0b38946ab497a97873ca1a81e88",
   "apps/issuer-library/credit_os/catalog.json": "f8b0cedb8da041c14694bc7b971d71ea48c99697",
@@ -358,6 +358,7 @@
   "docs/rulings/2026-11-13-appendix-and-routing-scope.md": "914fb31e833b2109ca33ca630f033a09d6a9900b",
   "docs/rulings/2026-11-13-downside-follows-forward-model.md": "62075a415b19ebc11e5a65b0a41692ee6e0b456a",
   "docs/rulings/2026-11-13-full-and-lite-credit-assessments.md": "134b3db9f542c958ed318754be5725e2cba29171",
+  "docs/rulings/2026-11-13-negative-cash-not-calculable.md": "3f11f8c19f5afac620f53cf3df02ccf702a99a0f",
   "docs/rulings/2026-11-13-tdg-full-copilot-sol-high.md": "1e4e2e134919deab3cac17ea69d5c4e343eaaaf7",
   "docs/rulings/2026-11-13-tdg-full-copilot-sol-rerun.md": "0245062abb0e0265cf1a1655a55418a6b3d2aa24",
   "docs/signal/sources.json": "48a8dcc9338eeb96a502835f6ecffe57ebec25aa",
@@ -386,6 +387,7 @@
   "docs/sweeps/2026-11-10/REPORT.md": "8669120cda1c42cc3a8e5384735143dd00dcb4aa",
   "docs/sweeps/2026-11-10/goal.txt": "657475a4a7694db909f9707be2b2a5e77d14559f",
   "docs/sweeps/2026-11-13-optimisation-review/REPORT.md": "5143e4f7d03449b4894f17f2893bae812ce6772e",
+  "docs/sweeps/2026-11-13-optimisation-review/analysis-depth-proposal.md": "74cff06b5ffeab1eafdcc468ac67fda90fe082c8",
   "docs/sweeps/2026-11-13-optimisation-review/appendix-inventory.md": "ec7c31b41dc227356692337afc543de2f2fe1185",
   "docs/sweeps/2026-11-13-optimisation-review/findings.json": "9dc14da7ec36b7cfd49c315a28ec893586046373",
   "docs/sweeps/2026-11-13-optimisation-review/frontend-changes-needed.md": "cb1b774f1d989e852b5e7591b8703f56c73eb339",
@@ -632,7 +634,7 @@
   "src/deploy_workflow/owners/cpl10.py": "8fc0a8bd44296a8fa4011af3a856929f77d3c7af",
   "src/deploy_workflow/owners/cpos.py": "b9679d48e9baa072204df8251cd60e4817a821db",
   "src/deploy_workflow/owners/cpos_facilities.py": "1021ab5d5159d455510e0b6e4f9176b955535213",
-  "src/deploy_workflow/owners/cpos_forecast.py": "4f379626027446eb520df449132573033308d1f0",
+  "src/deploy_workflow/owners/cpos_forecast.py": "65a7138f20f7189a785bc2fecf683d5f19ac2264",
   "src/deploy_workflow/owners/cpos_launch.py": "e33851121392c60e7c4963448aa8664b291c1e5c",
   "src/deploy_workflow/owners/cpos_periods.py": "18b18c863e8c18e478aeb402bc4003dd31e06f71",
   "src/deploy_workflow/owners/period_basis.py": "3ad044a082522a772b705df6e2bb6a4d6696245d",
@@ -868,6 +870,7 @@
   "tests/test_library_page_browser.py": "624d82053be2483fefbcb1deccdfb350e58b09d5",
   "tests/test_library_reader_refs.py": "f64cac9908bf195cf1b41a85e08690bb1ef349a8",
   "tests/test_model_shell_browser.py": "0275f001bcb7360726dc07bb234991236c25a1cc",
+  "tests/test_negative_cash_not_calculable.py": "8728db52393d4d4ffd38795af1d219bcb6dac048",
   "tests/test_prose_checks.py": "a12fd0f0fe27b0f8ece678c842d4d92c1036cdfa",
   "tests/test_quality_gate.py": "af3296903fd6a78974ae9dc78e7b2102f03cc6fb",
   "tests/test_reader_summary.py": "3493332edebaff0a57a0055cd84e00170b979039",
@@ -895,6 +898,6 @@
   "tools/work_pc_delta.py": "fa5e9e81c534657f593cb8752a94de10cba0eead",
   "uv.lock": "7a4f05aeff999e9284ec29f34acacdd2619d64b1"
  },
- "head": "c9aa24401a6ea87fc4af4fe7a6b74cab5d938312",
- "head_date": "2026-11-13T22:40:02Z"
+ "head": "088090f157543e6f61ab1d9f0b903ed654e3ab5c",
+ "head_date": "2026-11-13T22:49:05Z"
 }
