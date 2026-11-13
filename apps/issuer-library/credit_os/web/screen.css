@@ -1658,6 +1658,8 @@ details[open]>summary .ms-ch,details[open]>summary .qa-ch,details[open]>summary 
 .fc-tools{display:flex;align-items:center;gap:6px;flex:none}
 .fc-fig{min-width:0;overflow-x:auto;border-radius:var(--radius-inline)}
 .fc-fig:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+/* The focusable region is the one that scrolls: a column chart inside a card does not clip itself (its own overflow-x:auto would leave the focusable .fc-fig with nothing to scroll). */
+.fc-fig .column-chart{overflow-x:visible}
 .fc-fig .section-heading{display:none}
 .fc-card .column-chart{margin:0}
 .fc-card .chart-reading{margin:0 0 8px}

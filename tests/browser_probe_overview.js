@@ -10,8 +10,7 @@
     fits: de.scrollWidth <= de.clientWidth && content.scrollWidth <= content.clientWidth,
     navigatorShown: shown('navigator'), moduleToggleShown: shown('module-toggle'),
     outline: document.querySelectorAll('#module-list .section-outline').length,
-    dates: [...document.querySelectorAll('.dates-table tbody tr')].map(row => row.textContent.trim()),
-    timeline: document.querySelectorAll('#overview-dates, .overview-page .tl').length,
+    timeline: document.querySelectorAll('.overview-page .tl').length,
     lead: document.querySelector('#overview-lead').textContent,
     // One tile per module: its name, then its declared state when the handoff has one.
     bottomLines: [...document.querySelectorAll('#overview-modules .mt')].map(tile => [tile.querySelector('.mt-name').textContent, tile.querySelector('.mt-state')?.textContent ?? ''].join(' ').trim()),

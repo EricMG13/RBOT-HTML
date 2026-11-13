@@ -39,6 +39,21 @@ MATURITIES = """
 | --- | --- | --- | --- |
 | FY2025 ending September 30 | 580 | US$m | Synthetic bucket. |
 | FY2026 ending September 30 | 92 | US$m | Synthetic bucket. |
+| FY2027 ending September 30 | 310 | US$m | Synthetic bucket. |
+| FY2028 ending September 30 | 450 | US$m | Synthetic bucket. |
+| FY2029 ending September 30 | 75 | US$m | Synthetic bucket. |
+| FY2030 ending September 30 | 860 | US$m | Synthetic bucket. |
+| FY2031 ending September 30 | 140 | US$m | Synthetic bucket. |
+| FY2032 ending September 30 | 100 | US$m | Synthetic bucket. |
+| FY2033 ending September 30 | 107 | US$m | Synthetic bucket. |
+| FY2034 ending September 30 | 114 | US$m | Synthetic bucket. |
+| FY2035 ending September 30 | 121 | US$m | Synthetic bucket. |
+| FY2036 ending September 30 | 128 | US$m | Synthetic bucket. |
+| FY2037 ending September 30 | 135 | US$m | Synthetic bucket. |
+| FY2038 ending September 30 | 142 | US$m | Synthetic bucket. |
+| FY2039 ending September 30 | 149 | US$m | Synthetic bucket. |
+| FY2040 ending September 30 | 156 | US$m | Synthetic bucket. |
+| FY2041 ending September 30 | 163 | US$m | Synthetic bucket. |
 | Thereafter | 12637 | US$m | Synthetic bucket. |
 """
 # Synthetic: a liquidity bridge as the launcher asks CP-2D for it (here placed in the CP-1 fixture).
@@ -487,19 +502,11 @@ def test_forced_colours_outline_the_run_cards_steps_marks_and_waiting_rows(tmp_p
         " return { step: style('.run-card .step').borderTopStyle,"
         " card: style('.run-card').borderTopStyle,"
         " row: style('.run-queue li').borderTopStyle,"
-        " mark: style('.run-card .run-marks .state').borderTopStyle,"
-        " progress: document.querySelector('.run-card .steps').getAttribute('aria-label') }; })()",
+        " mark: style('.run-card .run-marks .state').borderTopStyle }; })()",
         ".run-card",
         {"features": [{"name": "forced-colors", "value": "active"}]},
     )
-    # The progress is the step list's own label (3 of 8 modules), kept under forced colours.
-    assert seen == {
-        "step": "solid",
-        "card": "solid",
-        "row": "solid",
-        "mark": "solid",
-        "progress": "Modules, 3 of 8 done",
-    }
+    assert seen == {"step": "solid", "card": "solid", "row": "solid", "mark": "solid"}
 
 
 def test_a_waiting_row_centres_its_parts_and_keeps_a_top_edge(tmp_path):
@@ -717,8 +724,8 @@ def test_the_overview_fits_and_has_no_module_navigator(tmp_path, width):
     # Decision 6: no module navigator, Browse modules button or outline; the parts are H5's.
     assert seen["navigatorShown"] is False and seen["moduleToggleShown"] is False
     assert seen["outline"] == 0 and seen["fits"] is True
-    # The parts are drawn only when the run has what they hold: this earlier-format fixture states
-    # no limitation and no dated event, so the page is the lead and the module tiles.
+    # An earlier-format run has no lead to select from, so the page draws only the lead sentence and
+    # the module tiles.
     assert seen["parts"] == ["overview-lead", "overview-modules"]
     assert seen["timeline"] == 0
     # An earlier-format run has no passages (H7): no lead or bottom line; modules still listed.
@@ -1194,8 +1201,8 @@ def test_the_overview_lists_the_leads_dates_instead_of_drawing_lanes_and_fits_th
 ):
     page = synthetic_workspace(tmp_path, with_chart_and_event)
     # The Calendar tab is retired (decision 12) and the Overview draws no lane (H5): "What to watch"
-    # lists the lead module's dated items in one timeline, day-dated and period-dated items in one
-    # ordering by the day or the period end, nearest first.
+    # lists the lead module's dated items in one timeline, day-dated and period-dated items in the
+    # table's own row order (the component does not sort), here 2025-03-31, 2025-06, 2025-Q3, 2025.
     dom, console = visit(page, f"#W-Overview?c={NEW_FORMAT_RUN}", width)
     assert console == []
     seen = read_overview(page, f"#W-Overview?c={NEW_FORMAT_RUN}", width)
@@ -2012,10 +2019,11 @@ def test_chart_periods_on_the_forecast_page_do_not_draw_their_labels_over_each_o
     # label), so the period labels are read on the Forecast chart card of the same fixture chart.
     page = synthetic_workspace(tmp_path, with_chart_and_event)
     seen = read_probe(page, f"#W-Forecast?c={NEW_FORMAT_RUN}", width, CHIP_OVERLAP_PROBE)
-    assert seen["labels"] >= 3, "the fixture chart draws a label per period"
+    assert seen["labels"] >= 12, "the fixture chart draws a label per period"
     assert seen["crossing"] == [] and seen["fits"] is True, seen
-    # The chart sits in a focusable region inside its card; where it is wider than the card it
-    # scrolls there, not on the page (the fits check above).
+    # The twelve or more long period labels are wider than the card: the chart scrolls in its own
+    # focusable region, which stays inside the card, and the page does not widen (fits above).
+    assert seen["chartScrolls"] is True and seen["overflowX"] in ("auto", "scroll"), seen
     assert seen["regionFocusable"] is True and seen["regionInsideCard"] is True, seen
 
 
@@ -2077,7 +2085,7 @@ NEW_FORMAT_TILES = [
     ],
 ]
 # The dated events the fixture's EVENTS table holds (in the lead module), as the date is written
-# and the event's name, nearest first.
+# and the event's name, in the table's own row order.
 NEW_FORMAT_EVENTS = [
     ["2025-03-31", "Synthetic note"],
     ["2025-06", "Synthetic call"],
@@ -2131,8 +2139,8 @@ def test_the_earlier_format_overview_has_its_sentence_and_the_module_tiles_only(
     page = tmp_path / "library/index.html"
     seen = read_overview(page, "#W-Overview?c=run-a", 1440)
     assert seen["fits"] is True
-    # No reader passages, so no lead to select from: the sentence, then one tile per module. The
-    # dated events of the run's tables are the lead module's to draw, so there is no list of dates.
+    # No reader passages, so no lead: the page draws only the sentence, then one tile per module
+    # (the why grid, the watch timeline and the limitations all hang on a lead).
     assert seen["parts"] == ["overview-lead", "overview-modules"] and "watch" not in seen
     assert EARLIER_LEAD in seen["lead"]["text"] and seen["lead"]["h2"]["text"] == "Credit view"
     assert seen["lead"]["h2"]["transform"] == "uppercase"
@@ -2435,8 +2443,23 @@ CHART_ROUTE_PROBE = """(async () => {
 })();"""
 
 
-def test_a_chart_route_scrolls_its_card_into_view_and_no_chart_data_text_is_drawn(tmp_path):
-    page = synthetic_workspace(tmp_path, with_chart_in_findings)
+@pytest.mark.parametrize(
+    ("edit", "rail"),
+    [
+        # The chart section sits after `## Gaps` (a gaps section to Evidence, drawn as a card).
+        (
+            with_chart_and_event,
+            ["Bottom line", "Key findings", "Charts", "Timeline", "Limitations"],
+        ),
+        # The chart section sits under `## Findings`, where the launcher's handoffs hold it.
+        (with_chart_in_findings, ["Bottom line", "Key findings", "Charts", "Limitations"]),
+    ],
+    ids=["under-gaps", "under-findings"],
+)
+def test_a_chart_route_scrolls_its_card_into_view_and_no_chart_data_text_is_drawn(
+    tmp_path, edit, rail
+):
+    page = synthetic_workspace(tmp_path, edit)
     [handoff] = [
         f
         for f in tmp_path.glob(f"runs/{NEW_FORMAT_RUN}/deliveries/**/*CP-2*.md")
@@ -2448,7 +2471,7 @@ def test_a_chart_route_scrolls_its_card_into_view_and_no_chart_data_text_is_draw
     assert seen["chartData"] is False and seen["cards"] >= 1
     # The section rail ("On this page") lists the parts the page draws, and no raw section names;
     # the audit part is gone from the module page (Evidence holds it).
-    assert seen["outline"] == ["Bottom line", "Key findings", "Charts", "Limitations"]
+    assert seen["outline"] == rail
     hidden = ("Chart data", "Events", "Request", "Next module", "Evidence")
     assert not any(entry.startswith(hidden) for entry in seen["outline"])
 

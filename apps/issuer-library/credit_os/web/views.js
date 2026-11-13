@@ -681,6 +681,8 @@ function newFormatSplit(id) {
     if(role==='drawing'&&section.blocks.some(block=>block.type==='table'&&drawnTables.has(block.line)))split.drawings.push(section);
     else if(['finding','drawing','passage'].includes(role)&&drawsSomething(section))split.rest.push(section);
     else if(role==='registers'&&promotedTables(section).length)split.registers.push(section);
+    // A chart, map or events table is drawn as a card whatever its heading's role (a `### Chart data` under `## Gaps` is a gaps section to Evidence), so its section is routable.
+    else if(section.blocks.some(block=>block.type==='table'&&drawnTables.has(block.line)))split.drawings.push(section);
   }
   return split;
 }
@@ -978,49 +980,12 @@ function mapsView(id,tag='h2',keep=()=>true,own=false) {
 }
 // Maps on a module page.
 const reportMaps=id=>data[id]?.maps?.length?`<section class="part" id="maps"><h3>Maps</h3>${mapsView(id,'h4',()=>true,true)}</section>`:'';
-// ---- Chart index (CP-MODEL-V02): one row per `Chart data:`, `Map:` or `Events:` table the run's handoffs hold, in the state the build gave it. It lists and links; nothing is drawn or recomputed here.
-const CHART_HEADING=/^(Chart data|Map|Events): /;
-const NOT_STATED='Not stated',NOT_ESTABLISHED='Not established for this run';
-const raised=text=>text.charAt(0).toUpperCase()+text.slice(1);
-const shownIn=out=>[`${moduleTitle(out.module)} page`];
 // The part of the module page that holds a chart, map or lane table: charts (earlier format: Key numbers), maps, and for a lane the routable s-<line>
 // section that holds its table, else the page's Timeline part. Every one is an anchor of reportParts, so the link never lands on the page head.
 function tableForm(id,kind,section) {
   if(kind==='map')return 'maps';
   if(kind==='chart')return isNewFormat(data[id].sections)?'charts':'numbers';
   return drawnAnchors(id).has(`s-${section.line}`)?`s-${section.line}`:'timeline';
-}
-function chartRows(context) {
-  const ids=Object.values(contexts[context]?.modules||{}).map(entry=>entry.default||entry.outputs[0]).filter(id=>id&&data[id]);
-  return ids.flatMap(id=>{
-    const out=data[id];
-    const held=new Map([...(out.charts||[]).map(c=>[c.table,{kind:'chart',title:c.title,unit:c.unit,gap:null}]),...(out.chartGaps||[]).map(c=>[c.table,{kind:'chart',...c}]),...(out.maps||[]).map(m=>[m.table,{kind:'map',title:`${raised(m.name)} map`,name:m.name,gap:m.gap}]),...(out.events||[]).map(l=>[l.table,{kind:'lane',title:`${l.lane} events`,gap:l.gap}])]);
-    return out.sections.filter(section=>CHART_HEADING.test(section.heading)).flatMap(section=>{
-      const table=section.blocks.find(b=>b.type==='table');
-      if(!table)return [];
-      const kind=section.heading.startsWith('Map')?'map':section.heading.startsWith('Events')?'lane':'chart',name=section.heading.replace(CHART_HEADING,''),here=held.get(table.line);
-      const title=here?.title||(kind==='map'?`${raised(name)} map`:kind==='lane'?`${name} events`:raised(name));
-      const sentBack=!here&&out.issue?.split('; ').find(problem=>problem.startsWith(section.heading));
-      const unsupplied=table.rows[0]?.cells.find(cell=>/^Not supplied:/.test(cell))?.replace(/^Not supplied:\s*/,'');
-      const hidden=kind==='chart'&&out.state.established===false;
-      const drawn=Boolean(here)&&here.gap===null&&!hidden,basis=[...new Set(table.rows.map(row=>row.cells.at(-1)))].join('; ');
-      const state=hidden?NOT_ESTABLISHED:drawn?'Drawn':sentBack?'Sent back':NOT_ESTABLISHED;
-      const limitation=hidden?(out.summary?.limitation||'Module not assessable'):drawn?(kind==='chart'&&/^Basis/.test(table.headers.at(-1))&&basis)||NOT_STATED:sentBack||here?.gap||unsupplied||NOT_STATED;
-      const unit=drawn&&kind==='chart'?(here.unit===''?'Stated per row':here.unit??NOT_STATED):NOT_STATED;
-      const period=drawn&&kind==='chart'&&table.headers[0]==='Period'?[...new Set([table.rows[0].cells[0],table.rows.at(-1).cells[0]])].map(plain).join(' to '):NOT_STATED;
-      const line=table.rows[0]?.line,key=`${id}:${line}`;
-      const form=!drawn?null:routeHref(out.module,tableForm(id,kind,section),null,out.run,out.source);
-      return [{key,title,owner:moduleTitle(out.module),state,limitation,unit,period,where:drawn?shownIn(out).join(', '):'Not drawn',form,source:evidence.has(key)?evidenceHref(id,line):null,line}];
-    });
-  });
-}
-function chartIndex(context) {
-  if(!contexts[context])return '';
-  const rows=chartRows(context),open='<section class="run-section chart-index" id="run-charts"><h2>Chart index</h2>';
-  if(!rows.length)return `${open}<p class="intro">No chart, map or calendar lane table is held in this run’s handoffs.</p></section>`;
-  const head=['Chart','Module','State','Limitation','Unit','Period','Shown in','Table form','Source'];
-  const body=rows.map(row=>`<tr data-chart="${esc(row.key)}"><th scope="row">${esc(row.title)}</th><td>${esc(row.owner)}</td><td>${esc(row.state)}</td><td class="index-limit">${esc(row.limitation)}</td><td>${esc(row.unit)}</td><td>${esc(row.period)}</td><td>${esc(row.where)}</td><td>${row.form?`<a href="${esc(row.form)}">Table form</a>`:'Not drawn'}</td><td>${row.source?`<a href="${esc(row.source)}">Line ${row.line}</a>`:NOT_STATED}</td></tr>`).join('');
-  return `${open}<p class="intro">Every chart, map and calendar lane in this run’s handoffs, as the handoff states it. A chart drawn in several places is one row. This index lists them; it recalculates nothing.</p><div class="table-scroll" role="region" aria-label="Chart index" tabindex="0"><table class="index-table"><thead><tr>${head.map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div></section>`;
 }
 // ---- The run label (decision 12 of the 2026-11-11 reader ruling): every run page says which run it shows, and where the issuer's other runs are.
 // H7: a run is "Earlier format" when any of its handoffs (every saved output of every module, not only the defaults) has no Bottom line first under Findings.

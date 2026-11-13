@@ -1001,7 +1001,7 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules, more
   const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag', 'eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'eventTicks', 'eventAsOf', 'eventStack', 'eventRoom', 'earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes', 'matchesHeading', 'readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml', 'passageControls', 'eventTimeline', '$', 'appDestinations', 'document', 'ChangesView'];
   const eventTimeline = realEventTimeline(esc, rich);
   const args = [libraryDefaults(), libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), libraryDefaults(), win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head', sections: more.sections?.[id] || [] }])), contexts, more.store || {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => '', ...['eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'eventTicks', 'eventAsOf', 'eventStack', 'eventRoom'].map(name => require('./calendar.js')[name]), ...['earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes'].map(name => require('./reader.js')[name]), (heading, prefix) => (prefix.startsWith('=') ? heading === prefix.slice(1) : heading.startsWith(prefix)), ...['readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml', 'passageControls'].map(name => require('./reader.js')[name]), eventTimeline, more.dom?.$, new Set(['W-Library', 'CP-OS']), more.dom?.document, require('./changes.js')];
-  return new Function(...names, `${src}; return {runTokens, runReport, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, libraryFilters, libraryChoices, LIBRARY_COLUMNS, libraryView, libraryRows, libraryFacets, libraryCard, libraryCards, libraryLive, libraryChipValue, libraryCount, sameNameWords, libraryRunName, libraryModules, libraryLead, libraryStrip, libraryFiltered, moduleHead, headerChipMarkup, traceHref, drawerFoot, runName, updateWorkspaceChrome, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, chartIndex, moduleReport, reportParts, outlineMarkup, navigatorView, issuerMeta, startRunHref, startRunLink, drawnAnchors, defaultOutput, firstSection, cashflowSection, modelOptionLabels, forecastView, forecastCharts, chartCard, evidenceInput};`)(...args);
+  return new Function(...names, `${src}; return {runTokens, runReport, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, libraryFilters, libraryChoices, LIBRARY_COLUMNS, libraryView, libraryRows, libraryFacets, libraryCard, libraryCards, libraryLive, libraryChipValue, libraryCount, sameNameWords, libraryRunName, libraryModules, libraryLead, libraryStrip, libraryFiltered, moduleHead, headerChipMarkup, traceHref, drawerFoot, runName, updateWorkspaceChrome, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, moduleReport, reportParts, outlineMarkup, navigatorView, issuerMeta, startRunHref, startRunLink, drawnAnchors, defaultOutput, firstSection, cashflowSection, modelOptionLabels, forecastView, forecastCharts, chartCard, evidenceInput};`)(...args);
 }
 const countOf = (html, re) => (html.match(re) || []).length;
 
@@ -1695,6 +1695,19 @@ test('module page: s-<line> routes are the finding and drawing sections the page
   const page = fixturePage(), cp2 = page.drawnAnchors(outId('CP-2'));
   assert.deepEqual([...cp2], [], 'CP-2 has only passages and Evidence sections (Request line 3, Sources, Calculations line 44, Gaps, Next module)');
   assert.deepEqual([...page.drawnAnchors(outId('CP-1'))], ['s-19'], 'CP-1 draws its Canonical data section (line 19)');
+});
+
+test('module page: a chart, map or events section is routable whatever its heading\'s role, including one placed under ## Gaps', () => {
+  const chart = (line, heading) => sec(heading, 3, line, 'view', [table(line + 2, ['Period', 'Debt maturing', 'Reporting unit', 'Basis and limitation'], [[line + 3, 'FY2025', '93', 'US$m', 'Schedule.']])]);
+  const sections = [...passageSections({ bottom: 'Refinancing decides the view.', key: ['- Debt is due soon.'], limits: ['- None stated.'] }),
+    sec('Gaps', 2, 40, 'view', []), chart(44, 'Chart data: maturities under gaps'),
+    sec('Calculations', 2, 60, 'view', []), chart(64, 'Chart data: maturities under calculations')];
+  const page = runPage(() => {
+    const d = overviewData({ 'CP-2': sections });
+    d[outId('CP-2')].charts = [{ title: 'Maturities', unit: 'US$m', table: 46, columns: [1] }, { title: 'Maturities again', unit: 'US$m', table: 66, columns: [1] }];
+    return d;
+  }, [], m => m, { record: steps(['CP-2']), runFields: { asOf: '2025-03-31' }, names: FIXTURE_NAMES });
+  assert.deepEqual([...page.drawnAnchors(outId('CP-2'))].sort(), ['s-44', 's-64'], 'each drawn chart section has its s-<line> route, under Gaps or Calculations too');
 });
 
 test('navigator (decision 5): nothing collapses and nothing persists: no expandedGroups, no details in the navigator code or markup, the Browse modules toggle remains', () => {
@@ -3163,113 +3176,7 @@ test('maps: the region label has no stray punctuation', () => {
   assert.ok(/edges\. The edge table follows; scroll horizontally/.test(label), label);
 });
 
-// ---- Package 7 views (2026-11-10): the chart index, the report manifest and the run/file context bar. Every value is synthetic.
-const withIndex = d => {
-  withLanes(d);
-  withMaps(d);
-  const cp1 = d[outId('CP-1')];
-  cp1.sections.push(sec('Chart data: broken peer set', 3, 500, 'consumed', [table(502, ['Period', 'Value'], [[503, 'FY2024', '1']])]));
-  cp1.issue = 'Chart data: broken peer set is not in its fixed table';
-  return d;
-};
-const cellsOf = (html, attr) => [...html.matchAll(new RegExp(`<tr ${attr}="[^"]*">(.*?)</tr>`, 'gs'))].map(m => [...m[1].matchAll(/<t[dh][^>]*>(.*?)<\/t[dh]>/gs)].map(c => strip(c[1])));
-const INDEX_HEAD = ['Chart', 'Module', 'State', 'Limitation', 'Unit', 'Period', 'Shown in', 'Table form', 'Source'];
-
-test('chart index: one row per chart, map and lane the run holds, whatever its state, with the owner by name', () => {
-  const html = runPage(withIndex, [], m => m, OVERVIEW_CP1).chartIndex(RUN);
-  assert.deepEqual([...html.matchAll(/<th scope="col">(.*?)<\/th>/g)].map(m => m[1]), INDEX_HEAD);
-  const rows = cellsOf(html, 'data-chart').map(r => r.slice(0, 7));
-  const OVERVIEW = 'Financial foundation page'; // the Overview draws no chart or map, so "Shown in" names the module page alone, whatever the catalogue says
-  assert.deepEqual(rows, [
-    ['Leverage', 'Financial foundation', 'Drawn', 'K', 'x', 'FY2024', OVERVIEW],
-    ['Cover', 'Financial foundation', 'Drawn', 'K', 'x', 'FY2024', OVERVIEW],
-    ['Financing events', 'Financial foundation', 'Drawn', 'Not stated', 'Not stated', 'Not stated', OVERVIEW],
-    ['Credit-risk transmission map', 'Financial foundation', 'Drawn', 'Not stated', 'Not stated', 'Not stated', OVERVIEW],
-    ['Stress scenario map', 'Financial foundation', 'Not established for this run', 'no scenario stated', 'Not stated', 'Not stated', 'Not drawn'],
-    ['Broken peer set', 'Financial foundation', 'Sent back', 'Chart data: broken peer set is not in its fixed table', 'Not stated', 'Not stated', 'Not drawn'],
-    ['Decision and watch events', 'Committee decision', 'Not established for this run', 'the handoff states no dated event', 'Not stated', 'Not stated', 'Not drawn'],
-  ]);
-  assert.ok(!/CP-\d/.test(strip(html)), 'owners are named, never coded');
-});
-
-test('chart index: the table form and the handoff line are links that keep the run; a row with no evidence line has none', () => {
-  const html = runPage(withIndex).chartIndex(RUN);
-  const leverage = /<tr data-chart="[^"]*">.*?<\/tr>/s.exec(html)[0];
-  const [table, source] = [...leverage.matchAll(/<a href="([^"]+)"/g)].map(m => m[1]);
-  assert.ok(table.startsWith('#CP-1/numbers') && table.includes('c=run-a') && !table.includes('e='), table);
-  assert.ok(source.startsWith('#CP-1/') && source.includes('c=run-a') && source.includes(`e=${encodeURIComponent(`${outId('CP-1')}:43`)}`), source);
-  assert.ok(!leverage.includes('data-evidence'), 'a plain route works from every page the index sits on');
-  const lane = cellsOf(html, 'data-chart')[2];
-  assert.ok(/<tr data-chart="[^"]*">(?:(?!<\/tr>).)*href="#CP-1\/timeline\?c=run-a"/s.test(html.slice(html.indexOf('Financing events') - 120)), 'a lane whose section is not a routable section opens the Timeline part, never the page head');
-  assert.equal(lane[7], 'Table form');
-  const map = /<tr data-chart="[^"]*">(?:(?!<\/tr>).)*Credit-risk transmission map.*?<\/tr>/s.exec(html)[0];
-  assert.ok(map.includes('#CP-1/maps?c=run-a'), 'a map opens its module’s Maps part');
-});
-
-test('chart index: "Shown in" is the module page alone, with or without a visuals catalogue row naming Overview (the Overview draws no chart; task 8)', () => {
-  for (const more of [{}, OVERVIEW_CP1]) {
-    const rows = cellsOf(runPage(withIndex, [], m => m, more).chartIndex(RUN), 'data-chart').map(r => r[6]);
-    assert.deepEqual(rows.slice(0, 2), ['Financial foundation page', 'Financial foundation page']);
-  }
-});
-
-test('chart index: a lane opens the routable s-<line> section that holds its events table, not the module head', () => {
-  // The Events section (line 300) is placed in the view, so it is a routable section of the module page.
-  const html = runPage(d => { withIndex(d); d[outId('CP-1')].placement = d[outId('CP-1')].sections.map(s => (s.line === 300 ? 'view' : s.where)); return d; }).chartIndex(RUN);
-  const lane = /<tr data-chart="[^"]*">(?:(?!<\/tr>).)*?Financing events.*?<\/tr>/s.exec(html)[0];
-  assert.equal(/<a href="([^"]+)">Table form/.exec(lane)[1], '#CP-1/s-300?c=run-a', lane);
-});
-
-test('chart index: a new-format chart opens the page\'s Charts part, an earlier-format one Key numbers; both are parts of the module page', () => {
-  const fixture = fixturePage();
-  const cp1a = fixture.chartIndex(RUN);
-  const forms = [...cp1a.matchAll(/<a href="([^"]+)">Table form/g)].map(m => m[1]);
-  assert.ok(forms.length >= 1 && forms.every(href => !/#CP-[0-9A-Z]+\/(?:numbers|s\d)/.test(href)), forms.join('\n'));
-  const outline = id => new Set(fixture.reportParts(id).map(p => p[0]));
-  // A new-format output with one chart: the link names the Charts part, which the page draws.
-  const sections = [...passageSections({ bottom: 'Cash is up.' }), sec('Chart data: leverage', 3, 40, 'view', [chartTable(42, [[43, 'FY2024', '6.57', 'x', 'K']])])];
-  const chart = runPage(() => { const d = overviewData({ 'CP-1': sections }); d[outId('CP-1')].charts = [{ title: 'Leverage', unit: 'x', table: 42, columns: [1] }]; return d; }, [], m => m, { record: steps(['CP-1']), runFields: { asOf: '2025-03-31' }, names: FIXTURE_NAMES });
-  const [chartForm] = [...chart.chartIndex(RUN).matchAll(/<a href="([^"]+)">Table form/g)].map(m => m[1]);
-  assert.equal(chartForm, '#CP-1/charts?c=run-a');
-  assert.ok(chart.reportParts(outId('CP-1')).some(p => p[0] === 'charts'));
-  for (const href of forms) {
-    const [, module, part] = /^#(CP-[0-9A-Z]+)\/([^?]+)/.exec(href);
-    const id = outId(module);
-    assert.ok(outline(id).has(part) || fixture.drawnAnchors(id).has(part), `${href} is not a part of ${module}'s page`);
-  }
-});
-
-test('chart index never claims or links charts hidden by a not-assessable module', () => {
-  const page = runPage(d => {
-    withIndex(d);
-    const out = d[outId('CP-1')];
-    out.state.established = false;
-    out.summary.limitation = 'No comparable source.';
-    return d;
-  });
-  const rows = cellsOf(page.chartIndex(RUN), 'data-chart');
-  for (const row of rows.slice(0, 2)) {
-    assert.equal(row[2], 'Not established for this run');
-    assert.equal(row[3], 'No comparable source.');
-    assert.equal(row[6], 'Not drawn');
-    assert.equal(row[7], 'Not drawn');
-  }
-  assert.ok(!page.chartIndex(RUN).includes('#CP-1/numbers'));
-  assert.equal(rows[3][2], 'Drawn', 'the folded module still draws its maps');
-});
-
-test('chart index uses the stored reason for an owner table that states none', () => {
-  const html = runPage(d => {
-    const out = d[outId('CP-1')], [chart] = out.charts;
-    out.charts = out.charts.slice(1);
-    out.chartGaps = [{ ...chart, gap: 'No sourced quantity.' }];
-    return d;
-  }).chartIndex(RUN);
-  const [row] = cellsOf(html, 'data-chart');
-  assert.equal(row[2], 'Not established for this run');
-  assert.equal(row[3], 'No sourced quantity.');
-  assert.equal(row[7], 'Not drawn');
-});
+// ---- Package 7 views (2026-11-10): the report manifest and the run/file context bar. Every value is synthetic.
 
 const BAR_STORE = { inputs: { [`${RUN}/inputs/CP-1-input.md`]: { module: 'CP-1', run: RUN, source: 'inputs/CP-1-input.md', href: '../runs/run-a/inputs/CP-1-input.md', sha256: 'c'.repeat(64) } } };
 const BAR = {

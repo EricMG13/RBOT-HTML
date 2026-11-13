@@ -12,7 +12,7 @@
   const region = document.querySelector('.fc-card .column-chart').closest('.fc-fig');
   const card = region.closest('.fc-card');
   const seen = {labels: labels.length, crossing, fits: document.documentElement.scrollWidth <= innerWidth,
-    chartScrolls: region.scrollWidth > region.clientWidth, regionFocusable: region.getAttribute('tabindex') === '0',
+    chartScrolls: region.scrollWidth > region.clientWidth, overflowX: getComputedStyle(region).overflowX, regionFocusable: region.getAttribute('tabindex') === '0',
     regionInsideCard: region.getBoundingClientRect().right <= card.getBoundingClientRect().right + 1};
   const out = document.createElement('pre'); out.id = 'probe';
   out.textContent = JSON.stringify(seen); document.body.appendChild(out);
