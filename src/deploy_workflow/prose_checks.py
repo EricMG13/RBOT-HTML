@@ -884,6 +884,24 @@ class _Figure(NamedTuple):
     bracketed: bool  # The sign was written as parentheses, not a minus.
     unit: str | None
     shown: str
+    currency: str | None = None  # USD, EUR or GBP when written before or inside the figure
+
+
+_CURRENCY_CODES = {"us$": "USD", "usd": "USD", "$": "USD", "eur": "EUR", "€": "EUR", "£": "GBP"}
+_CURRENCY_WORD = re.compile(r"US\$|USD|\$|EUR|€|GBP|£", re.IGNORECASE)
+
+
+def _currency(found: re.Match[str], base: str) -> str | None:
+    """The currency a figure is written with (`USD 247 million`, `247 USD million`, `£5m`), as a
+    code, or None."""
+    end = found.start("minus") if found["minus"] else found.start("n")
+    before = _ends_at(_CURRENCY_BEFORE, base, end) or _CURRENCY_WORD.search(
+        found["u1"] or found["u2"] or ""
+    )
+    if before is None:
+        return None
+    key = before[0].strip().casefold()
+    return _CURRENCY_CODES.get(key, key.upper())
 
 
 def _unit(written: str | None) -> str | None:
@@ -1017,6 +1035,7 @@ def _figures(text: str, passage: bool = False, amounts_only: bool = False) -> li
                 bracketed and not annotation,
                 _unit(found["u1"] or found["u2"]),
                 found[0].strip(),
+                _currency(found, base),
             )
         )
     return figures
@@ -1047,8 +1066,8 @@ def _fidelity_problem(figure: _Figure, held: list[_Figure]) -> str | None:
     )
 
 
-def _figure_key(figure: _Figure) -> tuple[str, bool, str | None]:
-    return figure.number, figure.negative, figure.unit
+def _figure_key(figure: _Figure) -> tuple[str, bool, str | None, str | None]:
+    return figure.number, figure.negative, figure.unit, figure.currency
 
 
 def _is_percent_of(figure: _Figure, held: list[_Figure]) -> bool:
@@ -1066,34 +1085,90 @@ def _date_key(date_text: str) -> str:
 
 
 def _shape(line: str) -> str:
-    """A line with every number written as `#`, so an edit of a value in place compares equal."""
+    """A line with every number written as `#`: two lines of one shape differ only in numbers."""
     return NUMBER.sub("#", line.strip())
 
 
+_LINE_LABEL = re.compile(r"\blines? (\d+)", re.IGNORECASE)
+_QUOTED = re.compile(r'"([^"]*)"|`([^`]*)`')
+_BARE_CELL = re.compile(r"-?\d+(?:\.\d+)?")
+
+
+def _tokens(text: str) -> set[str]:
+    """Figure numbers and dates written in `text`."""
+    return {f.number for f in _figures(text)} | {_date_key(m[0]) for m in DATE.finditer(text)}
+
+
+def _issue_quotes(issue: str) -> tuple[int | None, set[str]]:
+    """The line an issue names (None if none) and the numbers and dates it quotes: those inside
+    "..." or backticks, or, for an issue that quotes nothing, those of its text outside the
+    `line N` label."""
+    label = _LINE_LABEL.search(issue)
+    spans = [a or b for a, b in _QUOTED.findall(issue)]
+    text = " ".join(spans) if spans else _LINE_LABEL.sub(" ", issue)
+    return (int(label[1]) if label else None), _tokens(text)
+
+
+def _tracked(line: str) -> list[tuple[object, str, str, _Figure | None]]:
+    """The (key, shown, excuse token) of every value of a line that a repair must not drop
+    silently: amounts, bracketed negatives of three digits or more, a bare number alone in a table
+    cell and dates."""
+    found: list[tuple[object, str, str, _Figure | None]] = []
+    figures = _figures(line, amounts_only=True)
+    figures += [
+        f
+        for f in _figures(line)
+        if f.bracketed and (len(f.number) >= 3 or "." in f.number) and f not in figures
+    ]
+    if line.lstrip().startswith("|"):
+        for cell in _cells(line):
+            alone = _figures(cell)
+            if _BARE_CELL.fullmatch(cell.strip()) and len(alone) == 1 and alone[0] not in figures:
+                figures.append(alone[0])
+    for f in figures:
+        shown = f"{f.currency} {f.shown}" if f.currency else f.shown
+        found.append((_figure_key(f), shown, f.number, f))
+    found += [(_date_key(m[0]), m[0], _date_key(m[0]), None) for m in DATE.finditer(line)]
+    return found
+
+
 def lost_values(previous: str, new: str, named: Sequence[str] = ()) -> list[dict[str, str | int]]:
-    """Amounts (number, sign and unit) and dates written in the `previous` draft and nowhere in
-    `new`, in the order they first appear, as {value, previous_line, context}. Left out: a figure
-    whose number an issue in `named` quotes (a fidelity repair may ask for it to go); a bare
-    fraction `new` writes as a percentage; a value on a line `new` keeps with only its numbers
-    changed (an edit in place, not a removal). An amount counts as present in `new` however it is
-    written there (a bracket, a date, a label number), so only a value that has gone is listed."""
-    held = _figures(new)
-    kept = {_figure_key(f) for f in held}
-    kept_dates = {_date_key(m[0]) for m in DATE.finditer(new)}
-    quoted = {f.number for issue in named for f in _figures(issue)}
-    shapes = {_shape(line) for line in new.splitlines()}
+    """What a repair removed: the amounts, bracketed negatives (755), bare numbers alone in a
+    table cell, and dates written in the `previous` rejected draft and nowhere in `new`, in the
+    order they first appear, as one list of {value, previous_line, context}. A value changed in
+    place (247 to 240) is a dropped old value: the old one is absent. An amount is its number,
+    sign, unit and currency, and counts as present in `new` however it is written there (a
+    bracket, a date, a label number), so only a value that has gone is listed.
+
+    Left out: a value an issue in `named` quotes inside "..." or backticks (an issue that quotes
+    nothing: its text outside `line N`), and only on the line the issue names, or on any line
+    holding it when the issue names none; the same when the issue quotes a number on the line of
+    `new` of the same shape (a value corrected in place); a bare fraction `new` writes as a
+    percentage on the line of the same shape.
+
+    Limits: a small bare table cell whose unit sits in the column header is tracked only as a
+    bare number, so `| 47 |` is compared with a bare 47, not with `47 USD m`; a fraction is
+    hidden by a percentage of that value times 100 on a line of the same shape, related or not."""
+    kept = {_figure_key(f) for f in _figures(new)} | {_date_key(m[0]) for m in DATE.finditer(new)}
+    quotes = [_issue_quotes(issue) for issue in named]
+    twins: dict[str, set[str]] = {}
+    twin_figures: dict[str, list[_Figure]] = {}
+    for line in new.splitlines():
+        twins.setdefault(_shape(line), set()).update(_tokens(line))
+        twin_figures.setdefault(_shape(line), []).extend(_figures(line))
     lost: list[dict[str, str | int]] = []
     seen: set[object] = set()
     for number, line in enumerate(previous.splitlines(), 1):
-        if _shape(line) in shapes:
-            continue
-        values = [
-            (_figure_key(f), f.shown, f.number in quoted or _is_percent_of(f, held))
-            for f in _figures(line, amounts_only=True)
-        ] + [(_date_key(m[0]), m[0], False) for m in DATE.finditer(line)]
-        for key, shown, excused in values:
-            absent = key not in (kept_dates if isinstance(key, str) else kept)
-            if absent and not excused and key not in seen:
+        nearby = twins.get(_shape(line), set())
+        for key, shown, token, figure in _tracked(line):
+            excused = any(
+                ln in (None, number) and (token in tokens or tokens & nearby)
+                for ln, tokens in quotes
+            )
+            fraction = figure is not None and _is_percent_of(
+                figure, twin_figures.get(_shape(line), [])
+            )
+            if key not in kept and key not in seen and not excused and not fraction:
                 seen.add(key)
                 lost.append(
                     {"value": shown, "previous_line": number, "context": line.strip()[:200]}

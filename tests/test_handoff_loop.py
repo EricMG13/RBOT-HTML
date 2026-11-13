@@ -855,8 +855,8 @@ def test_a_repair_that_drops_two_sourced_figures_is_recorded_and_accepted(tmp_pa
     assert module.accepted and results[1].startswith("ACCEPTED")
     dropped = _review(tmp_path, 2)["dropped_values"]
     assert [(d["value"], d["previous_line"]) for d in dropped] == [
-        ("247 million", 6),
-        ("755 million", 7),
+        ("USD 247 million", 6),
+        ("USD 755 million", 7),
     ]
     event = [e for e in read_events(tmp_path / "run" / EVENTS) if "dropped" in e["event"]]
     assert [(e["event"], e["module"], e["count"]) for e in event] == [
@@ -868,11 +868,12 @@ def test_a_rejected_repair_that_drops_values_asks_for_each_back(tmp_path: Path) 
     second = CP6_SECOND + "The canonical wording remains.\n"
     module, results = _writes(tmp_path, CP6_FIRST, second)
     assert not module.accepted and results[1].startswith("REJECTED")
-    assert "247 million" in results[1] and "755 million" in results[1]
+    assert "USD 247 million (Adjustments, line 6" in results[1]
+    assert "USD 755 million (Reported revolving availability, line 7" in results[1]
     assert "restore" in results[1]
     assert [d["value"] for d in _review(tmp_path, 2)["dropped_values"]] == [
-        "247 million",
-        "755 million",
+        "USD 247 million",
+        "USD 755 million",
     ]
 
 
@@ -884,7 +885,7 @@ def test_a_repair_that_adds_a_figure_flags_nothing(tmp_path: Path) -> None:
 
 def test_a_figure_the_issue_named_may_be_removed(tmp_path: Path) -> None:
     second = CP6_FIRST.replace("canonical", "adopted").replace("| USD 755 million ", "| n/a ")
-    named = ('line 3: "USD 755 million" is not in the handoff: remove it. canonical',)
+    named = ('line 7: "USD 755 million" is not in the handoff: remove it. canonical',)
     module, _ = _writes(tmp_path, CP6_FIRST, second, issues=named)
     assert module.accepted and _review(tmp_path, 2)["dropped_values"] == []
 
@@ -1145,3 +1146,97 @@ def test_the_record_reads_back_with_its_compactions_and_an_old_record_still_read
     old = row_of(folder)
     del old["compactions"]  # a record written before the field existed
     assert CallRecord.model_validate_json(json.dumps(old)).compactions is None
+
+
+def _body(findings: str) -> str:
+    return (
+        "## Request\nTDG\n## Sources\nS1\n## Findings\n"
+        + findings
+        + "## Calculations\nNone\n## Gaps\nNone\n## Next module\ndelivery\n"
+    )
+
+
+def _dropped(tmp_path: Path, first: str, second: str, issues: tuple[str, ...]) -> list[Any]:
+    module, _ = _writes(tmp_path, _body(first + "canonical\n"), _body(second), issues=issues)
+    assert module.accepted
+    return [d["value"] for d in _review(tmp_path, 2)["dropped_values"]]
+
+
+def test_a_value_changed_in_place_is_a_dropped_old_value(tmp_path: Path) -> None:
+    row = "| Adjustments | USD 247 million | FY2023 |\n"
+    assert _dropped(tmp_path, row, row.replace("247", "240"), ("line 6: canonical",)) == [
+        "USD 247 million"
+    ]
+
+
+def test_a_deleted_table_row_is_flagged_though_another_row_has_its_shape(tmp_path: Path) -> None:
+    rows = "| A | USD 247 million | FY2023 |\n| B | USD 9 million | FY2023 |\n"
+    kept = "| B | USD 9 million | FY2023 |\n"
+    assert _dropped(tmp_path, rows, kept, ("line 8: canonical",)) == ["USD 247 million"]
+
+
+def test_an_issue_that_quotes_the_old_number_excuses_a_change_in_place(tmp_path: Path) -> None:
+    row = "| Adjustments | USD 247 million | FY2023 |\n"
+    issue = ('line 6: "247 million" does not appear elsewhere in the handoff; canonical',)
+    assert _dropped(tmp_path, row, row.replace("247", "240"), issue) == []
+
+
+def test_a_quote_excuses_only_the_line_the_issue_names(tmp_path: Path) -> None:
+    rows = "Availability was USD 755 million.\n| Revolver | USD 755 million | FY2023 |\n"
+    issue = ('line 6: "USD 755 million" does not appear elsewhere; canonical',)
+    second = "Availability is in the table.\n| Revolver | Not supplied | FY2023 |\n"
+    assert _dropped(tmp_path, rows, second, issue) == ["USD 755 million"]
+
+
+def test_a_line_number_in_an_issue_label_excuses_no_value(tmp_path: Path) -> None:
+    row = "| Adjustments | USD 247 million | FY2023 |\n"
+    assert _dropped(
+        tmp_path, row, "| Adjustments | Not supplied | FY2023 |\n", ('line 247: "canonical"',)
+    ) == ["USD 247 million"]
+
+
+def test_an_unrelated_figure_of_another_currency_or_unit_hides_nothing(tmp_path: Path) -> None:
+    row = "| Adjustments | USD 247 million | FY2023 |\n"
+    other = "EUR 247 million of notes; 247 million shares.\n"
+    assert _dropped(tmp_path, row, other, ("line 6: canonical",)) == ["USD 247 million"]
+
+
+def test_a_bracketed_negative_in_a_table_is_tracked(tmp_path: Path) -> None:
+    row = "| FY2022 | 5,429 | (755) |\n"
+    assert _dropped(
+        tmp_path, row, "| FY2022 | 5,429 | Not supplied |\n", ("line 6: canonical",)
+    ) == ["(755)"]
+
+
+def test_a_dropped_comparison_fault_keeps_acceptance_and_is_recorded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from deploy_workflow.model import handoff
+    from deploy_workflow.run_events import EVENTS, read_events
+
+    def broken(*_a: Any, **_k: Any) -> list[Any]:
+        raise IndexError("boom")
+
+    monkeypatch.setattr(handoff, "lost_values", broken)
+    module, results = _writes(tmp_path, CP6_FIRST, CP6_SECOND)
+    assert module.accepted and results[1] == "ACCEPTED"
+    review = _review(tmp_path, 2)
+    assert review["issues"] == [] and review["dropped_values_error"] == "IndexError: boom"
+    assert "dropped_values" not in review
+    failed = [e for e in read_events(tmp_path / "run" / EVENTS) if "failed" in e["event"]]
+    assert [(e["event"], e["module"]) for e in failed] == [("dropped_values_check_failed", "CP-2")]
+    assert "boom" in failed[0]["error"]
+
+
+def test_a_comparison_fault_on_a_rejected_repair_keeps_the_checkers_issues(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from deploy_workflow.model import handoff
+
+    def broken(*_a: Any, **_k: Any) -> list[Any]:
+        raise ValueError("boom")
+
+    monkeypatch.setattr(handoff, "lost_values", broken)
+    module, results = _writes(tmp_path, CP6_FIRST, CP6_FIRST)
+    assert not module.accepted and results[1].startswith("REJECTED (1 writes left)")
+    assert "line 3: canonical" in results[1] and "no longer contains" not in results[1]

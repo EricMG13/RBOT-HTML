@@ -367,6 +367,15 @@ def strip_citation_markers(text: str) -> tuple[str, int]:
     return "".join(parts), count
 
 
+def _where(dropped: dict[str, str | int]) -> str:
+    """A dropped value with the row label (a table row's first cell) or the first 60 characters of
+    the line it was on, so the model can find it."""
+    context = str(dropped["context"])
+    cells = [c.strip() for c in context.strip("|").split("|")] if context.startswith("|") else []
+    label = cells[0] if cells and cells[0] else context[:60]
+    return f"{dropped['value']} ({label}, line {dropped['previous_line']} of your previous draft)"
+
+
 class ModuleTools:
     def __init__(
         self,
@@ -536,12 +545,26 @@ class ModuleTools:
             *(web_source_issues(markdown) if self.strip_markers else ()),
         ]
         review: dict[str, Any] = {"issues": issues}
+        self.accepted = not issues
         dropped: list[dict[str, str | int]] | None = None
         if self.rejected is not None:  # a repair: say what it removed that no issue named
-            dropped = lost_values(self.rejected[0], markdown, self.rejected[1])
-            review["dropped_values"] = dropped
+            try:
+                dropped = lost_values(self.rejected[0], markdown, self.rejected[1])
+                review["dropped_values"] = dropped
+            except Exception as exc:  # noqa: BLE001 -- documented, logged fail-open below
+                # Fail-open by design: this comparison is an auxiliary record. A fault in it must
+                # not turn the checker's verdict into an ERROR (the write is spent and acceptance
+                # is the checker's alone), so the fault is kept in this write's review.json and
+                # as a `dropped_values_check_failed` event, and the write goes on unchanged.
+                review["dropped_values_error"] = f"{type(exc).__name__}: {exc}"
+                if self.events is not None:
+                    append_event(
+                        self.events,
+                        "dropped_values_check_failed",
+                        module=self.task.module_id,
+                        error=review["dropped_values_error"],
+                    )
         _put(self.directory / f"{self.writes}.review.json", dump_json(review).encode())
-        self.accepted = not issues
         note = (
             ""
             if not removed
@@ -567,9 +590,7 @@ class ModuleTools:
             ""
             if not dropped
             else "\n\nThis draft no longer contains "
-            + "; ".join(
-                f"{d['value']} (line {d['previous_line']} of your previous draft)" for d in dropped
-            )
+            + "; ".join(_where(d) for d in dropped)
             + ". No issue named "
             + ("it" if len(dropped) == 1 else "them")
             + ": restore each one, or say why it was removed."
