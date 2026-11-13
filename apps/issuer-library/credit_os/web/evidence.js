@@ -9,7 +9,7 @@
   const shapes = typeof module !== 'undefined' ? require('./shapes.js') : window.Shapes;
   const components = () => (typeof module !== 'undefined' ? require('./components.js') : window.Components);
   // reader.js declares these at the top level of a classic script, so the page reaches them by name once it has loaded.
-  const reader = () => (typeof module !== 'undefined' ? require('./reader.js') : {escapeHtml, richText, plainText, splitBasis, basisItem});
+  const reader = () => (typeof module !== 'undefined' ? require('./reader.js') : {escapeHtml, richText, plainText, splitBasis, basisItem, paragraphBody});
   const esc = value => reader().escapeHtml(value);
   const rich = value => reader().richText(value);
   const plain = value => reader().plainText(value);
@@ -67,8 +67,9 @@
   // One module's content: trace statements, calculation, gap and register entries, finding tables as written, method notes.
   function moduleContent(mod, input) {
     const known = knownFiles(input.run.evidence);
-    const content = {id: mod.id, name: input.deps.moduleTitle(mod.id), trace: [], calcs: [], gaps: [], regs: [], written: [], notes: []};
+    const content = {id: mod.id, name: input.deps.moduleTitle(mod.id), trace: [], calcs: [], gaps: [], regs: [], written: [], notes: [], calcNotes: [], regNotes: []};
     for (const output of mod.outputs) {
+      const tokens = shapes.idTokens(output.sections);
       for (const {section, chain, role} of classify(output.sections, output.placement)) {
         if (role === 'hidden') continue;
         const texts = section.blocks.filter(b => b.type === 'text'), tables = section.blocks.filter(b => b.type === 'table').map(tableView).filter(Boolean);
@@ -82,6 +83,9 @@
           for (const block of texts) {
             if (role === 'finding' && shapes.blockRole(block.text) === 'note') { content.notes.push({heading: section.heading, text: block.text}); continue; }
             if (role === 'drawing') continue;
+            // Ruling 2026-11-13: a finding paragraph holding an identifier, or naming a calculation, is not on the findings page; it is a method note here.
+            const kind = role === 'finding' && !block.text.startsWith('```') ? shapes.methodNote(reader().paragraphBody(block.text).body, tokens) : null;
+            if (kind) (kind === 'calculations' ? content.calcNotes : content.regNotes).push({heading: section.heading, text: block.text});
             const split = reader().splitBasis(block.text, known);
             if (split.items.length) content.trace.push({mod: mod.id, name: content.name, key: `${output.id}:${block.line}`, heading: section.heading, body: split.body, items: split.items});
           }
@@ -110,7 +114,7 @@
     const tableHead = hay(name, caption, view.headers.join(' '));
     return `<div class="ev-tbl" role="region" aria-label="${esc(caption)}" tabindex="0" data-group data-head="${tableHead}"${counted === 'table' ? ` data-hay="${tableHead}"` : ''}><table><caption class="sr-only">${esc(caption)}</caption><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
   }
-  const noteMarkup = (text, name) => `<p class="ev-note" data-find="${hay(name, text)}">${rich(text)}</p>`;
+  const noteMarkup = (text, name, counted = false) => `<p class="ev-note" ${counted ? 'data-hay' : 'data-find'}="${hay(name, text)}">${rich(text)}</p>`;
   const moduleHead = (c, n, one, many) => `<div class="ev-grp-h"><span>${esc(c.name)}</span><span class="ev-cd">${esc(c.id)}</span><span class="ev-ct"><span data-count>${n}</span> ${n === 1 ? one : many}</span></div>`;
   const subHead = label => (label ? `<h4 class="ev-sub">${esc(label)}</h4>` : '');
 
@@ -163,9 +167,10 @@
     return `${usedHtml}${unusedHtml}${unrecordedHtml}`;
   }
   function calculationsPanel(all) {
-    const groups = all.filter(c => c.calcs.length);
+    const groups = all.filter(c => c.calcs.length || c.calcNotes.length);
     if (!groups.length) return empty('Calculations', 'No calculation table is listed for this selection.');
-    return groups.map(c => `<section class="ev-grp" data-group>${moduleHead(c, rowTotal(c.calcs), 'calculation', 'calculations')}${c.calcs.map(e => `${subHead(e.label)}${e.notes.map(n => noteMarkup(n, c.name)).join('')}${e.tables.map(t => tableMarkup(t, `${c.name}: ${e.heading}`, c.name, 'rows')).join('')}`).join('')}</section>`).join('');
+    const notes = c => (c.calcNotes.length ? `<h4 class="ev-sub">Method notes</h4>${c.calcNotes.map(n => `${subHead(n.heading)}${noteMarkup(n.text, c.name, true)}`).join('')}` : '');
+    return groups.map(c => `<section class="ev-grp" data-group>${moduleHead(c, rowTotal(c.calcs) + c.calcNotes.length, 'calculation', 'calculations')}${c.calcs.map(e => `${subHead(e.label)}${e.notes.map(n => noteMarkup(n, c.name)).join('')}${e.tables.map(t => tableMarkup(t, `${c.name}: ${e.heading}`, c.name, 'rows')).join('')}`).join('')}${notes(c)}</section>`).join('');
   }
   const SEVERITY = {high: 3, medium: 2, low: 1};
   // A table of a gaps section is a list of gaps: a title, the other cells as fields, and a three-segment meter where the table has a severity column.
@@ -192,10 +197,10 @@
       return `<div class="ev-empty">${icon('folder-open')}<strong>Pick a module</strong><p>Registers are read one module at a time. Choose a module in the filter bar or here.</p><div class="ev-fchips">${links}</div></div>`;
     }
     const c = all[0];
-    if (!c || (!c.regs.length && !c.written.length && !c.notes.length)) return empty('Registers', 'This module has no register, table or method note to list.');
+    if (!c || (!c.regs.length && !c.written.length && !c.notes.length && !c.regNotes.length)) return empty('Registers', 'This module has no register, table or method note to list.');
     const out = c.regs.map(e => registerGroup(e.heading, e.tables.reduce((n, t) => n + t.rows.length, 0), `${e.notes.map(n => noteMarkup(n, c.name)).join('')}${e.tables.map(t => tableMarkup(t, `${c.name}: ${e.heading}`, c.name, 'table')).join('')}`));
     if (c.written.length) out.push(registerGroup('Tables as written', c.written.length, c.written.map(w => `${subHead(w.heading)}${tableMarkup(w.table, `${c.name}: ${w.heading}`, c.name, 'table')}`).join('')));
-    if (c.notes.length) out.push(registerGroup('Method notes', c.notes.length, c.notes.map(n => `${subHead(n.heading)}${noteMarkup(n.text, c.name)}`).join('')));
+    if (c.notes.length || c.regNotes.length) out.push(registerGroup('Method notes', c.notes.length + c.regNotes.length, `${c.notes.map(n => `${subHead(n.heading)}${noteMarkup(n.text, c.name)}`).join('')}${c.regNotes.map(n => `${subHead(n.heading)}${noteMarkup(n.text, c.name, true)}`).join('')}`));
     return out.join('');
   }
 
@@ -245,9 +250,9 @@
     return {
       trace: all.reduce((n, c) => n + c.trace.length, 0),
       sources: ev.sources.filter(f => !module || f.readBy.includes(module)).length,
-      calculations: all.reduce((n, c) => n + rowTotal(c.calcs), 0),
+      calculations: all.reduce((n, c) => n + rowTotal(c.calcs) + c.calcNotes.length, 0),
       gaps: all.reduce((n, c) => n + rowTotal(c.gaps), 0),
-      registers: all.reduce((n, c) => n + tableTotal(c), 0),
+      registers: all.reduce((n, c) => n + tableTotal(c) + c.regNotes.length, 0),
       record: input.run.steps.filter(s => !module || s.module === module).length,
     };
   }

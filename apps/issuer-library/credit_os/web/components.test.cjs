@@ -529,3 +529,247 @@ test('every component draws at least the label, and a table of one row, without 
     assert.ok(html.length > 50 && textOf(html).includes('Only') || shape === 'caseRows' || shape === 'ranked', shape);
   }
 });
+
+// ---- Non-numeric shape components (library redesign, task 6): the answer key's real tables are the inputs.
+const countOf = (html, re) => (html.match(re) || []).length;
+const WORD_COMPONENT = { status: 'statusChecklist', sided: 'sidedBoard', moduleState: 'moduleStateTiles', qa: 'qaAccordion', facts: 'factList', records: 'recordCards', matrix: 'riskMatrix', watch: 'watchList' };
+const keyHeaderIs = (t, at, rx) => rx.test(String(t.headers[at]).trim().toLowerCase());
+// The cells the drawing must hold. A side cell and a category cell are the word and, apart, what stands in their closing brackets; the module name of a
+// moduleState row is the handoff's own text, drawn even where it ends in a module code.
+function wordCells(t, ctx) {
+  const out = [];
+  t.headers.forEach((header, at) => {
+    if (t.hidden.includes(at)) return;
+    for (const cells of t.rows) {
+      const cell = plainCell(cells[at]);
+      if (cell === '') continue;
+      const subject = t.shape === 'moduleState' && at === 0;
+      if (!subject && C.findingCell(cell, ctx).html === undefined) continue;
+      const split = (t.shape === 'sided' && keyHeaderIs(t, at, /^side\b/)) || (t.shape === 'facts' && keyHeaderIs(t, at, /^category$/)) ? /^(.*?)\s*\(([^()]*)\)$/.exec(cell) : null;
+      out.push(...(split ? [split[1], split[2]] : [cell]));
+    }
+  });
+  return out;
+}
+
+test('render: each of the eight remaining shapes goes to its component, and the output holds every drawn cell of every key table of that shape', () => {
+  for (const [shape, name] of Object.entries(WORD_COMPONENT)) {
+    const found = KEY.tables.filter(t => t.shape === shape);
+    assert.ok(found.length >= 1, shape);
+    assert.equal(typeof C[name], 'function', name);
+    for (const t of found) {
+      const ctx = pageCtx(t.module), block = keyBlock(t);
+      assert.equal(Shapes.tableShape(block), shape, `${t.module} ${t.heading}`);
+      const html = C.render(shape, block, ctx);
+      assert.equal(html, C[name](block, ctx), `${shape} is drawn by ${name}`);
+      assert.ok(html.length > 200, `${t.module} ${t.heading} draws`);
+      const text = textOf(html);
+      assert.deepEqual(wordCells(t, ctx).filter(cell => !text.includes(cell)), [], `${shape} ${t.module} ${t.heading}: cells not drawn`);
+      noMarkdown(html);
+      assert.ok(/<button[^>]*class="basis-link trace-row"/.test(html), `${shape}: a trace control`);
+      assert.ok(!/<table/.test(html) || shape === 'matrix', `${shape}: no raw grid`);
+    }
+  }
+});
+
+test('no word component draws an identifier of the module, a calculation ID, a source or a hidden column', () => {
+  for (const t of KEY.tables.filter(x => Object.hasOwn(WORD_COMPONENT, x.shape))) {
+    const ctx = pageCtx(t.module), html = C.render(t.shape, keyBlock(t), ctx), text = textOf(html);
+    for (const token of idTextOf(ctx)) assert.ok(!new RegExp(`(?<![A-Za-z0-9_])${token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![A-Za-z0-9_])`).test(text), `${t.module} ${t.heading} draws ${token}`);
+    assert.ok(!/calculations? [A-Z]{1,2}\d{2}/i.test(text), `${t.module} ${t.heading} draws a calculation ID`);
+    assert.ok(!/\.jsonl|\.htm\b|sha256|Basis:/.test(text), 'no file name or Basis');
+    t.headers.forEach((header, at) => {
+      if (!t.hidden.includes(at)) return;
+      for (const cells of t.rows) { const cell = plainCell(cells[at]); if (cell.length > 12) assert.ok(!text.includes(cell), `${t.module} ${t.heading}: hidden column ${header} drawn`); }
+    });
+  }
+});
+
+// A table of each shape with the key's own headers and a row built from `make(header, column)`.
+const keyShapes = () => Object.keys(WORD_COMPONENT).map(shape => KEY.tables.find(t => t.shape === shape));
+test('variants: one row, empty cells, a row shorter or longer than its headers, HTML metacharacters and a very long token draw without error, and every cell is escaped text', () => {
+  for (const t of keyShapes()) {
+    const ctx = { key: row => `k:${row.line}`, evidenceHref: '#e', caption: 'Variant' }, name = WORD_COMPONENT[t.shape];
+    const make = (fill, n = t.headers.length) => ({ headers: t.headers, rows: [{ line: 1, cells: Array.from({ length: n }, (_, at) => fill(at)) }] });
+    // one row, every cell empty: the component still answers (a string), and does not throw
+    assert.equal(typeof C[name](make(() => ''), ctx), 'string', `${t.shape}: empty cells`);
+    for (const n of [1, 2, t.headers.length + 2]) assert.equal(typeof C[name](make(at => `cell ${at}`, n), ctx), 'string', `${t.shape}: ${n} cells for ${t.headers.length} headers`);
+    // metacharacters: escaped in every drawn cell, and the visible text is the cell as written
+    const meta = C[name](make(at => (t.hidden.includes(at) ? 'hidden' : '<b>&" x')), ctx);
+    assert.ok(!meta.includes('<b>&"') && !meta.includes('<b>&amp;') && meta.includes('&lt;b&gt;&amp;'), `${t.shape}: metacharacters are escaped`);
+    assert.ok(textOf(meta).includes('<b>&" x'), `${t.shape}: the visible text is the cell as written`);
+    // a very long unbroken token is drawn whole (CSS wraps it)
+    const long = 'Q'.repeat(300), big = C[name](make(at => (t.hidden.includes(at) ? 'hidden' : long)), ctx);
+    assert.ok(textOf(big).includes(long), `${t.shape}: the long token is whole`);
+    // no row at all draws nothing (and does not throw)
+    assert.equal(typeof C[name]({ headers: t.headers, rows: [] }, ctx), 'string');
+  }
+});
+
+test('Review Focus 1: a table a component cannot place, and a table of an unknown shape, is a record card with every non-hidden cell', () => {
+  const ctx = { key: row => `k:${row.line}`, evidenceHref: '#e' };
+  const odd = { headers: ['Zeta', 'Omega', 'Source'], rows: [{ line: 3, cells: ['one', 'two', 'src.pdf'] }, { line: 4, cells: ['three', '4.5x', 'src.pdf'] }] };
+  for (const name of Object.values(WORD_COMPONENT).filter(n => n !== 'qaAccordion')) assert.equal(C[name](odd, ctx), C.recordCards(odd, ctx), `${name} falls back to recordCards`);
+  const unknown = textOf(C.render('shape-from-the-future', odd, ctx));
+  for (const cell of ['one', 'two', 'three', '4.5x', 'Omega']) assert.ok(unknown.includes(cell), cell);
+  assert.ok(!unknown.includes('src.pdf'));
+  // each component's own missing column: status without a status column, sided without a side column, and so on
+  const rows = [{ line: 1, cells: ['a', 'b', 'c'] }];
+  for (const [name, headers] of [['statusChecklist', ['Item', 'Detail', 'Effect']], ['sidedBoard', ['Driver', 'Figure', 'Reading']], ['moduleStateTiles', ['Module', 'Cause', 'Why']], ['facts', ['Item', 'Category', 'Note']], ['riskMatrix', ['Event', 'Probability', 'Likelihood']], ['watchList', ['Indicator', 'Threshold', 'Limitation']]]) {
+    const block = { headers, rows }, fn = name === 'facts' ? 'factList' : name;
+    assert.equal(C[fn](block, ctx), C.recordCards(block, ctx), `${fn} without its column`);
+  }
+});
+
+test('statusChecklist: a row per item, the state word always beside its icon, tone from the word, other columns as labelled lines', () => {
+  const t = keyTables('CP-5', 'status')[0], ctx = pageCtx('CP-5'), html = C.statusChecklist(keyBlock(t), ctx);
+  assert.equal(countOf(html, /<li class="ck-row">/g), 5);
+  const states = [...html.matchAll(/<span class="state (\w+)">(<svg [^>]*>.*?<\/svg>)<span class="state-w">([^<]*)<\/span><\/span>/g)].map(m => [m[1], m[3]]);
+  assert.deepEqual(states, [['ok', 'Committee-Ready'], ['warn', 'Remediation Needed'], ['ok', 'Committee-Ready'], ['ok', 'Committee-Ready'], ['warn', 'Remediation Needed']]);
+  assert.equal(countOf(html, /<span class="state /g), 5, 'every state is an icon with its word');
+  for (const label of ['Lineage class', 'Re-performed', 'Creditor consequence']) assert.ok(html.includes(`<dt>${label}</dt>`), label);
+  assert.ok(!html.includes('<dt>Source') && !html.includes('calculation V'));
+  const legal = C.statusChecklist(keyBlock(keyTables('CP-4', 'status')[0]), pageCtx('CP-4'));
+  assert.ok(legal.includes('<span class="state warn">') && legal.includes('Not in source set; incorporated by reference only') && legal.includes('<span class="state-w">Unverified summary</span>'));
+  assert.ok(/class="ck-list" data-block aria-label="Table"/.test(legal));
+});
+
+test('statusChecklist: the state tone comes from the word; an unknown word is neutral; an empty state is n.a. with the neutral icon; a level column is the three-segment meter', () => {
+  const block = { headers: ['Item', 'Status', 'Confidence'], rows: [['A', 'Passed', 'High'], ['B', 'Gate fails', 'Low'], ['C', 'Not found', 'Medium'], ['D', 'Unchanged', 'Low'], ['E', 'New', 'High'], ['F', 'Frobnicated', 'Low'], ['G', '', 'Low']].map((cells, i) => ({ line: i + 1, cells })) };
+  const html = C.statusChecklist(block, { key: r => `k:${r.line}` });
+  assert.deepEqual([...html.matchAll(/<span class="state (\w+)">/g)].map(m => m[1]), ['ok', 'bad', 'warn', 'same', 'new', 'info', 'info']);
+  assert.ok(html.includes('<span class="na" title="Empty in the handoff">n.a.</span>'));
+  assert.equal(countOf(html, /<span class="meter-w">/g), 7);
+  assert.ok(html.includes('<span class="meter-w">Medium</span>') && !html.includes('<dd>High</dd>'));
+});
+
+test('statusChecklist: a cell holding an identifier leaves a link to Evidence in its place, and the identifier is not drawn', () => {
+  const block = { headers: ['Item', 'Status', 'Effect'], rows: [{ line: 1, cells: ['Gate', 'Blocked', 'Waits on EV-9 before release'] }] };
+  const html = C.statusChecklist(block, { key: r => `k:${r.line}`, tokens: ['EV-9'], evidenceHref: '#W-Evidence/registers?m=X' });
+  assert.ok(html.includes('<dt>Effect</dt><dd><a class="in-ev" href="#W-Evidence/registers?m=X">In Evidence</a></dd>') && !html.includes('EV-9'));
+});
+
+test('sidedBoard: two columns from the cell\'s own side word, a count per side, entries in the table\'s order, a qualifier as a tag', () => {
+  const t = keyTables('CP-6', 'sided')[0], ctx = pageCtx('CP-6'), html = C.sidedBoard(keyBlock(t), ctx);
+  assert.ok(html.includes('<p class="sd-hs sd-s0"><i class="sd-dot" aria-hidden="true"></i>Bull<b class="sd-n">3</b></p>') && html.includes('<p class="sd-hs sd-s1"><i class="sd-dot" aria-hidden="true"></i>Bear<b class="sd-n">5</b></p>'));
+  const lines = [...html.matchAll(/<div class="sd-line sd-s(\d)">.*?<span class="sd-side"><i class="sd-dot" aria-hidden="true"><\/i>(\w+)<\/span>(?:<span class="tag q-tag">([^<]*)<\/span>)?/g)].map(m => [m[1], m[2], m[3]]);
+  assert.deepEqual(lines, [['0', 'Bull', undefined], ['0', 'Bull', undefined], ['0', 'Bull', undefined], ['1', 'Bear', undefined], ['1', 'Bear', undefined], ['1', 'Bear', undefined], ['1', 'Bear', undefined], ['1', 'Bear', 'weakly']]);
+  assert.ok(html.includes('<p class="sd-fig">USD 526.39 million / 2.36x</p>') && html.includes('<p class="sd-name">Junior minus senior running yield</p>') && html.includes('<dt>Chair reading</dt><dd>Junior pickup unproven</dd>'));
+  assert.ok(!html.includes('Bear (weakly)'), 'the cell is the word and its tag');
+});
+
+test('sidedBoard: "Bear (weakly)" is placed right with the tag "weakly"; a side word neither column uses, and an empty one, go full width beneath, not dropped', () => {
+  const rows = [['Cover', '3.6x', 'Bull', 'a'], ['Leverage', '8.7x', 'Bear (weakly)', 'b'], ['Yield', '1.1 pp', 'Bear', 'c'], ['Liquidity', '2.3x', 'Bull', 'd'], ['Mix', '9%', 'Neutral (unclear)', 'e'], ['Pending', '1x', '', 'f']].map((cells, i) => ({ line: i + 1, cells }));
+  const html = C.sidedBoard({ headers: ['Driver', 'Figure', 'Side it supports', 'Reading'], rows }, { key: r => `k:${r.line}` });
+  const line = n => html.split('<div class="sd-line').slice(1)[n];
+  assert.ok(line(1).startsWith(' sd-s1">') && line(1).includes('<span class="tag q-tag">weakly</span>') && line(1).includes('>Bear</span>') && line(1).includes('Leverage'));
+  assert.ok(line(4).startsWith(' sd-s2">') && line(4).includes('Neutral') && line(4).includes('<span class="tag q-tag">unclear</span>') && line(4).includes('Mix'));
+  assert.ok(line(5).startsWith(' sd-s2">') && line(5).includes('Pending') && !line(5).includes('sd-side'), 'an empty side cell: the row is drawn beneath with no side word');
+  assert.ok(!html.includes('sd-node') || countOf(html, /<i class="sd-node"/g) === 4, 'only the two columns have spine nodes');
+});
+
+test('moduleStateTiles: a repeated state is one tile (icon, word, count, the modules in a details); a state seen once stays a full tile with its module name as the title', () => {
+  const t = keyTables('CP-8', 'moduleState')[0], ctx = pageCtx('CP-8'), html = C.moduleStateTiles(keyBlock(t), ctx);
+  assert.equal(countOf(html, /<article class="ms-tile ms-group">/g), 2);
+  assert.equal(countOf(html, /<article class="ms-tile">/g), 0, 'no title-less tile');
+  assert.ok(/<span class="state same">.*?<span class="state-w">Unchanged<\/span><\/span>/.test(html) && /<span class="state new">.*?<span class="state-w">New<\/span><\/span>/.test(html));
+  assert.deepEqual([...html.matchAll(/<summary><b class="ms-n">(\d+)<\/b> (\w+)/g)].map(m => [m[1], m[2]]), [['8', 'modules'], ['4', 'modules']]);
+  assert.equal(countOf(html, /<details class="ms-list">/g), 2);
+  for (const row of t.rows) assert.ok(textOf(html).includes(row[0]) && textOf(html).includes(row[3]), row[0]);
+  assert.ok(!/<details[^>]* open/.test(html), 'folded');
+  assert.equal(countOf(html, /class="basis-link trace-row"/g), 12, 'every module row stays reachable');
+  const mixed = C.moduleStateTiles({ headers: ['Module', 'Status', 'Why'], rows: [['Alpha', 'Unchanged', 'same'], ['Beta', 'Unchanged', 'same'], ['Gamma', 'Changed', 'moved']].map((cells, i) => ({ line: i + 1, cells })) }, { key: r => `k:${r.line}` });
+  assert.ok(mixed.includes('<article class="ms-tile"><div class="ms-head"><p class="ms-title">Gamma</p>') && mixed.includes('<dt>Why</dt><dd>moved</dd>') && countOf(mixed, /ms-group/g) === 1);
+  assert.ok(mixed.indexOf('ms-group') < mixed.indexOf('Gamma'), 'tiles keep the order of the first row of each');
+  assert.ok(!/ms-(?:id|code)|CP-\d/.test(mixed), 'no module id is added');
+});
+
+test('qaAccordion: a native details per question with the answer-state badge; a question with nothing to unfold is a plain row; without a state column there is no badge', () => {
+  const t = keyTables('CP-DR', 'qa')[0], ctx = pageCtx('CP-DR'), html = C.qaAccordion(keyBlock(t), ctx);
+  assert.equal(countOf(html, /<div class="qa-item">/g), 6);
+  assert.deepEqual([...html.matchAll(/<span class="state (\w+)">.*?<span class="state-w">([^<]*)<\/span>/g)].map(m => [m[1], m[2]]), [['warn', 'Partly (issuer view)'], ['warn', 'Partly (issuer only)'], ['warn', 'Not found'], ['ok', 'Answered'], ['warn', 'Partly (issuer view)'], ['ok', 'Answered']]);
+  assert.equal(countOf(html, /<details/g), 0, 'the key table has no column to unfold, so no empty accordion');
+  const wide = C.qaAccordion({ headers: ['Question', 'Answer state', 'Finding'], rows: [{ line: 1, cells: ['Is it secured?', 'Answered', 'Yes, first lien'] }, { line: 2, cells: ['Who guarantees?', 'Not found', ''] }] }, { key: r => `k:${r.line}` });
+  assert.ok(/<details class="qa-d"><summary><span class="qa-q">Is it secured\?<\/span><span class="state ok">.*?Answered<\/span><\/span><span class="qa-ch"/.test(wide) && wide.includes('<dt>Finding</dt><dd>Yes, first lien</dd>'));
+  assert.equal(countOf(wide, /<details/g), 1, 'an empty answer has nothing to unfold');
+  const none = C.qaAccordion({ headers: ['Question', 'Basis note'], rows: [{ line: 1, cells: ['Why?', 'Because of the filing'] }] }, { key: r => `k:${r.line}` });
+  assert.ok(!none.includes('class="state') && none.includes('<dt>Basis note</dt><dd>Because of the filing</dd>'), 'no state column, no badge, and no state inferred from prose');
+});
+
+test('factList: definition groups by the category column, a bracketed qualifier as a tag, the count of facts per group; flat without a category column', () => {
+  const t = keyTables('CP-1A', 'facts')[0], ctx = pageCtx('CP-1A'), html = C.factList(keyBlock(t), ctx);
+  assert.deepEqual([...html.matchAll(/<p class="fl-head">([^<]*)<b class="fl-n">(\d+)<\/b><\/p>/g)].map(m => [m[1], m[2]]), [['Documentary Fact', '6'], ['Management Language', '2']]);
+  assert.ok(html.includes('<span class="tag q-tag">leadership claim is Management Language</span>') && html.includes('<span class="tag q-tag">estimates</span>'));
+  assert.equal(countOf(html, /<div class="fl-row">/g), 8);
+  assert.ok(html.includes('<dt>Business</dt>') && html.includes('<dt>Workforce</dt>') && !html.includes('TDG_2024'));
+  const flat = C.factList({ headers: ['Item', 'Fact'], rows: [{ line: 1, cells: ['Domicile', 'Delaware'] }] }, { key: r => `k:${r.line}` });
+  assert.ok(!flat.includes('fl-head') && flat.includes('<dt>Domicile</dt>') && flat.includes('Delaware'));
+});
+
+test('recordCards: one card per row, the first non-hidden column its label, every other non-hidden cell a labelled line (the records shape)', () => {
+  for (const t of KEY.tables.filter(x => x.shape === 'records')) {
+    const ctx = pageCtx(t.module), html = C.render('records', keyBlock(t), ctx);
+    assert.equal(countOf(html, /<article class="rec-card">/g), t.rows.length);
+    assert.equal(countOf(html, /<p class="rec-title">/g), t.rows.length, 'every card has its label');
+    const first = t.headers.findIndex((h, at) => !t.hidden.includes(at));
+    for (const cells of t.rows) assert.ok(html.includes(`<p class="rec-title">${plainCell(cells[first])}</p>`), cells[first]);
+  }
+});
+
+test('riskMatrix: the table\'s own row and column labels in their written order, a real table with header associations, several items in one cell, the classification word in each chip', () => {
+  const t = keyTables('CP-2A', 'matrix')[0], ctx = pageCtx('CP-2A'), html = C.riskMatrix(keyBlock(t), ctx);
+  assert.deepEqual([...html.matchAll(/<th scope="row">([^<]*)<\/th>/g)].map(m => m[1]), ['High', 'Medium']);
+  assert.deepEqual([...html.matchAll(/<th scope="col">([^<]*)<\/th>/g)].map(m => m[1]), ['High', 'Low', 'Medium']);
+  assert.ok(html.includes('<th scope="col" class="rm-corner">') && html.includes('<caption class="sr-only">'));
+  const cells = [...html.matchAll(/<tr><th scope="row">(\w+)<\/th>(.*?)<\/tr>/g)].map(m => [m[1], [...m[2].matchAll(/<td>(.*?)<\/td>/g)].map(c => [...c[1].matchAll(/<p class="rm-t">([^<]*)<\/p>/g)].map(x => x[1]))]);
+  assert.deepEqual(cells, [['High', [['Special dividend paid'], ['Securitization fully drawn', 'Post-period buybacks'], []]], ['Medium', [['FY2028 maturity cluster'], ['Securitization maturity'], ['2027 subordinated notes maturity']]]]);
+  assert.ok(html.includes('<li class="rm-chip rm-c-critical">') && html.includes('<span class="sr-only">P/I Classification: </span>Critical'));
+  assert.equal(countOf(html, /<li class="rm-chip/g), 6);
+  assert.ok(/<p class="rm-lg"><span class="rm-lg-k">P\/I Classification<\/span>.*Critical.*Medium.*Low.*High/.test(html), 'the legend lists the words the table uses, in its order');
+});
+
+test('riskMatrix: no ramp from position; a classification word the table invents gets no colour; a row with no probability or impact is listed beneath, not dropped', () => {
+  const rows = [['Fire', 'Rare', 'Severe', 'Escalate'], ['Flood', 'Likely', 'Minor', 'Watch'], ['Theft', '', 'Minor', 'Watch'], ['Quake', 'Rare', 'Minor', 'Watch']].map((cells, i) => ({ line: i + 1, cells }));
+  const html = C.riskMatrix({ headers: ['Event', 'Probability', 'Impact', 'Rating'], rows }, { key: r => `k:${r.line}` });
+  assert.deepEqual([...html.matchAll(/<th scope="row">([^<]*)<\/th>/g)].map(m => m[1]), ['Rare', 'Likely']);
+  assert.deepEqual([...html.matchAll(/<th scope="col">([^<]*)<\/th>/g)].map(m => m[1]), ['Severe', 'Minor']);
+  assert.ok(!/rm-c-/.test(html), 'Escalate and Watch are not colours');
+  assert.ok(/Not placed in the grid.*Theft/.test(html) && countOf(html, /<li class="rm-chip/g) === 4);
+  assert.ok(!/data-h=|rm-heat/.test(html), 'no heat from position');
+});
+
+test('watchList: indicator, a leading or lagging icon with its word, the threshold as written, the limitation in a details; no limitation, no details', () => {
+  const t = keyTables('CP-2A', 'watch')[0], ctx = pageCtx('CP-2A'), html = C.watchList(keyBlock(t), ctx);
+  assert.equal(countOf(html, /<div class="wl-item">/g), t.rows.length);
+  assert.equal(countOf(html, /<details class="wl-d">/g), t.rows.length);
+  assert.ok(html.includes(`<span class="wl-lead">${C.icon('arrow-up-right')}Leading</span>`) && html.includes(`<span class="wl-lead">${C.icon('history')}Lagging</span>`));
+  for (const cells of t.rows) {
+    assert.ok(html.includes(`<span class="wl-th">${plainCell(cells[3])}</span>`), cells[3]);
+    assert.ok(html.includes(`<p class="wl-lim"><b>Limitation</b> ${plainCell(cells[7])}</p>`), cells[7]);
+  }
+  assert.ok(!/<details[^>]* open/.test(html) && !html.includes('Trigger ID') && !html.includes('CP-2A-MON'));
+  const plain = C.watchList({ headers: ['Indicator', 'Leading / Lagging', 'Threshold', 'Limitation'], rows: [{ line: 1, cells: ['Spread', 'Concurrent', 'Above 400bp', ''] }] }, { key: r => `k:${r.line}` });
+  assert.ok(!plain.includes('<details') && plain.includes('Above 400bp') && plain.includes(`<span class="wl-lead">${C.icon('activity')}Concurrent</span>`));
+});
+
+test('every drawn cell sits in an element whose CSS wraps a long unbroken token', () => {
+  const css = fs.readFileSync(path.join(__dirname, 'screen.css'), 'utf8');
+  for (const cls of ['ck-label', 'sd-name', 'sd-fig', 'ms-title', 'qa-q', 'fl-v', 'rm-t', 'wl-t', 'wl-th', 'state']) {
+    const rule = new RegExp(`(?:^|[},\\n])[^{}]*\\.${cls}\\b[^{}]*\\{[^}]*overflow-wrap:anywhere`);
+    assert.ok(rule.test(css), `.${cls} wraps`);
+  }
+});
+
+test('print: the folds of these components are opened for the print and put back as they were', () => {
+  const fold = open => ({ open, dataset: {} }), folds = [fold(false), fold(true)];
+  const root = { querySelectorAll: selector => { assert.equal(selector, '.qa-d, .wl-d, .ms-list'); return folds; } };
+  C.foldsForPrint(root, true);
+  assert.deepEqual(folds.map(f => f.open), [true, true]);
+  C.foldsForPrint(root, false);
+  assert.deepEqual(folds.map(f => f.open), [false, true]);
+  assert.deepEqual(folds.map(f => f.dataset), [{}, {}]);
+});
+
+test('the state icons come from icon files: the two new ones are in the table', () => {
+  for (const name of ['arrow-up-right', 'history']) assert.ok(Object.hasOwn(C.ICON_PATHS, name), name);
+});

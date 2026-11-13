@@ -11,6 +11,7 @@
     "activity": "<path d=\"M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2\" />",
     "arrow-left": "<path d=\"m12 19-7-7 7-7\" /><path d=\"M19 12H5\" />",
     "arrow-right": "<path d=\"M5 12h14\" /><path d=\"m12 5 7 7-7 7\" />",
+    "arrow-up-right": "<path d=\"M7 7h10v10\" /><path d=\"M7 17 17 7\" />",
     "calendar-days": "<path d=\"M8 2v3\" /><path d=\"M16 2v3\" /><rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\" /><path d=\"M3 9h18\" /><path d=\"M8 13h.01\" /><path d=\"M12 13h.01\" /><path d=\"M16 13h.01\" /><path d=\"M8 17h.01\" /><path d=\"M12 17h.01\" /><path d=\"M16 17h.01\" />",
     "chart-no-axes-combined": "<path d=\"M12 16v5\" /><path d=\"M16 14.639V21\" /><path d=\"M20 10.656V21\" /><path d=\"m22 3-8.646 8.646a.5.5 0 0 1-.708 0L9.354 8.354a.5.5 0 0 0-.707 0L2 15\" /><path d=\"M4 18.463V21\" /><path d=\"M8 14.656V21\" />",
     "check": "<path d=\"M20 6 9 17l-5-5\" />",
@@ -23,6 +24,7 @@
     "files": "<path d=\"M15 2h-4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8\" /><path d=\"M16.706 2.706A2.4 2.4 0 0 0 15 2v5a1 1 0 0 0 1 1h5a2.4 2.4 0 0 0-.706-1.706z\" /><path d=\"M5 7a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 1.732-1\" />",
     "folder-open": "<path d=\"m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2\" />",
     "git-compare": "<circle cx=\"18\" cy=\"18\" r=\"3\" /><circle cx=\"6\" cy=\"6\" r=\"3\" /><path d=\"M13 6h3a2 2 0 0 1 2 2v7\" /><path d=\"M11 18H8a2 2 0 0 1-2-2V9\" />",
+    "history": "<path d=\"M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8\" /><path d=\"M3 3v5h5\" /><path d=\"M12 7v5l4 2\" />",
     "info": "<circle cx=\"12\" cy=\"12\" r=\"10\" /><path d=\"M12 16v-4\" /><path d=\"M12 8h.01\" />",
     "layers": "<path d=\"M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z\" /><path d=\"M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12\" /><path d=\"M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17\" />",
     "layout-grid": "<rect width=\"7\" height=\"7\" x=\"3\" y=\"3\" rx=\"1\" /><rect width=\"7\" height=\"7\" x=\"14\" y=\"3\" rx=\"1\" /><rect width=\"7\" height=\"7\" x=\"14\" y=\"14\" rx=\"1\" /><rect width=\"7\" height=\"7\" x=\"3\" y=\"14\" rx=\"1\" />",
@@ -106,6 +108,8 @@
 
   // ---- The module page (Task 4). The text helpers are reader.js's: node requires the file, the page already holds its globals.
   const readerText = () => (typeof module !== 'undefined' ? require('./reader.js') : {richText, figureSpans, figuredHtml, paragraphBody, chartNumber, plainText, numericColumn});
+  // The words of a paragraph as the page reads them: its Basis line, list marker and line breaks gone.
+  const paragraphText = text => readerText().paragraphBody(text).body;
   const shapes = () => (typeof module !== 'undefined' ? require('./shapes.js') : window.Shapes);
   // One paragraph of a passage: its body as read (Basis line, list marker and line breaks gone) and `show(from, to)`, the inline HTML of a stretch of it.
   // A figure is the page's own control when `figure(line, index, text)` gives one, else its exact text.
@@ -499,9 +503,211 @@
     return `<div class="chg-cards"${ctx.caption ? ` role="group" aria-label="${escapeHtml(ctx.caption)}"` : ''}>${cards.join('')}</div>`;
   }
 
-  // The dispatch: one component per shape; every shape without one is a record card. Later tasks add their shapes to this table.
-  const SHAPE_COMPONENTS = {cases: casesBlock, caseRows: caseRowsBlock, ranked: rankedLadder, statement: statementCard, metric: metricTiles, measure: measureTiles, change: changeCards};
+  // ---- The non-numeric shape components (Task 6). A table of words is drawn by what its columns are, not by what it is called.
+  // Every cell goes through fieldHtml (findingCell): a cell kept back for an identifier leaves its "In Evidence" link, a reference-only cell leaves nothing, and the
+  // row's trace control reaches the rest. A table that does not fit its component (the column it needs is missing) is drawn by recordCards, never dropped.
+  const plain = text => readerText().plainText(text);
+  const labelNorm = col => col.label.trim().toLowerCase().replace(/_/g, ' ').replace(/\s+/g, ' ');
+  const rowLabel = (row, title) => `${plain(title).trim() || `Row ${row.line}`}: where it comes from`;
+  const levelColumn = (block, at) => { const cells = block.rows.map(row => cellText(row, at)).filter(text => text !== ''); return cells.length > 0 && cells.every(isLevel); };
+  const levelMeter = word => `<span class="cr-conf"><span class="meter" aria-hidden="true">${[1, 2, 3].map(n => (n <= LEVEL[word.toLowerCase()] ? '<i class="f"></i>' : '<i></i>')).join('')}</span><span class="meter-w">${escapeHtml(word)}</span></span>`;
+  // The columns of a row that a card shows as label and value; a level column (every cell High, Medium or Low) is the three-segment meter with its word (C29).
+  function fieldList(row, cols, ctx, levels = new Set()) {
+    const items = cols.map(col => {
+      const text = cellText(row, col.at), html = levels.has(col.at) && findingCell(text, ctx).html !== undefined ? levelMeter(text) : fieldHtml(text, ctx);
+      return html === '' ? '' : `<div><dt>${escapeHtml(col.label)}</dt><dd>${html}</dd></div>`;
+    }).join('');
+    return items ? `<dl class="rec-fields">${items}</dl>` : '';
+  }
+  // "Bear (weakly)", "Documentary Fact (estimates)": the word, and what the cell says in its closing brackets as a tag. Both are the cell's own characters.
+  function withQualifier(text) {
+    const found = /^(.*?)\s*\(([^()]*)\)\s*$/.exec(text.trim());
+    return found && found[1].trim() !== '' ? {word: found[1].trim(), qualifier: found[2].trim()} : {word: text.trim(), qualifier: ''};
+  }
+  const qualifierTag = (qualifier, ctx) => (qualifier === '' ? '' : `<span class="tag q-tag">${fieldHtml(qualifier, ctx)}</span>`);
+
+  // A state word and the mark beside it. The word is the cell; the table of words below only picks which icon and which status token (state is never colour alone).
+  const STATE_RULES = [
+    ['bad', 'x', /\b(?:fail(?:s|ed|ure)?|blocked|breach(?:ed)?|rejected|refuted|removed|dropped)\b/i],
+    ['warn', 'triangle-alert', /^not\b|\b(?:needed|needs|partly|partial(?:ly)?|pending|unverified|unresolved|missing|absent|unavailable|unclear|open|insufficient|withheld|restricted|limited|requires)\b/i],
+    ['ok', 'circle-check', /\b(?:ready|met|pass(?:ed)?|yes|complete[d]?|confirmed|sufficient|answered|supported|resolved|verified|cleared)\b/i],
+    ['new', 'plus', /^(?:new|added)\b/i],
+    ['same', 'check', /^(?:unchanged|same|no change)\b/i],
+  ];
+  const stateOf = text => { const word = plain(text).trim(), hit = STATE_RULES.find(([, , rx]) => rx.test(word)); return hit ? {tone: hit[0], icon: hit[1]} : {tone: 'info', icon: 'info'}; };
+  function stateBadge(text, ctx) {
+    const cell = findingCell(text, ctx);
+    if (cell.html === undefined) return `<span class="state info">${icon('info')}${cell.inEvidence ? evidenceLink(ctx) : MISSING}</span>`;
+    const {tone, icon: name} = stateOf(text);
+    return `<span class="state ${tone}">${icon(name)}<span class="state-w">${cell.html}</span></span>`;
+  }
+  const listGroup = (cls, ctx, inner) => `<div class="${cls}" role="group"${ctx.caption ? ` aria-label="${escapeHtml(ctx.caption)}"` : ''}>${inner}</div>`;
+
+  // ---- status: C12, a checklist row per item, the state word beside its icon
+  function statusChecklist(block, ctx) {
+    const cols = visibleColumns(block, 'status', ctx), stateCol = cols.find(col => /status$/.test(labelNorm(col))), labelCol = cols.find(col => col !== stateCol);
+    if (!stateCol || !labelCol || !block.rows.length) return recordCards(block, ctx);
+    const rest = cols.filter(col => col !== stateCol && col !== labelCol), levels = new Set(rest.filter(col => levelColumn(block, col.at)).map(col => col.at));
+    const rows = block.rows.map(row => {
+      const title = cellText(row, labelCol.at), titleHtml = fieldHtml(title, ctx);
+      return `<li class="ck-row"><div class="ck-head"><p class="ck-label">${titleHtml}</p>${stateBadge(cellText(row, stateCol.at), ctx)}${traceFor(ctx, row, rowLabel(row, title))}</div>${fieldList(row, rest, ctx, levels)}</li>`;
+    }).join('');
+    return `<ul class="ck-list" data-block${ctx.caption ? ` aria-label="${escapeHtml(ctx.caption)}"` : ''}>${rows}</ul>`;
+  }
+
+  // ---- sided: C7, two columns chosen from the cell's own side word
+  function sidedBoard(block, ctx) {
+    const cols = visibleColumns(block, 'sided', ctx), sideCol = cols.find(col => /^side\b/.test(labelNorm(col))), labelCol = cols.find(col => col !== sideCol);
+    if (!sideCol || !labelCol || !block.rows.length) return recordCards(block, ctx);
+    const figCol = cols.find(col => col !== sideCol && col !== labelCol && numericLike(block, col.at)), rest = cols.filter(col => ![sideCol, labelCol, figCol].includes(col));
+    const entries = block.rows.map(row => {
+      const text = cellText(row, sideCol.at), {word, qualifier} = withQualifier(text), wordHtml = word === '' ? '' : fieldHtml(word, ctx);
+      return {row, word: wordHtml === '' ? '' : word, wordHtml, qualifier, key: wordHtml === '' ? '' : plain(word).toLowerCase()};
+    });
+    const tally = new Map();
+    entries.filter(entry => entry.key !== '').forEach(entry => tally.set(entry.key, {key: entry.key, n: (tally.get(entry.key)?.n ?? 0) + 1, first: tally.get(entry.key)?.first ?? entry}));
+    const sides = [...tally.values()].sort((a, b) => b.n - a.n).slice(0, 2).sort((a, b) => entries.indexOf(a.first) - entries.indexOf(b.first));
+    if (sides.length === 2 && sides[0].key === 'bear' && sides[1].key === 'bull') sides.reverse();
+    const place = entry => (sides[0]?.key === entry.key ? 0 : sides[1]?.key === entry.key ? 1 : 2);
+    const head = sides.length ? `<div class="sd-h">${sides.map((side, k) => `<p class="sd-hs sd-s${k}"><i class="sd-dot" aria-hidden="true"></i>${side.first.wordHtml}<b class="sd-n">${side.n}</b></p>`).join('<span></span>')}</div>` : '';
+    const lines = entries.map(entry => {
+      const at = place(entry), title = cellText(entry.row, labelCol.at), figure = figCol ? fieldHtml(cellText(entry.row, figCol.at), ctx) : '';
+      const side = entry.wordHtml === '' && entry.qualifier === '' ? '' : `<span class="sd-side"><i class="sd-dot" aria-hidden="true"></i>${entry.wordHtml}</span>${qualifierTag(entry.qualifier, ctx)}`;
+      const card = `<article class="sd-entry"><div class="sd-top">${side || '<span></span>'}${traceFor(ctx, entry.row, rowLabel(entry.row, title))}</div>${figure ? `<p class="sd-fig">${figure}</p>` : ''}<p class="sd-name">${fieldHtml(title, ctx)}</p>${fieldList(entry.row, rest, ctx)}</article>`;
+      return `<div class="sd-line sd-s${at}">${at === 2 ? '' : '<i class="sd-node" aria-hidden="true"></i>'}${card}</div>`;
+    }).join('');
+    return `<div class="sd-board" data-block role="group"${ctx.caption ? ` aria-label="${escapeHtml(ctx.caption)}"` : ''}>${head}${lines}</div>`;
+  }
+
+  // The module name of a row is the handoff's own text for what the row is about: "Source readiness (CP-0)" is drawn as written, though a lone "(CP-0)" would be a reference.
+  const MODULE_NAME = /^.*\S\s*\(CP-[0-9A-Z]+\)$/;
+  function subjectHtml(text, ctx) {
+    const cell = findingCell(text, ctx);
+    return cell.omitted && !cell.inEvidence && MODULE_NAME.test(String(text).trim()) ? readerText().richText(String(text).trim()) : fieldHtml(text, ctx);
+  }
+
+  // ---- moduleState: C20, tiles; a state that repeats collapses to one tile with the state, the count and the rows in a <details>
+  function moduleStateTiles(block, ctx) {
+    const cols = visibleColumns(block, 'moduleState', ctx), stateCol = cols.find(col => labelNorm(col) === 'status'), nameCol = cols.find(col => col !== stateCol);
+    if (!stateCol || !nameCol || !block.rows.length) return recordCards(block, ctx);
+    const rest = cols.filter(col => col !== stateCol && col !== nameCol), stateKey = row => plain(cellText(row, stateCol.at)).toLowerCase();
+    const sizes = new Map();
+    block.rows.forEach(row => sizes.set(stateKey(row), (sizes.get(stateKey(row)) ?? 0) + 1));
+    const repeated = key => key !== '' && sizes.get(key) > 1, done = new Set(), tiles = [];
+    for (const row of block.rows) {
+      const key = stateKey(row), title = cellText(row, nameCol.at);
+      if (!repeated(key)) {
+        tiles.push(`<article class="ms-tile"><div class="ms-head"><p class="ms-title">${subjectHtml(title, ctx)}</p>${traceFor(ctx, row, rowLabel(row, title))}</div>${stateBadge(cellText(row, stateCol.at), ctx)}${fieldList(row, rest, ctx)}</article>`);
+      } else if (!done.has(key)) {
+        done.add(key);
+        const same = block.rows.filter(other => stateKey(other) === key), noun = `${nameCol.label.trim().toLowerCase()}${same.length === 1 ? '' : 's'}`;
+        const items = same.map(other => `<li><div class="ms-head"><p class="ms-name">${subjectHtml(cellText(other, nameCol.at), ctx)}</p>${traceFor(ctx, other, rowLabel(other, cellText(other, nameCol.at)))}</div>${fieldList(other, rest, ctx)}</li>`).join('');
+        tiles.push(`<article class="ms-tile ms-group"><div class="ms-head">${stateBadge(cellText(row, stateCol.at), ctx)}</div><details class="ms-list"><summary><b class="ms-n">${same.length}</b> ${escapeHtml(noun)}<span class="ms-ch" aria-hidden="true">${icon('chevron-down')}</span></summary><ul>${items}</ul></details></article>`);
+      }
+    }
+    return listGroup('ms-tiles', ctx, tiles.join(''));
+  }
+
+  // ---- qa: C18, a native accordion; the answer-state column, when the table has one, is the badge
+  function qaAccordion(block, ctx) {
+    const cols = visibleColumns(block, 'qa', ctx), qCol = cols[0];
+    if (!qCol || !block.rows.length) return recordCards(block, ctx);
+    const stateCol = cols.find(col => col !== qCol && /(?:^|\s)(?:state|status)$|^answer$/.test(labelNorm(col))), rest = cols.filter(col => col !== qCol && col !== stateCol);
+    const levels = new Set(rest.filter(col => levelColumn(block, col.at)).map(col => col.at));
+    const items = block.rows.map(row => {
+      const question = cellText(row, qCol.at), q = `<span class="qa-q">${fieldHtml(question, ctx)}</span>`, badge = stateCol ? stateBadge(cellText(row, stateCol.at), ctx) : '', body = fieldList(row, rest, ctx, levels);
+      const open = body ? `<details class="qa-d"><summary>${q}${badge}<span class="qa-ch" aria-hidden="true">${icon('chevron-down')}</span></summary><div class="qa-body">${body}</div></details>` : `<div class="qa-plain">${q}${badge}</div>`;
+      return `<div class="qa-item">${open}${traceFor(ctx, row, rowLabel(row, question))}</div>`;
+    }).join('');
+    return listGroup('qa-list', ctx, items);
+  }
+
+  // ---- facts: C17, definition lists grouped by the category column
+  function factList(block, ctx) {
+    const cols = visibleColumns(block, 'facts', ctx), catCol = cols.find(col => labelNorm(col) === 'category'), factCol = cols.find(col => labelNorm(col) === 'fact');
+    const labelCol = cols.find(col => col !== catCol && col !== factCol);
+    if (!factCol || !labelCol || !block.rows.length) return recordCards(block, ctx);
+    const rest = cols.filter(col => ![catCol, factCol, labelCol].includes(col)), groups = new Map();
+    for (const row of block.rows) {
+      const {word, qualifier} = catCol ? withQualifier(cellText(row, catCol.at)) : {word: '', qualifier: ''};
+      if (!groups.has(word)) groups.set(word, []);
+      groups.get(word).push({row, qualifier});
+    }
+    const sections = [...groups].map(([category, items]) => {
+      const rows = items.map(({row, qualifier}) => {
+        const label = cellText(row, labelCol.at), extra = rest.map(col => [col, fieldHtml(cellText(row, col.at), ctx)]).filter(([, html]) => html !== '').map(([col, html]) => `<span class="fl-x"><b>${escapeHtml(col.label)}</b> ${html}</span>`).join('');
+        return `<div class="fl-row"><dt>${fieldHtml(label, ctx)}</dt><dd><span class="fl-v">${valueHtml(cellText(row, factCol.at), ctx)}</span>${qualifierTag(qualifier, ctx)}${extra}${traceFor(ctx, row, rowLabel(row, label))}</dd></div>`;
+      }).join('');
+      const heading = category === '' ? '' : `<p class="fl-head">${fieldHtml(category, ctx)}<b class="fl-n">${items.length}</b></p>`;
+      return `<section class="fl-group">${heading}<dl class="fl">${rows}</dl></section>`;
+    }).join('');
+    return listGroup('fl-groups', ctx, sections);
+  }
+
+  // ---- matrix: C16, the table's own row and column labels in their written order; the classification word is the cell's own
+  const CLASS_WORDS = ['critical', 'high', 'medium', 'low'];
+  const classOf = text => { const word = plain(text).trim().toLowerCase(); return CLASS_WORDS.includes(word) ? ` rm-c-${word}` : ''; };
+  function riskMatrix(block, ctx) {
+    const cols = visibleColumns(block, 'matrix', ctx), probCol = cols.find(col => labelNorm(col) === 'probability'), impCol = cols.find(col => labelNorm(col) === 'impact');
+    const titleCol = cols.find(col => col !== probCol && col !== impCol);
+    if (!probCol || !impCol || !titleCol || !block.rows.length) return recordCards(block, ctx);
+    const classCol = cols.find(col => ![titleCol, probCol, impCol].includes(col) && /classification|rating|level|severity/.test(labelNorm(col))), rest = cols.filter(col => ![titleCol, probCol, impCol, classCol].includes(col));
+    const rowsOf = [], colsOf = [], placed = [], loose = [];
+    for (const row of block.rows) {
+      const p = cellText(row, probCol.at), i = cellText(row, impCol.at);
+      if (p === '' || i === '' || fieldHtml(p, ctx) === '' || fieldHtml(i, ctx) === '') { loose.push(row); continue; }
+      if (!rowsOf.includes(p)) rowsOf.push(p);
+      if (!colsOf.includes(i)) colsOf.push(i);
+      placed.push({row, p, i});
+    }
+    const chip = row => {
+      const title = cellText(row, titleCol.at), word = classCol ? cellText(row, classCol.at) : '', wordHtml = word === '' ? '' : fieldHtml(word, ctx);
+      const extra = rest.map(col => [col, fieldHtml(cellText(row, col.at), ctx)]).filter(([, html]) => html !== '').map(([col, html]) => `<span class="rm-x"><b>${escapeHtml(col.label)}</b> ${html}</span>`).join('');
+      return `<li class="rm-chip${classCol ? classOf(word) : ''}"><div class="rm-top"><p class="rm-t">${fieldHtml(title, ctx)}</p>${traceFor(ctx, row, rowLabel(row, title))}</div>${wordHtml ? `<p class="rm-k"><span class="sr-only">${escapeHtml(classCol.label)}: </span>${wordHtml}</p>` : ''}${extra}</li>`;
+    };
+    const corner = `<span class="rm-cx">${escapeHtml(impCol.label)}${icon('arrow-right')}</span><span class="rm-cy">${escapeHtml(probCol.label)}${icon('arrow-right')}</span>`;
+    const body = rowsOf.map(p => `<tr><th scope="row">${fieldHtml(p, ctx)}</th>${colsOf.map(i => { const here = placed.filter(entry => entry.p === p && entry.i === i); return `<td>${here.length ? `<ul class="rm-cell">${here.map(entry => chip(entry.row)).join('')}</ul>` : ''}</td>`; }).join('')}</tr>`).join('');
+    const grid = rowsOf.length ? `<div class="rm-wrap" role="region" tabindex="0" aria-label="${escapeHtml(`${ctx.caption || 'Matrix'}: ${probCol.label} by ${impCol.label}`)}"><table class="rm-tbl" style="--cols:${colsOf.length}"><caption class="sr-only">${escapeHtml(`${ctx.caption || 'Matrix'}: ${probCol.label} down, ${impCol.label} across`)}</caption><thead><tr><th scope="col" class="rm-corner">${corner}</th>${colsOf.map(i => `<th scope="col">${fieldHtml(i, ctx)}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>` : '';
+    const words = classCol ? [...new Set(block.rows.map(row => cellText(row, classCol.at)).filter(text => text !== '' && fieldHtml(text, ctx) !== ''))] : [];
+    const legend = words.length ? `<p class="rm-lg"><span class="rm-lg-k">${escapeHtml(classCol.label)}</span>${words.map(word => `<span class="rm-lg-i${classOf(word)}"><i aria-hidden="true"></i>${fieldHtml(word, ctx)}</span>`).join('')}</p>` : '';
+    const rest2 = loose.length ? `<div class="rm-loose"><p class="eyebrow">Not placed in the grid</p><ul class="rm-cell">${loose.map(chip).join('')}</ul></div>` : '';
+    return shapeBlock('shape-matrix', ctx, '', shapeBar('', traceOfBlock(ctx, block)) + grid + legend + rest2);
+  }
+
+  // ---- watch: indicator, a leading or lagging icon with its word, the threshold as written, the limitation folded
+  const WATCH_ICON = {leading: 'arrow-up-right', lagging: 'history'};
+  function watchList(block, ctx) {
+    const cols = visibleColumns(block, 'watch', ctx), leadCol = cols.find(col => /leading/.test(labelNorm(col))), nameCol = cols.find(col => col !== leadCol);
+    if (!leadCol || !nameCol || !block.rows.length) return recordCards(block, ctx);
+    const limitCol = cols.find(col => col.kind === 'limitation'), thresholdCol = cols.find(col => ![leadCol, nameCol, limitCol].includes(col));
+    const rest = cols.filter(col => ![leadCol, nameCol, limitCol, thresholdCol].includes(col));
+    const items = block.rows.map(row => {
+      const title = cellText(row, nameCol.at), word = cellText(row, leadCol.at), wordHtml = fieldHtml(word, ctx), threshold = thresholdCol ? fieldHtml(cellText(row, thresholdCol.at), ctx) : '';
+      const mark = wordHtml === '' ? '' : `<span class="wl-lead">${icon(WATCH_ICON[plain(word).trim().toLowerCase()] || 'activity')}${wordHtml}</span>`;
+      const limit = limitCol ? fieldHtml(cellText(row, limitCol.at), ctx) : '', more = fieldList(row, rest, ctx);
+      const head = `<span class="wl-t">${fieldHtml(title, ctx)}</span>${mark}${threshold ? `<span class="wl-th">${threshold}</span>` : ''}`;
+      const body = `${limit ? `<p class="wl-lim"><b>${escapeHtml(limitCol.label)}</b> ${limit}</p>` : ''}${more}`;
+      return `<div class="wl-item">${body ? `<details class="wl-d"><summary>${head}<span class="wl-ch" aria-hidden="true">${icon('chevron-down')}</span></summary><div class="wl-body">${body}</div></details>` : `<div class="wl-plain">${head}</div>`}${traceFor(ctx, row, rowLabel(row, title))}</div>`;
+    }).join('');
+    return listGroup('wl-list', ctx, items);
+  }
+
+  // The dispatch: one component per shape; every shape without one (and any table a component cannot place) is a record card.
+  const SHAPE_COMPONENTS = {cases: casesBlock, caseRows: caseRowsBlock, ranked: rankedLadder, statement: statementCard, metric: metricTiles, measure: measureTiles, change: changeCards,
+    status: statusChecklist, sided: sidedBoard, moduleState: moduleStateTiles, qa: qaAccordion, facts: factList, records: recordCards, matrix: riskMatrix, watch: watchList};
   const render = (shape, block, ctx) => (Object.hasOwn(SHAPE_COMPONENTS, shape) ? SHAPE_COMPONENTS[shape] : recordCards)(block, ctx);
+
+  // Print shows the text of a folded <details>: the ones these components draw are opened for the print and put back as they were. `root` is the document.
+  const FOLDS = '.qa-d, .wl-d, .ms-list';
+  function foldsForPrint(root, printing) {
+    root.querySelectorAll(FOLDS).forEach(fold => {
+      if (printing) { fold.dataset.wasOpen = String(fold.open); fold.open = true; } else if (fold.dataset.wasOpen !== undefined) { fold.open = fold.dataset.wasOpen === 'true'; delete fold.dataset.wasOpen; }
+    });
+  }
+  if (typeof window !== 'undefined' && typeof document !== 'undefined' && window.addEventListener) {
+    window.addEventListener('beforeprint', () => foldsForPrint(document, true));
+    window.addEventListener('afterprint', () => foldsForPrint(document, false));
+  }
 
   // The page's own state for these components: which case is chosen, which view is shown. Called from screen.js's click handler; true when the click was handled.
   function handleClick(target) {
@@ -532,7 +738,7 @@
     return `<nav class="sec-rail" aria-label="On this page"><p class="eyebrow">On this page</p>${items.map(link).join('')}</nav>`;
   }
 
-  const Components = {icon, traceButton, traceRow, headerChips, placePill, toast, toastHost, tipAttributes, verdictPanel, findingsFeed, callout, limitationsBlock, recordCards, findingCell, render, casesBlock, caseRowsBlock, rankedLadder, statementCard, metricTiles, measureTiles, changeCards, handleClick, sectionRail, ICON_PATHS};
+  const Components = {icon, traceButton, traceRow, headerChips, placePill, toast, toastHost, tipAttributes, verdictPanel, findingsFeed, callout, limitationsBlock, recordCards, findingCell, render, casesBlock, caseRowsBlock, rankedLadder, statementCard, metricTiles, measureTiles, changeCards, statusChecklist, sidedBoard, moduleStateTiles, qaAccordion, factList, riskMatrix, watchList, foldsForPrint, paragraphText, handleClick, sectionRail, ICON_PATHS};
   if (typeof window !== 'undefined') window.Components = Components;
   if (typeof document !== 'undefined' && document.body) toastHost();
   if (typeof module !== 'undefined') module.exports = Components;

@@ -162,3 +162,15 @@ test('casePairing: the CP-2A tables pair the three case columns with the three s
   const plain = {headers: ['Scenario', 'Note'], rows: ['a', 'b', 'c'].map(x => ({cells: [x, 'n']}))};
   assert.deepEqual(Shapes.casePairing([cases, plain]), {names: ['Base FY2024 (control)', 'Moderate scenario', 'Severe scenario'], ids: ['a', 'b', 'c']}, 'no id column: the first column');
 });
+
+test('methodNote: a calculation name makes a Calculations note, an identifier of the module a Registers note, anything else is findings prose (whole words only)', () => {
+  const tokens = ['EV-01', 'SC1'];
+  assert.equal(Shapes.methodNote('Net debt follows calculation D17.', tokens), 'calculations');
+  assert.equal(Shapes.methodNote('See Calculations C21 and the bridge.', []), 'calculations');
+  assert.equal(Shapes.methodNote('EV-01 is the special dividend.', tokens), 'registers');
+  assert.equal(Shapes.methodNote('Under SC1 leverage rises.', tokens), 'registers');
+  assert.equal(Shapes.methodNote('Both EV-01 and calculation D17 apply.', tokens), 'calculations', 'a calculation ID wins');
+  for (const prose of ['EV-010 is another event.', 'ASC1 is not an identifier.', 'Leverage is moderate.', 'calculation K1 has one digit', '']) assert.equal(Shapes.methodNote(prose, tokens), null, prose);
+  assert.equal(Shapes.methodNote('EV-01 stands', undefined), null);
+  assert.equal(Shapes.methodNote(undefined, tokens), null);
+});

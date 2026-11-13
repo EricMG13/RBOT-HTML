@@ -1515,6 +1515,26 @@ test('module page (Task 4): the page draws only passage, finding and drawing sec
   assert.ok(html.indexOf('gapsig') > html.indexOf('Peers were not compared.'));
 });
 
+test('module page (ruling 2026-11-13): a finding paragraph holding an identifier or naming a calculation is not drawn; a passage paragraph always is; a section left with nothing keeps its heading and a link to Evidence', () => {
+  const secs = [
+    ...passageSections({ bottom: 'Cash holds EV-1 constant. Debt is flat.', key: ['**Cash rose.** See calculation K12 for the bridge.'], limits: ['Peers were not compared (EV-1 only).'] }),
+    sec('Liquidity position', 3, 30, 'view', [text(31, 'Liquidity is ample.'), text(32, 'The EV-1 bridge needs review.'), text(33, 'Net debt is shown in calculation D17.'), text(34, 'EV-10 is another event, so this stays.')]),
+    sec('Only calculation notes', 3, 40, 'view', [text(41, 'Uses calculation D17 only.')]),
+    sec('Only identifier notes', 3, 45, 'view', [text(46, 'EV-1 drives this.')]),
+    sec('Event list', 3, 50, 'view', [text(51, 'The list below holds EV-1.'), table(52, ['ID', 'Event'], [[53, 'EV-1', 'Fire']])]),
+  ];
+  const parts = runPage(() => overviewData({ 'CP-1': secs }), [], m => m, { record: steps(['CP-1']), runFields: { asOf: '2025-03-31' }, names: FIXTURE_NAMES });
+  const html = parts.moduleReport(outId('CP-1')), text_ = readText(html);
+  for (const drawn of ['Liquidity is ample.', 'EV-10 is another event, so this stays.', 'Cash holds EV-1 constant.', 'See calculation K12 for the bridge.', 'Peers were not compared (EV-1 only).', 'Only calculation notes', 'Only identifier notes']) assert.ok(text_.includes(drawn), `${drawn} is drawn`);
+  for (const gone of ['The EV-1 bridge needs review', 'calculation D17', 'EV-1 drives this', 'The list below holds EV-1']) assert.ok(!text_.includes(gone), `${gone} is Evidence's`);
+  // The Event list keeps its table (a card per row; the ID column is never drawn) and gains no link; the two emptied sections each link to where their paragraphs went.
+  const section = line => html.slice(html.indexOf(`id="s-${line}"`)).split('<div class="analysis-section"')[0];
+  assert.ok(section(30).includes('Liquidity is ample.') && !section(30).includes('sec-moved'), 'a section with prose left has no link');
+  assert.ok(section(40).includes('<p class="sec-moved"><a class="in-ev" href="#W-Evidence/calculations?c=run-a&amp;m=CP-1">In Evidence</a></p>'), 'only calculation notes: the Calculations tab');
+  assert.ok(section(45).includes('<p class="sec-moved"><a class="in-ev" href="#W-Evidence/registers?c=run-a&amp;m=CP-1">In Evidence</a></p>'), 'an identifier among them: Registers');
+  assert.ok(section(50).includes('Fire') && !section(50).includes('sec-moved'), 'a section that kept a table has no link');
+});
+
 test('module page (Task 4): the key findings sit beside "What would change the view" (14 and 10 columns); without a Contrary evidence passage they take the full width; the section rail lists the parts with counts', () => {
   const html = fixturePage().moduleReport(outId('CP-2'));
   assert.ok(html.includes('<section class="part key-row g24" id="key-findings"><div class="c14"><div class="rd-card"><h4 class="rd-h">Key findings</h4>'), 'the findings take 14 columns');

@@ -683,8 +683,20 @@ const moduleTableContext=id=>{
 const findingSection=(id,section)=>{
   const shared=moduleTableContext(id),registers=window.Evidence.href('registers',data[id].module,data[id].run);
   const table=(block,at)=>window.Components.render(window.Shapes.tableShape(block),block,{...shared,id,section:at,module:data[id].module,evidenceHref:registers,key:row=>`${id}:${row.line}`,trace:(row,label)=>window.Components.traceRow(`${id}:${row.line}`,label),caption:plain(at.heading).replace(METHOD_CODE,'')});
-  const ctx={...bodyContext(id,true),skip:block=>block.type==='text'&&window.Shapes.blockRole(block.text)==='note',table};
-  return `<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,newFormatTag(section))}${sectionBodyHtml(section,ctx)}</div>`;
+  // Ruling 2026-11-13: a prose paragraph of a finding section that holds an identifier or names a calculation is a method note, drawn in Evidence (Registers, or Calculations when it names one).
+  const role=window.Evidence.classify(data[id].sections,data[id].placement).find(entry=>entry.section===section)?.role,moved=new Set();
+  const methodNote=block=>role==='finding'&&block.type==='text'&&!block.text.startsWith('```')?window.Shapes.methodNote(window.Components.paragraphText(block.text),shared.tokens):null;
+  const ctx={...bodyContext(id,true),skip:block=>{
+    if(block.type!=='text')return false;
+    if(window.Shapes.blockRole(block.text)==='note')return true;
+    const kind=methodNote(block);
+    if(kind)moved.add(kind);
+    return kind!==null;
+  },table};
+  const body=sectionBodyHtml(section,ctx);
+  // A section that lost every paragraph and holds no table keeps its heading and a link to where the paragraphs went, not an empty card.
+  const link=moved.size&&body.trim()===''?`<p class="sec-moved"><a class="in-ev" href="${esc(window.Evidence.href(moved.has('registers')?'registers':'calculations',data[id].module,data[id].run))}">In Evidence</a></p>`:'';
+  return `<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,newFormatTag(section))}${body}${link}</div>`;
 };
 const passageTexts=section=>(section?section.blocks.filter(block=>block.type==='text').map(block=>({text:block.text,line:block.line})):[]);
 // The gaps the module records: the rows of the tables of its Gaps sections, counted as the Evidence page lists them.

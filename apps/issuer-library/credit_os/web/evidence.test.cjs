@@ -340,3 +340,49 @@ test('classify is the one helper that gives each section its heading chain from 
   const out = E.classify([sec('CP-9 handoff', 1), sec('Findings', 2), sec('Bottom line', 3), sec('Events: Dates', 3), sec('Gaps', 2)], []);
   assert.deepEqual(out.map(o => [o.chain, o.role]), [[[], 'registers'], [['Findings'], 'finding'], [['Findings', 'Bottom line'], 'passage'], [['Findings', 'Events: Dates'], 'drawing'], [['Gaps'], 'gaps']]);
 });
+
+// Ruling 2026-11-13: a finding paragraph that holds an identifier of the module, or names a calculation, is a method note, drawn in Evidence.
+const CP9 = [
+  sec('Findings', 2, 1),
+  sec('Liquidity', 3, 3, [
+    table(5, ['Event ID', 'Event'], [['EV-1', 'Fire'], ['EV-2', 'Flood']]),
+    text(10, 'The EV-1 bridge needs review.\nBasis: TDG_10-K.htm.jsonl, page 7'),
+    text(11, 'Net debt is shown in calculation D17.'),
+    text(12, 'EV-10 is another event, plain finding prose.'),
+    text(13, 'Module status: accepted with limits.'),
+  ]),
+  sec('Bottom line', 3, 20, [text(21, 'The EV-1 line is a passage paragraph and is not a method note.')]),
+];
+const nine = () => input({modules: [{id: 'CP-2A', outputs: [out('o1', CP2A)]}, {id: 'CP-9', outputs: [out('o9', CP9)]}]});
+const nineView = (tab, module = 'CP-9') => Evidence.view(nine(), {tab, module});
+const hayCount = html => (html.slice(html.indexOf('id="ev-panel"'), html.indexOf('class="ev-card ev-foot"')).match(/data-hay="/g) || []).length;
+const badgeOf = (html, tab) => Number(new RegExp(`id="ev-tab-${tab}"[^>]*aria-current="page"><span>[^<]*</span><span class="ev-cnt" data-count>(\\d+)<`).exec(html)[1]);
+
+test('method notes: an identifier paragraph is under Registers, a calculation paragraph under Calculations; both counted, searchable and complete', () => {
+  const registers = nineView('registers'), calcs = nineView('calculations');
+  assert.ok(registers.includes('Method notes') && registers.includes('The EV-1 bridge needs review.') && registers.includes('Module status: accepted with limits.'));
+  assert.ok(!registers.includes('Net debt is shown in calculation D17.') && !registers.includes('EV-10 is another event') && !registers.includes('is a passage paragraph'), 'only identifier notes, and not findings prose or a passage');
+  assert.ok(calcs.includes('Method notes') && calcs.includes('Net debt is shown in calculation D17.') && !calcs.includes('The EV-1 bridge needs review.'));
+  assert.ok(/<p class="ev-note" data-hay="cp-9 the ev-1 bridge needs review\./.test(registers), 'the note is searchable by the module name and its words');
+  // the tab badge is the number of counted elements, which now include the notes (the status note stays searched, not counted)
+  assert.equal(hayCount(registers), badgeOf(registers, 'registers'));
+  assert.equal(hayCount(calcs), badgeOf(calcs, 'calculations'));
+  assert.equal(badgeOf(calcs, 'calculations'), 1);
+  assert.equal(badgeOf(registers, 'registers'), 2, 'the Liquidity table as written plus the note');
+});
+
+test('method notes: the Trace tab still lists the paragraph with its Basis line, and a search plan finds a note as an item', () => {
+  const trace = nineView('trace');
+  assert.ok(trace.includes('The EV-1 bridge needs review.'));
+  const plan = Evidence.searchPlan({tables: [], items: ['downside the ev-1 bridge needs review.', 'other note']}, 'bridge needs');
+  assert.deepEqual(plan.items, [true, false]);
+  assert.equal(plan.matches, 1);
+});
+
+test('method notes: a module with no identifier and no calculation name has none, and the Calculations tab of a module with only a note is not empty', () => {
+  const plainOnly = Evidence.view(input(), {tab: 'registers', module: 'CP-2A'});
+  assert.ok(!plainOnly.includes('The EV-1 bridge'));
+  const onlyCalc = input({modules: [{id: 'CP-9', outputs: [out('o9', [sec('Findings', 2, 1), sec('Bridge', 3, 3, [text(5, 'Uses calculation D17 for net debt.')])])]}]});
+  const html = Evidence.view(onlyCalc, {tab: 'calculations', module: 'CP-9'});
+  assert.ok(html.includes('Uses calculation D17 for net debt.') && !html.includes('No calculation table is listed'));
+});

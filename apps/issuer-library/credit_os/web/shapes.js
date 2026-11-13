@@ -116,7 +116,20 @@ const Shapes = (() => {
     return {names, ids: table.rows.map(row => String(row.cells[at] ?? '').trim())};
   }
 
-  return {sectionRole, tableShape, columnKind, hiddenColumns, blockRole, promoted, idTokens, casePairing};
+  // A prose paragraph of a finding section that holds an identifier of the module (an `id` column's value), or that names a calculation, is a method note: the
+  // Evidence page's, not the findings page's. `body` is the paragraph without its Basis line. 'calculations' when it names a calculation ID, 'registers' when it
+  // holds another identifier, null when it is findings prose. Whole words only, as findingCell reads a cell.
+  const CALCULATION_NAME = /\bcalculations?\s+[A-Z]{1,2}\d{2}\b/i;
+  const tokenPatterns = new WeakMap();
+  function methodNote(body, tokens) {
+    const text = String(body ?? '');
+    if (CALCULATION_NAME.test(text)) return 'calculations';
+    if (!Array.isArray(tokens) || !tokens.length) return null;
+    if (!tokenPatterns.has(tokens)) tokenPatterns.set(tokens, new RegExp(`(?<![A-Za-z0-9_])(?:${[...tokens].sort((a, b) => b.length - a.length).map(token => token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})(?![A-Za-z0-9_])`));
+    return tokenPatterns.get(tokens).test(text) ? 'registers' : null;
+  }
+
+  return {sectionRole, tableShape, columnKind, hiddenColumns, blockRole, promoted, idTokens, casePairing, methodNote};
 })();
 
 if (typeof window !== 'undefined') window.Shapes = Shapes;
