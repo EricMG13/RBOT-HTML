@@ -384,10 +384,10 @@ EVENT_HEAD = (
     "| Event date | Date precision | Published | Event | Status | Source | Credit relevance |"
 )
 EVENT_ROWS = (
-    "| 2025-03-31 | day | — | Synthetic note | Scheduled — matures | Synthetic filing p.1 | Wall |",
+    "| 2025-03-31 | day | 2024-11-07 | Synthetic note | Scheduled — matures | Filing p.1 | Wall |",
     "| 2025-06 | month | 2025-05-01 | Synthetic call | Historical — noted | Memo | Cost |",
-    "| 2025-Q3 | quarter | — | Synthetic review | Scenario — modelled | Synthetic memo | Rating |",
-    "| 2026 | year | — | Synthetic maturity | Scheduled — maturity | Synthetic filing p.2 | Wall |",
+    "| 2025-Q3 | quarter | 2024-11-07 | Synthetic review | Scenario — modelled | Memo | Rating |",
+    "| 2026 | year | 2024-11-07 | Synthetic maturity | Scheduled — maturity | Filing p.2 | Wall |",
 )
 EVENT_LANES = {  # module -> (lane name, a phrase of its catalogue guard the instructions carry)
     "CP-0": ("Sources", "import timestamp"),
@@ -5120,18 +5120,27 @@ def test_a_good_event_table_is_accepted_for_each_lane(module):
 @pytest.mark.parametrize(
     ("row", "complaint"),
     [
-        ("| 2025-03 | day | — | E | S | Src | R |", "Event date `2025-03` must be YYYY-MM-DD"),
-        ("| 2025-02-30 | day | — | E | S | Src | R |", "must be YYYY-MM-DD"),
-        ("| 2025-03-31 | month | — | E | S | Src | R |", "must be YYYY-MM"),
-        ("| 2025-13 | month | — | E | S | Src | R |", "must be YYYY-MM"),
-        ("| 2025-Q5 | quarter | — | E | S | Src | R |", "must be YYYY-Qn"),
-        ("| 2025-Q2 | year | — | E | S | Src | R |", "must be YYYY"),
+        (
+            "| 2025-03 | day | 2024-11-07 | E | S | Src | R |",
+            "Event date `2025-03` must be YYYY-MM-DD",
+        ),
+        ("| 2025-02-30 | day | 2024-11-07 | E | S | Src | R |", "must be YYYY-MM-DD"),
+        ("| 2025-03-31 | month | 2024-11-07 | E | S | Src | R |", "must be YYYY-MM"),
+        ("| 2025-13 | month | 2024-11-07 | E | S | Src | R |", "must be YYYY-MM"),
+        ("| 2025-Q5 | quarter | 2024-11-07 | E | S | Src | R |", "must be YYYY-Qn"),
+        ("| 2025-Q2 | year | 2024-11-07 | E | S | Src | R |", "must be YYYY"),
         ("| 2025 | week | — | E | S | Src | R |", "Date precision `week` must be one of"),
         ("| 2025-03-31 | day | May 2025 | E | S | Src | R |", "Published `May 2025`"),
         ("| 2025-03-31 | day | 2025-02-30 | E | S | Src | R |", "Published `2025-02-30`"),
-        ("| 2025-03-31 | day | — | | S | Src | R |", "Event is blank"),
-        ("| 2025-03-31 | day | — | E | S | Not supplied: none | R |", "Source is blank or not"),
-        ("| Not supplied: undated | day | — | E | S | Src | R |", "Event date is blank or not"),
+        ("| 2025-03-31 | day | 2024-11-07 | | S | Src | R |", "Event is blank"),
+        (
+            "| 2025-03-31 | day | 2024-11-07 | E | S | Not supplied: none | R |",
+            "Source is blank or not",
+        ),
+        (
+            "| Not supplied: undated | day | 2024-11-07 | E | S | Src | R |",
+            "Event date is blank or not",
+        ),
     ],
 )
 def test_a_malformed_event_row_is_sent_back(row, complaint):
@@ -5143,7 +5152,7 @@ def test_an_event_table_of_only_not_supplied_is_valid_and_a_mixed_one_is_not():
     gap = "Not supplied: the handoff states no dated event"
     assert event_issues(f"| {gap} |" + f" {gap} |" * 6) == ()
     assert event_issues(f"| {gap} |" + f" {gap} |" * 6, EVENT_ROWS[0]) != ()
-    assert event_issues(f"| {gap} | day | — | E | S | Src | R |") != ()
+    assert event_issues(f"| {gap} | day | 2024-11-07 | E | S | Src | R |") != ()
 
 
 def test_an_event_table_needs_its_exact_header_and_a_row():
@@ -5190,16 +5199,53 @@ def test_the_checker_sends_back_a_handoff_with_a_bad_event_precision(tmp_path):
     ],
 )
 def test_an_event_status_starts_with_its_kind_and_a_dash(status, ok):
-    issues = event_issues(f"| 2025-03-31 | day | — | E | {status} | Src | R |")
+    issues = event_issues(f"| 2025-03-31 | day | 2024-11-07 | E | {status} | Src | R |")
     assert (issues == ()) is ok, issues
     assert ok or any("Status" in i for i in issues), issues
 
 
 def test_a_published_date_equal_to_the_event_date_is_sent_back():
     issues = event_issues("| 2025-03-31 | day | 2025-03-31 | E | Scheduled — due | Src | R |")
-    assert any("write \u2014" in i for i in issues), issues
+    assert any("repeats the event date" in i and "publication" in i for i in issues), issues
     assert event_issues("| 2025-03-31 | day | 2025-03-30 | E | Scheduled — due | Src | R |") == ()
     assert event_issues("| 2025-03 | month | 2025-03-31 | E | Scheduled — due | Src | R |") == ()
+
+
+# Published is the date of the publication the row is taken from (checker-loop-3, corrected). The
+# 2033 maturity is taken from the FY2024 annual report, whose own date is 2024-11-07.
+TEN_K_ROW = (
+    "| 2033-06-15 | day | {} | 2033 senior secured notes mature | Scheduled \u2014 maturity "
+    "| Annual report FY2024, p.145 | Wall |"
+)
+PUBLISHED_FORMS = ("YYYY-MM-DD", "Not supplied: <reason>")
+
+
+def test_an_event_row_taken_from_a_dated_10k_carries_that_documents_date():
+    assert event_issues(TEN_K_ROW.format("2024-11-07")) == ()
+
+
+def test_a_published_gap_with_a_reason_passes_but_the_checker_cannot_see_the_documents_date():
+    # The checker reads the table only: it cannot tell whether the cited document states a date, so
+    # a stated reason is accepted in form. The instruction names the document's own date as the
+    # answer, so the gap is for a document that states none.
+    assert event_issues(TEN_K_ROW.format("Not supplied: the memo states no date")) == ()
+    assert event_issues(TEN_K_ROW.format("Not supplied:")) != ()
+    text = cpos_launch._selector(event_spec("CP-3"))
+    assert "date of the publication the row is taken from" in text
+    assert "only when that document states no date" in text
+
+
+@pytest.mark.parametrize("cell", ["\u2014", "Not stated", "n/a", ""])
+def test_a_bare_dash_or_not_stated_published_is_refused_listing_the_allowed_forms(cell):
+    issues = [i for i in event_issues(TEN_K_ROW.format(cell)) if "Published" in i]
+    assert issues, cell
+    assert all(form in issues[0] for form in PUBLISHED_FORMS), issues
+
+
+def test_published_is_checked_once_so_the_two_checks_cannot_contradict_each_other():
+    gap = event_issues(TEN_K_ROW.format("Not supplied: no date stated"))
+    bad = event_issues(TEN_K_ROW.format("Not stated"))
+    assert gap == () and len(bad) == 1, bad
 
 
 def test_the_event_rules_say_record_once_and_the_status_kinds():
@@ -5315,6 +5361,46 @@ def test_a_debt_stack_left_with_no_ranked_facility_may_state_none():
     assert "left out" in spec.rules and "states none" in cpos_launch._selector(spec)
 
 
+DEBT_UNIT_ROW = "| Term loan | 1 | Yes | 1871 | 4.72 | {} | Equal rank. |"
+
+
+def debt_stack_issues(*rows: str) -> tuple[str, ...]:
+    spec = next(t for t in ROW_SPECS if t.heading == "Chart data: debt stack")
+    text = "### Chart data: debt stack\n\n" + synthetic_table(DEBT_STACK_HEAD, *rows)
+    return cpos_launch.chart_issues(text, spec)
+
+
+def test_a_unit_that_starts_with_the_chart_unit_is_told_to_keep_only_the_unit():
+    (issue,) = debt_stack_issues(DEBT_UNIT_ROW.format("US$m; leverage in times"))
+    assert "must be exactly `US$m`" in issue and "Basis and limitation" in issue
+    assert "Not supplied" not in issue
+
+
+def test_a_real_other_unit_keeps_the_gap_advice_and_the_issue_count():
+    (issue,) = debt_stack_issues(DEBT_UNIT_ROW.format("EUR m"))
+    assert "write `Not supplied: reported in EUR m`" in issue
+    two = debt_stack_issues(
+        DEBT_UNIT_ROW.format("US$m; leverage in times"), DEBT_UNIT_ROW.format("US$m; x")
+    )
+    assert len(two) == 2
+
+
+def test_a_second_table_under_one_heading_is_named_not_reported_as_malformed_rows():
+    second = (
+        "| Transaction-only balance | Date | Amount | Unit | Basis | Source |\n"
+        "| --- | --- | ---: | --- | --- | --- |\n"
+        "| Pro forma gross debt | 2024-10-18 | 25230.5 | USD millions | C29 | p.63 |"
+    )
+    spec = next(t for t in ROW_SPECS if t.heading == "Chart data: debt stack")
+    first = DEBT_UNIT_ROW.format("US$m")
+    text = (
+        "### Chart data: debt stack\n\n" + synthetic_table(DEBT_STACK_HEAD, first) + "\n" + second
+    )
+    (issue,) = cpos_launch.chart_issues(text, spec)
+    assert "a second table under this heading: give it its own ### heading" in issue
+    assert "needs 7 cells" not in issue
+
+
 def test_a_repeated_class_and_scenario_row_is_sent_back_but_a_repeated_class_is_not():
     spec = next(t for t in ROW_SPECS if t.heading == RECOVERY)
     one = "| Senior | Base | 100 | 50 | 50 | US$m | S. |"
@@ -5326,7 +5412,7 @@ def test_a_repeated_class_and_scenario_row_is_sent_back_but_a_repeated_class_is_
 
 
 def test_a_user_reminder_status_the_cp6_guard_names_is_accepted_and_a_lookalike_is_not():
-    row = "| 2026-01-15 | day | — | Review | {} | Analyst note | Review date |"
+    row = "| 2026-01-15 | day | 2024-11-07 | Review | {} | Analyst note | Review date |"
     for status in ("User reminder", "User reminder — due"):
         assert event_issues(row.format(status), module="CP-6") == (), status
     for status in ("User reminders", "user reminder", "User reminder -"):

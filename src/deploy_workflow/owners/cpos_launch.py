@@ -843,7 +843,9 @@ OWNER_TABLES: dict[str, tuple[OwnerTable, ...]] = {
                 "through that facility over the common EBITDA denominator, as times without an "
                 "`x`; state it only for a positive common EBITDA denominator, else "
                 "`Not supplied: <reason>`. Name each facility's guarantor or obligor scope in "
-                "Basis and limitation. An enterprise value is not a sourced fact merely because "
+                "Basis and limitation. Reporting unit is the Amount's unit only (`US$m`): write "
+                "leverage in times and any other note in Basis and limitation. An enterprise value "
+                "is not a sourced fact merely because "
                 "it is a chart marker: add no enterprise value row unless a source states it."
             ),
             columns=("Facility", "Ranking", "Secured", "Amount", "Cumulative leverage"),
@@ -1133,8 +1135,10 @@ EVENT_RULES = (
     "One row per dated event the handoff states. Event date is written at the precision the "
     "source gives and Date precision names it: `day` YYYY-MM-DD, `month` YYYY-MM, `quarter` "
     "YYYY-Qn, `year` YYYY. Never write a day the source does not state, and infer no day from a "
-    "coarser date. Published is the publication date (YYYY-MM-DD) when it differs from the event "
-    "date, else `\u2014` (never repeat the event date there). Status starts with `Historical`, "
+    "coarser date. Published is the date of the publication the row is taken from (YYYY-MM-DD), "
+    "the one cited in Source: a row from a 10-K dated 2024-11-07 carries 2024-11-07 even when the "
+    "event is a 2033 maturity. Write `Not supplied: <reason>` only when that document states no "
+    "date; never `\u2014` or `Not stated`. Status starts with `Historical`, "
     "`Scheduled` or `Scenario`, then ` \u2014 ` and the source's own words, e.g. `Scenario \u2014 "
     "modelled downgrade trigger`. Record each event once, in the lane of the module that owns "
     "it; another module refers to it in Credit relevance, it does not repeat the row. Source "
@@ -1406,6 +1410,19 @@ def _stated_gap(cell: str) -> bool:
     return cell.startswith(NOT_SUPPLIED) and bool(cell.removeprefix(NOT_SUPPLIED).strip())
 
 
+def _unit_advice(spec: OwnerTable, unit: str) -> str:
+    """What to do about a unit cell that is not the chart unit. A cell that begins with the chart
+    unit and adds other words is a unit cell holding more than the unit: its amounts are sound, so
+    the advice is to cut the cell, never to replace the amounts with gaps."""
+    rest = unit.removeprefix(spec.chart_unit)
+    if rest != unit and rest[:1] and not rest[:1].isalnum():
+        return (
+            f"the Reporting unit must be exactly `{spec.chart_unit}` (the Amount's unit only); "
+            "move the rest to Basis and limitation."
+        )
+    return f"write `Not supplied: reported in {unit}`."
+
+
 def _number_issue(spec: OwnerTable, name: str, cell: str, unit: str) -> str | None:
     if _stated_gap(cell):
         return None
@@ -1413,8 +1430,7 @@ def _number_issue(spec: OwnerTable, name: str, cell: str, unit: str) -> str | No
         return f"{name} `{cell}` must be a plain number or `Not supplied: <reason>`."
     if spec.chart_unit and name in (spec.in_unit or spec.numbers) and unit != spec.chart_unit:
         return (
-            f"{name} in {unit} cannot be charted as {spec.chart_unit}; "
-            f"write `Not supplied: reported in {unit}`."
+            f"{name} in {unit} cannot be charted as {spec.chart_unit}; {_unit_advice(spec, unit)}"
         )
     return None
 
@@ -1450,6 +1466,11 @@ EVENT_STATUS = re.compile(
     r"(?:Historical|Scheduled|Scenario) \u2014 \S|User reminder(?: \u2014 \S|$)"
 )
 EVENT_KINDS = "Historical, Scheduled or Scenario"
+PUBLISHED_FORMS = (
+    "the YYYY-MM-DD date of the publication the row is taken from (cited in Source), or "
+    "`Not supplied: <reason>` only when that document states no date; `\u2014` and `Not stated` "
+    "are not accepted"
+)
 EVENT_FORMS = {"day": "YYYY-MM-DD", "month": "YYYY-MM", "quarter": "YYYY-Qn", "year": "YYYY"}
 
 
@@ -1470,10 +1491,13 @@ def _event_issues(spec: OwnerTable, header: list[str], row: list[str]) -> list[s
             issues.append(
                 f"Event date `{stated}` must be {EVENT_FORMS[precision]} at precision {precision}."
             )
-    if published != "\u2014" and not _stated_gap(published) and not _iso_date(published):
-        issues.append(f"Published `{published}` must be YYYY-MM-DD or \u2014.")
-    if published == stated:
-        issues.append("Published repeats the event date: write \u2014 when it is the event date.")
+    if not _stated_gap(published) and not _iso_date(published):
+        issues.append(f"Published `{published}` must be {PUBLISHED_FORMS}.")
+    elif published == stated:
+        issues.append(
+            "Published repeats the event date: it is the date of the publication the row is "
+            f"taken from, not the event's; write {PUBLISHED_FORMS}."
+        )
     if not _stated_gap(cells["Status"]) and not EVENT_STATUS.match(cells["Status"]):
         issues.append(
             f"Status `{cells['Status']}` must start with {EVENT_KINDS} and ` \u2014 `, "
@@ -1487,6 +1511,8 @@ def _cell_issue(spec: OwnerTable, name: str, cell: str, unit: str) -> str | None
     allowed = dict(spec.choices).get(name)
     if name in ("Basis and limitation", "Reporting unit"):
         issue = None if cell else f"{name} is blank."
+    elif spec.events and name == "Published":
+        issue = None  # `_event_issues` owns the whole rule, so a bad cell is refused once.
     elif spec.edges and name == "Evidence" and cell in DASHES:
         issue = f"{name} `{cell}` is not evidence: write where the source names its source."
     elif name in spec.counts:
@@ -1542,14 +1568,28 @@ def _near_none_issues(spec: OwnerTable, heading: str, event: str) -> list[str]:
     return [f"`{heading}`: to state that there is no event, write the Event exactly {advice}"]
 
 
+SEPARATOR_CELL = re.compile(r":?-{3,}:?")
+SECOND_TABLE = "a second table under this heading: give it its own ### heading"
+
+
+def _first_table(heading: str, rows: list[list[str]]) -> tuple[list[list[str]], list[str]]:
+    """The rows of the table the heading owns. A separator row among the rows opens a second table
+    (its header is the row before it): the rows from that header on are not this table's, and the
+    one issue says so instead of reporting its header and separator as malformed rows."""
+    for at, row in enumerate(rows):
+        if at and all(SEPARATOR_CELL.fullmatch(cell) for cell in row):
+            return rows[: at - 1], [f"`{heading}`: {SECOND_TABLE}."]
+    return rows, []
+
+
 def _row_table_issues(
     spec: OwnerTable, heading: str, header: list[str], rows: list[list[str]]
 ) -> list[str]:
     """A row table's rows against its fixed header, cell by cell, in the order stated."""
-    issues = []
+    rows, issues = _first_table(heading, rows)
     ranks = []
     if _states_none(spec, header, rows):
-        return []  # The module states none: valid, and nothing is drawn.
+        return issues  # The module states none: valid, and nothing is drawn.
     for row in rows:
         if len(row) != len(header):
             issues.append(f"`{heading}` row needs {len(header)} cells: {' | '.join(row)}")
@@ -1638,9 +1678,9 @@ def chart_issues(text: str, table: MarkdownRoute | OwnerTable) -> tuple[str, ...
         return (f"`{heading}` needs the table headed `| {' | '.join(header)} |`.",)
     if spec.columns:
         return tuple(_row_table_issues(spec, heading, header, rows[2:]))
-    issues = []
     stated = []
-    for row in rows[2:]:
+    body, issues = _first_table(heading, rows[2:])
+    for row in body:
         if len(row) != len(header):
             issues.append(f"`{heading}` row needs {len(header)} cells: {' | '.join(row)}")
             continue
@@ -1659,7 +1699,7 @@ def chart_issues(text: str, table: MarkdownRoute | OwnerTable) -> tuple[str, ...
             elif unit != spec.chart_unit:
                 issues.append(
                     f"`{heading}` {period}: a number in {unit} cannot be charted as "
-                    f"{spec.chart_unit}; write `Not supplied: reported in {unit}`."
+                    f"{spec.chart_unit}; {_unit_advice(spec, unit)}"
                 )
     if spec.steps and not issues:
         issues += _bridge_issues(heading, stated)

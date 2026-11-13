@@ -879,6 +879,15 @@ def test_an_event_table_out_of_shape_is_named_not_drawn(row):
     )
 
 
+def test_a_published_gap_with_a_reason_is_drawn_and_a_bare_not_stated_is_not():
+    # The launcher accepts `Not supplied: <reason>` in Published (the cited document states no
+    # date), so the Calendar must draw that row rather than drop the whole lane.
+    row = "| 2033-06-15 | day | {} | Notes mature | Scheduled \u2014 due | Filing p.2 | Wall |"
+    (lane,) = lane_fields(row.format("Not supplied: the memo states no date"))["events"]
+    assert lane["gap"] is None
+    assert lane_fields(row.format("Not stated"))["events"] == []
+
+
 def test_an_event_table_with_a_changed_header_is_named_not_drawn():
     header = EVENT_HEADER.replace("Event date", "Date")
     fields = synthetic_charts(chart_section("Events: Legal", header, EVENT_ROWS[0]))

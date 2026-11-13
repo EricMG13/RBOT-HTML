@@ -811,15 +811,13 @@ def _event_row_ok(cells: list[str]) -> bool:
     when, precision, published = cells[:3]
     shape = EVENT_SHAPES.get(precision)
     dated = valid_date(when) if precision == "day" else bool(shape and shape.fullmatch(when))
-    stated = all(c and not STATED_GAP.match(c) for c in cells)
+    stated = all(c and not STATED_GAP.match(c) for i, c in enumerate(cells) if i != 2)
     kind = EVENT_STATUS.match(cells[4])
-    return bool(
-        dated
-        and stated
-        and kind
-        and (published == "\u2014" or valid_date(published))
-        and published != when
+    # Published is a date, a legacy dash, or a stated gap (the document cited states no date).
+    published_ok = (
+        published == "\u2014" or valid_date(published) or bool(STATED_GAP.match(published))
     )
+    return bool(dated and stated and kind and published_ok and published != when)
 
 
 def _event_lane(section: dict[str, Any]) -> dict[str, Any] | None:
