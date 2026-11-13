@@ -114,6 +114,19 @@ def test_command_for_prepare_and_live(layout):
     assert live[-3:] == ["--live", "--ruling", "r.md"]
 
 
+def test_the_launch_the_start_page_makes_passes_no_lookup_setting(layout):
+    """The summary states the default lookup rule for no case hosts (run_start.submissions); the
+    command a Submit runs must leave both to that default."""
+    record = Record(
+        "id1", "credit_snapshot", "acme", "queued", "t", modules=("CP-0", "CP-DR"), prior="p1"
+    )
+    argv = command(
+        layout, record, Path("c.json"), launcher=["py"], cap=Decimal(20), ruling=Path("r.md")
+    )
+    assert "--modules" in argv and "--live" in argv
+    assert not [a for a in argv if a.startswith(("--web-lookup", "--web-host"))]
+
+
 def test_alive_for_this_process_and_not_for_an_exited_one():
     child = subprocess.Popen([sys.executable, "-c", "pass"])
     child.wait()

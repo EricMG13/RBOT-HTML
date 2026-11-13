@@ -76,11 +76,15 @@ from deploy_workflow.model.budget import Budget, exact_sum
 from deploy_workflow.model.handoff import (
     BYTES_PER_TOKEN_BOUND,
     REQUEST_OVERHEAD,
+    WEB_LOOKUP_MODULES,
     WEB_SEARCH_CALLS_PER_TURN,
     WEB_SEARCH_CASE_KINDS,
     FAILED_NO_USAGE,
     Check,
     _pages,
+    recorded_web_lookup,
+    settled_web_lookup,
+    web_lookup_offered,
     web_search_offered,
 )
 from deploy_workflow.model.pricing import (
@@ -111,6 +115,8 @@ from deploy_workflow.prose_checks import (
     key_figures_issues,
     prose_issues,
 )
+from deploy_workflow.research.intake import effective_cutoff
+from deploy_workflow.research.weblookup import USER_AGENT_ENV, bare_host_problem, usable_user_agent
 from deploy_workflow.run_events import EVENTS, read_events
 from deploy_workflow.run_expectations import Item, edges_for, expectations, guess_kind
 from deploy_workflow.workflow import _put
@@ -3440,6 +3446,42 @@ def _web_line(prepared: Prepared, config: str, ruling: Path | None) -> tuple[str
     return (f"Web:      off: CP-DR reads only this run's files ({why} {WEB_SEARCH_GRANT})",)
 
 
+def _lookup_lines(
+    prepared: Prepared,
+    setting: str,
+    hosts: Sequence[str],
+    env: Mapping[str, str],
+    recorded: str | None = None,
+) -> tuple[str, ...]:
+    """Whether the research module may fetch public pages and SEC EDGAR data, when it runs: the
+    one rule (`web_lookup_offered`) and its reason, or what the run folder recorded when it was
+    started (`recorded`). The contact string's value is never printed."""
+    module = WEB_LOOKUP_MODULES[0]
+    if module not in prepared.ordered:
+        return ()
+    kind = prepared.plan.run.case_kind
+    on = recorded == "on" if recorded is not None else web_lookup_offered(setting, module, kind)
+    if recorded is not None:
+        head = f"Lookup:   {recorded} (as recorded when this run folder was started)"
+    elif setting == "default":
+        why = f"{kind} case default"
+        head = (
+            f"Lookup:   on: {module} may fetch allowlisted public pages and SEC EDGAR ({why})"
+            if on
+            else f"Lookup:   off: {kind} case (default); --web-lookup on forces it"
+        )
+    else:
+        head = f"Lookup:   {setting} (forced by --web-lookup {setting})"
+    if on and hosts:
+        head += f"; case hosts: {', '.join(hosts)}"
+    refused = (
+        (f"SEC:      sec.gov lookups will be refused: {USER_AGENT_ENV} is not set",)
+        if on and usable_user_agent(env) is None
+        else ()
+    )
+    return (head, *refused)
+
+
 def _first_prompt_lines(prepared: Prepared, config: str) -> tuple[str, ...]:
     """Readiness warnings, GitHub Copilot configs only: each module whose first prompt, estimated
     in tokens, plus the output budget passes the share of the route's limit at which the runtime
@@ -3646,7 +3688,14 @@ def _print_review(directory: Path, stream: TextIO) -> None:
         print(line, file=stream)
 
 
-def _readiness(prepared: Prepared, config: str, ruling: Path | None = None) -> str:
+def _readiness(
+    prepared: Prepared,
+    config: str,
+    ruling: Path | None = None,
+    *,
+    web_lookup: str = "default",
+    web_hosts: Sequence[str] = (),
+) -> str:
     selected = CONFIGS[config]
     run = prepared.plan.run
     names = (n for n in prepared.plan.sources if n != CONTEXT_SOURCE_ID)
@@ -3663,6 +3712,13 @@ def _readiness(prepared: Prepared, config: str, ruling: Path | None = None) -> s
             f"Changes:  {prepared.changes.removeprefix('changes: ') or 'not recorded'}",
             f"Manifest: {prepared.manifest}",
             *_web_line(prepared, config, ruling),
+            *_lookup_lines(
+                prepared,
+                web_lookup,
+                web_hosts,
+                os.environ,
+                recorded_web_lookup(prepared.directory / "live" / "loop.json"),
+            ),
             *_first_prompt_lines(prepared, config),
         )
     )
@@ -3702,6 +3758,14 @@ def _high_efforts(
     return {m: "high" for m in modules}
 
 
+def _web_host(text: str) -> str:
+    """A ``--web-host`` value: a bare host name, in lower case."""
+    problem = bare_host_problem(text)
+    if problem is not None:
+        raise argparse.ArgumentTypeError(problem)
+    return text.lower()
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m deploy_workflow.owners.cpos_launch",
@@ -3720,6 +3784,21 @@ def _parser() -> argparse.ArgumentParser:
         "--prior",
         help="the earlier run to compare with: its run folder name, or `none` for a first run "
         "(the run start service passes what the approval named; default: search)",
+    )
+    parser.add_argument(
+        "--web-lookup",
+        choices=("default", "on", "off"),
+        default="default",
+        help="CP-DR's page and SEC EDGAR lookups: on for a public case by default, off otherwise; "
+        "on or off forces it",
+    )
+    parser.add_argument(
+        "--web-host",
+        action="append",
+        default=[],
+        type=_web_host,
+        metavar="HOST",
+        help="an investor-relations host of this case to add to the lookup allowlist (repeatable)",
     )
     parser.add_argument(
         "--high-modules",
@@ -3827,7 +3906,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.high_modules,
                 flag="--balanced" if args.balanced else "--high-modules",
             )
-        refuse_deactivated(load_context(Path(args.context).expanduser().read_bytes()).run.pathway)
+        context = load_context(Path(args.context).expanduser().read_bytes())
+        refuse_deactivated(context.run.pathway)
         prepared = prepare(
             args.context,
             args.sources,
@@ -3849,10 +3929,19 @@ def main(argv: Sequence[str] | None = None) -> int:
             if args.high_modules
             else {}
         )
+        recorded = recorded_web_lookup(prepared.directory / "live" / "loop.json")
+        lookup = settled_web_lookup(
+            args.web_lookup, prepared.ordered, prepared.plan.run.case_kind, recorded
+        )
     except (ValueError, OSError, LivePauseInForce) as error:
         print(error, file=sys.stderr)
         return 2
-    print(_readiness(prepared, args.config, args.ruling), flush=True)
+    print(
+        _readiness(
+            prepared, args.config, args.ruling, web_lookup=args.web_lookup, web_hosts=args.web_host
+        ),
+        flush=True,
+    )
     if efforts:
         print(
             f"Effort:   high for {', '.join(efforts)}; {CONFIGS[args.config].effort} otherwise",
@@ -3873,6 +3962,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             config=args.config,
             effort_by_module=efforts,
             on_notice=lambda line: print(line, flush=True),
+            web_lookup=lookup,
+            web_hosts=tuple(args.web_host),
+            lookup_cutoff=effective_cutoff(prepared.plan.run.as_of, context.run.cutoff),
         )
     except (ValueError, RuntimeError) as error:
         print(

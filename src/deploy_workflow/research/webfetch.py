@@ -361,6 +361,8 @@ class _Limits:
     total_timeout: float
     clock: Callable[[], float]
     started: float
+    host_allowed: Callable[[str], bool] | None = None
+    headers: Mapping[str, str] | None = None
 
     @property
     def deadline(self) -> float:
@@ -396,7 +398,8 @@ def _next_hop(
     if not location:
         raise FetchRefusal(f"{url} redirected without a location")
     nxt = _redirect_target(f"https://{_host_header(current)}{current.path_query}", location)
-    if nxt.host.lower() not in limits.manifest_hosts:
+    allowed = limits.host_allowed or limits.manifest_hosts.__contains__
+    if not allowed(nxt.host.lower()):
         raise FetchRefusal(f"redirect to host {nxt.host} refused: not a host named in the manifest")
     if nxt.port != DEFAULT_PORT and (nxt.host.lower(), nxt.port) != trace.origin:
         raise FetchRefusal(
@@ -469,7 +472,9 @@ def _exchange(
     try:
         _check_time(url, limits)
         connection.request(
-            "GET", split.path_query, headers={"Host": _host_header(split), **HEADERS}
+            "GET",
+            split.path_query,
+            headers={"Host": _host_header(split), **(limits.headers or HEADERS)},
         )
         response = connection.getresponse()
         trace.status = response.status
@@ -505,7 +510,7 @@ def _failure_reason(url: str, error: Exception, limits: _Limits) -> str:
     return f"{url} could not be fetched: {type(error).__name__}"
 
 
-def fetch(
+def fetch(  # noqa: PLR0913 - the existing signature, plus two optional keywords
     url: str,
     *,
     manifest_hosts: frozenset[str],
@@ -515,15 +520,29 @@ def fetch(
     connect_timeout: float = CONNECT_TIMEOUT_S,
     total_timeout: float = TOTAL_TIMEOUT_S,
     clock: Callable[[], float],
+    host_allowed: Callable[[str], bool] | None = None,
+    headers: Mapping[str, str] | None = None,
 ) -> tuple[FetchRecord, bytes | None, str | None]:
     """Fetch ``url``: the record, the retained raw body and the Content-Type value.
+
+    ``host_allowed``, when given, replaces the ``manifest_hosts`` test for redirect targets;
+    ``headers``, when given, replaces ``HEADERS`` for this fetch.
 
     A refusal returns a record with ``reason`` set and no body. Network failures (``OSError``,
     ``http.client.HTTPException``) are refusals too, recorded with the exception class name only.
     """
     trace = _Trace()
     limits = _Limits(
-        manifest_hosts, resolver, connect, cap, connect_timeout, total_timeout, clock, clock()
+        manifest_hosts,
+        resolver,
+        connect,
+        cap,
+        connect_timeout,
+        total_timeout,
+        clock,
+        clock(),
+        host_allowed,
+        headers,
     )
     try:
         body, media, headers = _follow(url, trace, limits)

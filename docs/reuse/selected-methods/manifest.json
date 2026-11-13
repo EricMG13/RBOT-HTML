@@ -40,18 +40,18 @@
       "archive_path": "docs/reuse/selected-methods/skills/cp-dr-deep-research/SKILL.md",
       "exact_copy_found_at": null,
       "note": "not a copy of the live cp-os file: this file is the live cp-os file (b57a344, sha256 0cc76aea..., which is source_sha256) plus the named edits in `edit`",
-      "sha256": "97580b90453a39ad8132f3efd87e46785645be1a476ac1d1901bd7b3aaa079e5",
+      "sha256": "23ceacf44aa2f67974859d6b93efc19bb7e2ec6e9dc95ae2675dbaf541e0820e",
       "source_sha256": "0cc76aea6e227ff923ca466fc000a80b1f2f6ef3b1fb74b78203e8601d507207",
-      "edit": "Replaced 2026-11-13 by cp-os version 2.0 (cp-os HEAD b57a344, file last changed in 5a78f93), byte-for-byte, then named edits 2a and 2b: (2a) the open-web limits in RESEARCH ITEMS, ANSWER RULES (LOCAL limitation) and CAPABILITY GATE, and (2a-4, fix round 1) the pack-tools-only reading and TDR.6 quote clauses, made conditional on the project's web-search rules, with section C of the step bundle governing web use when granted; (2b) the UNRESOLVED gap row's claim_type is `gap` and missing evidence is Complete with Gaps, never Blocked (wording from caos-databricks vendor/deploy-v c746ad67); sha256 is this edited file, source_sha256 the byte-for-byte copy of cp-os"
+      "edit": "Replaced 2026-11-13 by cp-os version 2.0 (cp-os HEAD b57a344, file last changed in 5a78f93), byte-for-byte, then named edits 2a and 2b: (2a) the open-web limits in RESEARCH ITEMS, ANSWER RULES (LOCAL limitation) and CAPABILITY GATE, and (2a-4, fix round 1) the pack-tools-only reading and TDR.6 quote clauses, made conditional on the project's web-search rules, with section C of the step bundle governing web use when granted; (2b) the UNRESOLVED gap row's claim_type is `gap` and missing evidence is Complete with Gaps, never Blocked (wording from caos-databricks vendor/deploy-v c746ad67); named edit 2c (2026-11-13): every clause conditional on the paragraph that begins \"web_search reaches public web pages\" is also conditional on the paragraph that begins \"fetch_page retrieves public web pages\" (RESEARCH ITEMS, ANSWER RULES, TDR.6 quote clause, CAPABILITY GATE; RESEARCH ITEMS names the pair once as \"a web paragraph\" and the later clauses use that term); under the lookup paragraph a page is fetched with `fetch_page` or the `sec_` tools and read with `read_pages` and `search_source`; the RESEARCH ITEMS after-the-as-of-date line gains the exception that a page dated after the cutoff may be cited as a labelled later event that carries no figure; sha256 is this edited file, source_sha256 the byte-for-byte copy of cp-os"
     },
     {
       "consumed_path": "skills/cp-dr-deep-research/references/REF_CP-DR_STEPS.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-dr-deep-research/references/REF_CP-DR_STEPS.md",
       "exact_copy_found_at": null,
       "edited_copy_of": "/Users/ericguei/Documents/cp-os/skills/cp-dr-deep-research/references/REF_CP-DR_STEPS.md",
-      "sha256": "fb9994d3ca4fc765e208e2f63cb88c1d7f00cda426ae4f95cfae19b9860c6a40",
+      "sha256": "cab435618c7f4f3cd34add6fb5acdc83a130cb7f7bb33cc70c7622680c9d6bc3",
       "source_sha256": "a75bd020e039a67e37063b0475718aebac4a9fc3107819b9d2987b4e1f30643c",
-      "edit": "Named edit 2b: gap row takes claim_type `gap` (step D) and missing evidence is Complete with Gaps, never Blocked (step F); wording from caos-databricks vendor/deploy-v c746ad67; sha256 is this edited file, source_sha256 the byte-for-byte copy of cp-os b57a344"
+      "edit": "Named edit 2b: gap row takes claim_type `gap` (step D) and missing evidence is Complete with Gaps, never Blocked (step F); wording from caos-databricks vendor/deploy-v c746ad67; named edit 2c (2026-11-13): section C reads \"verify that web_search or the lookup tools are granted first\" where it read \"verify WebSearch first\"; sha256 is this edited file, source_sha256 the byte-for-byte copy of cp-os b57a344"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-2h-ratings-migration-trigger/SKILL.md",

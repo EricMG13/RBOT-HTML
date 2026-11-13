@@ -33,6 +33,7 @@ from deploy_workflow.model.adapter import KEY_VARIABLES
 from deploy_workflow.owners.cpos import web_search_run
 from deploy_workflow.owners.cpos_launch import (
     NO_PRIOR,
+    _lookup_lines,
     LaunchRefused,
     prepare,
     read_documents,
@@ -778,6 +779,11 @@ def _summarise(layout: Layout, sid: str, answers: Answers, *, cap: Decimal) -> d
                 "ignored": list(prepared.ignored),
                 "omitted": list(prepared.omitted),
                 "changes": prepared.changes.removeprefix("changes: "),
+                # The launcher's own statement for this prepared run, under the setting Submit
+                # launches with: `runs.command` passes no --web-lookup or --web-host, so the
+                # default rule, no case hosts and the run folder not yet started. The SEC line
+                # names the variable, never its value.
+                "lookup": list(_lookup_lines(prepared, "default", (), os.environ)),
                 "model": answers["model"],
                 "effort": answers["effort"],
             }
