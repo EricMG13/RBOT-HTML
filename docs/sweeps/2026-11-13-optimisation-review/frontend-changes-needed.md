@@ -99,7 +99,7 @@ Status: **Done** (in a PR), **Needed** (the screen is wrong or incomplete withou
 | --- | --- | --- | --- | --- | --- |
 | 33 | A delivery with no `model.html` pins `annual.md` | Forecast | Link reads "Download published model (Markdown)" and no HTML frame is drawn | Done in PR 112; no VMO2 reader check | Review of PR 112 |
 | 34 | The Pro forma column said no handoff states pro forma adjustments | Forecast | New reason only when a CP-1 table header says "pro forma"; PR 111's CP-1 states pro forma in a body cell, so the old reason returns after it merges | Needed | Review of PRs 111 and 112 |
-| 35 | The page's Downside case differs from the forward credit model's own (coverage 2.41x against 1.68x on TDG) | Forecast, Overview | Owner, 2026-11-13: the page's downside must agree with the forward model, whose assumptions come from its upstream | Needed (fix not built) | PR 112 body; not checked here |
+| 35 | The page's Downside case differs from the forward credit model's own (coverage 2.41x against 1.68x on TDG) | Forecast, Overview | Owner, 2026-11-13: "A": the page's Downside uses the forward model's downside drivers plus the upstream shock (reverses the 2026-11-10 ruling); existing runs differ until re-run | Needed (own PR, not built) | PR 112 body; not checked here |
 
 ## Not verified
 
