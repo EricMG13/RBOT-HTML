@@ -11,9 +11,11 @@ needs issuer-specific row selectors; add it when a run can derive those from CP-
 """
 
 import argparse
+import functools
 import hashlib
 import importlib.util
 import json
+import logging
 import os
 import re
 import sys
@@ -76,6 +78,7 @@ from deploy_workflow.model.handoff import (
     REQUEST_OVERHEAD,
     WEB_SEARCH_CALLS_PER_TURN,
     WEB_SEARCH_CASE_KINDS,
+    FAILED_NO_USAGE,
     Check,
     _pages,
     web_search_offered,
@@ -102,6 +105,7 @@ from deploy_workflow.owners.cpos import (
 )
 from deploy_workflow.prose_checks import (
     DATA_MODULES,
+    ISO_4217,
     READER_HEADINGS,
     figure_issues,
     key_figures_issues,
@@ -110,6 +114,8 @@ from deploy_workflow.prose_checks import (
 from deploy_workflow.run_events import EVENTS, read_events
 from deploy_workflow.run_expectations import Item, edges_for, expectations, guess_kind
 from deploy_workflow.workflow import _put
+
+log = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parents[3]
 HTML_SUFFIXES = frozenset({".htm", ".html"})
@@ -144,6 +150,13 @@ _SKILLS = "docs/reuse/selected-methods/skills/"
 _VII = "src/deploy_vii/methods/"
 # The Confidence Score rules `confidence_score.py` applies; the script cannot run in this transport.
 _SCORE = "docs/reuse/selected-methods/CANON_SHARED.md § CP_CONFIDENCE_SCORE.md"
+# Owner, 2026-11-13 (T4, ruling 2026-11-13-appendix-and-routing-scope.md): the registers a module
+# no longer writes, one `## <module>` section each, sent last in the module's method block. Only
+# the ten modules the two retained Sol runs measured have one.
+REGISTER_SCOPE = "docs/reuse/selected-methods/CPOS_REGISTER_SCOPE.md"
+REGISTER_SCOPE_MODULES = (
+    *("CP-0", "CP-1A", "CP-DR", "CP-2", "CP-2A", "CP-2E", "CP-2G", "CP-3", "CP-5", "CP-6"),
+)
 # The method each module runs, per METHODOLOGY-REVIEW.md and what the 2026-11-05 live campaigns
 # consumed. prompts/CP-0.md and CP-1-intake.md are TDG case instructions, so they are left out.
 # Owner, 2026-11-10 ("Fix all"): each skill is sent every companion its SKILL.md calls mandatory
@@ -298,6 +311,7 @@ METHODS: dict[str, tuple[str, ...]] = {
     module: (
         *((*paths, _SCORE) if any(p.startswith(_SKILLS) for p in paths) else paths),
         *(() if module in DATA_MODULES else READER_LAYER),
+        *((f"{REGISTER_SCOPE} § {module}",) if module in REGISTER_SCOPE_MODULES else ()),
     )
     for module, paths in _SELECTED.items()
 }
@@ -1441,21 +1455,39 @@ def _stated_gap(cell: str) -> bool:
     return cell.startswith(NOT_SUPPLIED) and bool(cell.removeprefix(NOT_SUPPLIED).strip())
 
 
-CURRENCY_CODES = (
-    "USD", "EUR", "GBP", "JPY", "CHF", "CAD", "AUD", "NZD", "SEK", "NOK", "DKK", "CNY", "HKD",
-    "SGD", "INR", "BRL", "MXN", "ZAR", "PLN", "CZK", "HUF", "TRY", "RUB", "KRW",
-)  # fmt: skip
+CURRENCY_CODES = ISO_4217  # the repo's one list of real codes; LTM, PIK, RCF, TTM are not in it
+
+
+_AMOUNT_WORD = r"(?:m|mn|bn|k|thousands?|millions?|billions?|amounts?)"
+_SYMBOL_CODE = {"$": "USD", "\u20ac": "EUR", "\u00a3": "GBP", "\u00a5": "JPY"}
+
+
+def _other_currency(rest: str, chart_unit: str) -> bool:
+    """Whether `rest` (a unit cell without the chart unit) names a currency other than the chart
+    unit's own: a code or symbol of another currency. A code counts in a currency position only:
+    next to an amount word or unit (`GBPm`, `EUR millions`, `m EUR`), or standing alone (`(ILS)`,
+    `and EUR`). A capitalised word that is also a code (`ALL figures`, `TOP line`) does not."""
+    own_symbols = [s for s in _SYMBOL_CODE if s in chart_unit]
+    own = {c for c in CURRENCY_CODES if re.search(rf"\b{c}", chart_unit)}
+    own |= {_SYMBOL_CODE[s] for s in own_symbols}
+    code = "(?:" + "|".join(sorted(CURRENCY_CODES - own)) + ")"
+    alone = rf"(?:^|[(/;,&]|\band\b|\bor\b)\s*{code}\s*(?=$|[)/;,&])"
+    beside = rf"\b{code}\s*{_AMOUNT_WORD}\b|\b{_AMOUNT_WORD}\s+{code}\b"
+    symbols = "".join(s for s in _SYMBOL_CODE if s not in own_symbols)
+    return bool(re.search(f"{alone}|{beside}|[{symbols}]", rest))
 
 
 def _unit_advice(spec: OwnerTable, unit: str) -> str:
-    """What to do about a unit cell that is not the chart unit. A cell that begins with the chart
-    unit and adds other words is a unit cell holding more than the unit: its amounts are sound, so
-    the advice is to cut the cell, never to replace the amounts with gaps. When the rest names
-    another currency code or symbol the amounts may really be in it, so the gap advice stays."""
-    rest = unit.removeprefix(spec.chart_unit)
-    codes = "|".join(CURRENCY_CODES)
-    other_currency = re.search(rf"\b(?:{codes})\b|[$\u20ac\u00a3\u00a5]", rest)
-    if rest != unit and rest[:1] and not rest[:1].isalnum() and not other_currency:
+    """What to do about a unit cell that is not the chart unit. A cell that holds the chart unit
+    and adds other words is a unit cell holding more than the unit: its amounts are sound, so the
+    advice is to cut the cell, never to replace the amounts with gaps. When the rest names another
+    currency (`_other_currency`) the amounts may really be in it, so the gap advice stays."""
+    own = re.compile(rf"{re.escape(spec.chart_unit)}(?!\w)")
+    if (
+        spec.chart_unit
+        and own.search(unit)
+        and not _other_currency(own.sub("", unit), spec.chart_unit)
+    ):
         return (
             f"the Reporting unit must be exactly `{spec.chart_unit}` (the Amount's unit only); "
             "move the rest to Basis and limitation."
@@ -1898,6 +1930,49 @@ TRANSPORT_RULES = (
     "only the work that depends on it. Missing evidence still blocks exactly what the method says "
     "it blocks.\n\n"
 )
+# Every module, directly after TRANSPORT_RULES. Owner, 2026-11-13: "inter module communication
+# should [be] handled by orchestrator, so does not need to be held in the instructions". The last
+# sentence is the controller's (T4 ruling R4): the methods' own validators (`required_register_ids`,
+# `appendix_contract`, the lossless profile, `completeness_check.py`) are never run here, but
+# TRANSPORT_RULES has the module do their checks itself, and those would restore what is cut.
+ROUTING_RULES = (
+    "Routing in this transport: CP-OS chooses which modules run and in what order, gives each "
+    "module the handoffs it needs and keeps every handoff; no reader acts on a recommendation "
+    "about what to run next. This overrides every method instruction to return or recommend a "
+    "next command, keep a Master Index, managed workspace, export record or run command sheet, "
+    "map upstream or downstream dependencies, file a research request or brief, or write a "
+    "register whose rows are addressed to receiving modules (cross-module handoff, consumer "
+    "actions, analytical consumption, event use, downstream readiness) or the tables "
+    "`cp2g.cp_model_forecast_drivers` and `cp2b.cp_model_catalysts`: write none of them. Under "
+    "`## Next module` write only: `The orchestrator selects the next module.` A restriction on "
+    "how your results may be used is a limitation: state it in `### Limitations` or `## Gaps`, "
+    "in plain words. Every figure in a reader passage must still appear in a table you write or "
+    "in `## Calculations`. Nothing excluded here or in a `Register scope` section is required by "
+    "the method's `required_register_ids`, `appendix_contract`, lossless profile or completeness "
+    "check, or the canon's Analytical appendix rule: do not restore it or block for want of it.\n\n"
+)
+# Only the modules in REGISTER_SCOPE_MODULES, directly after ROUTING_RULES: what the presence check
+# (`register_issues`) asks of every register the scope section does not exclude.
+PRESENCE_RULE = (
+    "Write every other register the method requires under a heading that starts with its id or a "
+    "`<!-- table-id: -->` tag that carries it; one with nothing to report has one row "
+    "`Not supplied: <reason>`, never left out; a module that stops at its gate states "
+    "`module_status: Blocked` in the front matter and writes the gate register only.\n\n"
+)
+# CP-5 only: it audits the other modules' handoffs. The first line is the marker the tests look for;
+# `{lines}` is one `- <module>: <registers>` line per upstream module that has a scope section.
+UPSTREAM_SCOPE_NOTE = (
+    "Register scope of the handoffs you audit, in this transport:\n"
+    "CP-OS told each module below not to write the registers listed, so their absence is not a "
+    "finding: do not report it as a gap, a missing register, an issue or a must-fix, do not "
+    "lower the clearance for it, and do not ask for it to be restored.\n"
+    "{lines}\n"
+    "The routing rule above holds for every module in the same way: no Master Index, run command "
+    "sheet, `## Next module` recommendation, cross-module handoff, consumer actions, analytical "
+    "consumption, event use or downstream readiness register and neither of the tables "
+    "`cp2g.cp_model_forecast_drivers` and `cp2b.cp_model_catalysts` was asked for, so their "
+    "absence is not a finding either.\n\n"
+)
 # CP-2A only. Its two methods disagree on who sets the stress sizes; run tdg-forecast-005 followed
 # the SKILL, gave no shock, and CP-2G had no stress case to compute. The stress design text is
 # the later correction (LEAD adaptation, ruling Q2), and the owner allowed labelled judgment for
@@ -1919,10 +1994,10 @@ STRESS_BLOCK = (
 CP0_BLOCK = (
     "Source readiness here: the launcher has already listed, hashed and pinned the sources "
     "before this call, so the preparation the method describes is done. Do not write the "
-    "registers P1, P2, P4, P6, P7 and P8. Write P3 and P5, the readiness tables (T1 input gate, "
-    "T2 source register, T3 source hierarchy, T4 content-to-module map, T5 gaps and conflicts, "
-    "T6 evidence trace, T7 master index state, T8 recommended run command sheet), the document "
-    "hierarchy and the minimum missing documents. A result is CONDITIONAL only for a source the "
+    "registers P1, P2, P4, P6, P7 and P8. Do not write T7 or T8: CP-OS orders the modules. Write "
+    "P3 and the readiness tables T1 input gate, T2 source register, T4 content-to-module map "
+    "and T6 evidence trace. State any missing document under `## Gaps`. A result is "
+    "CONDITIONAL only for a source the "
     "effective-source set does not carry. An upstream analytical handoff that has not been "
     "produced yet is never a readiness ground and never a `CONDITIONAL` condition: modules are "
     "put in order by navigation, not by readiness. The package, parse and hash checks were done "
@@ -2007,8 +2082,10 @@ FORECAST_BLOCK = (
     f"{', '.join(f'`{c}`' for c in get_args(Category))}. When the method gives no forecast "
     "(for example a blocked dependency), still write the block, with every driver's `values` as "
     "`[null, null, null]`. `downside_shock` is "
-    '`{"ebitda_decline": "<0 to 1>", "rate_increase": "<0 to 1>"}` from the CP-2A '
-    "scenario, or null when no shock was supplied; Python applies it to the base drivers. "
+    '`{"ebitda_decline": "<0 to 1>", "rate_increase": "<0 to 1>"}`: both values are copied '
+    "unchanged from one CP-2A scenario row; `rate_increase` is that row's proportional "
+    "cash-interest increase, never a yield change; null when no shock was supplied; Python "
+    "applies it to your downside drivers, or to the base drivers when you set none. "
     "`upside_drivers` and `downside_drivers` are your own upside and downside cases: each holds "
     "only the drivers that differ from base, in the same driver form (every other driver is "
     "inherited from base), or null when you set no such case. "
@@ -2392,6 +2469,125 @@ def method_text(module: str) -> str:
     )
 
 
+def register_scope(module: str) -> str:
+    """The registers a module's scope section says not to write, as the section names them
+    (`<id> <title>; <id> <title>`)."""
+    section = dict(method_sections(module))[f"{REGISTER_SCOPE} § {module}"]
+    return section.partition("do not write ")[2].partition(". Any figure")[0]
+
+
+# The routing registers each module's scope section names (ROUTING_RULES tells it not to write
+# them); the presence check never requires them. Per module: ids collide across modules.
+ROUTING_REGISTERS = (
+    ("CP-0", ("T7", "T8")),
+    ("CP-1A", ("T2D.10", "downstream_readiness")),
+    ("CP-2A", ("T2B.8", "T5.6")),
+)
+_REQUIRED_KEY = re.compile(r"^(\s*)- \*\*required_register_ids\*\*:(.*)$")
+_REGISTER_ID = re.compile(r"[A-Za-z]\w*(?:\.\w+)*")
+_BLOCKED = re.compile(r"""^module_status:\s*["']?blocked["']?\s*$""", re.IGNORECASE)
+_MISSING_REGISTERS = (
+    "Missing registers: {ids}. The method requires each of them and CP-OS does not cut them. "
+    "Write each as its own register: a `###` heading that starts with its id (`### {first} - "
+    "<title>`, the id may be in bold or backticks) or a `<!-- table-id: ... {first} -->` tag above "
+    "its table. A register with nothing to "
+    "report is still written, with one row `Not supplied: <reason>` (or the method's own "
+    "placeholder row), never left out. A module that stops at its gate says so with "
+    "`module_status: Blocked` in the front matter and writes the gate register only; it is not "
+    "asked for the others."
+)
+
+
+def _listed_ids(lines: list[str]) -> list[str]:
+    """The ids of every `required_register_ids` entry in a method file, in order (the entry is
+    one `;` line or, as `structured below`, the deeper bullets under it)."""
+    ids: list[str] = []
+    for number, line in enumerate(lines):
+        key = _REQUIRED_KEY.match(line)
+        if not key:
+            continue
+        body = [key[2]]
+        for later in lines[number + 1 :]:
+            if not later.lstrip().startswith("- ") or len(later) - len(later.lstrip()) <= len(
+                key[1]
+            ):
+                break
+            body.append(later.lstrip()[2:])
+        ids += [p.strip() for p in ";".join(body).split(";")]
+    return [i for i in ids if _REGISTER_ID.fullmatch(i) and i != "none"]
+
+
+@functools.cache
+def required_registers(module: str) -> tuple[str, ...]:
+    """The registers a module's handoff must carry: the method's `required_register_ids` (CP-0:
+    less what CP0_BLOCK says the launcher did), less the module's scope section and the routing
+    registers. Derived from the method text the module is sent; empty outside the ten modules."""
+    if module not in REGISTER_SCOPE_MODULES:
+        return ()
+    listed: list[str] = []
+    for name, text in method_sections(module):
+        if not name.startswith(REGISTER_SCOPE):
+            listed += _listed_ids(text.split("\n"))
+    out = {part.strip().split(" ")[0] for part in register_scope(module).split(";")}
+    if module == "CP-0":
+        launcher = re.search(r"Do not write the registers ([^.]*)\.", CP0_BLOCK)
+        if launcher is None:
+            raise ValueError("CP0_BLOCK no longer says which registers the launcher made")
+        out |= set(re.findall(r"\bP\d+\b", launcher[1]))
+    out |= set(dict(ROUTING_REGISTERS).get(module, ()))
+    return tuple(dict.fromkeys(i for i in listed if i not in out))
+
+
+def _blocked_at_gate(text: str) -> bool:
+    """`module_status: Blocked` in the front matter: the method's own stop ("Module Status =
+    Blocked, STOP"); the retained CP-4 handoff writes its source gate and nothing else."""
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return False
+    head = lines[1:]
+    head = head[: head.index("---")] if "---" in head else head
+    return any(_BLOCKED.match(line.strip()) for line in head)
+
+
+def _has_register(text: str, ident: str) -> bool:
+    """A `###` heading that starts with the id (optionally after a number such as `1.`, and the id
+    in bold or backticks), or with a list of ids that includes it, or a `<!-- table-id: ... -->` tag
+    whose last part is the id. Each id in the list is id-shaped (a dotted id, a bare `T1`/`P3`, a
+    snake_case slug): a prose word before it makes the heading another register's (`Table T2.1:`
+    stays refused). An id in a table cell or mid-heading is a citation, not the register."""
+    wrap = r"(?:\*\*|`)?"
+    token = (
+        r"(?:[A-Z]+\d\w*(?:\.\w+)*|[A-Z][A-Za-z]*(?:\.\w+)+|[a-z]+(?:_[a-z]+)+)"  # id-shaped only
+    )
+    lead = rf"{wrap}{token}{wrap}(?:\s*[,&/]\s*|\s+and\s+)"
+    heading = rf"^#{{2,6}} (?:\d+[.)] )?(?:{lead})*{wrap}{re.escape(ident)}(?!\w|\.\d)"
+    tag = rf"^<!-- table-id: (?:\S*\.)?{re.escape(ident)} -->\s*$"
+    return any(re.search(p, text, re.MULTILINE) for p in (tag, heading))
+
+
+def register_issues(module: str, text: str) -> tuple[str, ...]:
+    """One issue naming every in-scope required register the handoff lacks; none for a module
+    outside the ten or one blocked at its gate. A register's body is not judged."""
+    required = required_registers(module)
+    if not required or _blocked_at_gate(text):
+        return ()
+    missing = [i for i in required if not _has_register(text, i)]
+    if not missing:
+        return ()
+    return (_MISSING_REGISTERS.format(ids=", ".join(missing), first=missing[0]),)
+
+
+def upstream_scope_note(ordered: Sequence[str]) -> str:
+    """What CP-5 is told about the handoffs it audits: the registers each module of the run planned
+    before it was told not to write. Empty when the run has no CP-5 or none of them has a scope
+    section."""
+    if "CP-5" not in ordered:
+        return ""
+    upstream = ordered[: ordered.index("CP-5")]
+    lines = [f"- {m}: {register_scope(m)}." for m in upstream if m in REGISTER_SCOPE_MODULES]
+    return UPSTREAM_SCOPE_NOTE.format(lines="\n".join(lines)) if lines else ""
+
+
 def _instructions(
     run: Run,
     module: str,
@@ -2428,6 +2624,8 @@ def _instructions(
         "Use calculate for all new arithmetic. Keep exact amounts, units, currencies, periods, "
         "source locators and limitations. Absent evidence stays an explicit gap.\n\n"
         + TRANSPORT_RULES
+        + ROUTING_RULES
+        + (PRESENCE_RULE if module in REGISTER_SCOPE_MODULES else "")
         + "A handoff is rejected unless it does all of this:\n"
         f"- name {run.issuer_name} in `## Request`, and state the as-of date {run.as_of} there;\n"
         "- list each issuer source it relied on in `## Sources`, naming the exact file and its "
@@ -2752,6 +2950,7 @@ def _prepare(  # noqa: PLR0913, PLR0915 - `prepare`'s body: one keyword per sett
         ("CP-1", CP1_CHECK_BLOCK, True),
         ("CP-1", LAYER1_FORECAST_BLOCK, forecast and "CP-2G" not in ordered),
         ("CP-0", CP0_BLOCK, True),
+        ("CP-5", upstream_scope_note(ordered), True),
         ("CP-2A", STRESS_BLOCK, True),
         ("CP-DR", PEER_PACK_BLOCK, peer_pack),
         ("CP-1C", PEER_READER_BLOCK, peer_pack),
@@ -2950,6 +3149,7 @@ def checker(layout: MarkdownLayout) -> Check:
             if route.kind == "chart":
                 issues += chart_issues(text, route, money=money_unit(text))
         issues += _owned_issues(task.module_id, routes, text)
+        issues += register_issues(task.module_id, text)
         return (*issues, *_forecast_issues(task, text))
 
     return check
@@ -3021,7 +3221,119 @@ def _forecast_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
             fix = "Correct the block; if you cannot, set every driver's values to "
             advice = f"{fix}[null, null, null] and say why in scope_limits."
         return (f"Forecast inputs: {stem}. {advice}",)
-    return _unstated_currency(inputs)
+    return (*_unstated_currency(inputs), *_shock_issues(task, inputs))
+
+
+# A Share as cp2g writes one: 0, 1, 0.d to 0.dddd or 1.0 to 1.0000, and nothing numeric after it
+# (so 20%, 0.31606, 1.5000, +0.30 and **0.20** are not read).
+_SHARE_CELL = re.compile(r"^(?:0\.\d{1,4}|1\.0{1,4}|0|1)(?![\d.%])")
+_PERCENT = re.compile(r"(?<![\d.])(\d+(?:\.\d+)?)%")
+_SCENARIO_MARKER = "<!-- table-id: T2DS.1 -->"
+_MAX_LISTED_SCENARIOS = 8
+
+
+def _t2ds_rows(cp2a: str) -> tuple[list[list[str]], str]:
+    """The rows of table T2DS.1 (header, divider, data) and the reason when there are none."""
+    lines = cp2a.replace("\r\n", "\n").split("\n")
+    marker = [i for i, line in enumerate(lines) if line.strip() == _SCENARIO_MARKER]
+    if len(marker) != 1:
+        return [], f"the marker of table T2DS.1 appears {len(marker)} times"
+    tail = lines[marker[0] + 1 :]
+    rows: list[list[str]] = []
+    for n, line in enumerate(tail):
+        if line.startswith("|"):
+            if "\\|" in line:
+                return [], "a table line holds an escaped pipe"
+            rows.append([cell.strip() for cell in line.strip().strip("|").split("|")])
+        elif rows or line.strip():  # blank lines before the table are skipped
+            if rows and "|" in next((after for after in tail[n:] if after.strip()), ""):
+                return [], "a line with a pipe follows the table's last pipe line"
+            break
+    if len(rows) > 1 and not all(re.fullmatch(r"[-: ]+", cell) for cell in rows[1]):
+        return [], "the second table row is not a divider"
+    return rows, "" if len(rows) > 2 else "table T2DS.1 has no data rows"
+
+
+def _t2ds_columns(header: list[str]) -> tuple[int, int] | None:
+    cells = [cell.lower() for cell in header]
+    found = [[i for i, cell in enumerate(cells) if name in cell] for name in _SCENARIO_COLUMNS]
+    if any(len(each) != 1 for each in found) or found[0] == found[1]:
+        return None
+    return found[0][0], found[1][0]
+
+
+_SCENARIO_COLUMNS = ("ebitda decline", "interest increase")
+
+
+def _share(cell: str) -> str | None:
+    found = _SHARE_CELL.match(cell)
+    if found is None:
+        return None
+    percent = Decimal(found.group(0)) * 100
+    rest = _PERCENT.sub(lambda m: "" if Decimal(m[1]) == percent else "0", cell[found.end() :])
+    return None if re.search(r"\d", rest) else found.group(0)
+
+
+def _t2ds_pairs(rows: list[list[str]], columns: tuple[int, int]) -> list[tuple[str, str]] | str:
+    """Every data row's two Shares, or the reason a row does not give them."""
+    pairs = []
+    for row in rows[2:]:  # the header and its divider are not scenarios
+        read = [_share(row[i]) if i < len(row) else None for i in columns]
+        if read[0] is None or read[1] is None:
+            return f"a scenario row has a cell that does not open with a Share: {str(row)[:200]}"
+        pairs.append((read[0], read[1]))
+    return pairs
+
+
+def _cp2a_scenarios(cp2a: str) -> tuple[tuple[str, str], ...]:
+    """The (EBITDA decline, cash-interest increase) pairs of CP-2A's table T2DS.1, each as the
+    Share its cell opens with. Empty (the check does not run) unless Python read the whole table
+    without doubt: one marker, one cell for each column, every data row long enough and both its
+    cells opening with a Share, and at least one row that is not the zero control. Documented
+    fail-open: a repair round costs a paid call, so a block is sent back only for a table Python
+    read completely; the reason is logged at WARNING."""
+    rows, why = _t2ds_rows(cp2a)
+    columns = _t2ds_columns(rows[0]) if not why else None
+    if not why and columns is None:
+        why = "the header lacks exactly one EBITDA decline cell and one interest increase cell"
+    pairs = _t2ds_pairs(rows, columns) if columns else []
+    if isinstance(pairs, str):
+        why, pairs = pairs, []
+    if not why and all(Decimal(s) == 0 and Decimal(k) == 0 for s, k in pairs):
+        why = "no scenario row is other than the zero control"
+    if why:
+        log.warning("CP-2A scenarios not checked against downside_shock: %s", why)
+        return ()
+    return tuple(pairs)
+
+
+def _shock_issues(task: HandoffTask, inputs: cpos_forecast.ForecastInputs) -> tuple[str, ...]:
+    """The block's `downside_shock` must be one of CP-2A's stated scenarios (owner ruling
+    2026-11-13). Documented fail-open, logged at WARNING with its reason (`_cp2a_scenarios`): when
+    CP-2A is not sent, or Python did not read the whole of its T2DS.1 table, nothing is checked
+    and the block is not sent back."""
+    stated = inputs.downside_shock
+    if stated is None:
+        return ()
+    if "CP-2A" not in task.handoffs:
+        log.warning("CP-2A scenarios not checked against downside_shock: CP-2A is not sent")
+        return ()
+    scenarios = _cp2a_scenarios(task.handoffs["CP-2A"].decode("utf-8"))
+    pair = (Decimal(stated.ebitda_decline), Decimal(stated.rate_increase))
+    if not scenarios or pair in {(Decimal(s), Decimal(k)) for s, k in scenarios}:
+        return ()
+    shown = scenarios[:_MAX_LISTED_SCENARIOS]
+    listed = "; ".join(f"{s} / {k}" for s, k in shown)
+    if len(scenarios) > len(shown):
+        listed += f"; and {len(scenarios) - len(shown)} more"
+    issue = (
+        f"Forecast inputs: `downside_shock` ({stated.ebitda_decline} / {stated.rate_increase}) "
+        "is not a CP-2A scenario. It must copy one CP-2A scenario unchanged: `rate_increase` is "
+        "that scenario's proportional increase in cash interest (0 to 1), never a yield change. "
+        f"CP-2A's table T2DS.1 states (EBITDA decline / cash-interest increase): {listed}. "
+        "If you cannot copy one of them, set `downside_shock` to null."
+    )
+    return (issue,)
 
 
 def _unstated_currency(inputs: cpos_forecast.ForecastInputs) -> tuple[str, ...]:
@@ -3164,9 +3476,6 @@ def _dropped_value_lines(events: Sequence[Mapping[str, Any]]) -> list[str]:
         for module in failed
     ]
     return lines
-
-
-FAILED_NO_USAGE = "failed, no usage reported"  # the reason handoff.py writes with a completion
 
 
 def _attempt(event: Mapping[str, Any]) -> str:

@@ -1665,3 +1665,33 @@ def test_a_sweep_discloses_a_start_that_began_after_the_module_end(tmp_path: Pat
     loop.drain_late()
     (event,) = named(folder, "compaction_uncharged")
     assert event["attempt_id"] == ATTEMPT and event["reason"] == "started, no completion reported"
+
+
+def test_a_value_dropped_by_an_earlier_rejected_draft_is_reported_when_the_third_is_accepted(
+    tmp_path: Path,
+) -> None:
+    from deploy_workflow.run_events import EVENTS, read_events
+
+    second = CP6_SECOND + "The canonical wording remains.\n"
+    module, results = _writes(tmp_path, CP6_FIRST, second, CP6_SECOND)
+    assert module.accepted and results[2].startswith("ACCEPTED")
+    assert [d["value"] for d in _review(tmp_path, 3)["dropped_values"]] == [
+        "USD 247 million",
+        "USD 755 million",
+    ]
+    event = [e for e in read_events(tmp_path / "run" / EVENTS) if "dropped" in e["event"]]
+    assert [(e["event"], e["module"], e["count"]) for e in event] == [
+        ("values_dropped_on_repair", "CP-2", 2)
+    ]
+
+
+def test_a_value_restored_before_acceptance_is_not_reported(tmp_path: Path) -> None:
+    from deploy_workflow.run_events import EVENTS, read_events
+
+    second = CP6_SECOND + "The canonical wording remains.\n"
+    third = CP6_FIRST.replace("canonical", "adopted")
+    module, _ = _writes(tmp_path, CP6_FIRST, second, third)
+    assert module.accepted and _review(tmp_path, 3)["dropped_values"] == []
+    assert all(
+        e["event"] != "values_dropped_on_repair" for e in read_events(tmp_path / "run" / EVENTS)
+    )

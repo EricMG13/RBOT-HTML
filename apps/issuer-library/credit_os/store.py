@@ -1391,6 +1391,9 @@ FORECAST_CASES = (
     ("DOWNSIDE_DRIVERS", "Downside (CP-2G drivers)"),
     ("DOWNSIDE", "Downside stress (shock on base drivers)"),
 )
+# The stress case's name when the model's shock sits on its own downside drivers (the model's
+# `downside_basis`); a model delivered before that field existed keeps the base-drivers name.
+STRESS_ON_DOWNSIDE_DRIVERS = "Downside stress (shock on downside drivers)"
 NO_VALUE = "the model's source table has no value for this period"
 PRINTED_DASH = "printed as \u2014 in the source"
 PRIOR_MISSING = "prior-year period not in the handoffs"
@@ -1990,6 +1993,8 @@ def forecast_inputs(exact: Any) -> tuple[Forecast, list[str], list[str]]:
             if not isinstance(year["year"], int):
                 raise TypeError("year is not a number")
             checked_entries(year, ("year", "planning_start", "planning_end"))
+        if key == "DOWNSIDE" and exact.get("downside_basis") == "downside_drivers":
+            name = STRESS_ON_DOWNSIDE_DRIVERS
         cases.append((name, years))
         keys.append(key)
     limits = exact["scope_limits"]
@@ -2001,6 +2006,9 @@ def forecast_inputs(exact: Any) -> tuple[Forecast, list[str], list[str]]:
 DOWNSIDE_CASE = "Downside case"
 DOWNSIDE_NOTES = {
     "DOWNSIDE": "Downside case is the stress case: a shock applied to the base-case drivers.",
+    "DOWNSIDE_ON_DRIVERS": (
+        "Downside case is the stress case: a shock applied to the model's own downside drivers."
+    ),
     "DOWNSIDE_DRIVERS": (
         "Downside case is CP-2G's own downside drivers; no CP-2A shock was supplied."
     ),
@@ -2014,7 +2022,8 @@ def main_cases(cases: Forecast, keys: list[str]) -> tuple[Forecast, Forecast, st
 
     A case with no years is not computed: it is never the Downside and opens no group.
     The Downside case is the CP-2A shock (DOWNSIDE) when computed, else CP-2G's own downside
-    drivers; it is shown as "Downside case". `keys` are the cases' keys in step with `cases`.
+    drivers; it is shown as "Downside case", its note naming the basis the model states.
+    `keys` are the cases' keys in step with `cases`.
     """
     named = {key: case for key, case in zip(keys, cases, strict=True) if case[1]}  # computed only
     chosen = next((key for key in ("DOWNSIDE", "DOWNSIDE_DRIVERS") if key in named), None)
@@ -2022,7 +2031,8 @@ def main_cases(cases: Forecast, keys: list[str]) -> tuple[Forecast, Forecast, st
     if chosen is not None:
         main.append((DOWNSIDE_CASE, named[chosen][1]))
     other = [case for key, case in named.items() if key not in ("REFERENCE", chosen)]
-    return main, other, DOWNSIDE_NOTES[chosen]
+    on_drivers = chosen == "DOWNSIDE" and named[chosen][0] == STRESS_ON_DOWNSIDE_DRIVERS
+    return main, other, DOWNSIDE_NOTES["DOWNSIDE_ON_DRIVERS" if on_drivers else chosen]
 
 
 def cell_count(rows: int, columns: int) -> int:

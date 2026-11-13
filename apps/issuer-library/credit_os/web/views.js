@@ -494,8 +494,8 @@ const drawn=(id,where)=>data[id].sections.filter((section,i)=>data[id].placement
 const DRAWN_PLACEMENTS=['view','reference','calculations','limits'];
 // The routable section anchors of an output: the sections a part draws (audit and consumed sections open from the audit list instead).
 const drawnAnchors=id=>{
-  const {rest,drawings,registers}=isNewFormat(data[id].sections)?newFormatSplit(id):{rest:DRAWN_PLACEMENTS.flatMap(where=>drawn(id,where)),drawings:[],registers:[]};
-  return new Set([...rest,...drawings,...registers].map(section=>`s-${section.line}`));
+  const {rest,drawings,registers,esg}=isNewFormat(data[id].sections)?newFormatSplit(id):{rest:DRAWN_PLACEMENTS.flatMap(where=>drawn(id,where)),drawings:[],registers:[],esg:[]};
+  return new Set([...rest,...drawings,...registers,...esg.map(entry=>entry.section)].map(section=>`s-${section.line}`));
 };
 // What a chip draws, from the chip dict as the library build emits it. An upstream chip with no module names register codes of the row's own module.
 // Only an issuer-page chip has an avatar (its source key); a module is named in the label, never coded.
@@ -680,9 +680,11 @@ const promotedTables=section=>section.blocks.filter(block=>block.type==='table'&
 // findings. A section that is not a passage, finding or drawing (its role says Evidence or nowhere) is in neither list.
 function newFormatSplit(id) {
   const held=new Set(passageSections(id)),drawnTables=new Set([...(data[id].charts||[]),...(data[id].chartGaps||[]),...(data[id].maps||[]),...(data[id].events||[])].map(drawing=>drawing.table));
-  const split={rest:[],drawings:[],registers:[]};
+  const split={rest:[],drawings:[],registers:[],esg:[]};
   for(const {section,role} of window.Evidence.classify(data[id].sections,data[id].placement)) {
     if(held.has(section)||!section.blocks.length)continue;
+    // The ESG analysis (T2G sections) is one named part of the page (newFormatParts): its finding sections, and its registers sections that hold a table with a row (each draws its promoted tables only and links to Evidence for the rest). It is also listed in rest or registers as before, so the Overview is unchanged.
+    if(window.Shapes.isEsgHeading(plain(section.heading))&&(role==='registers'?section.blocks.some(block=>block.type==='table'&&block.rows.length>0):['finding','drawing','passage'].includes(role)&&drawsSomething(section)))split.esg.push({section,role});
     if(role==='drawing'&&section.blocks.some(block=>block.type==='table'&&drawnTables.has(block.line)))split.drawings.push(section);
     else if(['finding','drawing','passage'].includes(role)&&drawsSomething(section))split.rest.push(section);
     else if(role==='registers'&&promotedTables(section).length)split.registers.push(section);
@@ -783,12 +785,19 @@ const registerSection=(id,section)=>{
   const table=tableRenderer(id);
   return `<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,newFormatTag(section))}${promotedTables(section).map(block=>table(block,section)).join('')}</div>`;
 };
+// An ESG registers section: as registerSection, and when it holds a table that is not drawn there, the link to where that table is (Evidence, Registers).
+const esgRegisterSection=(id,section)=>{
+  const html=registerSection(id,section),drawn=new Set(promotedTables(section));
+  if(!section.blocks.some(block=>block.type==='table'&&block.rows.length>0&&!drawn.has(block)))return html;
+  return `${html.slice(0,-'</div>'.length)}<p class="sec-moved"><a class="in-ev" href="${esc(window.Evidence.href('registers',data[id].module,data[id].run))}">In Evidence</a></p></div>`;
+};
 const passageTexts=section=>(section?section.blocks.filter(block=>block.type==='text').map(block=>({text:block.text,line:block.line})):[]);
 // The rail's count is of the items the section draws, read from its own markup: a feed item, a limitation, and one per table row that has its trace control (a row held back or not drawn has none).
 const drawnRows=html=>new Set([...html.matchAll(/data-evidence="([^"]*)"/g)].map(m=>m[1])).size;
 const drawnOf=(html,rx)=>(html.match(rx)||[]).length;
 // The line of the first section that holds one of a drawing's tables: where in the handoff the drawing stood.
 const drawingLine=(id,drawings)=>Math.min(...(drawings||[]).map(drawing=>drawingSection(id,drawing.table)?.line??Infinity));
+const ESG_LABEL='Environmental, social and sustainability (ESG)';
 // A part is [anchor, label, html, count?]; `count` is the number of listed items the rail shows beside the label.
 function newFormatParts(id) {
   const out=data[id],passages=readerPassages(out.sections),texts=Object.fromEntries(Object.entries(passages).map(([key,section])=>[key,passageTexts(section)]));
@@ -809,13 +818,21 @@ function newFormatParts(id) {
   if(charts)body.push([drawingLine(id,[...(out.charts||[]),...(out.chartGaps||[])]),['charts','Charts',`<section class="part" id="charts"><h3>Charts</h3>${charts}</section>`]]);
   if(timeline)body.push([drawingLine(id,out.events),['timeline','Timeline',timeline]]);
   if(maps)body.push([drawingLine(id,out.maps),['maps','Maps',maps]]);
-  for(const section of newFormatSplit(id).rest) {
+  const split=newFormatSplit(id),inEsg=new Set(split.esg.map(entry=>entry.section));
+  for(const section of split.rest) {
+    if(inEsg.has(section))continue;
     const html=findingSection(id,section),rows=drawnRows(html);
     body.push([section.line,[`s-${section.line}`,plain(section.heading.replace(METHOD_CODE,'')),`<section class="part">${html}</section>`,...(rows?[rows]:[])]]);
   }
+  // The ESG analysis stands where its first section stood: one named part, each section under its own heading, in handoff order. A registers section draws its heading and its promoted tables, with an In Evidence link when it holds a table not drawn (its prose and its other tables stay in Evidence).
+  if(split.esg.length) {
+    const html=split.esg.map(({section,role})=>role==='registers'?esgRegisterSection(id,section):findingSection(id,section)).join(''),rows=drawnRows(html);
+    body.push([split.esg[0].section.line,['esg',ESG_LABEL,`<section class="part" id="esg"><h3>${ESG_LABEL}</h3>${html}</section>`,...(rows?[rows]:[])]]);
+  }
   parts.push(...body.sort((a,b)=>(a[0]<b[0]?-1:a[0]>b[0]?1:0)).map(([,part])=>part));
   // The promoted registers follow the finding sections as one group, each under its section's own heading, in handoff order.
-  for(const section of newFormatSplit(id).registers) {
+  for(const section of split.registers) {
+    if(inEsg.has(section))continue;
     const html=registerSection(id,section),rows=drawnRows(html);
     parts.push([`s-${section.line}`,plain(section.heading.replace(METHOD_CODE,'')),`<section class="part part-register">${html}</section>`,...(rows?[rows]:[])]);
   }
@@ -1323,8 +1340,10 @@ function forecastView(context,id) {
   const built=model.sources.length?`<section class="forecast-built"><h2>Built from</h2><ul class="fc-built">${model.sources.map(source).join('')}</ul>${differing?'<p class="forecast-attempts">These inputs come from different attempts.</p>':''}</section>`:'';
   // The frame names the run by its period and pathway only (the select's labels may carry a delivery tag or a relationship).
   const label=contexts[context]?runName(contexts[context]):'This run';
-  const frame=`<details class="model-original"><summary>Published model (original HTML)</summary><div class="frame-host"><div class="frame-head"><h2>Published model</h2><span>${esc(label)}</span></div><p class="frame-status" role="status" hidden></p><iframe id="model-preview" data-download="${esc(model.download)}" data-src="${esc(model.href)}" title="Published model, ${esc(label)}" sandbox="allow-scripts allow-downloads" referrerpolicy="no-referrer"></iframe></div></details>`;
-  return `<div class="forecast">${forecastCharts(context)}<div class="report-tools forecast-tools">${select}${acceptance.html}<a href="${esc(model.download)}" download>Download original HTML</a></div>${cashflowSection(model)}${assumptions}${model.cashflow?`<section class="forecast-limits"><h2>Model limitations</h2><ul>${limitList}</ul></section>`:''}${why}${built}${frame}</div>`;
+  // Only an HTML file can be framed and called HTML; the catalogue pins annual.md when a delivery has no model.html.
+  const isHtml=/\.html$/i.test(String(model.href).split(/[?#]/)[0]);
+  const frame=!isHtml?'':`<details class="model-original"><summary>Published model (original HTML)</summary><div class="frame-host"><div class="frame-head"><h2>Published model</h2><span>${esc(label)}</span></div><p class="frame-status" role="status" hidden></p><iframe id="model-preview" data-download="${esc(model.download)}" data-src="${esc(model.href)}" title="Published model, ${esc(label)}" sandbox="allow-scripts allow-downloads" referrerpolicy="no-referrer"></iframe></div></details>`;
+  return `<div class="forecast">${forecastCharts(context)}<div class="report-tools forecast-tools">${select}${acceptance.html}<a href="${esc(model.download)}" download>${isHtml?'Download original HTML':'Download published model (Markdown)'}</a></div>${cashflowSection(model)}${assumptions}${model.cashflow?`<section class="forecast-limits"><h2>Model limitations</h2><ul>${limitList}</ul></section>`:''}${why}${built}${frame}</div>`;
 }
 // The Library screen. The served catalogue (window.DESIGN_CATALOGUE) is screened and sorted by LibraryLogic (screening.js); this places it. Nothing here calculates, converts or rescales a value.
 const METRIC_NAMES={revenue:'Revenue',ebitda:'EBITDA',leverage:'Leverage',net_leverage:'Net leverage',coverage:'Interest coverage',cash:'Closing cash',undrawn:'Undrawn facilities',cashflow:'Cash flow measure'};

@@ -438,7 +438,9 @@ NOT_DATED = (
 )
 NO_YTD = "the latest reported period is fiscal year {label}; there is no year to date"
 NEEDS = "needs {labels}, which the table holding the named row does not print"
-NO_PF = "no handoff states pro forma adjustments"
+NO_PF = (
+    "pro forma figures are not placed in this column; the financial foundation shows any it states"
+)
 NOT_EXACT = "the figures cannot be added exactly"
 PART_YEAR = "a ratio to part-year earnings is not shown"
 NO_COLUMN = "the tables holding the named rows print no {group} column Python can read"

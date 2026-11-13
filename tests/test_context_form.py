@@ -384,3 +384,12 @@ def test_the_component_look_takes_the_reference_box_values() -> None:
     assert "border-radius:6px" in _rule(".pill")
     dot = _rule(".stepper .dot")
     assert "width:24px" in dot and "height:24px" in dot and "border:1.5px solid" in dot
+
+
+def test_the_form_describes_the_rates_module_with_its_esg_part() -> None:
+    """Rates, FX & hedging also carries the ESG analysis (T2G tables); the form says so."""
+    expected = (
+        "'CP-2E': ['Rates, FX & hedging', 'Rate and currency shocks against the hedges, and the "
+        "environmental, social and sustainability (ESG) factors that reach the credit.'],"
+    )
+    assert expected in constant("MODULES")

@@ -92,6 +92,9 @@ REDACTION_FAILED = "redaction failed; the failure detail is withheld"
 # every measurement. The hold itself does not depend on it: a Sol call holds the whole context.
 BYTES_PER_TOKEN_BOUND = 2
 REQUEST_OVERHEAD = 4096
+FAILED_NO_USAGE = (
+    "failed, no usage reported"  # the reason written when a failed call reports no usage
+)
 # Reads stop once the request reaches this many bytes: 268,000 tokens at the lowest 4.11 bytes per
 # token measured, under the 272,000-token long-context price, with the 1,050,000-token context
 # left for drafts and repairs. At 700,000, run tdg-all-001 refused every read CP-3 and CP-5 made.
@@ -437,7 +440,7 @@ class ModuleTools:
         self.writes = 0
         self.draft = task.draft
         self.accepted = False
-        self.rejected: tuple[str, list[str]] | None = None  # the last rejected write and its issues
+        self.rejected: list[tuple[str, list[str]]] = []  # every rejected write and its issues
 
     def call(self, name: str, args: dict[str, Any]) -> str:
         if name not in {t.name for t in TOOLS}:
@@ -586,9 +589,15 @@ class ModuleTools:
         self.accepted = not issues
         dropped: list[dict[str, str | int]] | None = None
         try:  # the review is written once, whatever happens to the comparison, even an interrupt
-            if self.rejected is not None:  # a repair: say what it removed that no issue named
+            if self.rejected:  # a repair: say what it removed that no issue named
                 try:
-                    dropped = lost_values(self.rejected[0], markdown, self.rejected[1])
+                    dropped = []
+                    for before, named in self.rejected:  # a value any earlier draft held
+                        dropped += [
+                            d
+                            for d in lost_values(before, markdown, named)
+                            if d["value"] not in {k["value"] for k in dropped}
+                        ]
                     review["dropped_values"] = dropped
                 except Exception as exc:  # noqa: BLE001 -- documented, logged fail-open below
                     # Fail-open by design: this comparison is an auxiliary record. A fault in it
@@ -621,7 +630,7 @@ class ModuleTools:
                     count=len(dropped),
                 )
             return "ACCEPTED" + note
-        self.rejected = (markdown, issues)
+        self.rejected.append((markdown, issues))
         writes_left = MAX_WRITES - self.writes
         if self.events is not None:
             append_event(
@@ -1061,9 +1070,7 @@ class HandoffExecutor:
                 **_with_id(c, tokens),
             )
             if _uncharged_failure(c):
-                self._uncharged(
-                    task, index, c.tokens_before, "failed, no usage reported", c.attempt_id
-                )
+                self._uncharged(task, index, c.tokens_before, FAILED_NO_USAGE, c.attempt_id)
 
     def _uncharged(
         self,
