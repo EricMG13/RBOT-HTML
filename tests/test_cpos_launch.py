@@ -2038,6 +2038,92 @@ def test_a_handoff_in_the_new_register_shapes_passes_the_chart_checks():
     assert cpos_launch.chart_issues(recovery, spec) == ()
 
 
+# ---- Deploy V methods plan, Task 5B (2026-11-13): seven sent skills take one small named
+# correction each from caos-databricks vendor/deploy-v (repo HEAD dfff264) or cp-os 115f664. Each
+# module: one sentence of the new text is in the built instruction and the sentence it replaced is
+# not. Nothing in the CP-OS checker reads a T2.10 Direction, a T2H.3 `case`, a T1D `NONE` row or
+# the skills' critical-cell blocklist (`chart_issues` reads only the `### Chart data:` tables).
+def blocklist_lines(text: str) -> list[str]:
+    return [line for line in text.splitlines() if "critical_cell_values_casefold" in line]
+
+
+def test_cp5_instruction_says_cp6_runs_after_cp5_and_is_not_its_input(tmp_path):
+    text = instruction_text(tmp_path, "CP-5")
+    assert (
+        "**Downstream (QA gate):** CP-6 and CP-6A run only after this handoff is accepted (the "
+        "catalog's CP-5 \u2192 CP-6 QA gate); they are never CP-5's input" in text
+    )
+    assert "CP-6 and CP-6A run after CP-5 and are not its input" in text
+    for gone in (  # the sentences that said CP-5 reads CP-6 and CP-6A
+        "All analytical modules (CP-1 through CP-4A, CP-6, CP-6A), CP-5A QA output",
+        "all analytical modules (CP-1 through CP-4A, CP-6, CP-6A)",
+        "(especially CP-3, CP-6, CP-6A)",
+    ):
+        assert gone not in text, gone
+
+
+def test_cp6_instruction_says_its_qa_gate_is_cp5_upstream_of_it(tmp_path):
+    text = instruction_text(tmp_path, "CP-6")
+    assert (
+        "Its QA gate is CP-5: CP-6 runs only after CP-5's handoff is accepted (Passed or "
+        "Restricted), so CP-5 is upstream of CP-6 and never its consumer." in text
+    )
+
+
+def test_cp2_instruction_splits_a_mixed_direction_and_gives_none_supported_a_row(tmp_path):
+    text = instruction_text(tmp_path, "CP-2")
+    assert (
+        "A driver that cuts both ways is split into a Positive row and a Negative row, each "
+        "with its own `Credit Implication` (canon: Mixed->split); `Mixed` is never a Direction."
+        in text
+    )
+    assert "`Driver` `None supported`, `Evidence` naming what was reviewed" in text
+    assert "- Direction: Positive / Negative / Mixed" not in text
+    assert "**values**: Positive; Negative; Mixed" not in text
+
+
+def test_cp1d_instruction_gives_an_empty_cp1_bridge_one_none_row_per_register(tmp_path):
+    prepared, *_ = good_task(tmp_path, "CP-1D", "earnings_update")  # CP-1D's pathway
+    text = (tmp_path / "out" / prepared.plan.instructions["CP-1D"].path).read_text()
+    assert (
+        "T1D.1\u2013T1D.4 then each carry one row stating that no add-back exists (`Add-Back ID` "
+        "`NONE`" in text
+    )
+    assert "T1D.4 bridges reported EBITDA to itself, and Steps 5\u20137 still run." in text
+    assert "present in T1D.1 (one `NONE` row when the bridge is empty); achievability" in text
+    assert "present in T1D.1; achievability" not in text
+
+
+def test_cp2g_instruction_says_the_assumption_register_carries_base_and_downside_rows(tmp_path):
+    text = instruction_text(tmp_path, "CP-2G")
+    assert (
+        "In the assumption register (T2H.3) each row's `case` is `base`, `upside` or `downside` "
+        "(any capitalisation, and the word may lead a longer label such as `Base case`), and the "
+        "register carries rows for both `base` and `downside`." in text
+    )
+    assert "or `analyst_judgment`. Store exact source and locator" not in text
+
+
+def test_cp2h_blocklist_no_longer_refuses_unknown(tmp_path):
+    (line,) = blocklist_lines(instruction_text(tmp_path, "CP-2H"))
+    assert "unknown" not in line
+    assert line.endswith(
+        "; n/a; tbd; not calculable from provided materials; not assessable; unavailable"
+    )
+
+
+def test_cp3_blocklists_no_longer_refuse_not_assessable(tmp_path):
+    text = instruction_text(tmp_path, "CP-3")
+    # CP-3's own list and the CP-3A and CP-3B copies, each a value line of the method text
+    lines = [x for x in text.splitlines() if "[insufficient information]; insufficient" in x]
+    assert len(lines) == 3
+    for line in lines:
+        assert "not assessable" not in line
+        assert line.endswith(
+            "; n/a; tbd; unknown; not calculable from provided materials; unavailable"
+        )
+
+
 def test_cp1b_runs_the_deploy_v_method_not_the_structured_runtime_step():
     """Live runs 2026-11-09 and 2026-11-10: CP-1B blocked both times for want of a `read_inputs`
     view with `pairs`, which only the older structured runtime gives."""
@@ -2122,6 +2208,9 @@ def test_every_module_is_told_what_stands_for_acceptance_scripts_and_questions(t
 # methods" when the text after METHOD_MARK differs, so the shared-text change must leave every
 # one of these as it was. CP-8 alone changed on main after that commit (36a4c52, 184bfbb, 1e46c49:
 # src/deploy_vii/methods/cp8.md, the withheld-difference rules); its pin is the merged text.
+# CP-1D, CP-2, CP-2G, CP-2H, CP-3, CP-5 and CP-6 changed on 2026-11-13 (Deploy V methods plan,
+# Task 5B): each takes one small named correction, so runs made before it are correctly marked
+# "Earlier methods" for these seven modules.
 # CP-2D, CP-4 and CP-4C changed on 2026-11-13 (Deploy V methods plan, Task 5A): they now send the
 # caos-databricks versions with named edits, so runs made before it are correctly marked "Earlier
 # methods" for these three modules.
@@ -2140,20 +2229,20 @@ METHOD_TEXT_SHA256_AT_1B41E65 = {
     "CP-1A": "22a05988055d96a44382d235e760d401b550c1e7c6ff868c6e49b9d3430dbadc",
     "CP-1B": "7cd20df691582416e0ffd069d9f7aa8f7ac64d30c7682383dd7b8134b8dfa763",
     "CP-1C": "9353afdbce820f59c2dcabc951fc1ff3813174b3c84e79b47bc22bea97f3bbe8",
-    "CP-1D": "50cc8ec34ed140f22859fd384eb7f16d81acc3404728b0493f642d5ba4daf4b1",
-    "CP-2": "3b25a0a608a42902589a6b3151bde2bf6de7c81437088b8f2170af55e8cdb4f4",
+    "CP-1D": "e4a9d7cb45cefafcf13d4a765559bd0b0284ab6ef863095f043eff6f7cba0045",
+    "CP-2": "12ec6f0b9baf57547991e8575a6358b766c3443bf202aa5271d9f2d1c3aa2b0a",
     "CP-2A": "a594a8e8c7427f063274fc48961fbe2603b3bc0e032ff345222579fe57ef4c50",
     "CP-2D": "9517dfb7f02f3807a7eeb47576673c7c1ae641896f4dc8d66d6c783fd37eaaab",
     "CP-2E": "4d730920f241c7f7d762a7606890aa2f0b567e1b85372ab3ff659a462ab5d4a7",
-    "CP-2G": "6d15e5eee90a18410466fad2d60efb05740f7eb0972595ceae8116ba1f0db76f",
-    "CP-2H": "e98d0b0c5c84059ef7f10e595c270c4532cf29246c612bb0f108809010c3e3a8",
-    "CP-3": "144798da83e3aab842f8a2e187008a95ecc5c7b387f9e5bc1b31b92ffdf20f1c",
+    "CP-2G": "e7d537cb05eb36d13907222929f6301ff72ad57d5ff427e1944d910478b94842",
+    "CP-2H": "ba13a5880bfd53e1125b24b51e6daed8a097f7db7837822ea10725d4aa733c34",
+    "CP-3": "2e9adde5c2a4ab315b69ef79daa4c1d044889ba0379b425d6266e55c53dc3c49",
     "CP-3C": "c88298f0bb03b0cc7a4975f1eb523f5a8771ebe4e4e4ac2b24168acf343a0c43",
     "CP-3D": "e43f2d5d73d7e15e24d53e302d84d8eca543e14848656dc3a3dc7fb85fde25f8",
     "CP-4": "751ffda78611cf04e029a7cb56d04f80b67edbd28a9a2b00f68c2d3f3530d331",
     "CP-4C": "715cadfe93e767be2d5320ca16da0319e056478119834964c8684e6fbb0c7fbf",
-    "CP-5": "a0b02519822dbd84ba928f026b0e3aa8a7a82ba71604059e9f7ceec9f395bb90",
-    "CP-6": "32fdd06787a47c6351924f1371b90a8b6937c11fbfcb04404eb6590de0ec3b0b",
+    "CP-5": "f2257ce4c3b62e2b7b12fff0d098d1ec20a318a298bc24334135520d74d3496c",
+    "CP-6": "a286943552ce33279e5c83bbc92cd20487da3a3f2b90fa2c8ba333151ad42af5",
     "CP-8": "560e6026abc340b8240a2fb4397f43a52ccb9386c5810ae1cc3b74e063e45075",
     "CP-DR": "4dadb9548e497ed59c4be2acbf93534a7e8080f8fe8ac345a5b453df20b0723e",
     "CP-L10": "527d90f10ce7c541cc15f2e702f73502199f6628335c95e66b64920e7cfba18d",

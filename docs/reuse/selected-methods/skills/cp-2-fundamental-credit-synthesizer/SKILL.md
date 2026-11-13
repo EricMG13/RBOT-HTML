@@ -137,7 +137,7 @@ conclusions, never shorter reasoning or invented filler.
       - **register_id**: T2.10
       - **rule**: allowed_values
       - **rule_id**: cp2.materiality_direction_enum
-      - **values**: Positive; Negative; Mixed
+      - **values**: Positive; Negative
     - structured item
       - **case_sensitive**: True
       - **column**: Confidence
@@ -276,7 +276,7 @@ Full table per `REF_CP-2_Workflow.md`.
 7. Financial Profile & Credit Quality → REF_CP-2_07
 8. Outlook, Tailwinds & Headwinds → REF_CP-2_08
 9. Qualitative Downside / Stress Scenario → REF_CP-2_09
-10. Materiality Filter → REF_CP-2_10
+10. Materiality Filter → REF_CP-2_10 (a direction with no supported driver takes one `None supported` row; never an invented driver; a driver that cuts both ways is split into a Positive and a Negative row, never `Mixed`)
 11. Issuer Matrix → REF_CP-2_11
 12. Monitoring Triggers → REF_CP-2_12
 13. Overall Credit View → REF_CP-2_13

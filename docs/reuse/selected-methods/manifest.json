@@ -12,7 +12,9 @@
       "consumed_path": "skills/cp-2g-forward-credit-model/references/REF_CP-2G_STEPS.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-2g-forward-credit-model/references/REF_CP-2G_STEPS.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-2g-forward-credit-model/references/REF_CP-2G_STEPS.md",
-      "sha256": "b59d94f04dd2b7d4f243856433bdc46896be3765faf9d20acd77e0f56cf57536"
+      "sha256": "7db9c915f31c6d9722da13551053c7c4830c2e183097df4c33c92a674fd7ff13",
+      "source_sha256": "b59d94f04dd2b7d4f243856433bdc46896be3765faf9d20acd77e0f56cf57536",
+      "edit": "named edit: assumption-register rule sentence added: each T2H.3 row's `case` is base, upside or downside and the register carries rows for both `base` and `downside` (caos line 19); no other caos hunk ported (not the `cp2g.requires_base_and_downside_cases` checker id, `match: leading_word`, or the column splits); wording from caos-databricks vendor/deploy-v (last changed 592ee83a, repo HEAD dfff264); sha256 is this edited file, source_sha256 the previously archived file"
     },
     {
       "consumed_path": "skills/cp-2e-macro-fx-hedging-sensitivity/SKILL.md",
@@ -52,7 +54,9 @@
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-2h-ratings-migration-trigger/SKILL.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-2h-ratings-migration-trigger/SKILL.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-2h-ratings-migration-trigger/SKILL.md",
-      "sha256": "acf25aaea52bee5da74069fdfe3013c511b4cb2f3e1cb9d3c99fc950a27a62bb"
+      "sha256": "19c0a304a1dc3b9a6fa8e94f7256582da0ad22b83de8cd21b5e3a770827e2ad9",
+      "source_sha256": "acf25aaea52bee5da74069fdfe3013c511b4cb2f3e1cb9d3c99fc950a27a62bb",
+      "edit": "named edit: `unknown` dropped from the critical_cell_values_casefold blocklist (cp-os 115f664, skills/cp-2h-ratings-migration-trigger/SKILL.md); wording from cp-os 115f664; sha256 is this edited file, source_sha256 the previously archived file"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-2h-ratings-migration-trigger/references/REF_CP-2H_STEPS.md",
@@ -84,9 +88,10 @@
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-5-evidence-trace-validator/references/CP-5_RUNBOOK.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-5-evidence-trace-validator/references/CP-5_RUNBOOK.md",
-      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-5-evidence-trace-validator/references/CP-5_RUNBOOK.md",
-      "sha256": "c053b622c63b242364a8e53c1b2e676f6f02c1ce6a4f7e87728c885e9fd68434",
-      "use": "unchanged selected methodology; historical source is evidence, not inherited authority"
+      "exact_copy_found_at": "/Users/ericguei/Documents/caos-databricks/vendor/deploy-v/skills/cp-5-evidence-trace-validator/references/CP-5_RUNBOOK.md",
+      "sha256": "b313093b43fc2f8ca6c32c2afc478f082f815a5e7f97caa91c8fbe83a659fb06",
+      "use": "byte-for-byte copy of caos-databricks vendor/deploy-v (last changed c746ad67, repo HEAD dfff264); the only change from the previously archived text is the CP-5 ordering: CP-6 and CP-6A run after CP-5 and are not its input: the six ordering hunks of the caos copy (Upstream lines, UP/DOWN lines, the `Downstream (QA gate)` line); the caos copy differs from the archived file in nothing else; historical evidence, not inherited authority",
+      "source_sha256": "c053b622c63b242364a8e53c1b2e676f6f02c1ce6a4f7e87728c885e9fd68434"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-5-evidence-trace-validator/references/REF_CP-5_STEPS.md",
@@ -98,9 +103,10 @@
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-5-evidence-trace-validator/references/REF_CP-5A_STEPS.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-5-evidence-trace-validator/references/REF_CP-5A_STEPS.md",
-      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-5-evidence-trace-validator/references/REF_CP-5A_STEPS.md",
-      "sha256": "e93781b8055e0c33e744b06fb0706161885400d6f8c7ef07a743497d4a865e8d",
-      "use": "unchanged selected methodology; historical source is evidence, not inherited authority"
+      "exact_copy_found_at": "/Users/ericguei/Documents/caos-databricks/vendor/deploy-v/skills/cp-5-evidence-trace-validator/references/REF_CP-5A_STEPS.md",
+      "sha256": "4940a15162bb1f3a2063603cab8637573b5fd2da8c4e64b10759d75a8f207a16",
+      "use": "byte-for-byte copy of caos-databricks vendor/deploy-v (last changed c746ad67, repo HEAD dfff264); the only change from the previously archived text is the CP-5 ordering: step 4 input line: `CP-6 and CP-6A run after CP-5 and are not its input`; the caos copy differs from the archived file in nothing else; historical evidence, not inherited authority",
+      "source_sha256": "e93781b8055e0c33e744b06fb0706161885400d6f8c7ef07a743497d4a865e8d"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-5-evidence-trace-validator/scripts/confidence_score.py",
@@ -113,8 +119,10 @@
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-6-ic-debate-challenge/SKILL.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-6-ic-debate-challenge/SKILL.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-6-ic-debate-challenge/SKILL.md",
-      "sha256": "0ae74db02dd569fe7805e62a661f22cd436494183ba5cb928f8be37aa549a96b",
-      "use": "unchanged selected methodology; historical source is evidence, not inherited authority"
+      "sha256": "95e1a8678f42928fab02205c29395efc1976aeba49fa9e03547baaa7933e7823",
+      "use": "unchanged selected methodology; historical source is evidence, not inherited authority",
+      "source_sha256": "0ae74db02dd569fe7805e62a661f22cd436494183ba5cb928f8be37aa549a96b",
+      "edit": "named edit: Dependencies sentence added: `Its QA gate is CP-5: CP-6 runs only after CP-5's handoff is accepted (Passed or Restricted), so CP-5 is upstream of CP-6 and never its consumer.` (caos SKILL.md line 8); no other caos hunk ported; wording from caos-databricks vendor/deploy-v (last changed 99069f83, repo HEAD dfff264); sha256 is this edited file, source_sha256 the previously archived file"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-6-ic-debate-challenge/references/REF_CP-6_STEPS.md",
@@ -564,10 +572,12 @@
     {
       "consumed_path": "skills/cp-1d-earnings-quality/SKILL.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-1d-earnings-quality/SKILL.md",
-      "sha256": "9682b2da83fe7fd3288cae31fc5d1cf7f6d2daa3de2fac297637fe13d5e8e2ae",
+      "sha256": "56b74b7274a9f0130419efd52e4b9dfe0b8820cff8749bee762e3266980ec344",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-1d-earnings-quality/SKILL.md",
       "source_revision": "cp-os e67bf0cda2dc80d7a744bee371c4fb3c7b8b8df7 (selected files clean)",
-      "use": "Selected CP-1D/absorbed CP-1E analytical duties; current project transport, orchestration, delivery and Excel-input-only rules govern."
+      "use": "Selected CP-1D/absorbed CP-1E analytical duties; current project transport, orchestration, delivery and Excel-input-only rules govern.",
+      "source_sha256": "9682b2da83fe7fd3288cae31fc5d1cf7f6d2daa3de2fac297637fe13d5e8e2ae",
+      "edit": "named edit: hard rule 7 added: an empty CP-1 bridge gives T1D.1-T1D.4 one `NONE` row each and Steps 5-7 still run (caos line 165), and the completion check `(one `NONE` row when the bridge is empty)` (caos line 183); no other caos hunk ported; wording from caos-databricks vendor/deploy-v (last changed 99069f83, repo HEAD dfff264); sha256 is this edited file, source_sha256 the previously archived file"
     },
     {
       "consumed_path": "skills/cp-1d-earnings-quality/references/CP-1D_SCHEMA_REFERENCE.md",
@@ -812,8 +822,10 @@
       "consumed_path": "skills/cp-3-relative-value-security-selection/SKILL.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-3-relative-value-security-selection/SKILL.md",
       "exact_copy_found_at": null,
-      "sha256": "7e85b2f545fffcb3ad17f4997e5c577ae9620d279f1ffe8e12aefa8ce38abcd1",
-      "note": "archived before 2026-11-10; cp-os at b57a344 holds a later revision"
+      "sha256": "9e4ad1c1f383323f93d5f7d49865621af7d599df32c64b989f8d8fe7ea53dbe4",
+      "note": "archived before 2026-11-10; cp-os at b57a344 holds a later revision",
+      "source_sha256": "7e85b2f545fffcb3ad17f4997e5c577ae9620d279f1ffe8e12aefa8ce38abcd1",
+      "edit": "named edit: `not assessable` dropped from the critical_cell_values_casefold blocklist in all three places: CP-3 and its CP-3A and CP-3B copies (cp-os 115f664, skills/cp-3-relative-value-security-selection/SKILL.md); wording from cp-os 115f664; sha256 is this edited file, source_sha256 the previously archived file"
     },
     {
       "consumed_path": "skills/cp-3-relative-value-security-selection/references/CP-3A_SCHEMA_REFERENCE.md",
@@ -999,13 +1011,17 @@
       "consumed_path": "skills/cp-2-fundamental-credit-synthesizer/SKILL.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-2-fundamental-credit-synthesizer/SKILL.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-2-fundamental-credit-synthesizer/SKILL.md",
-      "sha256": "2419ccb707e0bce8659d79b077175f21e43b3ca95ad92968936da7d86da95135"
+      "sha256": "0b419cb292a5325c6a89398bf802fa605f9b9c6b5e0197e585171e91d784ec6f",
+      "source_sha256": "2419ccb707e0bce8659d79b077175f21e43b3ca95ad92968936da7d86da95135",
+      "edit": "named edit: T2.10 `Mixed` removed from the Direction values (caos line 144) and the step 10 index line gains the `None supported` row and split-never-Mixed rule (caos line 283); no other caos hunk ported; wording from caos-databricks vendor/deploy-v (last changed 99069f83, repo HEAD dfff264); sha256 is this edited file, source_sha256 the previously archived file"
     },
     {
       "consumed_path": "skills/cp-2-fundamental-credit-synthesizer/references/REF_CP-2_STEPS.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-2-fundamental-credit-synthesizer/references/REF_CP-2_STEPS.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-2-fundamental-credit-synthesizer/references/REF_CP-2_STEPS.md",
-      "sha256": "292f114bc456c5924712d692408550b058ed4424d146719fe42579b092a94a92"
+      "sha256": "9200f6b0ab977c454176d7f78f6c55d39e41cfcccfa04a1b772f8c4c18f08bfe",
+      "source_sha256": "292f114bc456c5924712d692408550b058ed4424d146719fe42579b092a94a92",
+      "edit": "named edit: T2.10 Direction `Positive / Negative` with the split-never-Mixed rule (caos line 237) and the rule line `Rank at least one Positive and one Negative driver` with the one `None supported` row (caos line 239); no other caos hunk ported; wording from caos-databricks vendor/deploy-v (last changed 99069f83, repo HEAD dfff264); sha256 is this edited file, source_sha256 the previously archived file"
     },
     {
       "consumed_path": "skills/cp-1a-business-transaction-fact-pack/SKILL.md",

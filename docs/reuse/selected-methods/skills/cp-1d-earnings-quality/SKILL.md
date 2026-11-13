@@ -162,6 +162,7 @@ The add-back challenge. Take the bridge CP-1 recorded and CP-1B transcription-ch
 4. Quality-adjusted EBITDA is an analytical restatement. Never present it as reported or covenant EBITDA, and never feed it to CP-4A as covenant capacity.
 5. Where evidence cannot settle an add-back, mark `[Insufficient Information]`, log the gap, and carry the amount as unresolved — not as accepted and not as rejected.
 6. Cash conversion is a test, not a conclusion: a gap between adjusted EBITDA and CFO is evidence about the add-backs, and its explanation must be sourced.
+7. An empty CP-1 bridge is a permitted upstream, not a missing one: CP-1 emits it when the issuer reports no add-backs. T1D.1–T1D.4 then each carry one row stating that no add-back exists (`Add-Back ID` `NONE`, its amount, category and assessment cells `—`, CP-1's empty `adjusted_ebitda_bridge` as the source), T1D.4 bridges reported EBITDA to itself, and Steps 5–7 still run. Never invent an add-back to fill a register. A null CP-1 figure (`—` or `Not Calculable`) is carried as it stands with a gap row, never as zero and never as a stop.
 </hard_rules>
 
 <workflow priority="critical">
@@ -179,7 +180,7 @@ The add-back challenge. Take the bridge CP-1 recorded and CP-1B transcription-ch
 
 <verification priority="critical">
 #### Verification — fail closed
-Record PASS/FAIL/NA for: CP-1 bridge inherited without restatement; every add-back in CP-1's bridge present in T1D.1; achievability assessed on evidence of action; recurrence tested against named prior periods; quality-adjusted bridge arithmetic reconciles to T1D.4's cumulative column; leverage restated on all three bases; every unresolved add-back carried as a gap.
+Record PASS/FAIL/NA for: CP-1 bridge inherited without restatement; every add-back in CP-1's bridge present in T1D.1 (one `NONE` row when the bridge is empty); achievability assessed on evidence of action; recurrence tested against named prior periods; quality-adjusted bridge arithmetic reconciles to T1D.4's cumulative column; leverage restated on all three bases; every unresolved add-back carried as a gap.
 </verification>
 
 #### Export

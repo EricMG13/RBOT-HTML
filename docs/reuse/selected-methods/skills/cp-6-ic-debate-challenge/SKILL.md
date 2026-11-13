@@ -5,7 +5,7 @@ description: "Start-of-message trigger: Run CP-6 or bare CP-6. Embedded, quoted,
 
 # CP-6 IC Debate Challenge
 
-**Dependencies — CP-6.** Requires a validated handoff from CP-0, CP-1, CP-2, CP-3 before this module can run — not merely the file, but an accepted artifact with matching identity and lineage. Optional upstream, used when present: CP-1A, CP-2A, CP-2E, CP-3.
+**Dependencies — CP-6.** Requires a validated handoff from CP-0, CP-1, CP-2, CP-3 before this module can run — not merely the file, but an accepted artifact with matching identity and lineage. Optional upstream, used when present: CP-1A, CP-2A, CP-2E, CP-3. Its QA gate is CP-5: CP-6 runs only after CP-5's handoff is accepted (Passed or Restricted), so CP-5 is upstream of CP-6 and never its consumer.
 
 Follow the dependency plan in CP-0 and `CREDIT_OS_V_MODULE_CATALOG_v2.json`. Module IDs and layer labels are not execution order. Run selected producers before consumers, including legal evidence before dependent security selection; revisit a layer when the plan requires it.
 
