@@ -235,6 +235,10 @@ class Compaction:
     token_limit: int | None = None
     success: bool | None = None
     usd: Decimal | None = None
+    # complete only: whether the event carried a usage block at all (``compactionTokensUsed``);
+    # a failed compaction with none was not charged, one whose block is unreadable is unknown
+    usage_reported: bool = False
+    request_count: int | None = None  # complete only: model requests the summary made
 
     def __post_init__(self) -> None:
         if self.usd is not None and (not self.usd.is_finite() or self.usd < 0):

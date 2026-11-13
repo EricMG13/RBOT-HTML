@@ -328,6 +328,8 @@ def test_a_completed_compaction_carries_its_tokens_and_its_charge() -> None:
             token_limit=272000,
             success=True,
             usd=Decimal(CP8_USD),
+            usage_reported=True,
+            request_count=1,
         ),
     )
     (cp6,) = compactions(_body(_event("session.compaction_complete", COMPLETE_CP6)))
@@ -382,3 +384,30 @@ def test_a_malformed_body_is_refused() -> None:
 
     with pytest.raises(_BadReply):
         compactions('{"not": "an array"}')
+
+
+def test_the_same_completion_delivered_twice_is_one_compaction() -> None:
+    from deploy_workflow.model.copilot import compactions
+    from tests.model._compaction import COMPLETE_CP6, COMPLETE_CP8
+
+    twice = _body(
+        _event("session.compaction_complete", COMPLETE_CP8),
+        _event("session.compaction_complete", COMPLETE_CP8),
+        _event("session.compaction_complete", COMPLETE_CP6),
+    )
+    assert [c.attempt_id[:8] for c in compactions(twice)] == ["9adc3933", "e52bf4e7"]
+
+
+def test_a_complete_says_whether_its_usage_block_and_request_count_were_reported() -> None:
+    from deploy_workflow.model.copilot import compactions
+    from tests.model._compaction import COMPLETE_CP8, without_usage
+
+    (real,) = compactions(_body(_event("session.compaction_complete", COMPLETE_CP8)))
+    assert real.usage_reported is True and real.request_count == 1
+    (bare,) = compactions(_body(_event("session.compaction_complete", without_usage(COMPLETE_CP8))))
+    assert bare.usage_reported is False and bare.request_count is None
+    used = {**COMPLETE_CP8["compactionTokensUsed"], "requestCount": 3}
+    (many,) = compactions(
+        _body(_event("session.compaction_complete", {**COMPLETE_CP8, "compactionTokensUsed": used}))
+    )
+    assert many.request_count == 3

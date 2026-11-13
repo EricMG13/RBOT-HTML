@@ -12,10 +12,11 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import logging
 import re
 import time
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from decimal import Decimal, DecimalException, localcontext
 from functools import partial
@@ -42,7 +43,7 @@ from deploy_vii.preparation import xlsx_content
 from deploy_vii.registry import modules
 from deploy_workflow.model.adapter import AdapterReply, ModelAdapter
 from deploy_workflow.model.budget import Budget, OverrunStop, exact_sum
-from deploy_workflow.model.copilot import near_limit, prompt_tokens_estimate
+from deploy_workflow.model.copilot import COMPACTION_SHARE, near_limit, prompt_tokens_estimate
 from deploy_workflow.model.loop import _caught, redacted_request, redacted_turn
 from deploy_workflow.model.pricing import (
     Priced,
@@ -72,6 +73,8 @@ from deploy_workflow.model_testing.configs import CONFIGS
 from deploy_workflow.prose_checks import lost_values
 from deploy_workflow.run_events import append_event
 from deploy_workflow.workflow import _put
+
+log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from deploy_workflow.owners.cpos import HandoffTask
@@ -601,10 +604,30 @@ class ModuleTools:
         return f"REJECTED ({writes_left} writes left){note}\n" + "\n".join(issues) + asked
 
 
+def _compaction_record(c: Compaction) -> CompactionRecord:
+    return CompactionRecord(
+        kind=c.kind,
+        attempt_id=c.attempt_id,
+        tokens_before=c.tokens_before,
+        tokens_after=c.tokens_after,
+        token_limit=c.token_limit,
+        success=c.success,
+        usd=c.usd,
+        request_count=c.request_count,
+    )
+
+
+def _uncharged_failure(c: Compaction) -> bool:
+    """A failed compaction whose event had no usage block: the runtime reported no charge for it
+    and none was made that we can know of. Disclosed (``compaction_uncharged``), not stopped on."""
+    return c.kind == "complete" and c.success is False and c.usd is None and not c.usage_reported
+
+
 def _compaction_usd(found: Sequence[Compaction]) -> Decimal | None:
     """What the call's completed compactions charged: nothing when there are none, unknown (None)
-    when any completed one reported no charge that can be read."""
-    done = [c for c in found if c.kind == "complete"]
+    when any completed one has a usage block whose charge cannot be read (or a charge missing on
+    one that did not fail)."""
+    done = [c for c in found if c.kind == "complete" and not _uncharged_failure(c)]
     if any(c.usd is None for c in done):
         return None
     return exact_sum(c.usd for c in done if c.usd is not None)
@@ -709,6 +732,7 @@ class HandoffExecutor:
         events: Path | None = None,
         web_search: bool = False,
         effort_by_module: Mapping[str, str] | None = None,
+        notice: Callable[[str], None] | None = None,
     ) -> None:
         if (
             adapter.config_id not in CONFIGS
@@ -731,6 +755,9 @@ class HandoffExecutor:
         self._query_check: tuple[Mapping[str, str], str] | None = None
         self.directory, self.adapter, self.check = directory, adapter, check
         self.events = events
+        self.notice = (
+            notice  # a plain line for the person watching the run (the launcher prints it)
+        )
         self.redactor = redactor or Redactor()
         self.max_turns, self.max_output_tokens = max_turns, max_output_tokens
         self.budget = Budget(cap_usd, directory)
@@ -738,6 +765,11 @@ class HandoffExecutor:
         # The first completed compaction of the module run last: the GitHub Copilot runtime
         # summarised the session's context, so the handoff it wrote may rest on a summary.
         self.written_after_compaction: Compaction | None = None
+        # what the module run in progress has seen of the runtime's compactions
+        self._digest: str | None = None
+        self._last_call = 0
+        self._starts: dict[str, tuple[int, int | None]] = {}  # attempt -> (call, tokens at start)
+        self._ended: set[str] = set()  # attempts that reported a completion (charged or not)
         _put(
             directory / "loop.json",
             dump_json(
@@ -767,6 +799,14 @@ class HandoffExecutor:
             return self._run(task)
 
     def _run(self, task: HandoffTask) -> bytes:
+        self._digest, self._last_call = None, 0
+        self._starts, self._ended = {}, set()
+        try:
+            return self._run_module(task)
+        finally:
+            self._finish_module(task)
+
+    def _run_module(self, task: HandoffTask) -> bytes:
         if task.draft is not None and self.redactor.bytes_(task.draft) != task.draft:
             raise ValueError("cpos_repair_draft: credential-like content is not permitted")
         searching = web_search_offered(self.web_search, task.module_id, task.run.case_kind)
@@ -834,6 +874,7 @@ class HandoffExecutor:
         folder.mkdir(parents=True)
         _put(folder / "invocation.json", encoded)
         self.written_after_compaction = None
+        self._digest = digest
         self._warn_first_prompt(task, len(encoded))
         module = ModuleTools(task, folder, self.check, self.events, strip_markers=searching)
         self._query_check = (
@@ -898,12 +939,15 @@ class HandoffExecutor:
     def _warn_first_prompt(self, task: HandoffTask, prompt_bytes: int) -> None:
         """Record, before the module's first call, that its real first prompt (an estimate in
         tokens) plus the output budget passes the share of the route's limit at which the GitHub
-        Copilot runtime starts summarising. It warns only; the call is made."""
-        if self.config.provider != "copilot" or self.events is None:
+        Copilot runtime starts summarising: an event, and a plain line for the launcher. It warns
+        only; the call is made."""
+        if self.config.provider != "copilot":
             return
         tokens = prompt_tokens_estimate(prompt_bytes)
         limit = near_limit(self.config.model, tokens, self.max_output_tokens)
-        if limit is not None:
+        if limit is None:
+            return
+        if self.events is not None:
             append_event(
                 self.events,
                 "first_prompt_near_limit",
@@ -912,17 +956,29 @@ class HandoffExecutor:
                 output_tokens=self.max_output_tokens,
                 token_limit=limit,
             )
+        if self.notice is not None:
+            self.notice(
+                f"Context:  {task.module_id}: first prompt about {tokens:,} tokens plus "
+                f"{self.max_output_tokens:,} output is over "
+                f"{int(COMPACTION_SHARE * 100)}% of the {limit:,}-token limit; GitHub Copilot "
+                "may summarise the context (recorded and charged)"
+            )
+
+    def _event(self, name: str, task: HandoffTask, **fields: str | int) -> None:
+        if self.events is not None:
+            append_event(self.events, name, module=task.module_id, **fields)
 
     def _record_compactions(
         self, task: HandoffTask, index: int, found: Sequence[Compaction]
     ) -> None:
         """Run events for the compactions the runtime reported during call ``index``, and the
-        module's flag: set by the first one that completed and was applied."""
+        module's flag: set by the first one that completed and was applied. A start is noted until
+        its completion is seen (``_finish_module`` reports the ones never completed)."""
+        done = [c for c in found if c.kind == "complete"]
+        if len(done) > 1 or any((c.request_count or 1) > 1 for c in done):
+            self._event("compaction_multiple", task, call_index=index, completions=len(done))
         for c in found:
-            if c.kind == "complete" and c.success is True and self.written_after_compaction is None:
-                self.written_after_compaction = c
-            if self.events is None:
-                continue
+            key = c.attempt_id or f"call-{index}"
             tokens = {
                 k: v
                 for k, v in (
@@ -933,18 +989,78 @@ class HandoffExecutor:
                 if v is not None
             }
             if c.kind == "start":
-                name = "context_compaction_started"
-                append_event(self.events, name, module=task.module_id, call_index=index, **tokens)
-            else:
-                append_event(
-                    self.events,
-                    "context_compacted",
-                    module=task.module_id,
-                    call_index=index,
-                    applied=c.success is True,
-                    usd="unknown" if c.usd is None else str(c.usd),
-                    **tokens,
-                )
+                if key not in self._starts:
+                    self._starts[key] = (index, c.tokens_before)
+                    name = "context_compaction_started"
+                    self._event(name, task, call_index=index, **tokens)
+                continue
+            self._ended.add(key)
+            if c.success is True and self.written_after_compaction is None:
+                self.written_after_compaction = c
+            self._event(
+                "context_compacted",
+                task,
+                call_index=index,
+                applied=c.success is True,
+                usd="unknown" if c.usd is None else str(c.usd),
+                **tokens,
+            )
+            if _uncharged_failure(c):
+                self._uncharged(task, index, c.tokens_before, "failed, no usage reported")
+
+    def _uncharged(self, task: HandoffTask, index: int, tokens: int | None, reason: str) -> None:
+        extra = {} if tokens is None else {"tokens_before": tokens}
+        self._event("compaction_uncharged", task, call_index=index, reason=reason, **extra)
+
+    def _fresh(self, reply: AdapterReply) -> AdapterReply:
+        """``reply`` without a completion this module run has already charged: one event the
+        runtime delivers twice (here, or in a later call) is one charge."""
+        keep = tuple(
+            c
+            for c in reply.compactions
+            if c.kind != "complete" or c.attempt_id is None or c.attempt_id not in self._ended
+        )
+        return reply if keep == reply.compactions else replace(reply, compactions=keep)
+
+    def _finish_module(self, task: HandoffTask) -> None:
+        """At the module's end, accepted or stopped: take what the runtime still reported for its
+        session, and disclose every compaction that has no charge in the ledger.
+
+        A completion found now arrived after the module's last call, which is already settled and
+        logged (both write once), so it cannot be added to that call and no marker without a
+        calls.jsonl row is invented: it is a ``compaction_charge_late`` event with its amount, and
+        the launcher totals it beside ``Charged:``. A start never seen to complete is a
+        ``compaction_uncharged`` event. The drain is advisory: a failure is logged, never raised
+        over the module's own outcome."""
+        if self._digest is None:
+            return
+        drain = getattr(self.adapter, "drain_compactions", None)
+        late: Sequence[Compaction] = ()
+        if callable(drain):
+            try:
+                late = drain(self._digest)
+            except Exception as error:  # noqa: BLE001 -- advisory, see the docstring
+                log.warning("could not drain %s's compaction events: %s", task.module_id, error)
+        for c in late:
+            key = c.attempt_id or f"call-{self._last_call}"
+            if c.kind == "start":
+                self._starts.setdefault(key, (self._last_call, c.tokens_before))
+            elif key not in self._ended:
+                self._ended.add(key)
+                if c.usd is None:
+                    reason = "completed after the module ended, no readable charge"
+                    self._uncharged(task, self._last_call, c.tokens_before, reason)
+                else:
+                    self._event(
+                        "compaction_charge_late",
+                        task,
+                        call_index=self._last_call,
+                        usd=str(c.usd),
+                        attempt_id=c.attempt_id or "",
+                    )
+        for key, (index, tokens) in self._starts.items():
+            if key not in self._ended:
+                self._uncharged(task, index, tokens, "started, no completion reported")
 
     def _fault_text(self, failure: BaseException | str) -> str:
         """Redacted text of a failure. A redactor that itself fails yields a fixed message (the
@@ -1005,6 +1121,11 @@ class HandoffExecutor:
         _put(folder / f"{index}.request.json", raw_request)
         searching = any(hosted_kind(t) for t in request.tools)
         search_hold = web_search_usd(WEB_SEARCH_CALLS_PER_TURN if searching else 0)
+        # On the Copilot route this hold (USD 7.17 at Sol rates: 1,050,000 x 5.00/M + 128,000 x
+        # 15.00/M) bounds a call plus ONE compaction in the same call: each at most 272,000 tokens
+        # in x 5.00/M + 128,000 out x 15.00/M = 3.28, so 6.56 < 7.17. More than that (several
+        # summaries billed in one call, ``compaction_multiple``) is covered by the ledger's
+        # overrun rule, which records the whole amount and stops the run.
         reserved = search_hold + request_reservation_usd(
             price_of(self.adapter.config_id),
             -(-len(raw_request) // BYTES_PER_TOKEN_BOUND) + REQUEST_OVERHEAD,
@@ -1024,6 +1145,7 @@ class HandoffExecutor:
                 cap_usd=str(self.budget.cap_usd),
             )
         started = time.time()
+        self._last_call = index
         try:
             reply = self.adapter.complete(
                 request, invocation_digest=digest, call_index=index, reservation_id=call_id
@@ -1040,6 +1162,7 @@ class HandoffExecutor:
                 time.time(),
                 message=self._fault_text(exc),
             )
+        reply = self._fresh(reply)
         received, failure = _caught(partial(self._receive, reply))
         fault: str | None = None  # one line, for the stop message
         fault_trace: str | None = None  # the redacted chain, kept in the record and response
@@ -1120,7 +1243,7 @@ class HandoffExecutor:
                 if fault_trace is None
                 else "\n".join(filter(None, (reply.message, fault_trace))),
                 **(
-                    {"compactions": tuple(CompactionRecord(**asdict(c)) for c in reply.compactions)}
+                    {"compactions": tuple(_compaction_record(c) for c in reply.compactions)}
                     if reply.compactions
                     else {}
                 ),

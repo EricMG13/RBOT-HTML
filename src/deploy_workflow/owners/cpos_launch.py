@@ -71,7 +71,7 @@ from deploy_workflow.model.adapter import (
     LivePauseInForce,
     check_ruling,
 )
-from deploy_workflow.model.budget import Budget
+from deploy_workflow.model.budget import Budget, exact_sum
 from deploy_workflow.model.handoff import (
     BYTES_PER_TOKEN_BOUND,
     REQUEST_OVERHEAD,
@@ -94,6 +94,7 @@ from deploy_workflow.owners.cpos import (
     WEB_SEARCH_GRANT,
     HandoffPlan,
     HandoffTask,
+    review_line,
     run_live_handoffs,
     web_search_ruled,
     web_search_run,
@@ -2935,32 +2936,80 @@ def _first_prompt_lines(prepared: Prepared, config: str) -> tuple[str, ...]:
     return tuple(lines)
 
 
+def _run_events(directory: Path) -> tuple[list[dict[str, Any]], str | None]:
+    """The run's events, or why they could not be read. No event file: nothing was recorded."""
+    try:
+        return read_events(directory / EVENTS), None
+    except FileNotFoundError:
+        return [], None
+    except (OSError, ValueError) as error:
+        return [], f"the run events could not be read ({error})"
+
+
 def _review_lines(directory: Path) -> tuple[str, ...]:
     """One line per module whose accepted handoff was written after GitHub Copilot summarised its
-    context, from the run's events (the last ``module_accepted`` of each module, so a resumed run
-    lists a module once). No event file: nothing was recorded, so no line."""
-    try:
-        events = read_events(directory / EVENTS)
-    except FileNotFoundError:
-        return ()
-    except (OSError, ValueError) as error:
-        return (f"Review: the run events could not be read ({error}); check each module's calls.",)
+    context, and one per module that had more than one summary billed in a call, from the run's
+    events (the last ``module_accepted`` of each module, so a resumed run lists a module once)."""
+    events, problem = _run_events(directory)
+    if problem is not None:
+        return (f"Review: {problem}; check each module's calls.",)
     accepted = {str(e.get("module")): e for e in events if e.get("event") == "module_accepted"}
     lines = []
     for module, event in accepted.items():
-        if event.get("written_after_compaction") is not True:
-            continue
-        before = event.get("compaction_tokens_before")
-        counted = f" ({before:,} tokens before)" if isinstance(before, int) else ""
-        lines.append(
-            f"Review: {module} was written after GitHub Copilot summarised its context{counted}; "
-            "check its figures against the earlier modules."
-        )
+        if event.get("written_after_compaction") is True:
+            before = event.get("compaction_tokens_before")
+            lines.append(review_line(module, before if isinstance(before, int) else None))
+    multiple = dict.fromkeys(
+        str(e.get("module")) for e in events if e.get("event") == "compaction_multiple"
+    )
+    lines += [
+        f"Review: {module} had more than one context summary billed in one call; check the "
+        "run's charge."
+        for module in multiple
+    ]
     return tuple(lines)
 
 
+def _charge_notes(directory: Path) -> tuple[str, ...]:
+    """What ``Charged:`` leaves out, from the run's events, each compaction counted once (a
+    relaunch reads the same events and cannot count one again): context summaries with no
+    reported charge, and charges the runtime reported after their module ended (not settled)."""
+    events, _ = _run_events(directory)
+    uncharged = {
+        (e.get("module"), e.get("call_index"), e.get("reason"))
+        for e in events
+        if e.get("event") == "compaction_uncharged"
+    }
+    late = {
+        (e.get("module"), e.get("attempt_id"), e.get("call_index")): e.get("usd")
+        for e in events
+        if e.get("event") == "compaction_charge_late"
+    }
+    notes = []
+    if uncharged:
+        modules = ", ".join(dict.fromkeys(str(m) for m, _, _ in sorted(uncharged, key=_order)))
+        count = len(uncharged)
+        noun = "summary" if count == 1 else "summaries"
+        notes.append(
+            f"Charged excludes {count} context {noun} with no reported charge ({modules}); "
+            "Copilot may bill them."
+        )
+    if late:
+        total = exact_sum(Decimal(str(usd)) for usd in late.values())
+        named = ", ".join(dict.fromkeys(str(m) for m, _, _ in late))
+        notes.append(
+            f"Charged excludes USD {total} of context-summary charges reported after their "
+            f"module ended ({named}); they were not settled."
+        )
+    return tuple(notes)
+
+
+def _order(item: tuple[Any, Any, Any]) -> tuple[int, str]:
+    return (item[1] if isinstance(item[1], int) else 0, str(item[0]))
+
+
 def _print_review(directory: Path, stream: TextIO) -> None:
-    for line in _review_lines(directory):
+    for line in (*_charge_notes(directory), *_review_lines(directory)):
         print(line, file=stream)
 
 
@@ -3190,6 +3239,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             on_handoff=lambda task, _: print(f"Accepted: {task.module_id}", flush=True),
             config=args.config,
             effort_by_module=efforts,
+            on_notice=lambda line: print(line, flush=True),
         )
     except (ValueError, RuntimeError) as error:
         print(

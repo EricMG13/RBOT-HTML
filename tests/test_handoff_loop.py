@@ -986,6 +986,7 @@ def test_a_completed_compaction_is_recorded_charged_and_flagged(tmp_path: Path) 
             "token_limit": 272000,
             "success": None,
             "usd": None,
+            "request_count": None,
         },
         {
             "kind": "complete",
@@ -995,6 +996,7 @@ def test_a_completed_compaction_is_recorded_charged_and_flagged(tmp_path: Path) 
             "token_limit": 272000,
             "success": True,
             "usd": "0.0996381",
+            "request_count": None,
         },
     ]
     seen = [e for e in run_events(folder) if e["event"].startswith("context_compact")]
@@ -1300,3 +1302,201 @@ def test_an_interrupt_in_the_comparison_still_leaves_the_review(
     with pytest.raises(KeyboardInterrupt):
         module.call("write_handoff", {"markdown": CP6_SECOND})
     assert _review(tmp_path, 2) == {"issues": []}
+
+
+# ---------------------------------------------------------------- compaction, fix round 1
+
+
+class Draining(Adapter):
+    """An adapter that, like the Copilot one, can hand back the compaction events still queued for
+    a module's session when the module ends."""
+
+    def __init__(self, late: tuple[Compaction, ...], *replies: AdapterReply | Exception) -> None:
+        super().__init__(*replies)
+        self.late, self.drained = late, []
+
+    def drain_compactions(self, digest: str) -> tuple[Compaction, ...]:
+        self.drained.append(digest)
+        return self.late
+
+
+def draining_loop(
+    tmp_path: Path, late: tuple[Compaction, ...], *replies: AdapterReply
+) -> tuple[HandoffExecutor, Path, Draining]:
+    folder = tmp_path / "run"
+    adapter = Draining(late, *replies)
+    loop = HandoffExecutor(
+        folder / "live", adapter=adapter, cap_usd=Decimal(10), check=check, events=folder
+    )
+    return loop, folder, adapter
+
+
+def named(folder: Path, event: str) -> list[dict[str, Any]]:
+    return [e for e in run_events(folder) if e["event"] == event]
+
+
+def test_a_start_with_no_completion_is_reported_uncharged_when_the_module_is_accepted(
+    tmp_path: Path,
+) -> None:
+    loop, folder = compacting_loop(tmp_path, compacted(turn(write_call()), CP8_START))
+    assert loop(task()) == GOOD
+    (event,) = named(folder, "compaction_uncharged")
+    assert (event["module"], event["call_index"], event["tokens_before"]) == ("CP-2", 0, 241349)
+    assert event["reason"] == "started, no completion reported"
+    assert loop.budget.spent == Decimal("0.0007")  # not charged, not an unknown hold
+
+
+def test_a_start_whose_completion_arrives_in_a_later_call_is_not_uncharged(tmp_path: Path) -> None:
+    loop, folder = compacting_loop(
+        tmp_path,
+        compacted(turn(ToolCall("r", "list_sources", {})), CP8_START),
+        compacted(turn(write_call()), CP8_DONE),
+    )
+    assert loop(task()) == GOOD
+    assert not named(folder, "compaction_uncharged")
+
+
+def test_a_module_that_stops_still_reports_its_uncharged_start(tmp_path: Path) -> None:
+    loop, folder = compacting_loop(
+        tmp_path, compacted(turn(ToolCall("r", "list_sources", {})), CP8_START), RuntimeError("x")
+    )
+    with pytest.raises(RuntimeError):
+        loop(task())
+    assert [e["module"] for e in named(folder, "compaction_uncharged")] == ["CP-2"]
+
+
+def test_a_late_completion_is_disclosed_with_its_amount_not_settled(tmp_path: Path) -> None:
+    """The last call is already settled and logged (write-once), so no marker is invented: the
+    amount is an event, and the start it completes is no longer an uncharged start."""
+    loop, folder, adapter = draining_loop(
+        tmp_path, (CP8_DONE,), compacted(turn(write_call()), CP8_START)
+    )
+    assert loop(task()) == GOOD
+    assert len(adapter.drained) == 1
+    (event,) = named(folder, "compaction_charge_late")
+    assert (event["module"], event["call_index"], event["usd"]) == ("CP-2", 0, "0.0996381")
+    assert not named(folder, "compaction_uncharged")
+    assert loop.budget.spent == Decimal("0.0007")
+    assert len((folder / "live/calls.jsonl").read_text().splitlines()) == 1
+
+
+def test_a_late_completion_with_no_readable_charge_is_uncharged(tmp_path: Path) -> None:
+    loop, folder, _ = draining_loop(tmp_path, (replace(CP8_DONE, usd=None),), turn(write_call()))
+    assert loop(task()) == GOOD
+    (event,) = named(folder, "compaction_uncharged")
+    assert event["reason"] == "completed after the module ended, no readable charge"
+
+
+def test_a_failing_drain_does_not_fail_the_module(tmp_path: Path) -> None:
+    loop, _, adapter = draining_loop(tmp_path, (), turn(write_call()))
+
+    def broken(digest: str) -> tuple[Compaction, ...]:
+        raise OSError("loop gone")
+
+    adapter.drain_compactions = broken  # type: ignore[method-assign]
+    assert loop(task()) == GOOD
+
+
+def test_a_failed_compaction_with_no_usage_block_is_uncharged_and_does_not_stop_the_run(
+    tmp_path: Path,
+) -> None:
+    """The reviewer's probe E1: success false, no usage block."""
+    failed = replace(CP8_DONE, success=False, usd=None)
+    loop, folder = compacting_loop(tmp_path, compacted(turn(write_call()), failed))
+    assert loop(task()) == GOOD
+    assert loop.budget.spent == Decimal("0.0007")
+    (event,) = named(folder, "compaction_uncharged")
+    assert event["reason"] == "failed, no usage reported"
+    assert loop.written_after_compaction is None
+
+
+def test_a_failed_compaction_whose_usage_block_is_unreadable_is_still_an_unknown_charge(
+    tmp_path: Path,
+) -> None:
+    failed = replace(CP8_DONE, success=False, usd=None, usage_reported=True)
+    loop, _ = compacting_loop(tmp_path, compacted(turn(write_call()), failed))
+    with pytest.raises(RuntimeError, match="cpos_live_stopped"):
+        loop(task())
+    assert loop.budget.stop_kind == "unknown"
+
+
+def test_the_same_completion_seen_in_two_calls_is_charged_once(tmp_path: Path) -> None:
+    loop, _ = compacting_loop(
+        tmp_path,
+        compacted(turn(ToolCall("r", "list_sources", {})), CP8_DONE),
+        compacted(turn(write_call()), CP8_DONE),
+    )
+    assert loop(task()) == GOOD
+    assert loop.budget.spent == Decimal("0.0007") * 2 + Decimal("0.0996381")
+
+
+def test_two_completions_in_one_call_are_reported_as_multiple(tmp_path: Path) -> None:
+    second = replace(CP8_DONE, attempt_id="b", usd=Decimal("0.05"))
+    loop, folder = compacting_loop(tmp_path, compacted(turn(write_call()), CP8_DONE, second))
+    assert loop(task()) == GOOD
+    (event,) = named(folder, "compaction_multiple")
+    assert (event["module"], event["call_index"], event["completions"]) == ("CP-2", 0, 2)
+    assert loop.budget.spent == Decimal("0.1503381")
+
+
+def test_a_completion_with_several_requests_is_reported_as_multiple(tmp_path: Path) -> None:
+    loop, folder = compacting_loop(
+        tmp_path, compacted(turn(write_call()), replace(CP8_DONE, request_count=2))
+    )
+    assert loop(task()) == GOOD
+    assert len(named(folder, "compaction_multiple")) == 1
+
+
+def test_one_ordinary_completion_is_not_multiple(tmp_path: Path) -> None:
+    loop, folder = compacting_loop(
+        tmp_path, compacted(turn(write_call()), replace(CP8_DONE, request_count=1))
+    )
+    assert loop(task()) == GOOD
+    assert not named(folder, "compaction_multiple")
+
+
+def test_the_first_prompt_warning_is_also_a_plain_line_for_the_launcher(tmp_path: Path) -> None:
+    lines: list[str] = []
+    folder = tmp_path / "run"
+    loop = HandoffExecutor(
+        folder / "live",
+        adapter=CopilotLike(replace(turn(write_call()), billed_usd=Decimal("0.01"))),
+        cap_usd=Decimal(10),
+        check=check,
+        events=folder,
+        notice=lines.append,
+    )
+    assert loop(prompt_of(800_000)) == GOOD
+    (event,) = named(folder, "first_prompt_near_limit")
+    (line,) = lines
+    assert line.startswith("Context:  CP-2: first prompt about ")
+    assert f"{event['estimated_tokens']:,} tokens" in line and "272,000-token limit" in line
+
+
+def test_a_small_first_prompt_prints_no_notice(tmp_path: Path) -> None:
+    lines: list[str] = []
+    folder = tmp_path / "run"
+    loop = HandoffExecutor(
+        folder / "live",
+        adapter=CopilotLike(replace(turn(write_call()), billed_usd=Decimal("0.01"))),
+        cap_usd=Decimal(10),
+        check=check,
+        events=folder,
+        notice=lines.append,
+    )
+    assert loop(prompt_of(1_000)) == GOOD
+    assert lines == []
+
+
+def test_compaction_usd_is_exact_beyond_the_default_context() -> None:
+    """Probe t3adv-p3: a charge of 38 digits must not round in the subtraction."""
+    from deploy_workflow.model.budget import exact_sum
+    from deploy_workflow.model.record import CallRecord, CompactionRecord
+
+    big = Decimal(10**37 + 1).scaleb(-11)
+    turn_usd = Decimal("0.00000123456")
+    rec = CallRecord.model_construct(
+        settled_usd=exact_sum((turn_usd, big)),
+        compactions=(CompactionRecord.model_construct(usd=big),),
+    )
+    assert rec.own_usd == turn_usd and rec.compaction_usd == big

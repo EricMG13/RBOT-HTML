@@ -351,6 +351,24 @@ def _compaction_flag(response: Path) -> dict[str, str | int | bool]:
     return {"written_after_compaction": True}
 
 
+def review_line(module: str, tokens_before: int | None) -> str:
+    """The plain line for a module written after GitHub Copilot summarised its context."""
+    counted = "" if tokens_before is None else f" ({tokens_before:,} tokens before)"
+    return (
+        f"Review: {module} was written after GitHub Copilot summarised its context{counted}; "
+        "check its figures against the earlier modules."
+    )
+
+
+def report_compaction(directory: Path, response_path: str, module: str) -> None:
+    """Print the review line for ``module`` to stderr when its retained response has a
+    compaction note (the route that has no run events, the CP-8 comparison, uses this)."""
+    flag = _compaction_flag(directory / response_path)
+    if flag:
+        before = flag.get("compaction_tokens_before")
+        print(review_line(module, before if isinstance(before, int) else None), file=sys.stderr)
+
+
 def _refuse_decided_stale(
     ordered: Sequence[str],
     producers: Mapping[str, set[str]],
@@ -801,6 +819,7 @@ def run_live_handoffs(  # noqa: PLR0913 -- the explicit paid entry point takes e
     config: str = "sol-medium",
     rulings_root: Path | None = None,
     effort_by_module: Mapping[str, str] | None = None,
+    on_notice: Callable[[str], None] | None = None,
 ) -> Path:
     """Explicit paid entry point; callers supply an evidence/instruction checker.
 
@@ -830,6 +849,7 @@ def run_live_handoffs(  # noqa: PLR0913 -- the explicit paid entry point takes e
             events=directory,
             web_search=web_search_run(config, ruling, rulings_root),
             effort_by_module=effort_by_module,
+            notice=on_notice,
         )
         result = run_handoffs(
             manifest,
@@ -1045,6 +1065,7 @@ def run_comparison(
         response, response_path = _handoff(
             task, directory, execute, checked_response, request.max_attempts
         )
+        report_compaction(directory, response_path, "CP-8")
         files = comparison_files(request.run, response, source_hashes)
         delivery_id = _sha(
             json.dumps({name: _sha(raw) for name, raw in files.items()}, sort_keys=True).encode()

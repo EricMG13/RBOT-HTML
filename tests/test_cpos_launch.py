@@ -7015,3 +7015,127 @@ def test_a_model_whose_limit_is_not_known_gets_no_first_prompt_estimate(tmp_path
         config="copilot-opus-medium", cap="50",
     )  # fmt: skip
     assert cpos_launch._first_prompt_lines(prepared, "copilot-opus-medium") == ()
+
+
+# ---------------------------------------------------------------- compaction, fix round 1
+
+DISCLOSURE = (
+    "Charged excludes 1 context summary with no reported charge (CP-4); Copilot may bill them."
+)
+
+
+def test_a_started_compaction_with_no_completion_is_disclosed_next_to_the_charge(
+    tmp_path, provider, capsys
+):
+    argv = compacting_run(tmp_path, provider, COMPACTING)
+    assert main(argv) == 0
+    lines = capsys.readouterr().out.splitlines()
+    at = next(i for i, n in enumerate(lines) if n.startswith("Charged:"))
+    assert lines[at + 1] == DISCLOSURE
+    assert "Review:" not in "\n".join(lines)
+
+
+def test_the_disclosure_is_not_counted_again_when_the_run_is_relaunched(tmp_path, provider, capsys):
+    argv = compacting_run(tmp_path, provider, COMPACTING)
+    assert main(argv) == 0
+    capsys.readouterr()
+    provider.answer = lambda context: pytest.fail("a retained module was sent again")
+    assert main(argv) == 0
+    out = capsys.readouterr().out
+    assert out.count("Charged excludes") == 1 and DISCLOSURE in out
+
+
+def test_no_uncharged_compaction_means_no_disclosure_line(tmp_path, provider, capsys):
+    assert main(compacting_run(tmp_path, provider, COMPACTED)) == 0
+    assert "Charged excludes" not in capsys.readouterr().out
+
+
+def events_dir(tmp_path, *records):
+    from deploy_workflow.run_events import append_event
+
+    for name, fields in records:
+        append_event(tmp_path, name, **fields)
+    return tmp_path
+
+
+def test_uncharged_summaries_are_counted_once_each_and_modules_listed_once(tmp_path):
+    same = {"module": "CP-5", "call_index": 1, "reason": "started, no completion reported"}
+    events_dir(
+        tmp_path,
+        ("compaction_uncharged", same),
+        ("compaction_uncharged", same),  # the same event recorded again
+        ("compaction_uncharged", {**same, "module": "CP-8", "call_index": 3}),
+        ("compaction_uncharged", {**same, "module": "CP-8", "call_index": 5}),
+    )
+    assert cpos_launch._charge_notes(tmp_path) == (
+        (
+            "Charged excludes 3 context summaries with no reported charge (CP-5, CP-8); "
+            "Copilot may bill them."
+        ),
+    )
+
+
+def test_late_charges_are_totalled_and_the_modules_named(tmp_path):
+    late = {"module": "CP-8", "call_index": 9, "usd": "0.0996381", "attempt_id": "a"}
+    events_dir(
+        tmp_path,
+        ("compaction_charge_late", late),
+        ("compaction_charge_late", late),  # again: a relaunch cannot count it twice
+        (
+            "compaction_charge_late",
+            {**late, "module": "CP-6", "usd": "0.1112661", "attempt_id": "b"},
+        ),
+    )
+    assert cpos_launch._charge_notes(tmp_path) == (
+        (
+            "Charged excludes USD 0.2109042 of context-summary charges reported after their "
+            "module ended (CP-8, CP-6); they were not settled."
+        ),
+    )
+
+
+def test_a_module_with_several_summaries_in_one_call_is_listed_for_review(tmp_path):
+    events_dir(
+        tmp_path,
+        ("compaction_multiple", {"module": "CP-8", "call_index": 2, "completions": 2}),
+    )
+    assert cpos_launch._review_lines(tmp_path) == (
+        (
+            "Review: CP-8 had more than one context summary billed in one call; check the run's "
+            "charge."
+        ),
+    )
+
+
+def test_the_launcher_prints_the_first_prompt_warning_while_the_run_goes_on(
+    tmp_path, monkeypatch, capsys, copilot_ruling
+):
+    monkeypatch.setenv("COPILOT_GITHUB_TOKEN", "ghp_" + "Z" * 36)
+    runtime = tmp_path / "copilot-runtime"
+    runtime.write_text("#!/bin/sh\n")
+    monkeypatch.setenv("COPILOT_CLI_PATH", str(runtime))
+
+    def fake_run(manifest, directory, **kwargs):
+        kwargs["on_notice"]("Context:  CP-8: first prompt about 231,000 tokens")
+        return directory / "delivery.json"
+
+    monkeypatch.setattr(cpos_launch, "run_live_handoffs", fake_run)
+    argv = copilot_argv(tmp_path, "copilot-sol-medium", "--live", "--ruling", str(copilot_ruling))
+    assert main(argv) == 0
+    assert "Context:  CP-8: first prompt about 231,000 tokens" in capsys.readouterr().out
+
+
+def test_a_note_for_the_separate_cp8_comparison_prints_the_same_review_line(tmp_path, capsys):
+    from deploy_workflow.owners import cpos
+
+    response = tmp_path / "requests/CP-8/fp/1.response.md"
+    response.parent.mkdir(parents=True)
+    response.write_text("x")
+    (response.parent / "1.compaction.json").write_text(json.dumps({"tokens_before": 259070}))
+    cpos.report_compaction(tmp_path, str(response.relative_to(tmp_path)), "CP-8")
+    assert capsys.readouterr().err.strip() == (
+        "Review: CP-8 was written after GitHub Copilot summarised its context (259,070 tokens "
+        "before); check its figures against the earlier modules."
+    )
+    cpos.report_compaction(tmp_path, "requests/CP-8/fp/2.response.md", "CP-8")
+    assert capsys.readouterr().err == ""

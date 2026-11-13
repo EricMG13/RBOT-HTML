@@ -62,6 +62,7 @@ from deploy_workflow.model.reply_classes import (
 )
 from deploy_workflow.model.transport import OVERALL_S
 from deploy_workflow.model.turn import (
+    Compaction,
     Message,
     ModelSpec,
     Turn,
@@ -616,6 +617,33 @@ class CopilotAdapter:
             "sent_unknown", None, None, None, error_class, None, started, self._clock(),
             message=text,
         )  # fmt: skip
+
+    def drain_compactions(self, invocation_digest: str) -> tuple[Compaction, ...]:
+        """The compaction events still queued for a kept exchange, taken off its queue: what the
+        runtime reported after the last call's boundary, when the module no longer needs the
+        session. Best effort: an exchange already released, an adapter closed or a loop that does
+        not answer within the bound gives nothing (documented fail-open: a compaction that began
+        and never reported its end is disclosed by the loop as uncharged)."""
+        loop = self._loop
+        if loop is None or self._closed:
+            return ()
+        future = asyncio.run_coroutine_threadsafe(self._drain(invocation_digest), loop)
+        try:
+            return future.result(timeout=_OUTER_SLACK_S)
+        except concurrent.futures.TimeoutError:
+            future.cancel()
+            return ()
+
+    async def _drain(self, digest: str) -> tuple[Compaction, ...]:
+        state = self._states.get(digest)
+        if state is None or state.releasing is not None:
+            return ()
+        records: list[dict[str, Any]] = []
+        while not state.queue.empty():
+            item = state.queue.get_nowait()
+            if item is not _INVOKED:
+                records.append(event_record(item))
+        return compactions(dump_json(records))
 
     def close(self) -> None:
         """Release every exchange (concurrently, within one exchange's teardown budget), force-stop

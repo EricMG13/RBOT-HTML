@@ -35,6 +35,7 @@ from pydantic import (
 from pydantic_core import PydanticCustomError
 
 from deploy_vii.contracts import Contract, Hash
+from deploy_workflow.model.budget import exact_subtract, exact_sum
 from deploy_workflow.model.pricing import CostStatus, money_text, refusal_values
 from deploy_workflow.model.providers import ProviderError, parse, redact_reply
 from deploy_workflow.model.redact import KEY_PATTERN, REPLACEMENT, Redactor
@@ -134,6 +135,7 @@ class CompactionRecord(Contract):
     token_limit: int | None = Field(ge=0)
     success: bool | None
     usd: Decimal | None = Field(ge=0)
+    request_count: int | None = Field(default=None, ge=0)
 
     @field_serializer("usd", when_used="json")
     def _money(self, value: Decimal | None) -> str | None:
@@ -234,12 +236,14 @@ class CallRecord(Contract):
     @property
     def compaction_usd(self) -> Decimal:
         """What the call's compactions charged, already inside ``settled_usd``."""
-        return sum((c.usd or Decimal(0) for c in self.compactions or ()), Decimal(0))
+        return exact_sum(c.usd or Decimal(0) for c in self.compactions or ())
 
     @property
     def own_usd(self) -> Decimal | None:
         """``settled_usd`` without the compactions: the turn's own reported charge."""
-        return None if self.settled_usd is None else self.settled_usd - self.compaction_usd
+        if self.settled_usd is None:
+            return None
+        return exact_subtract(self.settled_usd, self.compaction_usd)
 
     @field_validator("attempt", mode="before")
     @classmethod

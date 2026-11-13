@@ -261,6 +261,7 @@ def _compaction(kind: str, data: Mapping[str, Any]) -> Compaction | None:
         return Compaction("start", attempt, _opt_int(data, "currentTokens"), None, limit)
     if kind == COMPACTION_COMPLETE:
         done = data.get("success")
+        used = data.get("compactionTokensUsed")
         return Compaction(
             "complete",
             attempt,
@@ -269,13 +270,24 @@ def _compaction(kind: str, data: Mapping[str, Any]) -> Compaction | None:
             limit,
             done if isinstance(done, bool) else None,
             _compaction_usd(data),
+            isinstance(used, dict),
+            _opt_int(used, "requestCount") if isinstance(used, dict) else None,
         )
     return None
 
 
 def compactions(text: str) -> tuple[Compaction, ...]:
-    """The context compactions one call's body reports, in order. Raises ``_BadReply`` on a body
-    of the wrong shape, as ``parse_events`` does."""
+    """The context compactions one call's body reports, in order, each (kind, attempt id) once:
+    an event the runtime delivers twice is one compaction and is charged once. Raises ``_BadReply``
+    on a body of the wrong shape, as ``parse_events`` does."""
     _, events = _events(text)
-    found = (_compaction(kind, data) for kind, data in events)
-    return tuple(c for c in found if c is not None)
+    found: list[Compaction] = []
+    seen: set[tuple[str, str]] = set()
+    for kind, data in events:
+        c = _compaction(kind, data)
+        if c is None or (c.attempt_id is not None and (c.kind, c.attempt_id) in seen):
+            continue
+        if c.attempt_id is not None:
+            seen.add((c.kind, c.attempt_id))
+        found.append(c)
+    return tuple(found)
