@@ -333,6 +333,8 @@
   "docs/rulings/2026-11-12-module-output-review-changes.md": "418a2214aab79c1914e89d8c9d39a534c2b60b18",
   "docs/rulings/2026-11-12-tdg-mixed-effort-to-cp2.md": "269a699cb6dc69c2834246ea386262fa8bea5722",
   "docs/rulings/2026-11-13-full-and-lite-credit-assessments.md": "134b3db9f542c958ed318754be5725e2cba29171",
+  "docs/rulings/2026-11-13-tdg-full-copilot-sol-high.md": "1e4e2e134919deab3cac17ea69d5c4e343eaaaf7",
+  "docs/rulings/2026-11-13-tdg-full-copilot-sol-rerun.md": "0245062abb0e0265cf1a1655a55418a6b3d2aa24",
   "docs/superpowers/plans/2026-11-09-credit-os-static-pages.md": "a922f9f672b7b4dab2de6353848c7ed9fb811929",
   "docs/superpowers/plans/2026-11-09-inbox-automation.md": "985896a47b63bead5736d3db6aa07cf6640b14f0",
   "docs/superpowers/plans/2026-11-09-run-report-phase-a.md": "e14db66cf8ed101308c221119e2775446d0beef9",
@@ -364,6 +366,7 @@
   "pyproject.toml": "7a493eb7db0e83d0dff4ca11724460cca65a80ad",
   "reviews/2026-11-12-module-output-adversarial/earlier-run-tdg-reader-format-001.md": "a7c78f4d929b97f63009a8ebb350b77c73605b84",
   "reviews/2026-11-12-module-output-adversarial/latest-run-tdg-proof-snapshot-opus-002.md": "704c3cb5306a6a53e4cdeb459450e3416587d51d",
+  "runs/tdg-copilot-sol-medium-vs-high.md": "b8ad004adebc1727a8127441cbcc74ef2e88a074",
   "runs/tdg-mixed-effort-comparison.md": "35ae7605de13aa7eb77c6418dea788f11abaddb7",
   "src/deploy_vii/__init__.py": "d1f60137036abd2c3aa872ba55b69ec8aeef2676",
   "src/deploy_vii/assets/app.css": "9e68afead104f8eb309492e58b41163361de1165",
@@ -522,7 +525,7 @@
   "src/deploy_workflow/financial_rendering.py": "ab4db874063acef67ab7d9835c036366ccdd126f",
   "src/deploy_workflow/financial_series.py": "fb3cf1b94a224db3c28cb271152a749d0f65d722",
   "src/deploy_workflow/financial_workflow.py": "3e2183e551ea0c61a11ab84bf8af4b60ac47163a",
-  "src/deploy_workflow/handoff_delivery.py": "457f7d73799a8225f0268d998fad0f911e67b0ad",
+  "src/deploy_workflow/handoff_delivery.py": "7cb338e19f926360f4de67fb862f8e1917d27bc6",
   "src/deploy_workflow/host.py": "3b36e98fcc9ce44f2c54f7b90b68187595615583",
   "src/deploy_workflow/html_text.py": "740e9cd4cbc75f13128d1b0cfb8857b38200bc4b",
   "src/deploy_workflow/identity_check.py": "3802db8cf0151cdc35817ddcf5fe529ea7b35530",
@@ -786,6 +789,7 @@
   "tests/test_credit_os_store.py": "6f537b82e12e83bf5c9d8ab506b13918bd868c91",
   "tests/test_docx_text.py": "a8d6c820df6e908a9c6c435e1b350240d64c3270",
   "tests/test_financial_workflow.py": "b5f8d6bf6699314a952d27bf6446474f6741c887",
+  "tests/test_handoff_delivery_table.py": "65622e5d90627fafe1689e222015306bbffa9005",
   "tests/test_handoff_loop.py": "2ed036558587774a0f38a58351668d4139b7f8c6",
   "tests/test_inbox_activity.py": "dc8beb284e3e42553caf275be873218f7fe2ba90",
   "tests/test_inbox_filing.py": "2d07c380e86c48a6be5f059bc5955fddd73bc547",
@@ -814,6 +818,6 @@
   "tools/work_pc_delta.py": "fa5e9e81c534657f593cb8752a94de10cba0eead",
   "uv.lock": "7a4f05aeff999e9284ec29f34acacdd2619d64b1"
  },
- "head": "b2780e846e1924bb624aa56feffaa5e177bc951c",
- "head_date": "2026-11-13T08:06:16Z"
+ "head": "5ae00873d4077b41f7b7aae32763f597204a3002",
+ "head_date": "2026-11-13T11:51:36Z"
 }
