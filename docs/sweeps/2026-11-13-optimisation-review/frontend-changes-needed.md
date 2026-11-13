@@ -97,8 +97,8 @@ Status: **Done** (in a PR), **Needed** (the screen is wrong or incomplete withou
 
 | # | Cause | Screen | Change | Status | Source |
 | --- | --- | --- | --- | --- | --- |
-| 33 | A delivery with no `model.html` pins `annual.md` | Forecast | Link reads "Download published model (Markdown)" and no HTML frame is drawn | Done in PR 112; no VMO2 reader check | Review of PR 112 |
-| 34 | The Pro forma column said no handoff states pro forma adjustments | Forecast | One reason for every run: "pro forma figures are not placed in this column; the financial foundation shows any it states"; deliveries already made keep the old sentence | Done in PR 112 (`5e82133`); no VMO2 reader check | Re-review of PR 112 |
+| 33 | A delivery with no `model.html` pins `annual.md` | Forecast | Link reads "Download published model (Markdown)" and no HTML frame is drawn | Done in PR 112; owner accepted it without the VMO2 reader check, 2026-11-13 | Review of PR 112 |
+| 34 | The Pro forma column said no handoff states pro forma adjustments | Forecast | One reason for every run: "pro forma figures are not placed in this column; the financial foundation shows any it states"; deliveries already made keep the old sentence | Done in PR 112 (`5e82133`); owner accepted it without the VMO2 reader check, 2026-11-13 | Re-review of PR 112 |
 | 35 | The page's Downside case differs from the forward credit model's own (coverage 2.41x against 1.68x on TDG) | Forecast, Overview | Owner, 2026-11-13: "A": the page's Downside uses the forward model's downside drivers plus the upstream shock (reverses the 2026-11-10 ruling); existing runs differ until re-run | Needed (own PR, not built) | PR 112 body; not checked here |
 
 ## Not verified
