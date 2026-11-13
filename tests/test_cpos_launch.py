@@ -1508,6 +1508,7 @@ READER_LAYER_SECTIONS = (
     "docs/reuse/selected-methods/CANON_SHARED.md § Reader-facing research layer",
     "docs/reuse/selected-methods/CANON_SHARED.md § Credit-research reading order",
 )
+CANON_APPENDIX_SECTION = "docs/reuse/selected-methods/CANON_SHARED.md § Analytical appendix"
 
 
 def all_texts(tmp_path: Path) -> dict[str, str]:
@@ -2141,9 +2142,10 @@ def test_skill_modules_carry_the_confidence_score_rules_their_script_would_apply
         assert body.startswith("## CP_CONFIDENCE_SCORE.md\n")
         assert "score = clamp( (0.6 * E + 0.4 * C) * S - P , 0 , 100 )" in body
         assert "CP_LIMITATION_TAXONOMY" not in body  # the next canon section is not swept in
-    assert [name for name, _ in cpos_launch.method_sections("CP-L10")][1:] == list(
-        READER_LAYER_SECTIONS
-    )
+    assert [name for name, _ in cpos_launch.method_sections("CP-L10")][1:] == [
+        *READER_LAYER_SECTIONS,
+        CANON_APPENDIX_SECTION,
+    ]
 
 
 def test_the_method_archive_lists_every_sent_file_with_its_hash():
@@ -2223,29 +2225,32 @@ def test_every_module_is_told_what_stands_for_acceptance_scripts_and_questions(t
 # marked "Earlier methods" for CP-DR.
 # CP-1A and CP-2 changed on 2026-11-13 (owner: "Build rec. 1, then run"): they now send Deploy V's
 # skills, so runs made before it are correctly marked "Earlier methods" for these two modules.
+# Every prose module changed on 2026-11-13 (Deploy V methods plan, Task 6): the canon's Analytical
+# appendix section is now sent after the reader-layer sections. The data modules (CP-0, CP-1,
+# CP-1C, CP-PARSE) are unchanged.
 METHOD_TEXT_SHA256_AT_1B41E65 = {
     "CP-0": "e8d3e77bc48bc98e2fd8595e7b46ee7fc786e859591cf244325f3508b7d5dac9",
     "CP-1": "02477a91d582f6301b2dbfadd96572ea75f9845493de337d7160a55111b62170",
-    "CP-1A": "22a05988055d96a44382d235e760d401b550c1e7c6ff868c6e49b9d3430dbadc",
-    "CP-1B": "7cd20df691582416e0ffd069d9f7aa8f7ac64d30c7682383dd7b8134b8dfa763",
+    "CP-1A": "4c8efcfafe748cd01e6c856041349397c77384c3c82566b1f36a429535c01639",
+    "CP-1B": "38d9fa7b075d1ce5d0cd21bcc216f57f37369cd4db395b3f1fb65498697a509f",
     "CP-1C": "9353afdbce820f59c2dcabc951fc1ff3813174b3c84e79b47bc22bea97f3bbe8",
-    "CP-1D": "e4a9d7cb45cefafcf13d4a765559bd0b0284ab6ef863095f043eff6f7cba0045",
-    "CP-2": "12ec6f0b9baf57547991e8575a6358b766c3443bf202aa5271d9f2d1c3aa2b0a",
-    "CP-2A": "a594a8e8c7427f063274fc48961fbe2603b3bc0e032ff345222579fe57ef4c50",
-    "CP-2D": "9517dfb7f02f3807a7eeb47576673c7c1ae641896f4dc8d66d6c783fd37eaaab",
-    "CP-2E": "4d730920f241c7f7d762a7606890aa2f0b567e1b85372ab3ff659a462ab5d4a7",
-    "CP-2G": "e7d537cb05eb36d13907222929f6301ff72ad57d5ff427e1944d910478b94842",
-    "CP-2H": "ba13a5880bfd53e1125b24b51e6daed8a097f7db7837822ea10725d4aa733c34",
-    "CP-3": "2e9adde5c2a4ab315b69ef79daa4c1d044889ba0379b425d6266e55c53dc3c49",
-    "CP-3C": "c88298f0bb03b0cc7a4975f1eb523f5a8771ebe4e4e4ac2b24168acf343a0c43",
-    "CP-3D": "e43f2d5d73d7e15e24d53e302d84d8eca543e14848656dc3a3dc7fb85fde25f8",
-    "CP-4": "751ffda78611cf04e029a7cb56d04f80b67edbd28a9a2b00f68c2d3f3530d331",
-    "CP-4C": "715cadfe93e767be2d5320ca16da0319e056478119834964c8684e6fbb0c7fbf",
-    "CP-5": "f2257ce4c3b62e2b7b12fff0d098d1ec20a318a298bc24334135520d74d3496c",
-    "CP-6": "a286943552ce33279e5c83bbc92cd20487da3a3f2b90fa2c8ba333151ad42af5",
-    "CP-8": "560e6026abc340b8240a2fb4397f43a52ccb9386c5810ae1cc3b74e063e45075",
-    "CP-DR": "4dadb9548e497ed59c4be2acbf93534a7e8080f8fe8ac345a5b453df20b0723e",
-    "CP-L10": "527d90f10ce7c541cc15f2e702f73502199f6628335c95e66b64920e7cfba18d",
+    "CP-1D": "d4d1ee4507d743cdb9d98bffd865ca3d012a4b4fb79a92a275cfc6a796bff453",
+    "CP-2": "f925b66f13cff7bd7801d1c3cf7120eb1317126c8605bf1ff1875ce62ed3c162",
+    "CP-2A": "c40d2c2f56ec819edd1582e148c9170cc8d06ae95a1c65d1e17236289fb7d9a1",
+    "CP-2D": "fe39c49f842c99f6ffd390bd409cbb44adbbe397720d0a0d4d935b52a34a8fda",
+    "CP-2E": "ab111a4fb0bd201b84dbec916ccdba6e5df92f60671b2d419949ca34d6118e34",
+    "CP-2G": "268a85d82da39c9b7b66474b4052eb23b310f7fc5ce0c9d7efa25766a5699cf2",
+    "CP-2H": "f500af91511584f3dda4d0dd10180766dabe19d81de7df12a99b6da2d92e89b4",
+    "CP-3": "b84b8a08baa01a24a12f9f5e92a24dc735129a9dfec1449b4d8329833deef123",
+    "CP-3C": "d1038d5097955d6bf47ccae01fee07bdc1db0b2e49eb7b77d0153c07b48768ac",
+    "CP-3D": "a35a8a1d6f1b7aaecf7e98613e80a04c4c158f9163f315edbd004647463aa698",
+    "CP-4": "a769b7456e5661d70cb25388fc4acb444cfd0aecd8f778554f98369ebadc7f7e",
+    "CP-4C": "3f70a354c3af18aad766ca847d1fd8922fe2e3a4156715f502a32b95be789491",
+    "CP-5": "9ac221698cc36a06473ce8cd9c2128c1705da362b289163d4ab54fda0d418d76",
+    "CP-6": "900dba5480f8a4632df64821fc04fc9cbe76b16791c9cdad659e9ab91b677329",
+    "CP-8": "7801db139f31238e89757e40fbe588a6cefb9d26ccdab57e2719de4a8654df7c",
+    "CP-DR": "83aa5447c37db42db2e3df91cdd0cfaf491f37c0436fc8257c0d5fb43e735353",
+    "CP-L10": "5b0e904dd62e1d1b341ec3d7d1717500d68ce1aee734b347e0dbbdfbe696b006",
 }
 
 
@@ -6215,3 +6220,20 @@ def test_the_forecast_instruction_sentences_say_what_python_does():  # whole-bra
         assert "Those tables are in US$ million: at `scale` 1000 do not name them" in block
     assert "(your `Chart data:` tables and `Net debt data`)" in cpos_launch.LAYER1_FORECAST_BLOCK
     assert "(CP-1's `Chart data:` tables" in cpos_launch.FORECAST_BLOCK
+
+
+APPENDIX_RULE = (
+    "Place all complete canonical registers below\n"
+    "`### Analytical appendix — complete canonical registers` inside\n"
+    "`## Analysis`."
+)
+
+
+def test_prose_modules_are_sent_the_canon_analytical_appendix_rule_data_modules_not(tmp_path):
+    """The reader-layer canon section stops at the next `####` heading, so the appendix rule that
+    PROSE_PASSAGES says "still applies" was cut off and never sent (Task 6, item 1)."""
+    for module, text in all_texts(tmp_path).items():
+        method = text.partition(cpos_launch.METHOD_MARK)[2]
+        assert (APPENDIX_RULE in method) == (module not in DATA_MODULE_IDS), module
+        if module not in DATA_MODULE_IDS:
+            assert "#### Analytical appendix\n" in method, module

@@ -145,8 +145,9 @@ _SCORE = "docs/reuse/selected-methods/CANON_SHARED.md § CP_CONFIDENCE_SCORE.md"
 # or binding (a runbook, a phase's method bundle), copied from cp-os at b57a344 and listed in
 # docs/reuse/selected-methods/manifest.json. Companions the SKILL opens only "to resolve an
 # ambiguity" (the schema and system references) are archived, not sent. CANON_SHARED.md is sent
-# only as the two reader-layer sections of READER_LAYER, to every prose module (ruling
-# 2026-11-11, decision 8); the rest of it is archived.
+# only as the reader-layer sections of READER_LAYER, to every prose module (ruling
+# 2026-11-11, decision 8; the Analytical appendix section was added 2026-11-13, Deploy V methods
+# plan, Task 6, because the section above it ends at its heading); the rest of it is archived.
 _SELECTED: dict[str, tuple[str, ...]] = {
     # Owner-directed, 2026-11-13 (Deploy V methods plan, Task 3): Deploy V's skill and step file,
     # byte-identical to Deploy V c4d2e35 (the readiness part; CP-PARSE's own step file, the schema
@@ -269,6 +270,9 @@ _CANON = "docs/reuse/selected-methods/CANON_SHARED.md"
 READER_LAYER = (
     f"{_CANON} § Reader-facing research layer",
     f"{_CANON} § Credit-research reading order",
+    # PROSE_PASSAGES says the canon's "table and appendix rules still apply"; the first section
+    # ends at the next `####` heading, so the appendix rule needs its own entry.
+    f"{_CANON} § Analytical appendix",
 )
 METHODS: dict[str, tuple[str, ...]] = {
     module: (
