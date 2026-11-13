@@ -371,6 +371,20 @@ def test_pf_is_unavailable_with_its_reason():
     assert all(v == {"amount": None, "reason": NO_PF} for v in column["values"].values())
 
 
+def test_pf_reason_says_so_when_cp1_prints_a_pro_forma_header():
+    with_pf = [*TABLES, [["Metric", "Pro forma net debt"], ["Net debt", "1"]]]
+    column = history(with_pf, OPERANDS)["columns"][-1]
+    text = (
+        "the financial foundation states pro forma adjustments on its own basis; "
+        "they are not placed in this column"
+    )
+    assert column["reason"] == text
+    assert all(v == {"amount": None, "reason": text} for v in column["values"].values())
+    plain = [*TABLES, [["Metric", "Net debt"], ["Net debt", "1"]]]
+    plain_reason = history(plain, OPERANDS)["columns"][-1]["reason"]
+    assert plain_reason == "no handoff states pro forma adjustments"
+
+
 FY_ONLY = """| Reported label | FY2024 | FY2023 | Locator |
 | --- | --- | --- | --- |
 | Net sales | 1,000 | 940 | p.2 |
