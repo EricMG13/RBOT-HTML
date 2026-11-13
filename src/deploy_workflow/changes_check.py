@@ -20,8 +20,7 @@ it refuses, naming the line, a CP-8 handoff in which:
 - a row of a pack measure does not print that measure's earlier and current value, with its sign
   and unit, in the right columns (K5);
 - a measure the pack marks `judge` is said neither or both of `Same definition` and
-  `Not comparable`, one the pack marks `no` is not said `Not comparable`, or a `Not comparable`
-  row draws a trend (K6);
+  `Not comparable`, or one the pack marks `no` is not said `Not comparable` (K6);
 - a measure the two runs state for one period with different values is given the cause
   `New period` or `New source`, or is neither `Not comparable` nor `Same definition` with the
   cause `Correction` or `Method change` (K7);
@@ -47,9 +46,12 @@ it refuses, naming the line, a CP-8 handoff in which:
 - a figure of a checked line is held in no evidence (K10): the pack's values, the figures of its
   definition texts, the handoffs CP-8 was sent (this run's) and the earlier run's. Checked lines
   are all but the `## Request`, `## Sources`, `## Calculations` and `## Next module` sections; of
-  an issuer row only the Effect cell. No figure is rounded or worked out;
+  an issuer row of a pack measure only the Effect cell, while a fact row (its first cell not a
+  pack label) is read in every cell by the bare reading. No figure is rounded or worked out;
 - a fact row (a row naming no pack measure) prints a figure equal to a pack measure's earlier or
-  current value, or one held in no evidence (K11).
+  current value, or one held in no evidence (K11);
+- a pack measure has no row of its own in the issuer register: every pack measure needs exactly
+  one, its first cell the pack's label (K14).
 
 A "figure" is a number that is not a date, a period label, a year or (in a passage) a whole number
 below 100 without a unit (a count); in a measure's Earlier and Current cells every number counts.
@@ -445,8 +447,7 @@ def _value_cell_issues(
 
 
 def _definition_issues(where: str, row: Sequence[str], measure: Mapping[str, Any]) -> list[str]:
-    """The row's statement on whether the two values share a definition; a row that says
-    `Not comparable` draws no trend."""
+    """The row's statement on whether the two values share a definition."""
     text = " ".join(_plain(cell) for cell in row).lower()
     issues = []
     for word in (SAME, NOT_COMPARABLE):
@@ -577,7 +578,12 @@ def _issuer_issues(
 ) -> list[str]:
     issues: list[str] = []
     if not rows:
-        return [f"`### {ISSUER}` needs a row; if nothing changed, one `{NO_CHANGE}` row."]
+        return [
+            (
+                f"`### {ISSUER}` needs a row: one row per pack measure, then, if nothing "
+                f"changed, one `{NO_CHANGE}` row after them."
+            )
+        ]
     labels = {m["label"]: m for m in pack["measures"]}
     looks_like = {_alnum(label) for label in labels}
     first = {key: found[0] for key, found in _rows_by_measure(rows, pack).items()}

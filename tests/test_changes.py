@@ -4081,3 +4081,17 @@ def test_a_fact_row_prints_no_withheld_size_in_any_of_its_cells():
     count = "| Term loan refinancing | 8 findings | Announced | New source | Done. |"
     assert fact_issues(count) == ()  # a count noun after the number: a count, not the size 8
     assert fact_issues(FACT_C) == ()
+
+
+def test_an_empty_issuer_register_is_told_one_row_per_measure_then_no_material_change():
+    lev = (
+        "| Total debt / EBITDA | 4.20x (FY2023) | 3.60x (FY2024) | New period "
+        "| Leverage fell by 0.60x. |\n"
+    )
+    empty = REGISTERS.replace(lev, "").replace(CASH_ROW + "\n", "").replace(COVER_ROW + "\n", "")
+    wording = (
+        "one row per pack measure, then, if nothing changed, "
+        "one `No material change` row after them"
+    )
+    found = cp8_issues(empty, PACK)
+    assert any(wording in i for i in found), found

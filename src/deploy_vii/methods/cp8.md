@@ -200,8 +200,8 @@ and so is a handoff of a module that did not run in the run the item names.
 
 Keep the words plain. Module codes (for example `CP-2D`) are written only in the tables' Module
 and What closed it cells, limitation refs (`E1`, `C2`) only in the two ref columns, and neither in
-a sentence. A calculation ID (`C12`) looks like a limitation ref and is refused wherever it is
-written: describe the calculation in words; no hashes or page numbers outside the tables'
+a sentence. A calculation ID (`C12`) looks like a limitation ref: describe the calculation in words and
+write no calculation ID; no hashes or page numbers outside the tables'
 Source-style cells. After the registers
 keep the remaining sections of the handoff as the instructions require: `## Calculations` states
 that CP-8 makes none, and `## Gaps` lists what the pack could not compare.
