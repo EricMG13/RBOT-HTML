@@ -38,6 +38,7 @@ from deploy_workflow.model.reply_classes import SENT_UNKNOWN, USAGE_TIMEOUTS
 from deploy_workflow.model.transport import Request, Response, TransportError, https_transport
 from deploy_workflow.model.turn import (
     USAGE_KEYS,
+    Compaction,
     ModelSpec,
     Turn,
     TurnError,
@@ -115,6 +116,8 @@ class AdapterReply:
     billed_usd: Decimal | None = None
     retry_after: int | None = None
     message: str | None = None
+    # context compactions the runtime reported during the call (GitHub Copilot only)
+    compactions: tuple[Compaction, ...] = ()
 
     def __post_init__(self) -> None:
         if self.kind != "ok" and self.kind not in _ERROR_KINDS:

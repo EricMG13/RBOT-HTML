@@ -1192,3 +1192,97 @@ def test_default_idle_bound_is_the_overall_bound(rig: Rig) -> None:
     adapter = rig.make(text_script())
     assert adapter._idle_s == adapter._overall_s == OVERALL_S
     assert adapter._idle_s > IDLE_S
+
+
+# ---------------------------------------------------------------- compaction events (T3)
+
+
+def compaction_script(*events: tuple[str, dict[str, Any]]) -> list[Step]:
+    """A text turn with the runtime's compaction events arriving mid-call, before the usage."""
+    return [
+        *(Emit(wire(kind, data)) for kind, data in events),
+        said("ANSWER"),
+        usage(copilotUsage={"totalNanoAiu": 123456}),
+        Idle(),
+    ]
+
+
+def test_a_compaction_that_completes_mid_call_is_on_the_reply(rig: Rig) -> None:
+    from deploy_workflow.model.turn import Compaction
+    from tests.model._compaction import COMPLETE_CP8, CP8_USD, START_CP8
+
+    script = compaction_script(
+        ("session.compaction_start", START_CP8), ("session.compaction_complete", COMPLETE_CP8)
+    )
+    reply = call(rig.make(script), request())
+    assert reply.kind == "ok"
+    assert [c.kind for c in reply.compactions] == ["start", "complete"]
+    done = reply.compactions[1]
+    assert done == Compaction(
+        kind="complete",
+        attempt_id="9adc3933-fffb-4810-a23a-717e91c08200",
+        tokens_before=259070,
+        tokens_after=42447,
+        token_limit=272000,
+        success=True,
+        usd=Decimal(CP8_USD),
+    )
+    # the call's own charge is untouched: the compaction's is a separate amount on the reply
+    assert reply.billed_usd == Decimal("0.00000123456")
+
+
+def test_a_call_without_compaction_has_none(rig: Rig) -> None:
+    assert call(rig.make(text_script()), request()).compactions == ()
+
+
+def test_a_start_with_no_complete_is_recorded_as_a_start_only(rig: Rig) -> None:
+    from tests.model._compaction import START_MEDIUM_CP8
+
+    script = compaction_script(("session.compaction_start", START_MEDIUM_CP8))
+    reply = call(rig.make(script), request())
+    assert [c.kind for c in reply.compactions] == ["start"]
+    assert reply.compactions[0].tokens_before == 225537
+
+
+def test_a_compaction_in_a_timed_out_call_is_still_on_the_reply(rig: Rig) -> None:
+    from tests.model._compaction import COMPLETE_CP8
+
+    script: list[Step] = [
+        Emit(wire("session.compaction_complete", COMPLETE_CP8)),
+        said("part"),
+        usage(copilotUsage={"totalNanoAiu": 5}),
+    ]
+    reply = call(rig.make(script, idle_s=0.2, overall_s=30.0), request())
+    assert reply.kind == "sent_usage" and reply.error_class == "IdleTimeout"
+    assert [c.kind for c in reply.compactions] == ["complete"]
+
+
+def test_compaction_stays_the_sdk_default(rig: Rig) -> None:
+    """Not disabled here: a module whose first prompt already exceeds the limit would fail."""
+    call(rig.make(text_script()), request())
+    assert "infinite_sessions" not in rig.session.options
+
+
+def test_a_compaction_call_exports_with_the_turns_own_billed_amount(
+    rig: Rig, tmp_path: Path
+) -> None:
+    """calls.jsonl carries the compaction and a settled charge that includes it; the recording
+    still exports, with the turn's own billed amount (what the raw body parses to)."""
+    from tests.model._compaction import COMPLETE_CP8, START_CP8
+    from tests.test_handoff_loop import GOOD
+
+    script: list[Step] = [
+        Emit(wire("session.compaction_start", START_CP8)),
+        Emit(wire("session.compaction_complete", COMPLETE_CP8)),
+        said(""),
+        usage(finishReason="tool_calls", numToolCalls=1, copilotUsage={"totalNanoAiu": 123456}),
+        Invoke("c1", "write_handoff", {"markdown": GOOD.decode()}),
+        Await(),
+    ]
+    run, exported = _run_and_export(rig, tmp_path, rig.make(script))
+    (rec,) = CallLog(run, Redactor()).records()
+    assert rec["cost_status"] == "billed"
+    # 0.00000123456 (the turn: 123,456 nano-AIU) + 0.0996381 (the compaction), by hand
+    assert Decimal(rec["settled_usd"]) == Decimal("0.09963933456")
+    assert [c["kind"] for c in rec["compactions"]] == ["start", "complete"]
+    assert exported["response"]["billed_usd"] == "0.00000123456"  # the turn's own, not the sum

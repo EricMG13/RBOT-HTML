@@ -288,6 +288,8 @@ def _handoff(  # noqa: PLR0913 - existing signature
             response = retained if retained is not None else execute(current)
             if not isinstance(response, bytes):
                 raise ValueError("cpos_response: executor must return bytes")
+            # first: the retained response is what a resume trusts, so the note is already there
+            _retain_compaction(execute, retained, folder / f"{attempt}{COMPACTION_NOTE}")
             _put(response_path, response)
         if retained is not None and response != retained:
             raise ValueError(f"cpos_response_changed: {task.module_id}")
@@ -303,6 +305,50 @@ def _handoff(  # noqa: PLR0913 - existing signature
         if retained is not None:
             raise ValueError(f"cpos_retained_rejected: {task.module_id}: {'; '.join(feedback)}")
     raise ValueError(f"cpos_module_failed: {task.module_id}: {'; '.join(feedback)}")
+
+
+COMPACTION_NOTE = ".compaction.json"  # beside ``<attempt>.response.md``: the context was summarised
+
+
+def _retain_compaction(
+    execute: Callable[[HandoffTask], bytes], retained: bytes | None, note: Path
+) -> None:
+    """Keep, beside a response just produced, that the GitHub Copilot runtime summarised the
+    session's context before the module wrote it (``HandoffExecutor.written_after_compaction``).
+    A resume reads the note, not the executor, so the flag survives and nothing is called twice."""
+    from deploy_workflow.model.handoff import HandoffExecutor
+
+    if retained is not None or not isinstance(execute, HandoffExecutor):
+        return
+    found = execute.written_after_compaction
+    if found is None:
+        return
+    body = {
+        "attempt_id": found.attempt_id,
+        "tokens_before": found.tokens_before,
+        "tokens_after": found.tokens_after,
+        "token_limit": found.token_limit,
+    }
+    _put(note, json.dumps(body, sort_keys=True).encode())
+
+
+def _compaction_flag(response: Path) -> dict[str, str | int | bool]:
+    """The ``module_accepted`` event fields for a module whose retained response has a compaction
+    note: ``written_after_compaction`` and the tokens before it where the runtime gave them. A note
+    that cannot be read still flags the module: the flag is never dropped."""
+    note = response.with_name(response.name.removesuffix(".response.md") + COMPACTION_NOTE)
+    if not note.is_file():
+        return {}
+    try:
+        before = json.loads(note.read_bytes()).get("tokens_before")
+    except (OSError, ValueError, AttributeError) as error:
+        log.warning(
+            "compaction note %s is unreadable (%s); the module is still flagged", note, error
+        )
+        return {"written_after_compaction": True}
+    if isinstance(before, int) and not isinstance(before, bool):
+        return {"written_after_compaction": True, "compaction_tokens_before": before}
+    return {"written_after_compaction": True}
 
 
 def _refuse_decided_stale(
@@ -533,7 +579,12 @@ def run_handoffs(  # noqa: C901, PLR0912, PLR0913, PLR0915 -- legacy orchestrato
             handoffs[module_id] = raw
             selected[module_id] = path
             if events is not None:
-                append_event(events, "module_accepted", module=module_id)
+                append_event(
+                    events,
+                    "module_accepted",
+                    module=module_id,
+                    **_compaction_flag(directory / path),
+                )
             if on_handoff is not None:
                 on_handoff(task, raw)
         layout = request.layout

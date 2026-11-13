@@ -32,7 +32,7 @@ from deploy_workflow.model.adapter import (
 )
 from deploy_workflow.model.handoff import _pages
 from deploy_workflow.model.providers import build
-from deploy_workflow.model.turn import ToolCall, Turn, Usage, hosted_kind
+from deploy_workflow.model.turn import Compaction, ToolCall, Turn, Usage, hosted_kind
 from deploy_workflow.owners import cpos_forecast, cpos_launch
 from deploy_workflow.owners.cpos import (
     HandoffPlan,
@@ -51,6 +51,7 @@ from deploy_workflow.owners.cpos_launch import (
     refuse_deactivated,
     without_for,
 )
+from deploy_workflow.run_events import read_events
 from deploy_workflow.run_expectations import RULES, Item
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -595,11 +596,22 @@ def provider(monkeypatch):
             billed_usd=Decimal("0.01") if self.config_id == "deepseek-max" else None,
         )
         return AdapterReply(
-            "ok", turn, None, 200, None, None, 1, 2, turn.usage, billed_usd=turn.billed_usd
+            "ok",
+            turn,
+            None,
+            200,
+            None,
+            None,
+            1,
+            2,
+            turn.usage,
+            billed_usd=turn.billed_usd,
+            compactions=provider.compactions.get(context["module_id"], ()),
         )
 
     monkeypatch.setattr(LiveAdapter, "complete", complete)
     provider.calls = calls
+    provider.compactions = {}  # module -> the compactions its call reports (Copilot only)
     provider.searched = []
     provider.systems = {}
     provider.models = set()
@@ -6818,3 +6830,188 @@ def test_a_net_debt_period_the_pack_cannot_order_is_refused_with_the_form_to_wri
         "interim balance sheet, one form for the whole table and each period once; put any "
         "other word in the Basis and limitation cell."
     )
+
+
+# ---------------------------------------------------------------- compaction (T3)
+#
+# The compaction is the real CP-8 one of run tdg-full-copilot-sol-high-001-resume (tests/model/
+# _compaction.py): 259,070 tokens before, a charge of 9,963,810,000 nano-AIU x 1E-11 = USD
+# 0.0996381.
+# Each fake module call is 10 input and 5 output tokens on sol-medium: (10 x 2.00 + 5 x 10.00) / 1M
+# = USD 0.00007.
+
+COMPACTED = Compaction(
+    kind="complete",
+    attempt_id="9adc3933-fffb-4810-a23a-717e91c08200",
+    tokens_before=259070,
+    tokens_after=42447,
+    token_limit=272000,
+    success=True,
+    usd=Decimal("0.0996381"),
+)
+COMPACTING = Compaction(kind="start", attempt_id="9adc3933", tokens_before=241349)
+REVIEW_CP4 = (
+    "Review: CP-4 was written after GitHub Copilot summarised its context (259,070 tokens before); "
+    "check its figures against the earlier modules."
+)
+
+
+def charged_line(out: str) -> Decimal:
+    (line,) = [n for n in out.splitlines() if n.startswith("Charged:")]
+    return Decimal(line.split("USD")[1])
+
+
+def compacting_run(tmp_path, provider, *found):
+    argv = launch(tmp_path, "--modules", "CP-4", "--live", "--ruling", str(RULING))
+    routes = prepare_routes(tmp_path, "sol-medium")
+    provider.answer = lambda context: answer(context, routes)
+    provider.compactions = {"CP-4": found}
+    return argv
+
+
+def accepted_events(tmp_path):
+    events = read_events(tmp_path / "out" / "events.jsonl")
+    return {e["module"]: e for e in events if e["event"] == "module_accepted"}
+
+
+def test_a_module_written_after_a_compaction_is_flagged_charged_and_listed(
+    tmp_path, provider, capsys
+):
+    argv = compacting_run(tmp_path, provider, COMPACTING, COMPACTED)
+    assert main(argv) == 0
+    out = capsys.readouterr().out
+    assert out.count("Review:") == 1 and REVIEW_CP4 in out
+    accepted = accepted_events(tmp_path)
+    assert accepted["CP-4"]["written_after_compaction"] is True
+    assert accepted["CP-4"]["compaction_tokens_before"] == 259070
+    assert all("written_after_compaction" not in e for m, e in accepted.items() if m != "CP-4")
+    # every call 0.00007, and the compaction once: the run's reported charge includes it
+    assert charged_line(out) == Decimal("0.00007") * len(provider.calls) + Decimal("0.0996381")
+    notes = list((tmp_path / "out/requests/CP-4").glob("*/*.compaction.json"))
+    assert len(notes) == 1 and json.loads(notes[0].read_text())["tokens_before"] == 259070
+
+
+def test_a_resumed_module_keeps_its_flag_and_its_charge_is_not_settled_twice(
+    tmp_path, provider, capsys
+):
+    argv = compacting_run(tmp_path, provider, COMPACTING, COMPACTED)
+    assert main(argv) == 0
+    first = capsys.readouterr().out
+    calls, spent = len(provider.calls), charged_line(first)
+    ledger = sorted(p.name for p in (tmp_path / "out/live/owner-run-audit/reservations").iterdir())
+    # the second launch resumes: every response is retained, so no call is made
+    provider.answer = lambda context: pytest.fail("a retained module was sent again")
+    assert main(argv) == 0
+    second = capsys.readouterr().out
+    assert len(provider.calls) == calls
+    assert charged_line(second) == spent
+    assert REVIEW_CP4 in second and second.count("Review:") == 1
+    assert accepted_events(tmp_path)["CP-4"]["written_after_compaction"] is True
+    assert ledger == sorted(
+        p.name for p in (tmp_path / "out/live/owner-run-audit/reservations").iterdir()
+    )
+
+
+def test_a_compaction_that_only_started_is_recorded_but_flags_nothing(tmp_path, provider, capsys):
+    argv = compacting_run(tmp_path, provider, COMPACTING)
+    assert main(argv) == 0
+    out = capsys.readouterr().out
+    assert "Review:" not in out
+    assert all("written_after_compaction" not in e for e in accepted_events(tmp_path).values())
+    names = [e["event"] for e in read_events(tmp_path / "out/events.jsonl")]
+    assert "context_compaction_started" in names and "context_compacted" not in names
+    assert not list((tmp_path / "out/requests").glob("*/*/*.compaction.json"))
+    assert charged_line(out) == Decimal("0.00007") * len(provider.calls)
+
+
+def test_a_run_without_any_compaction_prints_no_review_line(tmp_path, provider, capsys):
+    argv = compacting_run(tmp_path, provider)
+    assert main(argv) == 0
+    out = capsys.readouterr().out
+    assert "Review:" not in out and "Context:" not in out
+    assert all("written_after_compaction" not in e for e in accepted_events(tmp_path).values())
+
+
+def test_an_unreadable_compaction_note_still_flags_the_module(tmp_path, provider, capsys):
+    argv = compacting_run(tmp_path, provider, COMPACTED)
+    assert main(argv) == 0
+    (note,) = (tmp_path / "out/requests/CP-4").glob("*/*.compaction.json")
+    note.write_text("{not json")
+    capsys.readouterr()
+    assert main(argv) == 0
+    out = capsys.readouterr().out
+    assert "Review: CP-4 was written after GitHub Copilot summarised its context;" in out
+
+
+def test_a_stopped_run_still_lists_the_modules_written_after_a_compaction(
+    tmp_path, provider, capsys
+):
+    """CP-0 is accepted after a compaction; CP-4 is then rejected and the run stops."""
+    argv = compacting_run(tmp_path, provider)
+    answers = provider.answer
+    provider.answer = lambda context: (
+        "## Request\n\nNot a handoff." if context["module_id"] == "CP-4" else answers(context)
+    )
+    provider.compactions = {"CP-0": (COMPACTED,)}
+    assert main(argv) == 1
+    err = capsys.readouterr().err
+    assert err.startswith("Stopped:") and "Review: CP-0 was written after" in err
+    assert "Review: CP-4" not in err
+
+
+def copilot_readiness(tmp_path, monkeypatch, limit):
+    from deploy_workflow.model import copilot
+
+    monkeypatch.setattr(copilot, "TOKEN_LIMITS", {"gpt-6.1-sol": limit})
+    prepared = prepare(
+        context_file(tmp_path), issuer_folder(tmp_path), tmp_path / "out",
+        config="copilot-sol-medium", cap="50",
+    )  # fmt: skip
+    return prepared, cpos_launch._readiness(prepared, "copilot-sol-medium")
+
+
+def test_readiness_warns_for_each_module_whose_first_prompt_nears_the_copilot_limit(
+    tmp_path, monkeypatch
+):
+    # A limit of 60,000 tokens (80% = 48,000) with the 32,000-token output budget: a module warns
+    # when its estimated prompt passes 16,000 tokens. The estimate by hand: the instruction file's
+    # bytes + 16,384 (the request's fixed part), over 3.85 bytes per token, rounded up.
+    prepared, text = copilot_readiness(tmp_path, monkeypatch, 60_000)
+    warned = {}
+    for module in prepared.ordered:
+        size = (prepared.directory / "instructions" / f"{module}.md").stat().st_size
+        tokens = -(-(size + 16384) * 100 // 385)
+        warned[module] = tokens
+    lines = [n for n in text.splitlines() if n.startswith("Context:  CP-")]
+    expected = [m for m, t in warned.items() if t + 32000 > 0.8 * 60_000]
+    assert expected  # the instructions alone are enough for some module to warn
+    assert [n.split(":")[1].strip() for n in lines] == expected
+    for line in lines:
+        module = line.split(":")[1].strip()
+        assert f"first prompt about {warned[module]:,} tokens (" in line
+        assert "over 80% of the 60,000-token limit" in line
+    # the handoffs of earlier modules are not written yet: the report says so
+    assert "handoffs not written yet are not counted" in text
+
+
+def test_readiness_is_silent_when_every_first_prompt_is_well_inside_the_limit(
+    tmp_path, monkeypatch
+):
+    _, text = copilot_readiness(tmp_path, monkeypatch, 272_000)
+    assert "Context:  CP-" not in text
+
+
+def test_readiness_has_no_context_lines_off_the_copilot_route(tmp_path):
+    prepared = prepare(
+        context_file(tmp_path), issuer_folder(tmp_path), tmp_path / "out",
+        config="sol-medium", cap="50",
+    )  # fmt: skip
+    assert "Context:" not in cpos_launch._readiness(prepared, "sol-medium")
+
+
+def test_a_model_whose_limit_is_not_known_gets_no_first_prompt_estimate(tmp_path):
+    prepared = prepare(
+        context_file(tmp_path), issuer_folder(tmp_path), tmp_path / "out",
+        config="copilot-opus-medium", cap="50",
+    )  # fmt: skip
+    assert cpos_launch._first_prompt_lines(prepared, "copilot-opus-medium") == ()

@@ -35,6 +35,7 @@ from deploy_workflow.model.copilot import (
     USAGE,
     _billed_usd,
     _usage,
+    compactions,
     event_record,
 )
 from deploy_workflow.model.providers import (
@@ -755,6 +756,10 @@ class CopilotAdapter:
                 _check_model(await client.list_models(), self._model.model, call.effort)
                 tools = [self._tool_def(spec, state) for spec in call.request.tools]
                 state.tool_names = frozenset(t.name for t in tools)
+                # No ``infinite_sessions`` option: the SDK default stays, so the runtime summarises
+                # ("compacts") the context at 80% of the model's limit. That is recorded and charged
+                # by the loop (``Compaction``), not disabled: a module whose first prompt already
+                # exceeds the limit would fail outright, and the readiness check only warns.
                 state.session = await client.create_session(
                     model=self._model.model,
                     reasoning_effort=call.effort,
@@ -798,7 +803,10 @@ class CopilotAdapter:
             state.calls.clear()
             await self._deliver(state, answers, nudge, call.deadline)
             records, timeout = await self._collect(state, call.deadline)
-            return await self._settle(call, state, records, timeout, redactor)
+            reply = await self._settle(call, state, records, timeout, redactor)
+            # read back as the parser reads a body: the runtime's charge is a JSON float on the wire
+            reported = compactions(dump_json(records))
+            return dataclasses.replace(reply, compactions=reported) if reported else reply
         except _Refuse as refusal:  # nothing was sent; a live exchange is left as it is
             return self._not_sent(refusal.error_class, refusal.message, call.started)
         except _ToolCallLost:

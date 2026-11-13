@@ -8,8 +8,10 @@ package (the SDK is top-level ``copilot``; this module is ``deploy_workflow.mode
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from decimal import Decimal
+from types import MappingProxyType
 from typing import Any
 
 from deploy_workflow.model.providers import (
@@ -25,6 +27,7 @@ from deploy_workflow.model.providers import (
 )
 from deploy_workflow.model.redact import Redactor
 from deploy_workflow.model.turn import (
+    Compaction,
     StopReason,
     ToolCall,
     Turn,
@@ -38,6 +41,24 @@ USAGE = "assistant.usage"
 MESSAGE = "assistant.message"
 TOOL_START = "tool.execution_start"
 SESSION_ERROR = "session.error"
+COMPACTION_START = "session.compaction_start"
+COMPACTION_COMPLETE = "session.compaction_complete"
+
+# The runtime's context limit per model, in tokens: the ``tokenLimit`` its own events report,
+# 272000 for gpt-6.1-sol. Read from the raw bodies of the four retained runs
+# (tdg-full-copilot-sol-001, -sol-001-resume, -sol-high-001, -sol-high-001-resume, live/raw/*.json,
+# e.g. c6f6170f864287194550faf5980d1383667cd20cdb6fbb97092ed689dc36e1e2-1.json): all 521 files
+# carry "tokenLimit":272000 and no other value. Only a model whose limit has been read from the
+# runtime is listed: for any other the first-prompt check is silent.
+TOKEN_LIMITS: Mapping[str, int] = MappingProxyType({"gpt-6.1-sol": 272_000})
+# The SDK's default for background compaction (copilot/session.py ``InfiniteSessionConfig``,
+# github_copilot_sdk 1.0.28): the runtime starts summarising at this share of the limit.
+COMPACTION_SHARE = Decimal("0.80")
+# An ESTIMATE of request bytes per token, from the retained high-effort run's first requests
+# (tdg-full-copilot-sol-high-001-resume: ``modules/<digest>/0.request.json`` bytes over the call's
+# ``input_tokens``): 3.73 to 4.50 over 15 modules, 3.85 to 3.93 for the four largest (CP-3, CP-5,
+# CP-6, CP-8). The lower figure is used so that the estimate does not understate a large prompt.
+BYTES_PER_TOKEN_ESTIMATE = Decimal("3.85")
 
 # Both vocabularies: OpenAI's words and Anthropic's, whichever the runtime passes through.
 _FINISH: Mapping[str, StopReason] = {
@@ -202,3 +223,59 @@ def parse_events(
         detail = "finishReason length or max_tokens"
         return _usage_error(REPLY_CUT, detail, 200, usage, model, rid, billed)
     return Turn("".join(contents), calls, usage, stop, model, rid, 200, billed)
+
+
+def prompt_tokens_estimate(prompt_bytes: int) -> int:
+    """An estimate of the tokens in ``prompt_bytes`` of request (``BYTES_PER_TOKEN_ESTIMATE``)."""
+    return math.ceil(Decimal(prompt_bytes) / BYTES_PER_TOKEN_ESTIMATE)
+
+
+def near_limit(model: str, prompt_tokens: int, output_tokens: int) -> int | None:
+    """The model's token limit when ``prompt_tokens`` plus the ``output_tokens`` budget passes the
+    share of it at which the runtime starts to summarise; None when it does not, or when the
+    model's limit is not known."""
+    limit = TOKEN_LIMITS.get(model)
+    if limit is None or prompt_tokens + output_tokens <= limit * COMPACTION_SHARE:
+        return None
+    return limit
+
+
+def _opt_int(data: Mapping[str, Any], key: str) -> int | None:
+    value = data.get(key)
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+
+
+def _compaction_usd(data: Mapping[str, Any]) -> Decimal | None:
+    """The summariser's charge, by the rule the route uses for a call (``_billed_usd``). A
+    subtotal the runtime marks ``partial`` or ``unavailable`` is not a charge: None."""
+    used = data.get("compactionTokensUsed")
+    if not isinstance(used, dict) or used.get("aiCreditsStatus", "complete") != "complete":
+        return None
+    return _billed_usd(used)
+
+
+def _compaction(kind: str, data: Mapping[str, Any]) -> Compaction | None:
+    attempt = _str_or_none(data.get("compactionAttemptId"))
+    limit = _opt_int(data, "tokenLimit")
+    if kind == COMPACTION_START:
+        return Compaction("start", attempt, _opt_int(data, "currentTokens"), None, limit)
+    if kind == COMPACTION_COMPLETE:
+        done = data.get("success")
+        return Compaction(
+            "complete",
+            attempt,
+            _opt_int(data, "preCompactionTokens"),
+            _opt_int(data, "postCompactionTokens"),
+            limit,
+            done if isinstance(done, bool) else None,
+            _compaction_usd(data),
+        )
+    return None
+
+
+def compactions(text: str) -> tuple[Compaction, ...]:
+    """The context compactions one call's body reports, in order. Raises ``_BadReply`` on a body
+    of the wrong shape, as ``parse_events`` does."""
+    _, events = _events(text)
+    found = (_compaction(kind, data) for kind, data in events)
+    return tuple(c for c in found if c is not None)

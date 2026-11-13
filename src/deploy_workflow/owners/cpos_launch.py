@@ -25,12 +25,12 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Any, get_args
+from typing import Any, TextIO, get_args
 
 from deploy_vii.business_context import Category
 from deploy_vii.contracts import DEACTIVATED_MESSAGE, DEACTIVATED_PATHWAYS, PATHWAY_MODULES, Run
 from deploy_vii.live.prompts import STEP_CONTRACTS
-from deploy_vii.registry import modules, plan
+from deploy_vii.registry import dependencies, modules, plan
 from deploy_vii.report_view import _spec_of, pathways
 from deploy_workflow import confidence, platform_io
 from deploy_workflow.changes import (
@@ -63,6 +63,7 @@ from deploy_workflow.markdown_delivery import (
     markdown_files,
     require_issuer,
 )
+from deploy_workflow.model import copilot as copilot_route
 from deploy_workflow.model.adapter import (
     COPILOT_GH_LOGIN_VARIABLE,
     COPILOT_RUNTIME_VARIABLE,
@@ -105,6 +106,7 @@ from deploy_workflow.prose_checks import (
     key_figures_issues,
     prose_issues,
 )
+from deploy_workflow.run_events import EVENTS, read_events
 from deploy_workflow.run_expectations import Item, edges_for, expectations, guess_kind
 from deploy_workflow.workflow import _put
 
@@ -2886,6 +2888,82 @@ def _web_line(prepared: Prepared, config: str, ruling: Path | None) -> tuple[str
     return (f"Web:      off: CP-DR reads only this run's files ({why} {WEB_SEARCH_GRANT})",)
 
 
+def _first_prompt_lines(prepared: Prepared, config: str) -> tuple[str, ...]:
+    """Readiness warnings, GitHub Copilot configs only: each module whose first prompt, estimated
+    in tokens, plus the output budget passes the share of the route's limit at which the runtime
+    starts to summarise its context. A warning only: nothing is refused.
+
+    What can be estimated before the run: the instructions (exact) and the request's fixed part
+    (`REQUEST_ALLOWANCE`). The handoffs a module is sent do not exist yet; where an earlier run
+    of the issuer is pinned (CP-8's comparison) its handoffs stand in for them, otherwise they are
+    left out and the estimate is a floor. `HandoffExecutor` checks each module again, on its real
+    first prompt, before its first call (event ``first_prompt_near_limit``)."""
+    chosen = CONFIGS[config]
+    if chosen.provider != "copilot" or chosen.model not in copilot_route.TOKEN_LIMITS:
+        return ()
+    earlier = {
+        name: (prepared.directory / pin.path).read_bytes()
+        for name, pin in prepared.plan.sources.items()
+        if name.startswith(PRIOR_PREFIX)
+    }
+    producers = dependencies(prepared.ordered)
+    lines: list[str] = []
+    unsized = False
+    for module in prepared.ordered:
+        sent = [m for m in prepared.ordered if m in producers[module] and m != "CP-8"]
+        instructions = (prepared.directory / prepared.plan.instructions[module].path).stat()
+        tokens = copilot_route.prompt_tokens_estimate(
+            _cp8_request_bytes(instructions.st_size, sent, earlier)
+        )
+        basis = "instructions only"
+        if sent and earlier:
+            basis = "handoffs sized from the earlier run's"
+        unsized = unsized or bool(sent and not earlier)
+        limit = copilot_route.near_limit(chosen.model, tokens, output_limit(config))
+        if limit is not None:
+            share = int(copilot_route.COMPACTION_SHARE * 100)
+            lines.append(
+                f"Context:  {module}: first prompt about {tokens:,} tokens ({basis}) plus "
+                f"{output_limit(config):,} output is over {share}% of the {limit:,}-token limit; "
+                "GitHub Copilot may summarise the context (recorded and charged)"
+            )
+    if unsized:
+        lines.append(
+            "Context:  handoffs not written yet are not counted; each module's first prompt is "
+            "checked again before its first call (event first_prompt_near_limit)"
+        )
+    return tuple(lines)
+
+
+def _review_lines(directory: Path) -> tuple[str, ...]:
+    """One line per module whose accepted handoff was written after GitHub Copilot summarised its
+    context, from the run's events (the last ``module_accepted`` of each module, so a resumed run
+    lists a module once). No event file: nothing was recorded, so no line."""
+    try:
+        events = read_events(directory / EVENTS)
+    except FileNotFoundError:
+        return ()
+    except (OSError, ValueError) as error:
+        return (f"Review: the run events could not be read ({error}); check each module's calls.",)
+    accepted = {str(e.get("module")): e for e in events if e.get("event") == "module_accepted"}
+    lines = []
+    for module, event in accepted.items():
+        if event.get("written_after_compaction") is not True:
+            continue
+        before = event.get("compaction_tokens_before")
+        counted = f" ({before:,} tokens before)" if isinstance(before, int) else ""
+        lines.append(
+            f"Review: {module} was written after GitHub Copilot summarised its context{counted}; "
+            "check its figures against the earlier modules."
+        )
+    return tuple(lines)
+
+
+def _print_review(directory: Path, stream: TextIO) -> None:
+    for line in _review_lines(directory):
+        print(line, file=stream)
+
+
 def _readiness(prepared: Prepared, config: str, ruling: Path | None = None) -> str:
     selected = CONFIGS[config]
     run = prepared.plan.run
@@ -2903,6 +2981,7 @@ def _readiness(prepared: Prepared, config: str, ruling: Path | None = None) -> s
             f"Changes:  {prepared.changes.removeprefix('changes: ') or 'not recorded'}",
             f"Manifest: {prepared.manifest}",
             *_web_line(prepared, config, ruling),
+            *_first_prompt_lines(prepared, config),
         )
     )
 
@@ -3117,9 +3196,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"Stopped: {with_notes(error)}\nRetained work is in {prepared.directory}",
             file=sys.stderr,
         )
+        _print_review(prepared.directory, sys.stderr)
         return 1
     spent = Budget(prepared.plan.provider_cap_usd, prepared.directory / "live").spent
     print(f"Delivery: {receipt}\nCharged:  USD {spent}")
+    _print_review(prepared.directory, sys.stdout)
     if not args.no_library:
         _refresh_library(prepared.directory)
     print("Automated checks only: review the handoffs against the sources before relying on this.")

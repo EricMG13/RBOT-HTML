@@ -122,6 +122,24 @@ class ToolCallRecord(Contract):
     refusal_code: str | None
 
 
+class CompactionRecord(Contract):
+    """One context compaction the runtime reported during a call (see ``turn.Compaction``)."""
+
+    model_config = ConfigDict(hide_input_in_errors=True)
+
+    kind: Literal["start", "complete"]
+    attempt_id: str | None
+    tokens_before: int | None = Field(ge=0)
+    tokens_after: int | None = Field(ge=0)
+    token_limit: int | None = Field(ge=0)
+    success: bool | None
+    usd: Decimal | None = Field(ge=0)
+
+    @field_serializer("usd", when_used="json")
+    def _money(self, value: Decimal | None) -> str | None:
+        return None if value is None else _money_field(value)
+
+
 def _money_field(value: Decimal) -> str:
     """The one money text for a record or its export: zero is written ``0`` (not ``-0``/``0.00``)."""
     return "0" if value == 0 else money_text(value)
@@ -209,6 +227,19 @@ class CallRecord(Contract):
     submit_sha256: Hash | None
     error_class: str | None
     error: str | None
+    # None for a call with no compaction, and absent from a record written before the field
+    # existed. ``settled_usd`` includes the charge of each completed one.
+    compactions: tuple[CompactionRecord, ...] | None = None
+
+    @property
+    def compaction_usd(self) -> Decimal:
+        """What the call's compactions charged, already inside ``settled_usd``."""
+        return sum((c.usd or Decimal(0) for c in self.compactions or ()), Decimal(0))
+
+    @property
+    def own_usd(self) -> Decimal | None:
+        """``settled_usd`` without the compactions: the turn's own reported charge."""
+        return None if self.settled_usd is None else self.settled_usd - self.compaction_usd
 
     @field_validator("attempt", mode="before")
     @classmethod
@@ -602,8 +633,8 @@ def _error_response(
                 "http_status": None,
                 "usage": _usage_object(rec),
             }
-            if rec.cost_status == "billed" and rec.settled_usd is not None:  # validated non-None
-                out_t["billed_usd"] = _money_field(rec.settled_usd)
+            if rec.cost_status == "billed" and rec.own_usd is not None:  # validated non-None
+                out_t["billed_usd"] = _money_field(rec.own_usd)
             return out_t
         if unknown:
             if error_class not in SENT_UNKNOWN:
@@ -632,8 +663,8 @@ def _error_response(
         out["kind"] = "sent_known"
         if not 400 <= rec.http_status <= 499:
             raise ExportMismatch(*key, "http_status")
-    if rec.cost_status == "billed" and rec.settled_usd is not None:
-        out["billed_usd"] = _money_field(rec.settled_usd)
+    if rec.cost_status == "billed" and rec.own_usd is not None:
+        out["billed_usd"] = _money_field(rec.own_usd)
     return {"kind": out.pop("kind"), **out}
 
 
@@ -694,7 +725,7 @@ def _ok_response(
         raise ExportMismatch(digest, index, "outcome")
     if _usage_of(rec) != {k: getattr(outcome.usage, k) for k in _RECORDED_TOKENS}:
         raise ExportMismatch(digest, index, "usage")
-    if rec.cost_status == "billed" and outcome.billed_usd != rec.settled_usd:
+    if rec.cost_status == "billed" and outcome.billed_usd != rec.own_usd:
         raise ExportMismatch(digest, index, "billed_usd")
     if rec.request_id != outcome.request_id:
         raise ExportMismatch(digest, index, "request_id")

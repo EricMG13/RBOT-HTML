@@ -282,3 +282,103 @@ def test_real_sdk_events_round_trip() -> None:
 def test_unknown_finish_reason_is_other() -> None:
     assert turn(usage(finishReason="content_filter")).stop_reason == "other"
     assert turn(usage()).stop_reason == "other"
+
+
+# ---------------------------------------------------------------- compaction events (T3)
+
+
+def _body(*events: dict[str, Any]) -> str:
+    return json.dumps(list(events))
+
+
+def _event(kind: str, data: dict[str, Any]) -> dict[str, Any]:
+    return {"type": kind, "data": data}
+
+
+def test_a_compaction_start_is_read_from_the_runtimes_own_fields() -> None:
+    from deploy_workflow.model.copilot import compactions
+    from deploy_workflow.model.turn import Compaction
+    from tests.model._compaction import START_CP8
+
+    found = compactions(_body(_event("session.compaction_start", START_CP8)))
+    assert found == (
+        Compaction(
+            kind="start",
+            attempt_id="9adc3933-fffb-4810-a23a-717e91c08200",
+            tokens_before=241349,
+            token_limit=272000,
+        ),
+    )
+
+
+def test_a_completed_compaction_carries_its_tokens_and_its_charge() -> None:
+    from deploy_workflow.model.copilot import compactions
+    from deploy_workflow.model.turn import Compaction
+    from tests.model._compaction import COMPLETE_CP6, COMPLETE_CP8, CP6_USD, CP8_USD
+
+    # The charge is the runtime's totalNanoAiu (a JSON float on the wire) x 1E-11; the expected
+    # amounts were summed by hand from each fragment's tokenDetails (see _compaction.py).
+    cp8 = compactions(_body(_event("session.compaction_complete", COMPLETE_CP8)))
+    assert cp8 == (
+        Compaction(
+            kind="complete",
+            attempt_id="9adc3933-fffb-4810-a23a-717e91c08200",
+            tokens_before=259070,
+            tokens_after=42447,
+            token_limit=272000,
+            success=True,
+            usd=Decimal(CP8_USD),
+        ),
+    )
+    (cp6,) = compactions(_body(_event("session.compaction_complete", COMPLETE_CP6)))
+    assert cp6.usd == Decimal(CP6_USD) and cp6.tokens_before == 238958 and cp6.tokens_after == 72125
+
+
+def test_other_events_and_a_body_with_no_compaction_give_nothing() -> None:
+    from deploy_workflow.model.copilot import compactions
+
+    assert compactions(_body(usage(), message("x"))) == ()
+
+
+def test_a_completed_compaction_with_no_readable_charge_has_no_usd() -> None:
+    """Never a zero: an absent usage, a partial or unavailable subtotal, a negative or fractional
+    count and a boolean are each an unknown charge."""
+    from deploy_workflow.model.copilot import compactions
+    from tests.model._compaction import COMPLETE_CP8, with_status, without_usage
+
+    def charge(data: dict[str, Any]) -> Decimal | None:
+        (found,) = compactions(_body(_event("session.compaction_complete", data)))
+        assert found.kind == "complete"
+        return found.usd
+
+    def with_nano(value: Any) -> dict[str, Any]:
+        used = {**COMPLETE_CP8["compactionTokensUsed"]}
+        used["copilotUsage"] = {"totalNanoAiu": value}
+        return {**COMPLETE_CP8, "compactionTokensUsed": used}
+
+    assert charge(without_usage(COMPLETE_CP8)) is None
+    assert charge(with_status(COMPLETE_CP8, "partial")) is None
+    assert charge(with_status(COMPLETE_CP8, "unavailable")) is None
+    assert charge(with_nano(-1)) is None
+    assert charge(with_nano(12.5)) is None
+    assert charge(with_nano(True)) is None
+    assert charge(with_nano(0)) == Decimal(0)  # a reported zero is a zero
+
+
+def test_a_failed_compaction_is_not_a_success() -> None:
+    from deploy_workflow.model.copilot import compactions
+    from tests.model._compaction import COMPLETE_CP8
+
+    failed = {**COMPLETE_CP8, "success": False}
+    (found,) = compactions(_body(_event("session.compaction_complete", failed)))
+    assert found.success is False
+
+
+def test_a_malformed_body_is_refused() -> None:
+    import pytest
+
+    from deploy_workflow.model.copilot import compactions
+    from deploy_workflow.model.providers import _BadReply
+
+    with pytest.raises(_BadReply):
+        compactions('{"not": "an array"}')

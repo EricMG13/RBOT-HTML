@@ -14,8 +14,9 @@ from deploy_vii.contracts import Run
 from deploy_workflow.model.adapter import AdapterReply
 from deploy_workflow.model.handoff import REDACTION_FAILED, HandoffExecutor, ModuleTools
 from deploy_workflow.model.providers import WEB_SEARCH_BLOCK
-from deploy_workflow.model.turn import ProviderBlock, ToolCall, Turn, Usage, hosted_kind
+from deploy_workflow.model.turn import Compaction, ProviderBlock, ToolCall, Turn, Usage, hosted_kind
 from deploy_workflow.owners.cpos import HandoffTask
+from deploy_workflow.run_events import read_events
 
 
 def task() -> HandoffTask:
@@ -912,3 +913,235 @@ def test_a_clean_accepted_repair_emits_no_event(tmp_path: Path) -> None:
     assert all(
         e["event"] != "values_dropped_on_repair" for e in read_events(tmp_path / "run" / EVENTS)
     )
+
+
+# ---------------------------------------------------------------- compaction (T3)
+#
+# The fragments are the real CP-8 compaction of run tdg-full-copilot-sol-high-001-resume (see
+# tests/model/_compaction.py); the amounts below are worked by hand from the sol-medium rates
+# (USD per 1M tokens: input 2.00, output 10.00): the call's own 100 input and 50 output tokens
+# cost (100 x 2.00 + 50 x 10.00) / 1M = 0.0007, and the compaction's reported charge is
+# 9,963,810,000 nano-AIU x 1E-11 = 0.0996381.
+
+ATTEMPT = "9adc3933-fffb-4810-a23a-717e91c08200"
+CP8_START = Compaction(kind="start", attempt_id=ATTEMPT, tokens_before=241349, token_limit=272000)
+CP8_DONE = Compaction(
+    kind="complete",
+    attempt_id=ATTEMPT,
+    tokens_before=259070,
+    tokens_after=42447,
+    token_limit=272000,
+    success=True,
+    usd=Decimal("0.0996381"),
+)
+
+
+def write_call() -> ToolCall:
+    return ToolCall("w", "write_handoff", {"markdown": GOOD.decode()})
+
+
+def compacted(reply: AdapterReply, *found: Compaction) -> AdapterReply:
+    return replace(reply, compactions=tuple(found))
+
+
+def run_events(folder: Path) -> list[dict[str, Any]]:
+    return read_events(folder / "events.jsonl")
+
+
+def row_of(folder: Path) -> dict[str, Any]:
+    return json.loads((folder / "live/calls.jsonl").read_text().splitlines()[0])
+
+
+def compacting_loop(
+    tmp_path: Path, *replies: AdapterReply, cap: str = "10"
+) -> tuple[HandoffExecutor, Path]:
+    folder = tmp_path / "run"
+    loop = HandoffExecutor(
+        folder / "live",
+        adapter=Adapter(*replies),
+        cap_usd=Decimal(cap),
+        check=check,
+        events=folder,
+    )
+    return loop, folder
+
+
+def test_a_completed_compaction_is_recorded_charged_and_flagged(tmp_path: Path) -> None:
+    loop, folder = compacting_loop(tmp_path, compacted(turn(write_call()), CP8_START, CP8_DONE))
+    assert loop(task()) == GOOD
+    assert loop.budget.spent == Decimal("0.1003381")  # 0.0007 + 0.0996381
+    assert not loop.budget.unsettled
+    row = row_of(folder)
+    assert Decimal(row["settled_usd"]) == Decimal("0.1003381")
+    assert row["cost_status"] == "computed"
+    assert row["compactions"] == [
+        {
+            "kind": "start",
+            "attempt_id": ATTEMPT,
+            "tokens_before": 241349,
+            "tokens_after": None,
+            "token_limit": 272000,
+            "success": None,
+            "usd": None,
+        },
+        {
+            "kind": "complete",
+            "attempt_id": ATTEMPT,
+            "tokens_before": 259070,
+            "tokens_after": 42447,
+            "token_limit": 272000,
+            "success": True,
+            "usd": "0.0996381",
+        },
+    ]
+    seen = [e for e in run_events(folder) if e["event"].startswith("context_compact")]
+    assert [(e["event"], e["module"], e["call_index"]) for e in seen] == [
+        ("context_compaction_started", "CP-2", 0),
+        ("context_compacted", "CP-2", 0),
+    ]
+    assert seen[0]["tokens_before"] == 241349
+    assert (seen[1]["tokens_before"], seen[1]["tokens_after"]) == (259070, 42447)
+    assert seen[1]["usd"] == "0.0996381" and seen[1]["applied"] is True
+    assert loop.written_after_compaction == CP8_DONE
+
+
+def test_the_accepted_handoff_is_the_one_the_checker_judges_after_a_compaction(
+    tmp_path: Path,
+) -> None:
+    """The flag does not change acceptance: a draft the checker rejects is still rejected."""
+    bad = GOOD.replace(b"100", b"101")
+    loop, _ = compacting_loop(
+        tmp_path,
+        compacted(turn(ToolCall("w", "write_handoff", {"markdown": bad.decode()})), CP8_DONE),
+        turn(ToolCall("e", "edit_handoff", {"edits": [{"old": "101", "new": "100"}]})),
+    )
+    assert loop(task()) == GOOD
+    assert "REJECTED" in loop.adapter.requests[1].messages[-1].text
+
+
+def test_a_compaction_that_started_but_did_not_complete_is_recorded_not_flagged(
+    tmp_path: Path,
+) -> None:
+    loop, folder = compacting_loop(tmp_path, compacted(turn(write_call()), CP8_START))
+    assert loop(task()) == GOOD
+    assert loop.budget.spent == Decimal("0.0007")  # no compaction charge is known
+    assert loop.written_after_compaction is None
+    names = [e["event"] for e in run_events(folder) if e["event"].startswith("context_compact")]
+    assert names == ["context_compaction_started"]
+    assert [c["kind"] for c in row_of(folder)["compactions"]] == ["start"]
+
+
+def test_a_failed_compaction_is_charged_but_does_not_flag_the_module(tmp_path: Path) -> None:
+    failed = replace(CP8_DONE, success=False, usd=Decimal("0.05"))
+    loop, folder = compacting_loop(tmp_path, compacted(turn(write_call()), failed))
+    assert loop(task()) == GOOD
+    assert loop.budget.spent == Decimal("0.0507")
+    assert loop.written_after_compaction is None
+    (event,) = [e for e in run_events(folder) if e["event"] == "context_compacted"]
+    assert event["applied"] is False
+
+
+def test_a_call_with_no_compaction_writes_nothing_new(tmp_path: Path) -> None:
+    loop, folder = compacting_loop(tmp_path, turn(write_call()))
+    assert loop(task()) == GOOD
+    assert row_of(folder)["compactions"] is None
+    assert not [e for e in run_events(folder) if "compact" in e["event"]]
+    assert loop.written_after_compaction is None
+    assert loop.budget.spent == Decimal("0.0007")
+
+
+def test_a_compaction_charge_past_the_cap_is_an_overrun_not_a_dropped_charge(
+    tmp_path: Path,
+) -> None:
+    """The call's hold (about USD 5.5 on sol-medium) was inside the cap (USD 10); a compaction
+    charge of USD 11 arrives after it. The ledger's overrun rule records the whole amount and
+    stops the run; it is neither refused nor left out."""
+    huge = replace(CP8_DONE, usd=Decimal(11))
+    loop, folder = compacting_loop(tmp_path, compacted(turn(write_call()), huge))
+    with pytest.raises(RuntimeError, match="cpos_live_stopped.*overrun=True"):
+        loop(task())
+    assert loop.budget.stop_kind == "overrun"
+    assert loop.budget.spent == Decimal("11.0007")  # 11 + 0.0007: counted, above the cap of 10
+    assert loop.budget.spent > loop.budget.cap_usd
+    assert Decimal(row_of(folder)["settled_usd"]) == Decimal("11.0007")
+
+
+def test_a_completed_compaction_with_no_readable_charge_is_an_unknown_charge(
+    tmp_path: Path,
+) -> None:
+    """As an unreadable reply is today: the whole hold stays and the run stops. Never a zero."""
+    loop, folder = compacting_loop(
+        tmp_path, compacted(turn(write_call()), replace(CP8_DONE, usd=None))
+    )
+    with pytest.raises(RuntimeError, match="cpos_live_stopped"):
+        loop(task())
+    row = row_of(folder)
+    assert row["cost_status"] == "unknown" and row["settled_usd"] is None
+    assert loop.budget.stop_kind == "unknown"
+    assert loop.budget.spent == Decimal(row["reserved_usd"]) > 0
+
+
+class CopilotLike(Adapter):
+    """The Copilot route as the executor sees it: a ruling in force and a reported charge."""
+
+    config_id = "copilot-sol-medium"
+    ruling = Path("lift.md")
+
+
+def copilot_loop(tmp_path: Path) -> tuple[HandoffExecutor, Path]:
+    folder = tmp_path / "run"
+    reply = turn(write_call())
+    reply = replace(reply, billed_usd=Decimal("0.01"))
+    loop = HandoffExecutor(
+        folder / "live", adapter=CopilotLike(reply), cap_usd=Decimal(10), check=check, events=folder
+    )
+    return loop, folder
+
+
+def prompt_of(size: int) -> HandoffTask:
+    return replace(task(), handoffs={"CP-1": b"x" * size})
+
+
+def test_a_first_prompt_near_the_copilot_limit_is_flagged_before_the_first_call(
+    tmp_path: Path,
+) -> None:
+    """800,000 bytes of handoff: at 3.85 bytes per token that is about 208,000 tokens, which with
+    the 16,000-token output budget passes 80% of 272,000 (217,600). It warns; the run goes on."""
+    loop, folder = copilot_loop(tmp_path)
+    assert loop(prompt_of(800_000)) == GOOD
+    (event,) = [e for e in run_events(folder) if e["event"] == "first_prompt_near_limit"]
+    (invocation,) = (folder / "live/modules").glob("*/invocation.json")
+    size = invocation.stat().st_size
+    expected = -(-size * 100 // 385)  # ceil(size / 3.85), by hand
+    assert event["module"] == "CP-2" and event["estimated_tokens"] == expected
+    assert event["output_tokens"] == 16000 and event["token_limit"] == 272000
+    assert expected + 16000 > 0.8 * 272000
+
+
+def test_a_small_first_prompt_on_copilot_raises_no_warning(tmp_path: Path) -> None:
+    loop, folder = copilot_loop(tmp_path)
+    assert loop(prompt_of(1_000)) == GOOD
+    assert not [e for e in run_events(folder) if e["event"] == "first_prompt_near_limit"]
+
+
+def test_the_first_prompt_check_is_for_the_copilot_route_only(tmp_path: Path) -> None:
+    loop, folder = compacting_loop(tmp_path, turn(write_call()))  # sol-medium, OpenAI
+    assert loop(prompt_of(800_000)) == GOOD
+    assert not [e for e in run_events(folder) if e["event"] == "first_prompt_near_limit"]
+
+
+def test_the_record_reads_back_with_its_compactions_and_an_old_record_still_reads(
+    tmp_path: Path,
+) -> None:
+    from deploy_workflow.model.record import CallRecord
+    from deploy_workflow.model_testing.records import read_journal
+
+    loop, folder = compacting_loop(tmp_path, compacted(turn(write_call()), CP8_START, CP8_DONE))
+    assert loop(task()) == GOOD
+    (record,) = read_journal(folder / "live/calls.jsonl")
+    assert record.compactions is not None and record.compactions[1].usd == Decimal("0.0996381")
+    assert record.compaction_usd == Decimal("0.0996381")
+    assert record.own_usd == Decimal("0.0007")  # the turn's own charge, without the compaction
+    old = row_of(folder)
+    del old["compactions"]  # a record written before the field existed
+    assert CallRecord.model_validate_json(json.dumps(old)).compactions is None
