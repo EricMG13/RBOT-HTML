@@ -4,6 +4,20 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-13 — Signal: an unexpected error on one source no longer starves the rest (branch `claude/signal-ingest-starvation`)
+
+Scope is **offline only**: recorded feeds, no network, no live service run. Defect (adversarial
+review, PR 102 W1 / PR 106-109 W2): an exception other than a refused fetch or unreadable feed left
+no check row, so that source failed first on every pass and later sources were never checked.
+Now `ingest.run_due` logs the traceback, records a failed check `unexpected error (<Type>); see the
+log` (the exception text is not stored) and continues. Three tests failed for that cause before the
+fix. At `07090d5`: `uv run pytest tests/test_signal_ingest.py tests/test_signal_service.py
+tests/test_signal_cli.py -q` 77 passed; `uv run python tools/quality_gate.py` 0 findings; the
+reviewer's loop-coverage probe exits 0. Not verified: the real service loop against a live feed; a
+store error raised by `record_check` itself (still propagates to the loop); the full suite.
+Open, older than this change: a story whose topic match raised straight after it was added is not
+matched on a later pass.
+
 ## 2026-11-13 — CP-DR web lookup: page fetch and SEC EDGAR tools (branch `claude/t5-cpdr-lookup-2e88f4`)
 
 Ruling: `docs/rulings/2026-11-13-cpdr-web-lookup.md`. Scope is **offline only**: no live request, no
