@@ -309,6 +309,27 @@ def _handoff(  # noqa: PLR0913 - existing signature
     raise ValueError(f"cpos_module_failed: {task.module_id}: {'; '.join(feedback)}")
 
 
+def _with_web_checks(
+    execute: Callable[[HandoffTask], bytes],
+    check: Callable[[HandoffTask, bytes], tuple[str, ...]],
+) -> Callable[[HandoffTask, bytes], tuple[str, ...]]:
+    """The check ``_handoff`` runs on every response it holds, a retained one on resume included:
+    the launcher's checker, then the web checks of the run's lookup (``HandoffExecutor.web_issues``,
+    none unless the module is offered lookup). The executor's own loop gives a live write the same
+    web issues through ``ModuleTools`` and ``execute.check`` stays the bare checker, so a live
+    write's feedback names each issue once: this wrapper runs only on the response the loop
+    returned, which that loop accepted, and on the next attempt's feedback."""
+    from deploy_workflow.model.handoff import HandoffExecutor
+
+    if not isinstance(execute, HandoffExecutor):
+        return check
+
+    def checked(task: HandoffTask, raw: bytes) -> tuple[str, ...]:
+        return (*check(task, raw), *execute.web_issues(task, raw))
+
+    return checked
+
+
 COMPACTION_NOTE = ".compaction.json"  # beside ``<attempt>.response.md``: the context was summarised
 
 
@@ -580,7 +601,7 @@ def run_handoffs(  # noqa: C901, PLR0912, PLR0913, PLR0915 -- legacy orchestrato
                     task,
                     directory,
                     execute,
-                    check,
+                    _with_web_checks(execute, check),
                     request.max_attempts,
                     retained=retained.get(module_id),
                 )

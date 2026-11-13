@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import types
 import typing
 from collections import Counter
@@ -7466,6 +7467,125 @@ def test_run_live_handoffs_resolves_the_default_against_the_case_kind(tmp_path, 
             )
         assert seen["web_lookup"] == expected
         assert seen["lookup_runtime"].env[SEC_AGENT_VARIABLE] == SEC_AGENT_VALUE
+
+
+# A resumed run applies the web checks to a retained CP-DR handoff (Task 5, W5). The checker is the
+# launcher's own (`checker(layout)`); the run is the one real loop with the fake provider.
+
+
+def retained_cpdr(tmp_path, provider, kind="public"):
+    """A finished CP-DR run, and its retained response pinned in a manifest for a second folder.
+    Returns (manifest, layout, the response text, the second folder's live folder)."""
+    argv = launch(tmp_path, "--modules", "CP-DR", "--live", "--ruling", str(RULING))
+    with_case_kind(tmp_path / "context.json", kind)
+    routes = prepare_routes(tmp_path, "sol-medium", modules=("CP-DR",))
+    provider.answer = lambda context: answer(context, routes)
+    assert main(argv) == 0
+    out = tmp_path / "out"
+    (record,) = out.glob("requests/CP-DR/*/1.request.json")
+    asked = json.loads(record.read_text())
+    response = (record.parent / "1.response.md").read_text()
+    request = HandoffPlan.model_validate_json((out / "workflow.json").read_bytes())
+    return request, asked, response, out
+
+
+def resume_with(retained, response, again):
+    request, asked, _, out = retained
+    path = "retained/CP-DR.md"
+    (out / path).parent.mkdir(exist_ok=True)
+    (out / path).write_text(response)
+    pin = RetainedHandoff(
+        path=path,
+        sha256=hashlib.sha256(response.encode()).hexdigest(),
+        source_hashes=asked["sources"],
+        upstream=asked["handoffs"],
+    )
+    manifest = out / "workflow-retained.json"
+    manifest.write_text(
+        request.model_copy(update={"retained_handoffs": {"CP-DR": pin}}).model_dump_json()
+    )
+    return cpos_launch.run_live_handoffs(
+        manifest,
+        again,
+        ruling=RULING,
+        check=checker(request.layout),
+        max_turns=4,
+        max_output_tokens=cpos_launch.MAX_OUTPUT_TOKENS,
+    )
+
+
+def cites_a_page(response: str, sid: str, url: str) -> str:
+    from test_web_lookup_tools import row
+
+    table = (
+        "| Source | URL | Publisher | Stated date | Source type |\n|---|---|---|---|---|\n"
+        f"{row(sid, url)}\n"
+    )
+    return response.replace("## Sources\n", "## Sources\n\n" + table, 1)
+
+
+def retain_page(again: Path) -> tuple[str, str]:
+    """Fetch the fake issuer page into ``again/live/web`` with the real lookup; its id and url."""
+    from test_web_lookup_tools import HOST, PAGE, FakeNet, make, pages
+
+    lookup = make(again / "scratch", FakeNet(pages()), case_hosts=frozenset({HOST}))
+    item = lookup.fetch_page(PAGE)
+    shutil.copytree(again / "scratch" / "run" / "web", again / "live" / "web")
+    return item.source_id, PAGE
+
+
+MISSING_PAGE = "web-0123456789ab"
+
+
+def test_w5_a_retained_cpdr_handoff_citing_a_page_absent_from_the_index_is_rejected_on_resume(
+    tmp_path, provider
+):
+    from test_web_lookup_tools import PAGE
+
+    retained = retained_cpdr(tmp_path, provider)
+    response = retained[2]
+    again = tmp_path / "again"
+    (again / "live" / "web").mkdir(parents=True)
+    (again / "live" / "web" / "index.jsonl").write_text("")
+    bad = cites_a_page(response, MISSING_PAGE, PAGE)
+    with pytest.raises(ValueError, match="cpos_retained_rejected: CP-DR") as raised:
+        resume_with(retained, bad, again)
+    assert MISSING_PAGE in str(raised.value)
+    assert "retained web pages could not be read" not in str(raised.value)
+
+
+def test_w5_the_same_retained_handoff_with_its_page_in_the_index_is_accepted(tmp_path, provider):
+    retained = retained_cpdr(tmp_path, provider)
+    response = retained[2]
+    again = tmp_path / "again"
+    sid, url = retain_page(again)
+    good = cites_a_page(response, sid, url)
+    resume_with(retained, good, again)
+    assert json.loads((again / "live" / "loop.json").read_text())["web_lookup"] is True
+
+
+def test_w5_with_lookup_off_a_retained_handoff_is_checked_as_before(tmp_path, provider):
+    from test_web_lookup_tools import PAGE
+
+    retained = retained_cpdr(tmp_path, provider, kind="private")
+    response = retained[2]
+    bad = cites_a_page(response, MISSING_PAGE, PAGE)
+    resume_with(retained, bad, tmp_path / "again")
+    assert "web_lookup" not in json.loads((tmp_path / "again/live/loop.json").read_text())
+
+
+def test_w5_a_damaged_index_rejects_a_retained_cpdr_handoff_with_one_plain_issue(
+    tmp_path, provider
+):
+    retained = retained_cpdr(tmp_path, provider)
+    response = retained[2]
+    again = tmp_path / "again"
+    (again / "live" / "web").mkdir(parents=True)
+    (again / "live" / "web" / "index.jsonl").write_text('{"bytes": "x"}\n{"bytes": 1}\n')
+    with pytest.raises(ValueError, match="cpos_retained_rejected: CP-DR") as raised:
+        resume_with(retained, response, again)
+    assert "retained web pages could not be read" in str(raised.value)
+    assert str(tmp_path) not in str(raised.value)
 
 
 def test_distinct_uncharged_starts_in_one_call_are_counted_apart_and_one_attempt_once(tmp_path):

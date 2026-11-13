@@ -3,6 +3,7 @@ resolver and connector stand in for the network, every page is hand-written, and
 called. The expected values here are written from the brief, not computed by the code under test."""
 
 import json
+import shutil
 from dataclasses import replace
 from datetime import date
 from decimal import Decimal
@@ -1830,3 +1831,83 @@ def test_a_retained_page_whose_file_is_gone_is_a_plain_message(tmp_path, tool):
 
 def test_the_rules_tell_the_module_to_list_filings_before_fetching_a_filing_document():
     assert "sec_filing_list before fetching one of its filing documents" in WEB_LOOKUP_RULES
+
+
+# Task 5: W5 (a retained CP-DR handoff is rechecked with the web checks) -------------------------
+
+
+def bare_executor(tmp_path: Path, setting: str = "on", **kw) -> HandoffExecutor:
+    """An executor over a copy of ``tmp_path/run``'s web folder (each loop.json is its own)."""
+    folder = tmp_path / f"exec-{setting}-{len(kw)}"
+    if (tmp_path / "run" / "web").exists() and not (folder / "web").exists():
+        shutil.copytree(tmp_path / "run" / "web", folder / "web")
+    return HandoffExecutor(
+        folder,
+        adapter=Adapter(),
+        cap_usd=Decimal(10),
+        check=lambda _t, _r: (),
+        web_lookup=setting,
+        **kw,
+    )
+
+
+def cited(sid: str, url: str = PAGE) -> bytes:
+    return handoff_md(row(sid, url), findings=f'Revenue: "{QUOTE}" ({sid}).').encode()
+
+
+def test_w5_known_pages_reads_the_index_as_the_module_tools_do(tmp_path):
+    expected = known(tmp_path)
+    found = weblookup.known_pages(tmp_path / "run")
+    assert dict(found) == expected
+    assert [r.source_id for r in found.rows] == [
+        r.source_id for r in tools_for(tmp_path)[0].web_rows
+    ]
+
+
+def test_w5_a_retained_handoff_citing_a_page_absent_from_the_index_gets_the_live_sentence(tmp_path):
+    tools, _ = tools_for(tmp_path)
+    tools.call("fetch_page", {"url": PAGE})
+    md = handoff_md(row("web-000000000000", PAGE))
+    live = tools.write_handoff(md)
+    recheck = bare_executor(tmp_path).web_issues(cpdr_task(), md.encode())
+    assert recheck and all(issue in live for issue in recheck)
+
+
+def test_w5_the_same_handoff_with_its_page_in_the_index_passes(tmp_path):
+    tools, _ = tools_for(tmp_path)
+    sid = source_id(tools.call("fetch_page", {"url": PAGE}))
+    assert bare_executor(tmp_path).web_issues(cpdr_task(), cited(sid)) == ()
+
+
+def test_w5_a_recheck_uses_the_hosted_search_value_of_the_live_write(tmp_path):
+    tools, _ = tools_for(tmp_path)
+    tools.call("fetch_page", {"url": PAGE})
+    other = "https://other.example.org/x"
+    md = handoff_md(f"| - | {other} | Example Issuer | 2025-05-01 | Issuer filing |").encode()
+    plain = bare_executor(tmp_path).web_issues(cpdr_task(), md)
+    hosted = bare_executor(tmp_path, web_search=True).web_issues(cpdr_task(), md)
+    assert any(other in issue for issue in plain)  # not fetched, and no hosted search to excuse it
+    assert hosted == ()  # hosted search may have read it: the live write accepts the same row
+
+
+def test_w5_lookup_off_and_other_modules_add_no_web_issue(tmp_path):
+    md = handoff_md(row("web-000000000000", PAGE)).encode()
+    assert bare_executor(tmp_path, "off").web_issues(cpdr_task(), md) == ()
+    assert bare_executor(tmp_path).web_issues(replace(cpdr_task(), module_id="CP-2"), md) == ()
+
+
+def test_w5_a_damaged_index_gives_one_plain_issue_without_a_path(tmp_path):
+    first, _ = tools_for(tmp_path)
+    first.call("fetch_page", {"url": PAGE})
+    index = tmp_path / "run" / "web" / "index.jsonl"
+    index.write_text(index.read_text() + '{"bytes": "x"}\n{"bytes": 1}\n')
+    issues = bare_executor(tmp_path).web_issues(cpdr_task(), cited("web-000000000000"))
+    assert len(issues) == 1
+    assert "retained web pages could not be read" in issues[0] and str(tmp_path) not in issues[0]
+
+
+def test_w5_a_run_that_retained_no_page_has_no_index_and_is_not_damaged(tmp_path):
+    issues = bare_executor(tmp_path).web_issues(cpdr_task(), b"## Request\nx\n")
+    assert issues == ()
+    cites = bare_executor(tmp_path).web_issues(cpdr_task(), cited("web-000000000000"))
+    assert cites and not any("could not be read" in i for i in cites)

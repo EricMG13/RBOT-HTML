@@ -551,11 +551,7 @@ class WebLookup:
 
     def page_text(self, item: Retained) -> list[str]:
         """The retained page as text pages for the paging tools (delimiters neutralised)."""
-        if _media_type(item.content_type) == _PDF:
-            return [_PDF_PAGE]  # the body is not read
-        ext = _EXTENSIONS.get(_media_type(item.content_type), "txt")
-        body = (self._folder / f"{item.sha256}.{ext}").read_bytes()
-        return pages_from(body, item.content_type)
+        return _page_text(self._folder, item)
 
     def _checked_url(self, url: str) -> webfetch.SplitUrl | Refused:
         if len(url) > MAX_URL_CHARS:
@@ -1031,6 +1027,14 @@ def web_frame(item: Retained, pages: int, summary: str = "") -> str:
     return "\n".join(lines)
 
 
+def _page_text(folder: Path, item: Retained) -> list[str]:
+    """The retained page under ``folder`` (a run's ``web`` folder) as text pages."""
+    if _media_type(item.content_type) == _PDF:
+        return [_PDF_PAGE]  # the body is not read
+    ext = _EXTENSIONS.get(_media_type(item.content_type), "txt")
+    return pages_from((folder / f"{item.sha256}.{ext}").read_bytes(), item.content_type)
+
+
 class KnownPages(dict[str, tuple[Retained, str]]):
     """The retained pages by ``source_id`` (the first row of each id, with its extracted text) and
     ``rows``, every index row: two URLs that serve the same bytes share one ``source_id`` but are
@@ -1039,6 +1043,27 @@ class KnownPages(dict[str, tuple[Retained, str]]):
     def __init__(self, pages: Mapping[str, tuple[Retained, str]], rows: Sequence[Retained]) -> None:
         super().__init__(pages)
         self.rows = tuple(rows)
+
+
+def known_pages(run_dir: Path) -> KnownPages:
+    """The pages retained under ``run_dir/web`` as the handoff checks read them, built the way a
+    module's tools register them: each id once (its first row) with its extracted text, every row
+    kept. A page whose file cannot be read is logged and left out, so a quote cited to it is
+    rejected. A run that retained nothing has no index and gives no pages.
+
+    Raises ``ResearchError`` when the index is damaged and ``OSError`` when it cannot be read."""
+    pages: dict[str, tuple[Retained, str]] = {}
+    rows: list[Retained] = []
+    for item in retained_rows(run_dir):
+        if item.source_id not in pages:
+            try:
+                text = "".join(_page_text(run_dir / "web", item))
+            except OSError as exc:
+                log.warning("retained page %s could not be read: %s", item.source_id, exc)
+                continue
+            pages[item.source_id] = (item, text)
+        rows.append(item)
+    return KnownPages(pages, rows)
 
 
 def _trim_url(url: str) -> str:

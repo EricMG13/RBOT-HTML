@@ -20,6 +20,7 @@ from library_fixtures import make_run
 from test_cpos_launch import context_file, issuer_folder
 
 from deploy_workflow.inbox.layout import Layout, ensure_layout
+from deploy_workflow.owners import cpos_launch
 from deploy_workflow.owners.cpos_launch import prepare, read_documents
 from deploy_workflow.run_start import submissions
 from deploy_workflow.run_start.submissions import (
@@ -247,6 +248,63 @@ def test_the_summary_is_the_launchers_forecast(layout, tmp_path):
     assert s["ignored"] == list(expected.ignored)
     assert s["prior"] is None  # no earlier run is listed: the approval names a first run
     assert s["digest"] == submissions.bound(digest(layout, sid, answers), "none")
+
+
+SEC_AGENT = "DEPLOY_WORKFLOW_SEC_USER_AGENT"
+
+
+def lookup_of(layout, tmp_path, kind, monkeypatch, agent=None):
+    """The summary's lookup statement for a case of ``kind``, and the launcher's own for the same
+    prepared run (the one the page's Submit starts: no --web-lookup, no --web-host)."""
+    if agent is None:
+        monkeypatch.delenv(SEC_AGENT, raising=False)
+    else:
+        monkeypatch.setenv(SEC_AGENT, agent)
+    sid, source = upload_issuer(layout, tmp_path)
+    answers = answers_for(tmp_path)
+    answers["context"]["run"]["case_kind"] = kind  # type: ignore[index]
+    result = summary(layout, sid, answers, cap=Decimal(20))
+    ref = tmp_path / "ref"
+    ref.mkdir()
+    context = tmp_path / "ref-context.json"
+    context.write_bytes(submissions.context_bytes(answers))
+    prepared = prepare(context, source, ref / "out", config="sol-medium", cap="20")
+    return result, cpos_launch._lookup_lines(prepared, "default", (), os.environ)
+
+
+def test_a_public_case_summary_states_that_lookup_is_on(layout, tmp_path, monkeypatch):
+    result, launcher = lookup_of(layout, tmp_path, "public", monkeypatch)
+    assert result["error"] == ""
+    assert result["lookup"] == list(launcher)  # the launcher's own lines, not a second rule
+    assert result["lookup"][0].startswith("Lookup:   on: CP-DR may fetch allowlisted public pages")
+
+
+def test_a_private_case_summary_states_that_lookup_is_off(layout, tmp_path, monkeypatch):
+    result, launcher = lookup_of(layout, tmp_path, "private", monkeypatch)
+    assert result["lookup"] == list(launcher)
+    assert result["lookup"] == ["Lookup:   off: private case (default); --web-lookup on forces it"]
+
+
+def test_the_summary_names_a_missing_sec_contact_but_never_its_value(layout, tmp_path, monkeypatch):
+    marker = "marker-contact-string"
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    ok, _ = lookup_of(layout, tmp_path / "a", "public", monkeypatch, agent=marker)
+    assert len(ok["lookup"]) == 1 and marker not in json.dumps(ok)  # usable: nothing to refuse
+    bad, launcher = lookup_of(
+        layout, tmp_path / "b", "public", monkeypatch, agent=marker + "\u00e9"
+    )
+    assert bad["lookup"][1].startswith("SEC:      sec.gov lookups will be refused")
+    assert list(launcher) == bad["lookup"]
+    assert marker not in json.dumps(bad)
+
+
+def test_a_summary_with_no_research_module_states_no_lookup(layout, tmp_path, monkeypatch):
+    monkeypatch.delenv(SEC_AGENT, raising=False)
+    sid, _ = upload_issuer(layout, tmp_path)
+    result = summary(layout, sid, answers_for(tmp_path, modules=["CP-0", "CP-1"]), cap=Decimal(20))
+    assert result["error"] == "" and "CP-DR" not in result["modules"]
+    assert result["lookup"] == []
 
 
 def test_the_summary_says_whether_cp8_will_run_and_against_which_earlier_run(layout, tmp_path):

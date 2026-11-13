@@ -84,6 +84,7 @@ from deploy_workflow.research.weblookup import (
     bare_host_problem,
     neutralise,
     names_web_source,
+    known_pages,
     retained_rows,
     row_cells,
     sources_rows,
@@ -206,6 +207,12 @@ def _is_source_type_cell(cell: str) -> bool:
     """One type from the list, then optionally ``;`` and a Later event or Undated label."""
     kind, *labels = cell.split(";")
     return kind.strip() in SOURCE_TYPES and all(EVENT_LABEL.fullmatch(x.strip()) for x in labels)
+
+
+WEB_PAGES_UNREADABLE = (
+    "The run's retained web pages could not be read, so the web sources in this handoff "
+    "cannot be checked."
+)
 
 
 def web_source_issues(markdown: str) -> list[str]:
@@ -1163,6 +1170,25 @@ class HandoffExecutor:
 
     def _effort(self, task: HandoffTask) -> str:
         return self.effort_by_module.get(task.module_id, self.config.effort)
+
+    def web_issues(self, task: HandoffTask, raw: bytes) -> tuple[str, ...]:
+        """The web acceptance checks of a handoff of ``task``'s module: the issues ``ModuleTools``
+        gives a live write, computed from this run's retained index with the same functions and the
+        same hosted-search value. CP-OS adds them when it rechecks a retained response on resume;
+        none when the module is not offered lookup. An unreadable index is one plain issue."""
+        if not web_lookup_offered(self.web_lookup, task.module_id, task.run.case_kind):
+            return ()
+        markdown = raw.decode("utf-8")
+        try:
+            known = known_pages(self.directory)
+        except (OSError, ResearchError) as exc:
+            log.warning("the run's web index could not be read for the recheck: %s", exc)
+            return (WEB_PAGES_UNREADABLE,)
+        hosted = web_search_offered(self.web_search, task.module_id, task.run.case_kind)
+        return (
+            *web_source_issues(markdown),
+            *web_handoff_issues(markdown, known, hosted_search=hosted),
+        )
 
     def __call__(self, task: HandoffTask) -> bytes:
         from deploy_workflow.run_pathway import _single_writer
