@@ -129,6 +129,14 @@ test('verdictPanel: a one-sentence paragraph keeps its whole sentence as the lea
   assert.equal(C.verdictPanel([], mark), '');
 });
 
+test('verdictPanel: a lead sentence longer than 140 characters is marked is-long (set at text size, not as a headline); 140 characters or fewer is not', () => {
+  const at = n => `${'a'.repeat(n - 1)}.`;
+  const edge = C.verdictPanel([T(`${at(140)} Next sentence.`, 1)], mark), over = C.verdictPanel([T(`${at(141)} Next sentence.`, 1)], mark);
+  assert.ok(edge.includes('<p class="verdict-lead">') && !edge.includes('is-long'), 'exactly 140 characters is a headline');
+  assert.ok(over.includes('<p class="verdict-lead is-long">'), '141 characters is not');
+  assert.ok(C.verdictPanel([T(`**${'b'.repeat(70)}** ${'c'.repeat(70)}. Next.`, 1)], mark).includes('is-long'), 'the characters counted are the words shown, not the markup');
+});
+
 test('verdictPanel: a figure inside the lead is the figure button when a figure callback is given, its exact text otherwise', () => {
   const text = 'Net debt of USD 1,390 million is 4.2x earnings. Refinance soon.';
   const plain = C.verdictPanel([T(text, 5)], mark);
@@ -764,7 +772,7 @@ test('every drawn cell sits in an element whose CSS wraps a long unbroken token'
 
 test('print: the folds of these components are opened for the print and put back as they were', () => {
   const fold = open => ({ open, dataset: {} }), folds = [fold(false), fold(true)];
-  const root = { querySelectorAll: selector => { assert.equal(selector, '.qa-d, .wl-d, .ms-list, .mt'); return folds; } };
+  const root = { querySelectorAll: selector => { assert.equal(selector, '.qa-d, .wl-d, .ms-list, .mt, .chg-fold, .change-module'); return folds; } };
   C.foldsForPrint(root, true);
   assert.deepEqual(folds.map(f => f.open), [true, true]);
   C.foldsForPrint(root, false);

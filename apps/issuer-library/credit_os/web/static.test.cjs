@@ -4030,3 +4030,31 @@ test('plain-page charts (fix round 1): a cell is drawn as written (no added % or
   const early = runPage(withRecovery).readerChart(outId('CP-1'), RECOVERY);
   assert.ok(early.includes('90%') && early.includes('title="Not supplied'), 'earlier format unchanged');
 });
+
+// ---- Changes (library redesign, task 9): views.js's changesView gathers the run's CP-8 handoff, its drawer-key output and the Overview link, and gives them to changes.js.
+test('changesView hands changes.js the CP-8 output (id, module, run, chip counts) and the Overview route, and draws the page from them', () => {
+  const src = read('views.js');
+  const body = src.slice(src.indexOf('function changesView(context) {'), src.indexOf('function workspaceView'));
+  const cp8 = [sec('Findings', 2, 1, 'view', []), sec('Bottom line', 3, 3, 'view', [text(4, 'About the same. Nothing moved.\nBasis: changes.json')]),
+    sec('What changed: the issuer', 3, 10, 'view', [table(11, ['Measure or fact', 'Earlier', 'Current'], [[12, 'Leverage', '6.01x', '6.01x']])])];
+  const given = [];
+  const run = { folder: 'run-1', issuerKey: 'tdg', pathway: 'credit_snapshot', asOf: '2024-09-30', modules: { 'CP-8': { default: 'out-8' } },
+    changes: { lead: 'CP-2', first_run: false, pack: { schema: 'cpos-changes/2', prior: { run: 'r0', as_of: '2024-09-30' }, current: { as_of: '2024-09-30' }, measures: [], modules: [] }, note: null, problem: null, verdicts: { measures: {}, modules: {}, ledger: null } } };
+  const win = { CREDIT_OS_DATA: { chips: { 'out-8:4': [{ kind: 'gap' }, { kind: 'gap' }] } }, DESIGN_CATALOGUE: { real: [] } };
+  const real = require('./changes.js');
+  const spy = { changesHtml: input => { given.push(input); return real.changesHtml(input); }, leadBottom: real.leadBottom };
+  const html = new Function('contexts', 'data', 'historyRows', 'sameIssuer', 'window', 'runPathway', 'displayDate', 'routeHref', 'ChangesView', `${body}; return changesView;`)(
+    { 'run-1': run }, { 'out-8': { id: 'out-8', module: 'CP-8', run: 'run-1', sections: cp8 } }, rows => rows, (a, b) => a === b, win, () => 'Credit snapshot', iso => iso,
+    (module, section, key, context) => `#${module}/${section}?c=${context}`, spy)('run-1');
+  assert.equal(given.length, 1);
+  const out = given[0].output;
+  assert.deepEqual({ id: out.id, module: out.module, run: out.run, chips: out.chips('out-8:4'), none: out.chips('out-8:9') }, { id: 'out-8', module: 'CP-8', run: 'run-1', chips: 2, none: 0 });
+  assert.equal(given[0].overviewHref, '#W-Overview/overview?c=run-1');
+  assert.equal(given[0].cp8, cp8);
+  assert.ok(html.includes('class="verdict"') && html.includes('data-paragraph="out-8:4"'), 'the drawer key names the CP-8 output and the paragraph line');
+  assert.ok(html.includes('href="#W-Evidence/gaps?c=run-1&amp;m=CP-8"') === false, 'no ledger, no link');
+  // A run with no CP-8 handoff gives no output and no sections: the page says so and still draws.
+  const none = new Function('contexts', 'data', 'historyRows', 'sameIssuer', 'window', 'runPathway', 'displayDate', 'routeHref', 'ChangesView', `${body}; return changesView;`)(
+    { 'run-1': { ...run, modules: {} } }, {}, rows => rows, (a, b) => a === b, win, () => 'Credit snapshot', iso => iso, () => '#x', spy)('run-1');
+  assert.ok(none.includes('The explanation of the changes is not held for this run.') && given[1].output === null && given[1].cp8 === null);
+});

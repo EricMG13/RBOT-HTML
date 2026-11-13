@@ -723,8 +723,8 @@ const registerSection=(id,section)=>{
   return `<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,newFormatTag(section))}${promotedTables(section).map(block=>table(block,section)).join('')}</div>`;
 };
 const passageTexts=section=>(section?section.blocks.filter(block=>block.type==='text').map(block=>({text:block.text,line:block.line})):[]);
-// The gaps the module records: the rows of the tables of its Gaps sections, counted as the Evidence page lists them.
-const recordedGaps=id=>window.Evidence.classify(data[id].sections,data[id].placement).filter(({role})=>role==='gaps').reduce((total,{section})=>total+section.blocks.filter(block=>block.type==='table'&&window.Evidence.tableView(block)).reduce((rows,block)=>rows+block.rows.length,0),0);
+// The gaps the module records: the rows the Evidence Gaps tab lists for it (its Gaps sections' tables and its comparison ledgers), counted as that page counts them.
+const recordedGaps=id=>window.Evidence.gapTotal(data[id].sections,data[id].placement);
 const tableRows=section=>section.blocks.filter(block=>block.type==='table').reduce((rows,block)=>rows+block.rows.length,0);
 // The line of the first section that holds one of a drawing's tables: where in the handoff the drawing stood.
 const drawingLine=(id,drawings)=>Math.min(...(drawings||[]).map(drawing=>drawingSection(id,drawing.table)?.line??Infinity));
@@ -1575,13 +1575,14 @@ function evidenceView(context) {
 // this gathers what the library holds, the runs of this issuer and pathway (earliest first) with their quoted figures, packs and lead-module bottom lines.
 function changesView(context) {
   const ctx=contexts[context],keyOf=new Map(Object.entries(contexts).map(([key,run])=>[run,key]));
-  const sections=run=>{const id=run.modules['CP-8']?.default;return id&&data[id]?data[id].sections:null;};
+  const cp8Id=run=>{const id=run.modules['CP-8']?.default;return id&&data[id]?id:null;},sections=run=>(cp8Id(run)?data[cp8Id(run)].sections:null);
+  const held=cp8Id(ctx),output=held?{id:held,module:data[held].module,run:data[held].run,chips:key=>(window.CREDIT_OS_DATA?.chips?.[key]||[]).length}:null;
   const runs=historyRows(Object.values(contexts).filter(run=>run===ctx||(sameIssuer(run.issuerKey,ctx.issuerKey)&&run.pathway===ctx.pathway))).reverse().map(run=>{
     const key=keyOf.get(run),lead=run.changes?.lead&&run.modules[run.changes.lead]?.default,out=lead&&data[lead];
     return {key,href:routeHref('W-Changes','changes',null,key),asOf:run.asOf,runId:run.folder,current:run===ctx,bottom:out?ChangesView.leadBottom(out.sections,out.summary):null,
       metrics:window.DESIGN_CATALOGUE.real.find(r=>r.id===run.folder)?.metrics||{},changes:run.changes||null};
   });
-  return ChangesView.changesHtml({changes:ctx.changes||null,cp8:sections(ctx),pathway:runPathway(ctx),fmtDate:displayDate,runs});
+  return ChangesView.changesHtml({changes:ctx.changes||null,cp8:sections(ctx),output,pathway:runPathway(ctx),fmtDate:displayDate,overviewHref:routeHref('W-Overview','overview',null,context),runs});
 }
 function workspaceView(module,section) {
   const context=current?.context,ctx=contexts[context],available=ctx?contextModules(context):[];

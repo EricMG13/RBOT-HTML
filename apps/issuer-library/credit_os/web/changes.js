@@ -1,13 +1,19 @@
 'use strict';
 // Pure rendering of the Changes tab (docs/rulings/2026-11-11-module-presets-and-changes.md, decision M8): no DOM, no store, no globals written.
 // Browser: one global, ChangesView (reader.js is loaded first; nothing else leaks into the page's scope). Node: module.exports.
+// The page is the shared components' (components.js) drawing of CP-8's passages and tables, the way a module page draws them: its Bottom line, Key findings and what would
+// change the view as C2, C5 and C6, each `change` table as C19, the `moduleState` table as C20, any other finding table by its shape, its Limitations beside the gap signal.
+// The ledger (a register of what differs between the two runs) is Evidence's: the Gaps tab lists it as written, and this page keeps the counts and one link to it.
 // Delivery adds no analysis and computes nothing. Every figure shown is text the comparison pack (`changes.json`, schema cpos-changes/2 or /3) or CP-8's
 // handoff states, with its sign, unit and period: no rounding, no difference worked out here, no direction arrow. This page reads no register for a
 // verdict: the library's build derives them once, with CP-8's checker (`changes.verdicts`: measures, modules, ledger), and the page displays them.
 // A measure that is not comparable, is not judged, or has no verdict shows both values and no difference and no joining line. Chart positions are geometry only. All pack and handoff text is model output: it is
 // escaped before it reaches the page.
 const ChangesView = (() => {
-const ChangesReader = typeof module !== 'undefined' ? require('./reader.js') : {escapeHtml, richText, paragraphBody, readerPassages, tableView};
+const ChangesReader = typeof module !== 'undefined' ? require('./reader.js') : {escapeHtml, richText, plainText, paragraphBody, passageControls, readerPassages, sectionBodyHtml, isNewFormat};
+const Shapes = typeof module !== 'undefined' ? require('./shapes.js') : window.Shapes;
+const Components = typeof module !== 'undefined' ? require('./components.js') : window.Components;
+const Evidence = typeof module !== 'undefined' ? require('./evidence.js') : window.Evidence;
 
 const FIRST_RUN = 'First run of this pathway';
 const NO_RECORD = 'No comparison was recorded for this run';
@@ -16,7 +22,6 @@ const NOT_STATED = 'Not stated';
 const TREND_MEASURES = [['leverage', 'Total debt / EBITDA'], ['net_leverage', 'Net debt / EBITDA'], ['coverage', 'EBITDA / cash interest'], ['cash', 'Cash'], ['undrawn', 'Undrawn committed facilities']];
 const REASON_PREFIX = /^changes: not produced\s*[—-]\s*/;
 const esc = value => ChangesReader.escapeHtml(value);
-const rich = value => ChangesReader.richText(value);
 
 // What the run says about its comparison. A first run is only a run whose own record says it had no prior (`first_run`); a run that records nothing
 // (delivered before CP-8 existed, or an earlier format) is 'unrecorded': absence of data is never read as a first run. A pack that could not be read is neither.
@@ -26,23 +31,6 @@ function changesState(changes) {
   if (changes.note) return 'not_produced';
   if (changes.pack) return 'produced';
   return changes.first_run === true ? 'first' : 'unrecorded';
-}
-
-// CP-8's handoff (the store's sections) as its reader passages and, as verbatim tables, its issuer and ledger registers; each is null when the handoff has none.
-function cp8Parts(sections) {
-  const list = sections || [];
-  const passages = ChangesReader.readerPassages(list);
-  const register = heading => {
-    const section = list.find(s => s.level === 3 && s.heading === heading);
-    const table = section && section.blocks.find(b => b.type === 'table');
-    return table || null;
-  };
-  return {
-    bottom: passages.bottom,
-    key: passages.key,
-    issuer: register('What changed: the issuer'),
-    ledger: register('Limitations ledger'),
-  };
 }
 
 // A value with its unit as the pack states them: `x` and `%` follow the figure, any other unit follows after a space.
@@ -121,38 +109,58 @@ const omittedNote = omitted => {
   return lines.length ? `<p class="intro changes-omitted">${lines.map(esc).join(' ')}</p>` : '';
 };
 
-const verbatim = (caption, table) => (table ? ChangesReader.tableView(caption, table, {id: 'cp8', chips: () => 0}) : `<p class="empty">${esc(`The Changes handoff has no ${caption.toLowerCase()} table.`)}</p>`);
+// A closed fold for the figures a card or a chart already shows: the pack's own table, kept one click away (print opens it).
+const fold = (label, inner) => `<details class="chg-fold"><summary><span>${esc(label)}</span><span class="chg-fold-ch" aria-hidden="true">${Components.icon('chevron-down')}</span></summary>${inner}</details>`;
 
-function issuerPart(pack, parts, changes) {
+// ---- Part 2: the issuer. `cards` is CP-8's `change` tables drawn as C19 (empty when the handoff has none or is not held). The pack's own measures follow them: with cards the
+// chart and table are a fold (the cards already draw each measure), without them (CP-8 not produced) the chart stands and the table is the fold.
+function issuerPart(pack, parts, changes, cards = '') {
   const measures = pack.measures || [];
   const verdicts = measures.map(m => measureVerdict(m, changes));
-  const register = parts ? `<h3>Each change and its cause</h3>${verbatim('What changed: the issuer', parts.issuer)}` : '';
-  return `<section class="run-section" id="changes-issuer"><h2>The issuer</h2>${thenAndNowChart(measures, verdicts)}${measures.length ? measureTable(measures, verdicts) : '<p class="empty">The comparison pack states no measure.</p>'}${netDebtView(pack.net_debt_change)}${maturityView(pack.maturity_profile)}${omittedNote(pack.omitted)}${register}</section>`;
+  const chart = thenAndNowChart(measures, verdicts), table = measures.length ? measureTable(measures, verdicts) : '<p class="empty">The comparison pack states no measure.</p>';
+  const figures = !measures.length ? table : cards ? fold('The pack’s measures, drawn on one scale and as a table', chart + table) : chart + fold('The pack’s measures as a table', table);
+  const missing = parts && !cards ? '<p class="intro">The Changes handoff has no table of what changed in the issuer.</p>' : '';
+  return `<section class="run-section" id="changes-issuer"><h2>The issuer</h2>${cards}${missing}${figures}${netDebtView(pack.net_debt_change)}${maturityView(pack.maturity_profile)}${omittedNote(pack.omitted)}</section>`;
 }
 
-// ---- Part 1: CP-8's own words, verbatim; a Basis line is shown as the source line it is, never dropped.
-function passageView(section) {
-  if (!section) return `<p class="empty">${NOT_STATED} in the Changes handoff.</p>`;
-  let html = '', open = false;
-  const close = () => { if (open) html += '</ul>'; open = false; };
-  for (const block of section.blocks.filter(b => b.type === 'text')) {
-    const {item, body, items} = ChangesReader.paragraphBody(block.text);
-    const basis = items.length ? `<small class="changes-basis">Basis: ${esc(items.join('; '))}</small>` : '';
-    if (item && !open) html += '<ul class="passage-list">';
-    if (!item) close();
-    open = item;
-    html += item ? `<li>${rich(body)}${basis}</li>` : `<p class="passage-text">${rich(body)}${basis}</p>`;
-  }
-  close();
-  return html;
+// ---- CP-8's own page, drawn as a module page draws a handoff (the same components and reader functions). `sections` are the store's; `output` is {id, module, run, chips(key)}.
+// Passages: Bottom line (C2), Key findings (C5), what would change the view (C6), Limitations (the list and the gap signal). Every finding section is drawn by its tables' shapes:
+// a section with a `change` table is the issuer part (C19 cards), one with a `moduleState` table the analysis part (C20 tiles), any other keeps its own heading.
+// A section whose role is Evidence's (sources, calculations, gaps, registers) or nobody's (hidden) is not drawn: the ledger is one of them.
+const textsOf = section => (section ? section.blocks.filter(b => b.type === 'text').map(b => ({text: b.text, line: b.line})) : []);
+const drawsSomething = section => section.blocks.some(b => (b.type === 'table' ? b.rows.length > 0 && Shapes.hiddenColumns(b.headers, 'records').length < b.headers.length : Shapes.blockRole(b.text) !== 'note'));
+function cp8Page(sections, output) {
+  const out = {id: 'cp8', module: 'CP-8', run: null, chips: () => 0, ...output};
+  const passages = ChangesReader.readerPassages(sections), held = new Set(Object.values(passages).filter(Boolean));
+  const texts = Object.fromEntries(Object.entries(passages).map(([key, section]) => [key, textsOf(section)]));
+  const controls = key => ChangesReader.passageControls(texts[key], {id: out.id, chips: out.chips});
+  const tables = sections.flatMap(section => section.blocks.filter(b => b.type === 'table'));
+  const tokens = Shapes.idTokens(sections), pairing = Shapes.casePairing(tables), registers = Evidence.href('registers', out.module, out.run);
+  const ctxOf = section => ({tokens, pairing, id: out.id, section, module: out.module, evidenceHref: registers, key: row => `${out.id}:${row.line}`, trace: (row, label) => Components.traceRow(`${out.id}:${row.line}`, label), caption: headingOf(section)});
+  const skip = block => block.type === 'text' && (Shapes.blockRole(block.text) === 'note' || (!block.text.startsWith('```') && Shapes.methodNote(Components.paragraphText(block.text), tokens) !== null));
+  const bodyOf = section => ChangesReader.sectionBodyHtml(section, {id: out.id, tables: true, chips: out.chips, caption: headingOf, skip, table: (block, at) => Components.render(Shapes.tableShape(block), block, ctxOf(at))});
+  const drawn = Evidence.classify(sections).filter(({section, role}) => role === 'finding' && !held.has(section) && section.blocks.length > 0 && drawsSomething(section))
+    .map(({section}) => ({section, body: bodyOf(section), shapes: section.blocks.filter(b => b.type === 'table').map(Shapes.tableShape)})).filter(item => item.body.trim() !== '');
+  const group = shape => drawn.filter(item => item.shapes.includes(shape));
+  const issuer = group('change'), analysis = group('moduleState').filter(item => !issuer.includes(item)), other = drawn.filter(item => !issuer.includes(item) && !analysis.includes(item));
+  const joined = items => items.map(item => `${items.length > 1 ? `<h3 class="chg-sec-h">${esc(headingOf(item.section))}</h3>` : ''}${item.body}`).join('');
+  const verdict = Components.verdictPanel(texts.bottom, controls('bottom').trace, controls('bottom').figure, 'h3');
+  const feed = Components.findingsFeed(texts.key, controls('key').trace, controls('key').figure);
+  const contrary = Components.callout('What would change the view', texts.contrary, controls('contrary').trace, controls('contrary').figure, 'h3');
+  const why = feed || contrary ? `<div class="g24 chg-why">${feed ? `<div class="${contrary ? 'c14' : 'c24'}"><div class="rd-card"><h3 class="rd-h">Key findings</h3>${feed}</div></div>` : ''}${contrary ? `<div class="${feed ? 'c10' : 'c24'}">${contrary}</div>` : ''}</div>` : '';
+  const limits = Components.limitationsBlock(texts.limits, Evidence.gapTotal(sections), Evidence.href('gaps', out.module, out.run), controls('limits').trace, controls('limits').figure);
+  return {
+    lead: verdict || why ? `<section class="run-section chg-lead" id="changes-what"><h2 class="sr-only">What changed</h2>${verdict}${why}</section>` : '',
+    issuer: joined(issuer), analysis: joined(analysis),
+    other: other.map(item => `<section class="run-section chg-other"><h2>${esc(headingOf(item.section))}</h2>${item.body}</section>`).join(''),
+    limits, ledgerRows: Evidence.ledgerTotal(sections), gapsHref: Evidence.href('gaps', out.module, out.run),
+  };
 }
+const headingOf = section => ChangesReader.plainText(section.heading).replace(Shapes.METHOD_CODE, '');
 
-function whatChangedPart(parts) {
-  return `<section class="run-section" id="changes-what"><h2>What changed</h2><h3>Bottom line</h3>${passageView(parts.bottom)}<h3>Key findings</h3>${passageView(parts.key)}</section>`;
-}
-
-// ---- Part 3: one row per module of the pack; CP-8's status and reason are the build's (`changes.verdicts.modules[code]`, only a code with exactly one row).
-function analysisPart(pack, parts, changes) {
+// ---- Part 3: the analysis. `tiles` is CP-8's `moduleState` table as C20 (one counted tile for each state that repeats). Beneath it, one row per module of the pack with each run's own
+// bottom line; CP-8's status and reason are the build's (`changes.verdicts.modules[code]`, only a code with exactly one row).
+function analysisPart(pack, parts, changes, tiles = '') {
   const modules = (changes && changes.verdicts && changes.verdicts.modules) || {};
   const rows = (pack.modules || []).map(m => {
     const row = Object.prototype.hasOwnProperty.call(modules, m.module) ? modules[m.module] : null;
@@ -162,18 +170,24 @@ function analysisPart(pack, parts, changes) {
     const reason = row ? [row.cause, row.why].filter(Boolean) : [];
     return `<details class="change-module"><summary><span class="change-name">${esc(m.title)}</span><span class="badge badge-gray change-status">${esc(state)}</span><span class="change-then"><small>Earlier</small>${esc(earlier)}</span><span class="change-now"><small>Current</small>${esc(current)}</span></summary><div class="change-pair"><section><h4>Earlier</h4><p>${esc(earlier)}</p></section><section><h4>Current</h4><p>${esc(current)}</p></section></div>${reason.length ? `<p class="change-why">${esc(reason.join(' · '))}</p>` : ''}</details>`;
   }).join('');
-  return `<section class="run-section" id="changes-analysis"><h2>The analysis</h2><p class="intro">One row per module. A row opens the earlier and current bottom lines side by side.</p><div class="change-modules">${rows}</div></section>`;
+  const missing = parts && !tiles ? '<p class="intro">The Changes handoff has no table of what changed in the analysis.</p>' : '';
+  return `<section class="run-section" id="changes-analysis"><h2>The analysis</h2>${tiles}${missing}${tiles ? '<h3 class="chg-sec-h">Each module’s bottom line, earlier and current</h3>' : ''}<p class="intro">One row per module. A row opens the earlier and current bottom lines side by side.</p><div class="change-modules">${rows}</div></section>`;
 }
 
-// ---- Part 4: counts of each status as one bar (segment sizes are the counts, the build's: `changes.verdicts.ledger`, null when it could not read the ledger), the ledger itself beneath.
+// ---- Part 4: the Limitations (CP-8's list beside the gap signal), and under them the ledger's counts of each status as one bar (segment sizes are the counts, the build's:
+// `changes.verdicts.ledger`, null when it could not read the ledger) with the one link to the ledger itself, which Evidence lists as written. No ledger and no passage, no part.
 function limitationsPart(parts, changes) {
-  const table = parts.ledger, counts = changes && changes.verdicts ? changes.verdicts.ledger : null;
-  if (!table) return `<section class="run-section" id="changes-limitations"><h2>Limitations</h2><p class="empty">${NOT_STATED} in the Changes handoff.</p></section>`;
-  if (!counts) return `<section class="run-section" id="changes-limitations"><h2>Limitations</h2>${verbatim('Limitations ledger', table)}</section>`;
-  const label = counts.map(([name, n]) => `${name} ${n}`).join(', ');
-  const segments = counts.filter(([, n]) => n > 0).map(([name, n]) => `<i class="ledger-${esc(name.toLowerCase().replace(/\W+/g, '-'))}" style="flex-grow:${n}" title="${esc(`${name} ${n}`)}"></i>`).join('');
-  const legend = counts.map(([name, n]) => `<span><i class="ledger-${esc(name.toLowerCase().replace(/\W+/g, '-'))}"></i>${esc(name)} <strong>${n}</strong></span>`).join('');
-  return `<section class="run-section" id="changes-limitations"><h2>Limitations</h2><div class="ledger-bar" role="img" aria-label="${esc(`Limitations: ${label}`)}">${segments}</div><div class="chart-legend ledger-legend">${legend}</div>${verbatim('Limitations ledger', table)}</section>`;
+  const counts = changes && changes.verdicts ? changes.verdicts.ledger : null;
+  let summary = '';
+  if (counts) {
+    const label = counts.map(([name, n]) => `${name} ${n}`).join(', ');
+    const segments = counts.filter(([, n]) => n > 0).map(([name, n]) => `<i class="ledger-${esc(name.toLowerCase().replace(/\W+/g, '-'))}" style="flex-grow:${n}" title="${esc(`${name} ${n}`)}"></i>`).join('');
+    const legend = counts.map(([name, n]) => `<span><i class="ledger-${esc(name.toLowerCase().replace(/\W+/g, '-'))}"></i>${esc(name)} <strong>${n}</strong></span>`).join('');
+    summary += `<div class="ledger-bar" role="img" aria-label="${esc(`Limitations: ${label}`)}">${segments}</div><div class="chart-legend ledger-legend">${legend}</div>`;
+  }
+  if (parts.ledgerRows > 0) summary += `<p class="chg-ledger-link"><a class="text-action" href="${esc(parts.gapsHref)}">Unresolved differences in Evidence<span class="chg-n">${parts.ledgerRows}</span>${Components.icon('arrow-right')}</a></p>`;
+  if (!parts.limits && !summary) return '';
+  return `<section class="run-section" id="changes-limitations"><div class="rd-card"><h2 class="rd-h">Limitations</h2>${parts.limits}${summary ? `<div class="chg-ledger">${summary}</div>` : ''}</div></section>`;
 }
 
 // ---- Part 5: every listed run of the issuer and pathway, earliest first. `runs` is [{key, href, asOf, runId, current, bottom, metrics, changes}], `runId` being the run's folder name (the pack names its prior run by folder):
@@ -209,7 +223,7 @@ function overTimePart(runs, fmtDate) {
     return `<tr><th scope="row">${r.href ? `<a href="${esc(r.href)}">${date}</a>` : date}</th>${TREND_MEASURES.map(([key]) => `<td>${metric(key)}</td>`).join('')}<td>${esc(r.bottom == null ? NOT_STATED : r.bottom)}</td></tr>`;
   }).join('');
   const lines = TREND_MEASURES.map(([key, label]) => trendLine(runs, key, label)).join('');
-  return `<section class="run-section" id="changes-over-time"><h2>Over time</h2><p class="intro">Every listed run of this issuer and pathway, earliest first, with the figures the library quotes for each. A line joins two runs only where the later run's comparison states that the definitions match; otherwise the points stand alone.</p><ul class="trend-list">${lines}</ul><div class="table-scroll" role="region" aria-label="Over time" tabindex="0"><table class="history-table"><caption>Figures and the lead module's bottom line at each date</caption><thead><tr>${head.map(h => `<th scope="col">${esc(h)}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div></section>`;
+  return `<section class="run-section" id="changes-over-time"><h2>Over time</h2><p class="intro">Every listed run of this issuer and pathway, earliest first, with the figures the library quotes for each. A line joins two runs only where the later run's comparison states that the definitions match; otherwise the points stand alone.</p><ul class="trend-list">${lines}</ul>${fold('The figures and bottom lines as a table', `<div class="table-scroll" role="region" aria-label="Over time" tabindex="0"><table class="history-table"><caption>Figures and the lead module's bottom line at each date</caption><thead><tr>${head.map(h => `<th scope="col">${esc(h)}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>`)}</section>`;
 }
 
 // The lead module's bottom line as its handoff states it: the first paragraph under Bottom line (Basis line dropped), or an earlier-format Reader summary's.
@@ -220,16 +234,24 @@ function leadBottom(sections, summary) {
   return summary && summary.bottomLine != null ? summary.bottomLine : null;
 }
 
-// The whole tab. `input`: {changes, cp8 (sections|null), pathway (words), fmtDate(iso), runs}.
+// The whole tab. `input`: {changes, cp8 (sections|null), output ({id, module, run, chips(key)} of the CP-8 handoff), pathway (words), fmtDate(iso), overviewHref, runs}.
+const EARLIER_FORMAT = 'It is in the earlier format, which has no bottom line or key findings; the comparison pack is shown on its own.';
+function emptyBlock(title, line, overviewHref) {
+  return `<section class="run-section chg-empty">${Components.emptyState(title, [esc(line)], `<p class="chg-empty-go"><a class="text-action" href="${esc(overviewHref)}">Open the Overview${Components.icon('arrow-right')}</a></p>`)}</section>`;
+}
 function changesHtml(input) {
   const {changes, cp8, pathway, fmtDate, runs} = input;
-  const state = changesState(changes);
-  if (state === 'first') return `<div class="changes"><p class="changes-first">${FIRST_RUN}</p></div>`;
-  if (state === 'unrecorded') return `<div class="changes"><p class="changes-first">${NO_RECORD}</p>${runs.length > 1 ? overTimePart(runs, fmtDate) : ''}</div>`;
+  const state = changesState(changes), overviewHref = input.overviewHref || '#W-Overview/overview';
+  if (state === 'first') return `<div class="changes">${emptyBlock('Nothing to compare yet', FIRST_RUN, overviewHref)}</div>`;
+  if (state === 'unrecorded') return `<div class="changes">${emptyBlock('No comparison recorded', NO_RECORD, overviewHref)}${runs.length > 1 ? overTimePart(runs, fmtDate) : ''}</div>`;
   const pack = changes.pack || null;
-  const parts = state === 'produced' && cp8 ? cp8Parts(cp8) : null;
+  // `parts` is what CP-8 supplies: its drawn page when the handoff is in the current format, a bare marker when it is held in the earlier one, null when it is not held.
+  const held = state === 'produced' && cp8 ? cp8 : null;
+  const current = held ? ChangesReader.isNewFormat(held) : false;
+  const parts = held ? (current ? cp8Page(held, input.output) : {legacy: true}) : null;
   const since = pack && pack.prior && pack.prior.as_of ? `Since ${fmtDate(pack.prior.as_of)}` : 'Since the earlier run';
-  const heading = `<h2 class="changes-heading">${esc(`${since} · ${pathway}`)}</h2>`;
+  const now = pack && pack.current && pack.current.as_of ? `<p class="chg-now">This run: ${esc(`${fmtDate(pack.current.as_of)} · ${pathway}`)}</p>` : '';
+  const heading = `<header class="chg-top"><span class="chg-top-i" aria-hidden="true">${Components.icon('git-compare')}</span><div><h2 class="changes-heading">${esc(`${since} · ${pathway}`)}</h2>${now}</div></header>`;
   let notice = '';
   if (state === 'not_produced') {
     notice = `<div class="caution changes-not-produced" role="note"><strong>The explanation of what changed was not produced for this run.</strong><p>${esc(`Recorded reason: ${changes.note.replace(REASON_PREFIX, '')}`)}</p></div>`;
@@ -238,17 +260,21 @@ function changesHtml(input) {
   } else if (!parts) {
     notice = '<div class="caution changes-not-produced" role="note"><strong>The explanation of the changes is not held for this run.</strong><p>The comparison pack is shown without it.</p></div>';
   }
+  const stated = parts && !parts.legacy;
+  const what = !parts ? '' : stated ? (parts.lead || `<section class="run-section" id="changes-what"><h2>What changed</h2><p class="empty">${NOT_STATED} in the Changes handoff.</p></section>`)
+    : `<section class="run-section" id="changes-what"><h2>What changed</h2><p class="empty">${NOT_STATED} in the Changes handoff. ${EARLIER_FORMAT}</p></section>`;
   const sections = [
-    parts ? whatChangedPart(parts) : '',
-    pack ? issuerPart(pack, parts, changes) : '',
-    pack ? analysisPart(pack, parts, changes) : '',
-    parts ? limitationsPart(parts, changes) : '',
+    what,
+    pack ? issuerPart(pack, parts, changes, stated ? parts.issuer : '') : '',
+    pack ? analysisPart(pack, parts, changes, stated ? parts.analysis : '') : '',
+    stated ? parts.other : '',
+    stated ? limitationsPart(parts, changes) : '',
     overTimePart(runs, fmtDate),
   ].join('');
   return `<div class="changes">${heading}${notice}${sections}</div>`;
 }
 
-return {changesState, cp8Parts, measureVerdict, differenceText, withUnit, thenAndNowChart, measureTable, netDebtView, maturityView, passageView, analysisPart, limitationsPart, overTimePart, leadBottom, changesHtml, FIRST_RUN, NO_RECORD, NOT_COMPARABLE};
+return {changesState, measureVerdict, differenceText, withUnit, thenAndNowChart, measureTable, netDebtView, maturityView, analysisPart, overTimePart, leadBottom, changesHtml, FIRST_RUN, NO_RECORD, NOT_COMPARABLE};
 })();
 
 if (typeof module !== 'undefined') module.exports = ChangesView;

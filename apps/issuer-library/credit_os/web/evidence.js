@@ -77,7 +77,12 @@
         const keep = entry.notes.length || tables.length;
         if (role === 'calculations' && keep) content.calcs.push(entry);
         else if (role === 'gaps' && keep) content.gaps.push(entry);
-        else if ((role === 'sources' || role === 'registers') && keep) content.regs.push(entry);
+        else if (role === 'registers' && tables.some(shapes.isLedger)) {
+          // A comparison ledger lists what differs between two runs: it is a gap register, drawn as written on the Gaps tab. The section's other tables and its prose stay in Registers.
+          const others = {...entry, tables: tables.filter(table => !shapes.isLedger(table))};
+          if (others.notes.length || others.tables.length) content.regs.push(others);
+          content.gaps.push({heading: section.heading, label: entry.label, notes: [], tables: tables.filter(shapes.isLedger), ledger: true});
+        } else if ((role === 'sources' || role === 'registers') && keep) content.regs.push(entry);
         else if (role === 'finding' || role === 'drawing' || role === 'passage') {
           for (const table of tables) content.written.push({heading: section.heading, table});
           for (const block of texts) {
@@ -94,6 +99,11 @@
     }
     return content;
   }
+  // The rows the Gaps tab lists for one handoff's sections: those of its Gaps sections and of its comparison ledgers. The Overview's and the Changes page's gap signals count the same rows.
+  const rowsOf = (sections, placement, wanted, keep) => classify(sections, placement).reduce((total, {section, role}) => (role !== wanted ? total
+    : total + section.blocks.filter(b => b.type === 'table').map(tableView).filter(view => view && keep(view)).reduce((n, view) => n + view.rows.length, 0)), 0);
+  const ledgerTotal = (sections, placement) => rowsOf(sections, placement, 'registers', shapes.isLedger);
+  const gapTotal = (sections, placement) => rowsOf(sections, placement, 'gaps', () => true) + ledgerTotal(sections, placement);
   const contents = input => input.modules.map(mod => moduleContent(mod, input));
   const traceRows = input => contents(input).flatMap(c => c.trace);
   const rowTotal = entries => entries.reduce((n, entry) => n + entry.tables.reduce((k, t) => k + t.rows.length, 0), 0);
@@ -186,7 +196,9 @@
   function gapsPanel(all) {
     const groups = all.filter(c => c.gaps.length);
     if (!groups.length) return empty('Gaps', 'No gap is listed for this selection.');
-    return groups.map(c => `<section class="ev-grp" data-group>${moduleHead(c, rowTotal(c.gaps), 'gap', 'gaps')}${c.gaps.map(e => `${subHead(e.label)}${e.notes.map(n => noteMarkup(n, c.name)).join('')}${e.tables.map(t => gapCards(t, c)).join('')}`).join('')}</section>`).join('');
+    // A ledger is a table as written (counted by row); any other gap table is cards.
+    const drawn = (e, c) => e.tables.map(t => (e.ledger ? tableMarkup(t, `${c.name}: ${e.heading}`, c.name, 'rows') : gapCards(t, c))).join('');
+    return groups.map(c => `<section class="ev-grp" data-group>${moduleHead(c, rowTotal(c.gaps), 'gap', 'gaps')}${c.gaps.map(e => `${subHead(e.label)}${e.notes.map(n => noteMarkup(n, c.name)).join('')}${drawn(e, c)}`).join('')}</section>`).join('');
   }
   function registerGroup(title, n, inner) {
     return `<details class="ev-reg" open data-group><summary>${esc(title)}<span class="ev-cnt"><span data-count>${n}</span></span><span class="ev-ch">${icon('chevron-down')}</span></summary>${inner}</details>`;
@@ -373,7 +385,7 @@
     applyFilter(input.closest('.ev'));
   }
 
-  const api = {TABS, parseHash, href, tableView, classify, traceRows, traceBody, view, searchPlan, handleClick, handleSearch};
+  const api = {TABS, parseHash, href, tableView, classify, gapTotal, ledgerTotal, traceRows, traceBody, view, searchPlan, handleClick, handleSearch};
   if (typeof window !== 'undefined') window.Evidence = api;
   if (typeof module !== 'undefined') module.exports = api;
 })();

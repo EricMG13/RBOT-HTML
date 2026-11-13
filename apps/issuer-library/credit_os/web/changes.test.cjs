@@ -68,39 +68,51 @@ const VERDICTS = {
 const here = {key: 'k3', href: '#W-Changes/changes/k3', asOf: '2024-09-30', runId: 'r-now', current: true, bottom: 'Now.', metrics: {}, changes: null, cp8: null};
 const base = (over = {}) => ({changes: {lead: 'CP-2', pack: PACK, note: null, problem: null, verdicts: VERDICTS}, cp8: CP8, pathway: 'Credit snapshot', fmtDate, runs: [here], ...over});
 const count = (html, needle) => html.split(needle).length - 1;
+// The text of a page: tags removed, entities decoded (the five the page writes), spaces collapsed.
+const INLINE = '(?:button|b|strong|em|i|code|a|span|small)';
+const textOf = html => html.replace(new RegExp(`</?${INLINE}\\b[^>]*>`, 'g'), '').replace(/<[^>]*>/g, ' ').replace(/&(?:amp|lt|gt|quot|#39);/g, m => ({'&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'"}[m])).replace(/\s+/g, ' ');
 
-test('a run with no comparison is a first run: the one line and nothing else', () => {
-  const expected = `<div class="changes"><p class="changes-first">${FIRST_RUN}</p></div>`;
+test('a run with no comparison is a first run: the designed empty state with the line the page states and the way to the Overview, and nothing drawn as a comparison', () => {
+  const html = changesHtml(base({changes: {lead: 'CP-2', first_run: true, pack: null, note: null, problem: null}}));
   assert.equal(FIRST_RUN, 'First run of this pathway');
-  assert.equal(changesHtml(base({changes: {lead: 'CP-2', first_run: true, pack: null, note: null, problem: null}})), expected);
+  assert.ok(html.includes(`<li>${FIRST_RUN}</li>`) && html.includes('class="empty-state" role="status"'), 'C32 with the fixed line as its reason');
+  assert.ok(html.includes('<a class="text-action" href="#W-Overview/overview">Open the Overview'));
+  assert.ok(html.includes('href="#W-Overview/x"') === false && changesHtml(base({overviewHref: '#W-Overview/x', changes: {first_run: true, pack: null}})).includes('href="#W-Overview/x"'));
+  for (const gone of ['changes-heading', '<table', 'chg-card', 'ms-tile', 'changes-over-time', 'ledger-bar']) assert.ok(!html.includes(gone), gone);
+  assert.equal(count(html, '<h1'), 0);
   assert.equal(changesState({pack: null, note: null, problem: 'is not valid JSON'}), 'unreadable');
   assert.equal(changesState({pack: PACK, note: 'changes: not produced — why', problem: null}), 'not_produced');
 });
 
-test('a full Changes tab: heading, CP-8 passages verbatim, the issuer, the analysis, the ledger counts, over time', () => {
+test('a full Changes tab: heading, CP-8 passages, the issuer, the analysis, the ledger counts, over time', () => {
   const html = changesHtml(base());
   assert.ok(html.includes('<h2 class="changes-heading">Since 30 September 2024 · Credit snapshot</h2>'));
-  // Part 1: the passage text as written; the Basis line is a source line, not part of the sentence.
-  assert.ok(html.includes('The credit picture is about the same since the earlier run, and the change is the analysis&#39;s, not the issuer&#39;s.<small class="changes-basis">Basis: CP-1 handoff; calculation C01</small>'));
-  assert.ok(html.includes('<li>Cash is unchanged at USD 6,261 million.</li>'));
-  assert.ok(html.includes('Leverage is 6.01x on EBITDA as defined against 6.57x on reported EBITDA, not comparable.'));
-  // Part 2: the pack's values with unit and period; the register verbatim.
+  // Part 1: the passages' sentences as written (the page's text, tags removed); the Basis line is not part of the sentence and is not on the page (it is Evidence's).
+  const page = textOf(html);
+  assert.ok(page.includes('The credit picture is about the same since the earlier run, and the change is the analysis\'s, not the issuer\'s.'));
+  assert.ok(!html.includes('Basis:') && !page.includes('CP-1 handoff; calculation C01'));
+  assert.ok(page.includes('Cash is unchanged at USD 6,261 million.'));
+  assert.ok(page.includes('Leverage is 6.01x on EBITDA as defined against 6.57x on reported EBITDA, not comparable.'));
+  // Part 2: the pack's values with unit and period.
   assert.ok(html.includes('<td>6.57x (FY2024 / 2024-09-30)</td><td>6.01x (FY2024)</td>'));
   assert.ok(html.includes('<td>6261 US$m (2024-09-30)</td><td>6261 US$m (2024-09-30)</td><td>0 US$m</td>'));
   assert.ok(html.includes('Net debt change is not shown: gross debt is not stated in either run.'));
   assert.ok(html.includes('<th scope="row">FY2028</th><td>6637</td><td>6637</td><td>0</td>'));
-  assert.ok(html.includes('Same definition; unchanged at USD 6,261 million.'));
   assert.ok(html.includes('Debt maturities, US$m'));
-  // Part 3: one row per pack module, CP-8's status by the code in its first cell.
+  // CP-8's own tables: each change row is a card, the cause and the effect in words.
+  assert.equal(count(html, '<article class="chg-card">'), 3);
+  assert.ok(page.includes('Same definition; unchanged at USD 6,261 million.'));
+  // Part 3: one row per pack module, CP-8's status by the code in its first cell; CP-8's own table is the tiles.
   assert.equal(count(html, '<details class="change-module">'), 2);
   assert.ok(html.includes('<span class="badge badge-gray change-status">Unchanged</span>'));
   assert.ok(html.includes('<span class="badge badge-gray change-status">Not run this time</span>'));
   assert.ok(html.includes('<small>Current</small>Did not run'));
   assert.ok(html.includes('<p>The supplied sources support a bounded snapshot.</p>'));
-  // Part 4: the four counts as one bar (E1, E2 no longer stated; E3/C1 remaining; C2 new), then the ledger.
+  assert.equal(count(html, '<article class="ms-tile'), 2);
+  // Part 4: the four counts as one bar (E1, E2 no longer stated; E3/C1 remaining; C2 new); the ledger itself is Evidence's: its rows are not on this page.
   assert.ok(html.includes('aria-label="Limitations: Closed 0, Remaining 1, New 1, No longer stated 2"'));
   assert.equal(count(html, 'class="ledger-bar"'), 1);
-  assert.ok(html.includes('<td>An earlier limitation in words.</td>'));
+  for (const row of ['An earlier limitation in words.', 'Another earlier limitation.', 'Carried over.', 'A current limitation in words.']) assert.ok(!page.includes(row), row);
   // Part 5 is present.
   assert.ok(html.includes('id="changes-over-time"'));
 });
@@ -308,9 +320,10 @@ test('a module row is the build\u2019s: its status and reason are shown, and a m
   assert.ok(analysisPart(pack, {}, null).includes('change-status">Not stated by Changes since the last run<'));
   assert.ok(analysisPart(pack, null, changes('Unchanged')).includes('change-status">Explanation not produced<'));
 });
-test('the ledger bar is the build\u2019s counts; a ledger it could not read keeps the verbatim table and draws no bar', () => {
+test('the ledger bar is the build\u2019s counts; a ledger it could not read draws no bar, and no ledger row is on the Changes page either way', () => {
   const unread = changesHtml(base({changes: {lead: 'CP-2', pack: PACK, note: null, problem: null, verdicts: {...VERDICTS, ledger: null}}}));
-  assert.ok(!unread.includes('class="ledger-bar"') && unread.includes('<td>An earlier limitation in words.</td>'));
+  assert.ok(!unread.includes('class="ledger-bar"') && !textOf(unread).includes('An earlier limitation in words.'));
+  assert.ok(unread.includes('Unresolved differences in Evidence'), 'the one link stays');
   const other = changesHtml(base({changes: {lead: 'CP-2', pack: PACK, note: null, problem: null, verdicts: {...VERDICTS, ledger: [['Closed', 0], ['Remaining', 0], ['New', 0], ['No longer stated', 0], ['Other', 3]]}}}));
   assert.ok(other.includes('aria-label="Limitations: Closed 0, Remaining 0, New 0, No longer stated 0, Other 3"'));
 });
@@ -355,4 +368,148 @@ test('net debt periods and values are escaped', () => {
   const evil = '<img src=x onerror=alert(1)>';
   const html = netDebtView({...ND, prior_period: evil, prior_cash: evil});
   assert.ok(!html.includes('<img') && html.includes('&lt;img'));
+});
+
+// ---- Task 9: the page is CP-8's own passages and tables drawn by the shared components. Fixture with unique lines, Basis lines, a Source column and a ledger.
+const R_ISSUER_HEAD = ['Measure or fact', 'Earlier', 'Current', 'Cause', 'Effect on the credit view', 'Source'];
+const R_ISSUER = [
+  ['Total debt / EBITDA', '6.01x (FY2024)', '6.01x (FY2024)', 'Unresolved', 'Same definition: difference 0.00x at the same date.', 'changes.json; prior/CP-1.md, page 4'],
+  ['Net debt / EBITDA', '4.51x', '4.40x', 'Unresolved', 'Same definition, so the leverage view is unchanged.', 'changes.json'],
+  ['Undrawn facilities', 'USD 1,200 million', 'USD 1,900 million', 'Definition', 'Not comparable: the current run adds the securitization.', 'changes.json'],
+];
+const R_STATE = [
+  ['Source readiness (CP-0)', 'Unchanged', 'Presentation', 'The headings differ only.'],
+  ['Financial data foundation (CP-1)', 'Unchanged', 'Presentation', 'The same pack is sufficient.'],
+  ['Debt structure (CP-2B)', 'Unchanged', 'None', 'The same structure is read.'],
+  ['Credit view (CP-2)', 'Unchanged', 'None', 'The same credit conclusion.'],
+  ['Hedging (CP-2E)', 'Not run this time', 'Unresolved', 'Not in the current run.'],
+  ['Forward model (CP-5)', 'Added', 'New module', 'A module with no earlier counterpart.'],
+];
+const R_LEDGER = [['E1', '—', 'LEDGERROW one limitation.', 'No longer stated', '—'], ['E2', 'C1', 'LEDGERROW two carried over.', 'Remaining', '—'], ['—', 'C2', 'LEDGERROW three is new.', 'New', '—']];
+const para = (line, body) => ({type: 'text', line, end: line, text: body});
+const CP8R = [
+  {heading: 'Request', level: 2, line: 1, blocks: [para(2, 'HIDDEN request text.')]},
+  {heading: 'Findings', level: 2, line: 10, blocks: []},
+  h3('Bottom line', para(12, 'About the same: the credit picture has not changed since the earlier run. Every difference is the analysis’s, not the issuer’s.\nBasis: changes.json; prior/CP-1.md, page 4'), para(14, 'Total debt is 6.01x EBITDA As Defined in both runs.\nBasis: calculation C01; TDG_10-K.htm.jsonl, page 5')),
+  h3('Key findings', para(16, '- **The issuer did not change.** No part of the view should be re-priced on this comparison. Cash is USD 6,261 million.\nBasis: changes.json'), para(18, '- The analysis changed by addition. Four modules were added this time.\nBasis: prior/CP-1.md, page 6')),
+  h3('Contrary evidence and what would change the view', para(20, 'A covenant test below 7.0x would change the view. A new filing would too.\nBasis: changes.json')),
+  h3('Limitations', para(22, '- Both runs share the as-of date. The conclusion holds by construction.\nBasis: changes.json'), para(24, '- Net debt balances could not be compared.')),
+  h3('What changed: the issuer', {type: 'table', headers: R_ISSUER_HEAD, rows: R_ISSUER.map((cells, i) => ({line: 30 + i, cells}))}),
+  h3('What changed: the analysis', {type: 'table', headers: ['Module', 'Status', 'Cause', 'Why'], rows: R_STATE.map((cells, i) => ({line: 40 + i, cells}))}),
+  h3('Limitations ledger', {type: 'table', headers: ['Earlier ref', 'Current ref', 'Limitation', 'Status', 'What closed it'], rows: R_LEDGER.map((cells, i) => ({line: 50 + i, cells}))}),
+  {heading: 'Calculations', level: 2, line: 60, blocks: [para(61, 'CALCSECTION text'), {type: 'table', headers: ['ID', 'Item'], rows: [{line: 62, cells: ['D01', 'CALCROW']}]}]},
+  {heading: 'Gaps', level: 2, line: 70, blocks: [{type: 'table', headers: ['Gap', 'Effect'], rows: [{line: 71, cells: ['GAPROW', 'No change figure']}]}]},
+  {heading: 'Next module', level: 2, line: 80, blocks: [para(81, 'NEXTMODULE text')]},
+];
+const OUT = {id: 'o8', module: 'CP-8', run: 'run-x', chips: () => 0};
+const rich = (over = {}) => base({cp8: CP8R, output: OUT, ...over});
+const reasonless = html => html.replace(/ (?:href|data-paragraph|data-basis|data-evidence|data-figure)="[^"]*"/g, '');
+
+test('every sentence of the CP-8 passages is on the page as written; the Basis lines are not', () => {
+  const html = changesHtml(rich()), page = textOf(html);
+  const sentences = [
+    'About the same: the credit picture has not changed since the earlier run.', 'Every difference is the analysis’s, not the issuer’s.', 'Total debt is 6.01x EBITDA As Defined in both runs.',
+    'The issuer did not change.', 'No part of the view should be re-priced on this comparison.', 'Cash is USD 6,261 million.', 'The analysis changed by addition.', 'Four modules were added this time.',
+    'A covenant test below 7.0x would change the view.', 'A new filing would too.', 'Both runs share the as-of date.', 'The conclusion holds by construction.', 'Net debt balances could not be compared.',
+  ];
+  for (const sentence of sentences) assert.ok(page.includes(sentence), sentence);
+  for (const gone of ['Basis', 'changes.json', 'prior/CP-1.md', 'calculation C01', 'TDG_10-K.htm.jsonl']) assert.ok(!page.includes(gone), gone);
+  // Each passage in its component: C2, C5, C6, the Limitations list.
+  assert.ok(html.includes('class="verdict"') && html.includes('class="feed"') && html.includes('class="callout"') && html.includes('class="lim-compact"'));
+  assert.equal(count(html, '<li class="feed-item">'), 2);
+});
+
+test('every cell of the change and moduleState tables is drawn, except a Source column, which the row’s trace control reaches', () => {
+  const html = changesHtml(rich()), page = textOf(html);
+  for (const row of R_ISSUER) for (const cell of row.slice(0, 5)) assert.ok(page.includes(cell), cell);
+  for (const row of R_STATE) for (const cell of row) assert.ok(page.includes(cell), cell);
+  assert.ok(!page.includes('changes.json') && !html.includes('>Source<'));
+  assert.equal(count(html, '<article class="chg-card">'), 3);
+  assert.equal(count(html, 'class="dumb"'), 1, 'the one row of two plain numbers carries a dumbbell');
+  assert.ok(!html.includes('<table class="history-table"><caption>Each change'), 'no plain grid of the handoff’s table');
+});
+
+test('the modules whose state repeats collapse to one tile whose count is the rows collapsed', () => {
+  const html = changesHtml(rich());
+  const group = /<article class="ms-tile ms-group">(.*?)<\/article>/s.exec(html)[1];
+  assert.equal(count(html, 'ms-group'), 1);
+  assert.ok(group.includes('Unchanged') && /<b class="ms-n">4<\/b>/.test(group));
+  assert.equal(count(group, '<li>'), 4, 'the count equals the rows collapsed');
+  for (const name of ['Source readiness (CP-0)', 'Financial data foundation (CP-1)', 'Debt structure (CP-2B)', 'Credit view (CP-2)']) assert.ok(group.includes(name), name);
+  assert.equal(count(html, '<article class="ms-tile">'), 2, 'the two states that occur once are single tiles');
+  assert.ok(html.includes('Not run this time') && html.includes('Added'));
+});
+
+test('the ledger is not on the Changes route: no row, no heading, no table; one counted link to Evidence’s Gaps tab', () => {
+  const html = changesHtml(rich()), page = textOf(html);
+  for (const gone of ['LEDGERROW', 'Earlier ref', 'Limitations ledger', 'What closed it', 'CALCSECTION', 'CALCROW', 'GAPROW', 'NEXTMODULE', 'HIDDEN request']) assert.ok(!page.includes(gone), gone);
+  assert.ok(html.includes('<a class="text-action" href="#W-Evidence/gaps?c=run-x&amp;m=CP-8">Unresolved differences in Evidence<span class="chg-n">3</span>'));
+  assert.equal(count(html, 'Unresolved differences in Evidence'), 1);
+  assert.ok(html.includes('class="gapsig"') && html.includes('<div class="gapsig-n" data-count>4</div>'), 'the gap signal counts what the Gaps tab lists: 1 gap and 3 ledger rows');
+  // The same rows are on Evidence’s Gaps tab for the module.
+  const Evidence = require('./evidence.js');
+  assert.equal(Evidence.ledgerTotal(CP8R), 3);
+  assert.equal(Evidence.gapTotal(CP8R), 4);
+});
+
+test('nothing audit-like is on the page: no Basis, file, hash, calculation or method code, run code or inter-module text, in text or in attributes (trace keys apart)', () => {
+  const html = reasonless(changesHtml(rich({changes: {lead: 'CP-2', pack: PACK, note: null, problem: null, verdicts: VERDICTS}})));
+  for (const [name, rx] of [['Basis', /Basis:/], ['file', /\.(?:jsonl|htm|html|pdf|md|json)\b/], ['hash', /sha256|\b[0-9a-f]{32,}\b/i], ['calculation', /\b[Cc]alculations? [A-Z]{1,2}\d{2}\b/], ['method code', /\bT\d[A-Z]?\.\d/],
+    ['run code', /run-x|r-now/], ['id', /\b(?:EV|GAP|MON|DP|SRC)-\d{2,3}\b|\bSC\d\b/]]) assert.ok(!rx.test(html), `${name}: ${rx.exec(html)?.[0]}`);
+});
+
+test('Review Focus 3: no CP-8 handoff, no change table, no moduleState table, an earlier-format handoff: nothing throws, no empty heading, and each says what it shows', () => {
+  const withoutTable = (...names) => CP8R.map(s => (names.includes(s.heading) ? {...s, blocks: []} : s));
+  const emptyHeadings = html => [...html.matchAll(/<h2[^>]*>([^<]*)<\/h2>\s*<\/(?:section|div)>/g)].map(m => m[1]);
+  const none = changesHtml(rich({cp8: null}));
+  assert.ok(none.includes('The explanation of the changes is not held for this run.') && !none.includes('id="changes-what"') && !none.includes('class="chg-card"') && none.includes('id="changes-issuer"'));
+  const noChange = changesHtml(rich({cp8: withoutTable('What changed: the issuer')}));
+  assert.ok(noChange.includes('The Changes handoff has no table of what changed in the issuer.') && !noChange.includes('chg-card') && noChange.includes('ms-tile') && noChange.includes('class="verdict"'));
+  const noState = changesHtml(rich({cp8: withoutTable('What changed: the analysis')}));
+  assert.ok(noState.includes('The Changes handoff has no table of what changed in the analysis.') && !noState.includes('ms-tile') && noState.includes('chg-card') && noState.includes('change-module'));
+  const earlier = changesHtml(rich({cp8: [{heading: 'Reader summary', level: 2, line: 1, blocks: [para(2, 'An earlier-format summary.')]}]}));
+  assert.ok(earlier.includes('Not stated in the Changes handoff. It is in the earlier format, which has no bottom line or key findings; the comparison pack is shown on its own.'));
+  assert.ok(earlier.includes('id="changes-issuer"') && earlier.includes('id="changes-analysis"') && earlier.includes('id="changes-over-time"') && !earlier.includes('class="verdict"') && !earlier.includes('An earlier-format summary.'));
+  const nothing = changesHtml(rich({cp8: CP8R.slice(0, 2)}));
+  assert.ok(nothing.includes('Not stated in the Changes handoff.'));
+  for (const html of [none, noChange, noState, earlier, nothing]) {
+    assert.deepEqual(emptyHeadings(html), []);
+    assert.ok(!/undefined|NaN|\[object/.test(html));
+    assert.equal(count(html, '<h1'), 0);
+  }
+});
+
+test('a handoff with only some passages draws only those; a passage with no text leaves no card', () => {
+  const only = CP8R.filter(s => !['Key findings', 'Contrary evidence and what would change the view', 'Limitations'].includes(s.heading) && !/ledger/i.test(s.heading));
+  const html = changesHtml(rich({cp8: only, changes: {lead: 'CP-2', pack: PACK, note: null, problem: null, verdicts: {...VERDICTS, ledger: null}}}));
+  assert.ok(html.includes('class="verdict"') && !html.includes('class="feed"') && !html.includes('class="callout"') && !html.includes('id="changes-limitations"') && !html.includes('chg-why'));
+  const keyOnly = changesHtml(rich({cp8: CP8R.filter(s => s.heading !== 'Contrary evidence and what would change the view')}));
+  assert.ok(keyOnly.includes('<div class="c24"><div class="rd-card"><h3 class="rd-h">Key findings</h3>') && !keyOnly.includes('class="callout"'));
+});
+
+test('a finding section whose shape no component names keeps its own heading and is drawn as cards, never a raw grid', () => {
+  const extra = h3('Watch items', {type: 'table', headers: ['Item', 'Why it matters'], rows: [{line: 90, cells: ['A refinancing', 'It would move leverage.']}]});
+  const html = changesHtml(rich({cp8: [...CP8R.slice(0, 8), extra, ...CP8R.slice(8)]}));
+  assert.ok(html.includes('<h2>Watch items</h2>') && html.includes('rec-card') && textOf(html).includes('It would move leverage.'));
+});
+
+test('cells and text with <b>&" are escaped on every block of the page', () => {
+  const evil = '<b>&"x</b>';
+  const cp8 = CP8R.map(s => {
+    if (s.heading === 'Bottom line') return h3('Bottom line', para(12, `${evil} is the bottom line.`));
+    if (s.heading === 'What changed: the issuer') return h3(s.heading, table(R_ISSUER_HEAD, [evil, evil, evil, evil, evil, 'src']));
+    if (s.heading === 'What changed: the analysis') return h3(s.heading, table(['Module', 'Status', 'Cause', 'Why'], [evil, 'Unchanged', evil, evil], [`${evil}2`, 'Unchanged', evil, evil]));
+    return s;
+  });
+  const html = changesHtml(rich({cp8}));
+  assert.ok(!/<b>&"x/.test(html) && !html.includes('&"x'), 'no raw <b>&" survives');
+  assert.ok(html.includes('&amp;&quot;x'), 'its text is on the page, escaped');
+  assert.equal(count(html, '<script'), 0);
+});
+
+test('earlier run: CP-8 not held and no change table leaves the pack parts; the first-run, unrecorded and unreadable states keep their own text', () => {
+  const unrecorded = changesHtml(base({changes: null}));
+  assert.ok(unrecorded.includes('<li>No comparison was recorded for this run</li>') && unrecorded.includes('empty-state'));
+  const unreadable = changesHtml(rich({changes: {lead: 'CP-2', pack: null, note: null, problem: 'could not read', verdicts: null}, cp8: null}));
+  assert.ok(unreadable.includes('could not be read') && !unreadable.includes('empty-state') && !unreadable.includes('id="changes-what"'));
 });

@@ -602,8 +602,8 @@ td .basis-link{margin-left:6px}
 .citations-heading{margin-top:14px}
 .library-not-shown{margin-top:24px}.library-not-shown summary,#evidence-record summary{cursor:pointer;font-weight:600}.library-not-shown h3,#evidence-record h3{margin:16px 0 6px}
 /* Changes tab (changes.js): chart rows reuse the dumbbell rows; everything else is plain text and tables. */
-.changes{max-width:980px}.changes-heading{margin-bottom:12px}.changes-first{font-size:var(--fs-control);color:var(--muted);margin:24px 0}
-.changes h3{margin:22px 0 8px}.changes-basis{display:block;margin-top:4px;color:var(--muted);font-size:var(--fs-label)}
+.changes-heading{margin-bottom:12px}
+.changes h3{margin:22px 0 8px}
 .changes-row>.chart-open{cursor:default}.changes-row>.chart-open:hover{background:none}.changes-chart:focus-visible{outline:2px solid var(--blue)}
 .changes td small,.changes th small{display:block;color:var(--muted);font-size:var(--fs-label)}
 .net-debt-change{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:8px 0}.net-debt-change dt{font-size:var(--fs-label);color:var(--muted)}.net-debt-change dd{margin:2px 0 0;font:var(--fs-control) 'Red Hat Mono',monospace}
@@ -1612,3 +1612,49 @@ details[open]>summary .ms-ch,details[open]>summary .qa-ch,details[open]>summary 
 @media(forced-colors:active){.strip,.mt,#overview-watch{border:1px solid CanvasText}.strip-i{forced-color-adjust:auto}}
 @media print{.mt-ch{display:none}.mt{break-inside:avoid}.mt[open] .mt-body{animation:none}.mt[open] .mt-lead{display:none}}
 @media(forced-colors:active){.map-node rect{fill:Canvas;stroke:CanvasText}.map-edge{stroke:CanvasText}.map-arrow{fill:CanvasText}.map-node.hl rect,.map-eg.hl .map-edge{stroke:Highlight;stroke-width:3}.map-node.on rect{fill:Canvas;stroke:Highlight;stroke-width:4}.map-eg.on .map-edge{stroke:Highlight;stroke-width:4}.map-node[role=button]:focus-visible rect{stroke:Highlight;stroke-width:4;stroke-dasharray:6 3}.map-eg:focus-visible .map-edge{stroke:Highlight;stroke-width:4;stroke-dasharray:6 3}.map-eg:focus-visible .map-hit{stroke:Highlight;stroke-opacity:.3}}
+
+/* Changes (library redesign, task 9): CP-8's passages and tables drawn by the shared components, the pack's own figures beneath. Tokens only; the grid is .g24. */
+.changes{display:flex;flex-direction:column;gap:28px;min-width:0}
+.changes>.run-section{margin-top:0;min-width:0}
+.changes .run-section>h2{margin:0 0 14px;font:700 18px/1.2 'Red Hat Display',sans-serif;letter-spacing:-.01em;color:var(--text-primary)}
+.changes .run-section>h2.sr-only{margin:0}
+.changes .chg-sec-h{margin:22px 0 10px;font:700 15px/1.3 'Red Hat Display',sans-serif;color:var(--text-primary)}
+.changes .rd-h{margin:0 0 14px}
+.changes .verdict .eyebrow,.changes .callout h3{margin-top:0}
+.chg-top{display:flex;align-items:center;gap:14px;padding:16px 20px;background:#fff;border:1px solid var(--rule);border-radius:12px;min-width:0}
+.chg-top-i{flex:none;display:grid;place-items:center;width:40px;height:40px;border-radius:10px;background:var(--blue-50);color:var(--blue-700)}
+.chg-top-i .i{width:20px;height:20px}
+.chg-top>div{min-width:0}
+.changes .changes-heading{margin:0;font:700 18px/1.25 'Red Hat Display',sans-serif;letter-spacing:-.01em;color:var(--text-primary);overflow-wrap:anywhere}
+.chg-now{margin:2px 0 0;font:400 12px/1.4 'Red Hat Text',sans-serif;color:var(--muted)}
+.chg-lead{display:flex;flex-direction:column;gap:20px}
+.chg-why{align-items:start}
+.chg-why>.c14,.chg-why>.c10,.chg-why>.c24{min-width:0}
+.chg-why :is(.rd-card,.callout){height:auto}
+@media(max-width:991px){.chg-why>.c14,.chg-why>.c10{grid-column:span 24}}
+/* a lead sentence of more than 140 characters is read as a paragraph (components.js verdictPanel) */
+.verdict-lead.is-long{font:600 16px/1.55 'Red Hat Text',sans-serif;letter-spacing:0}
+@media(max-width:767px){.verdict-lead.is-long{font-size:15px}}
+#changes-analysis .ms-tiles{margin-top:0}
+.chg-fold{margin-top:14px;background:#fff;border:1px solid var(--rule);border-radius:12px;min-width:0}
+.chg-fold>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;cursor:pointer;list-style:none;font:600 13px/1.4 'Red Hat Text',sans-serif;color:var(--text-primary);border-radius:12px}
+.chg-fold>summary::-webkit-details-marker{display:none}
+.chg-fold>summary:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
+.chg-fold-ch{flex:none;display:inline-flex;color:var(--text-quaternary)}
+.chg-fold-ch .i{width:16px;height:16px}
+.chg-fold[open] .chg-fold-ch{transform:rotate(180deg)}
+.chg-fold>:not(summary){margin:0 16px 16px}
+.chg-ledger{margin-top:20px;padding-top:16px;border-top:1px solid var(--rule)}
+.chg-ledger .ledger-bar{margin-top:0}
+.chg-ledger-link{margin:12px 0 0}
+.chg-ledger-link a{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
+.chg-n{display:inline-block;min-width:22px;padding:0 8px;border-radius:999px;background:var(--blue-50);color:var(--blue-700);font:600 12px/20px 'Red Hat Text',sans-serif;text-align:center;white-space:nowrap}
+.chg-empty .empty-state{margin-top:0}
+.chg-empty-go{margin:0}
+.chg-empty-go a{display:inline-flex;align-items:center;gap:6px}
+.change-status{flex:none;white-space:nowrap}
+@media(prefers-reduced-motion:no-preference){
+.chg-fold-ch{transition:transform .2s}
+}
+@media(forced-colors:active){.chg-top,.chg-fold{border:1px solid CanvasText}.chg-n{border:1px solid CanvasText}}
+@media print{.chg-fold::details-content,.change-module::details-content{content-visibility:visible}.chg-fold-ch{display:none}.chg-top,.chg-fold,.change-module{break-inside:avoid}}

@@ -441,3 +441,50 @@ test('fix 6: a Calculations group head counts calculations only; its method note
   assert.ok(onlyNotes.includes('<span data-count>1</span> method note') && !/<span data-count>\d+<\/span> calculation/.test(onlyNotes), 'no calculation is counted where there is none');
   assert.ok(calc);
 });
+
+// ---- Task 9: the comparison ledger is a Gaps-tab table, as written, counted and searchable.
+const LEDGER_HEAD = ['Earlier ref', 'Current ref', 'Limitation', 'Status', 'What closed it', 'Consumer'];
+const CP8 = [
+  sec('Findings', 2, 1),
+  sec('Limitations ledger', 3, 5, [text(6, 'How the two runs\' limitations line up.'), table(7, LEDGER_HEAD, [['E1', '—', 'Earlier <b>limit</b> & "more"', 'No longer stated', '—', 'CP-9'], ['E2', 'C1', 'Carried over', 'Remaining', '—', 'CP-9'], ['—', 'C2', 'A new one', 'New', '—', 'CP-9']])]),
+  sec('Other register', 3, 20, [table(21, ['Item', 'Value'], [['Kept', 'in Registers']])]),
+  sec('Gaps', 2, 30, [table(31, ['Gap', 'What the pack could not compare', 'Effect', 'Source'], [['Net debt', 'Gross debt is not stated', 'No change figure', 'pack']])]),
+];
+const cp8Input = () => input({modules: [{id: 'CP-8', outputs: [out('o8', CP8)]}]});
+const cp8View = tab => Evidence.view(cp8Input(), {tab, module: 'CP-8'});
+
+test('ledger: its rows are on the Gaps tab, as written minus the inter-module column, and no longer under Registers', () => {
+  const gaps = cp8View('gaps'), registers = cp8View('registers');
+  for (const cell of ['Earlier ref', 'Current ref', 'What closed it', 'No longer stated', 'Carried over', 'A new one', 'E2', 'C2']) assert.ok(gaps.includes(cell), cell);
+  assert.ok(gaps.includes('Earlier &lt;b&gt;limit&lt;/b&gt; &amp; &quot;more&quot;'), 'escaped, not markup');
+  assert.ok(!gaps.includes('Consumer') && !gaps.includes('CP-9'), 'the inter-module column is dropped');
+  assert.ok(gaps.includes('Limitations ledger'), 'under its own heading');
+  assert.ok(gaps.includes('Net debt') && gaps.includes('ev-gap'), 'the Gaps section stays cards');
+  assert.ok(!registers.includes('Carried over') && !registers.includes('Earlier ref'), 'drawn once');
+  assert.ok(registers.includes('Kept') && registers.includes('How the two runs'), 'other registers and the section\'s prose stay');
+});
+
+test('ledger: the Gaps badge, the group count and the counted [data-hay] elements agree (1 gap + 3 ledger rows)', () => {
+  const html = cp8View('gaps'), badge = /id="ev-tab-gaps"[^>]*aria-current="page"><span>[^<]*<\/span><span class="ev-cnt" data-count>(\d+)</.exec(html)[1];
+  const panel = html.slice(html.indexOf('id="ev-panel"'), html.indexOf('class="ev-card ev-foot"'));
+  assert.equal(badge, '4');
+  assert.equal(panel.match(/data-hay=/g).length, 4);
+  assert.ok(/<span data-count>4<\/span> gaps/.test(panel));
+  assert.equal(Evidence.gapTotal(CP8), 4);
+  assert.equal(Evidence.gapTotal([sec('Findings', 2, 1)]), 0);
+});
+
+test('ledger: its rows are searchable like the rest of the tab (each row has its own search text, the head matches the whole table)', () => {
+  const html = cp8View('gaps'), row = /<tr data-hay="([^"]*)"><td[^>]*>E2</.exec(html);
+  assert.ok(row && row[1].includes('carried over') && row[1].includes('remaining'));
+  assert.ok(/data-head="[^"]*earlier ref[^"]*"/.test(html));
+});
+
+test('ledger: a ledger beside a table that is not one in one section keeps each where it belongs; a section with no ledger is unchanged', () => {
+  const mixed = [sec('Findings', 2, 1), sec('Mixed register', 3, 2, [text(3, 'Note kept.'), table(4, ['Earlier ref', 'Current ref', 'Limitation'], [['E1', 'C1', 'L']]), table(9, ['Item', 'Value'], [['Other', '1']])])];
+  const html = (tab) => Evidence.view(input({modules: [{id: 'CP-8', outputs: [out('o8', mixed)]}]}), {tab, module: 'CP-8'});
+  assert.ok(html('gaps').includes('>E1<') && !html('gaps').includes('>Other<'));
+  assert.ok(html('registers').includes('>Other<') && html('registers').includes('Note kept.') && !html('registers').includes('>E1<'));
+  assert.equal(Evidence.gapTotal(mixed), 1);
+  assert.equal(Evidence.gapTotal(CP2A), 2, 'only the Gaps section counts there');
+});

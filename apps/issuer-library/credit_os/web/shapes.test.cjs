@@ -176,3 +176,14 @@ test('methodNote: a calculation name makes a Calculations note, an identifier of
   assert.equal(Shapes.methodNote('EV-01 stands', undefined), null);
   assert.equal(Shapes.methodNote(undefined, tokens), null);
 });
+
+test('isLedger: a table that lists a comparison\'s limitations by the earlier and the current reference is a ledger; no other table is, and the section heading is not read', () => {
+  const ledger = {headers: ['Earlier ref', 'Current ref', 'Limitation', 'Status', 'What closed it'], rows: [{cells: ['E1', '—', 'x', 'No longer stated', '—']}]};
+  assert.equal(Shapes.isLedger(ledger), true);
+  assert.equal(Shapes.isLedger({...ledger, headers: ['earlier_ref', ' CURRENT REF ', 'Limitation']}), true, 'case, spacing and underscores as columnKind reads them');
+  for (const headers of [['Earlier', 'Current', 'Cause'], ['Earlier ref', 'Limitation'], ['Current ref', 'Limitation'], ['Gap', 'Severity'], []]) assert.equal(Shapes.isLedger({headers, rows: ledger.rows}), false, headers.join('|'));
+  assert.equal(Shapes.isLedger({headers: ledger.headers, rows: []}), false, 'no row, no ledger');
+  assert.equal(Shapes.isLedger(null), false);
+  assert.equal(Shapes.isLedger({headers: ['Earlier ref', 'Current ref'], rows: [{cells: ['a', 'b']}]}), true);
+  assert.equal(Shapes.tableShape(ledger), 'status', 'the shape classifier is unchanged');
+});

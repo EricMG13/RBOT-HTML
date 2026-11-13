@@ -133,6 +133,7 @@
     return end ? {lead: [0, end.index + 1], rest: [end.index + end[0].length, body.length]} : {lead: [0, body.length], rest: [body.length, body.length]};
   }
 
+  const LONG_LEAD = 140;
   // C2: the Bottom line. The first sentence of the first paragraph is the large lead; what follows is at body size, a trace button ends each paragraph.
   // `tag` is the heading level of the eyebrow: the page that holds the panel sets it so headings stay in order.
   function verdictPanel(texts, trace, figure, tag = 'h4') {
@@ -140,7 +141,9 @@
     if (!first) return '';
     const cut = firstSentence(first.body), hasRest = cut.rest[1] > cut.rest[0];
     const row = (inner, entry) => `<div class="row-end"><p class="verdict-body">${inner}</p>${traceOf(trace, entry)}</div>`;
-    const lead = `<div class="row-end"><p class="verdict-lead">${first.show(...cut.lead)}</p>${hasRest ? '' : traceOf(trace, first.entry)}</div>`;
+    // A lead sentence longer than 140 characters is a paragraph, not a headline: it is set at the size of the text beneath it.
+    const long = readerText().plainText(first.body.slice(...cut.lead)).length > LONG_LEAD;
+    const lead = `<div class="row-end"><p class="verdict-lead${long ? ' is-long' : ''}">${first.show(...cut.lead)}</p>${hasRest ? '' : traceOf(trace, first.entry)}</div>`;
     const rest = hasRest ? row(first.show(...cut.rest), first.entry) : '';
     return `<div class="verdict"><${tag} class="eyebrow">Bottom line</${tag}>${lead}${rest}${later.map(p => row(p.show(0, p.body.length), p.entry)).join('')}</div>`;
   }
@@ -990,7 +993,7 @@
   const render = (shape, block, ctx) => (Object.hasOwn(SHAPE_COMPONENTS, shape) ? SHAPE_COMPONENTS[shape] : recordCards)(block, ctx);
 
   // Print shows the text of a folded <details>: the ones these components draw are opened for the print and put back as they were. `root` is the document.
-  const FOLDS = '.qa-d, .wl-d, .ms-list, .mt';
+  const FOLDS = '.qa-d, .wl-d, .ms-list, .mt, .chg-fold, .change-module';
   function foldsForPrint(root, printing) {
     root.querySelectorAll(FOLDS).forEach(fold => {
       if (printing) { if (fold.dataset.wasOpen === undefined) fold.dataset.wasOpen = String(fold.open); fold.open = true; } else if (fold.dataset.wasOpen !== undefined) { fold.open = fold.dataset.wasOpen === 'true'; delete fold.dataset.wasOpen; }

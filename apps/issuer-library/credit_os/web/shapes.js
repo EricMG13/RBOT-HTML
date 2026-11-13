@@ -81,6 +81,13 @@ const Shapes = (() => {
   const SKILL = /\bSKILL\b/;  // the method file's name, upper case only
   const blockRole = text => { const t = String(text ?? '').trim(); return NOTE.test(t) || SKILL.test(t) ? 'note' : 'prose'; };
 
+  // A comparison ledger: a table that lists limitations by an earlier reference and a current reference (the two runs' own numbering). It is a register of
+  // what differs between two runs, so Evidence lists it with the gaps; it is read by its columns, never by the heading of its section.
+  const isLedger = block => {
+    const h = (block?.headers ?? []).map(norm);
+    return h.includes('earlier ref') && h.includes('current ref') && (block.rows ?? []).length > 0;
+  };
+
   const promoted = shape => ['matrix', 'watch', 'dated'].includes(shape);
 
   // ---- identifiers of a module (Task 5) ----
@@ -135,7 +142,7 @@ const Shapes = (() => {
     return tokenPatterns.get(tokens).test(text) ? 'registers' : null;
   }
 
-  return {sectionRole, tableShape, columnKind, hiddenColumns, blockRole, promoted, idTokens, casePairing, methodNote, CALCULATION_ID};
+  return {sectionRole, tableShape, columnKind, hiddenColumns, blockRole, promoted, isLedger, idTokens, casePairing, methodNote, CALCULATION_ID, METHOD_CODE};
 })();
 
 if (typeof window !== 'undefined') window.Shapes = Shapes;
