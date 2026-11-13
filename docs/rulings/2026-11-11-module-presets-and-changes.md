@@ -525,3 +525,26 @@ it supersedes. This amendment is text only; the packages that build it follow it
 Recorded scope: the first real CP-8 (`tdg-proof-snapshot-opus-002`) is the only retained model-written CP-8
 after PR 66; every form above is unproven at first attempt until the proof run, and the plan lists what no
 retained run demonstrates.
+
+## Amendment, 2026-11-13 (controller, after review)
+
+Four of the records above differ from what was built. The original text stands; this states what was built.
+
+- E3 as built. Check W refuses a number written in words only when a listed unit word directly follows it
+  (`thirty million`, `two hundred bps`). The direction-word half described in E3 was built, found in review to
+  refuse counts the method allows ("added four new modules") while missing most wordings, and deleted (PR 89).
+  Residual limit: any other wording of a withheld size in words passes; the method text, not the checker, keeps
+  amounts in digits.
+- E9 as built. The `LTM Qn YYYY` balance path was deleted (PR 90). The deletion of the `column` path and the
+  per-row unit reader, which E9 places "before the proof run", was NOT made before it: the wrong-scale unit check
+  is reachable only through that path and no model has been shown the new instruction, so only the instruction
+  changed (PR 91: operands named by `row` and `period`). Decided by the controller on 2026-11-13 under the
+  owner's instruction of the same day; the owner may order the deletion at any time. It is to be decided after the
+  proof run shows how balances are printed.
+- Basis names (not in the original list). No exact-name rule was first built because the model's own names in
+  retained handoffs differ from the registry titles; a deny-list was used (PR 87), then the listed name from
+  `MODULE_NAMES` was accepted outright after the whole-branch review found the deny-list refused
+  `Rates, FX & hedging`.
+- Forecast currency (not in the original list). The planned comparison of the block's `currency` with unit cells
+  was replaced in review by a presence rule: the stated currency must be named somewhere in the Financial
+  foundation handoff, because real handoffs state units in headings (PR 88).
