@@ -256,6 +256,27 @@ folder (read access only if they open `library.html` from it); only the service'
   library README) but stays in `issuers\`.
 - Whether USD 20 covers a full pathway on `sol-medium` has not been measured.
 
+## 4. Signal (news feed, command line only)
+
+Signal collects stories from news, regulator and ratings feeds that the owner has approved, folds
+duplicate stories and keeps them in a local SQLite store under `<root>/signal/`. Slice 1 is the
+store and the command line; pages, the AI pass, digests and login are later slices.
+
+```
+python -m deploy_workflow.signal --root <root> users add <name> --role <reader|writer|owner>
+python -m deploy_workflow.signal --root <root> sources propose <name> --kind <kind> --url <url> --by <name>
+python -m deploy_workflow.signal --root <root> sources approve <id>     # or: sources pause <id>
+python -m deploy_workflow.signal --root <root> sources list
+python -m deploy_workflow.signal --root <root> ingest                   # add --loop for a pass every 60 s
+python -m deploy_workflow.signal --root <root> stories --limit 20
+```
+
+Only approved sources are fetched. Design: `docs/superpowers/specs/2026-11-13-signal-design.md`.
+Candidate sources: `docs/signal/sources.json` (85 checked on 2026-11-13, 60 meet tier A (fetched and parsed with dated items); none
+is approved until the owner approves it).
+
+Known limits: DNS, connect and TLS handshake cannot be interrupted (the worker may outlive a timed-out fetch until its own timeout), DNS rebinding is not defended against, and two ingest passes running at once may both fetch a due source.
+
 ## Current limits
 
 - The automated checks cover handoff structure, issuer/date/source/upstream anchors and report
