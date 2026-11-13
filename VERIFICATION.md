@@ -13,6 +13,48 @@ Scope: presentation only, offline, one CSS declaration; no provider or model cal
 - Review: implementation by mx-feature, task review by mx-precise: approve, no High or Medium finding. Low, left open: between 561 and 1024 px a long state is wider than its label (1024: label 201 / state 249; 561: 162 / 210), both wrapping on words with no overlap; a smaller cap (40%) would rebalance it. The reviewer's probe measured short badges unchanged ("Complete" 100 px, "Open" 75 px, one line, at 1440 and 800 px).
 - Not verified: widths between 561 and 1439 px by test (reviewer's probe only); whether a long word breaks mid-word (box sizes were measured, not line breaks); a status row with no trace control or no state; print, forced colours, a screen reader; browsers other than Chrome; any issuer other than TransDigm; the earlier-format page, which draws status tables as plain tables. The oldest entry of this file (2026-11-10, names not codes) was trimmed to stay under 1,000 lines; git history keeps it.
 
+## 2026-11-13 — Signal slice 2: service and feed page (branch `claude/signal-2-service-pages`, tip `ba04ff7` plus this entry)
+Scope: Signal's HTTP service, feed API and feed page, its packaging, and the optional Signal link on the run start rail. No AI pass, no groups or threads, no settings pages, no login, no model call, no cost. The reader check in `AGENTS.md` applies to the issuer report and is not owed here.
+- `uv run pytest` on the ten `tests/test_signal_*.py` unit files, `tests/test_run_start_service.py` and `tests/test_issuer_library_packaging.py`: exit 0, 377 passed.
+- `uv run pytest tests/test_signal_page_browser.py -q -m browser`: exit 0, 13 passed, run in local headless Chrome on macOS against the real service with fixture data. A reviewer broke the page thirteen ways in a scratch copy (unsafe title rendering, unsafe links, lost focus, missing error band, low contrast, removed focus ring and others); a test caught each.
+- `uv run pytest tests/test_library_page_browser.py -q -m browser` after the shared browser-driver code moved to `tests/browser_cdp_common.cjs`: exit 0, 102 passed, 1 skipped (the opt-in screenshot test); run at `300cbef`, not re-run after the last fix wave, which did not touch those files.
+- `node --test src/deploy_workflow/signal/web/render.test.cjs`: exit 0, 10 passed. `uv run python tools/quality_gate.py`: exit 0, 0 findings.
+- Security: the service was attacked on loopback by a reviewer (Host and Origin variants, cross-site requests, path traversal, request framing, cookie and name injection, search syntax, slow clients). One weakness was found and fixed: slow clients could hold every connection; there is now a 120-second connection deadline and at most 16 connections per address. The run start `--signal-url` option had its own review: about 75 hostile URL forms and 6,000 generated inputs produced only `http://host:port/` links, and 440 start-up argument combinations behaved the same before and after the change.
+- Probes are kept under `.superpowers/sdd/2026-11-13-signal-2-service-and-feed-pages/probes/`, not in the repository. Not all exit 0: `probe_sec4_slowloris` (shares 127.0.0.1 with the connections it holds), `probe_sec7_make_server_contract` (does not catch the refusal it provokes), `probe_sec4r_timer_hygiene` (calls a helper with an older signature), and `probe_branch_growth` and `probe_branch_pill_inflight_pass` (call the time-based count that was replaced by a count by story id; `probe_wave_growth` and `probe_wave_pill` replace them and exit 0).
+- Growth, synthetic store of 50,000 stories with the five new indexes: feed reads at most 0.011 s, new-story count 0.014 s, adding a topic at most 0.019 s (reviewer's `probe_wave_growth`).
+- Live fetch of two public feeds, no model call, no cost; throwaway root outside the repository; the page was driven before the last two fix commits. `sources propose` and `approve` for UK CMA cases (Atom) and BEREC (RSS), `topics add` Mergers (merger, acquisition) and Telecoms (roaming, spectrum, broadband, mobile), `ingest`: CMA cases 50 new, BEREC 10 new, exit 0; `topics list`: Mergers 22, Telecoms 3. `serve` on 127.0.0.1, page at 1280 px in the desktop app's browser: the name was kept from its cookie, following Mergers filled For you with 22 cards, Save set its pressed state, a search for "roaming" inside For you gave no cards (those stories are under Telecoms), Latest showed CMA and BEREC cards with their topic tags, `/api/status` reported 2 approved, 0 failing, no loop error, and the console stayed empty.
+
+Not verified: anything on Windows (`Start signal.cmd`, Ctrl-C, port refusal); browsers other than Chrome and any screen reader; the 45-second poll timer itself (tests trigger the poll by making the tab visible); the run start rail link clicked in a browser; the real 120-second deadline (tested scaled down) and the per-address share behind a proxy or over IPv6; the ingest loop's own 60-second tick against real feeds; a root on a network or synced folder; store sizes on real data; a display name changed in another tab; a crash between storing a story and matching it to topics; the browser-test clean-up after a hung run. The slice 1 fetcher was rebuilt on `research.webfetch` after the pre-merge review of pull request 101; see the slice 1 entry.
+
+## 2026-11-13 — Signal slice 1: command line (branch `claude/signal-1b-store-ingest-cli`, tip after the pre-merge review fixes)
+Scope: Signal slice 1 command line only (`python -m deploy_workflow.signal`); no pages, no AI pass, no login, no model call, no cost.
+- `uv run pytest tests/test_signal_store.py tests/test_signal_feeds.py tests/test_signal_fetch.py tests/test_signal_fold.py tests/test_signal_ingest.py tests/test_signal_cli.py -q`: exit 0, 234 passed.
+- `uv run python tools/quality_gate.py`: exit 0, output `quality gate: 0 finding(s) in 14 changed file(s), 2642 line(s) in scope`.
+- Security: the fetcher was rebuilt on `research.webfetch` after a pre-merge review found the first version connected to an address it had not checked. A security review of the rebuilt fetcher over real TLS on loopback found nothing High or Medium: every connection went to a checked address; 58 non-public address forms and 50 hostile redirect targets were refused; the 10-second deadline held against dripped headers and bodies. Its probes are kept under `.superpowers/sdd/slice1-review-fixes/probes/`, not in the repository; two of them (`probe_f2_validator_provenance`, `probe_f2_validator_injection`) now exit 1 because the behaviour they demonstrated is gone. The 17 earlier `probe_fetch_*` probes tested the deleted transport and no longer apply.
+- Live fetch of two public feeds (UK CMA cases Atom, BEREC RSS), no model call, no cost; real network, throwaway root outside the repository. All commands exit 0. `<root>` stands for the long scratch folder passed to `--root`. Re-run on 2026-11-13 with the rebuilt fetcher over real TLS (same commands, throwaway root, no model call): CMA cases 50 new, BEREC 10 new, every command exit 0; the transcript below is from the first run.
+```
+$ signal --root <root> sources propose "CMA cases" --kind regulator --url https://www.gov.uk/cma-cases.atom --by owner
+$ signal --root <root> sources propose "BEREC" --kind regulator --url https://www.berec.europa.eu/en/rss.xml --by owner
+$ signal --root <root> sources approve 1
+$ signal --root <root> sources approve 2
+$ signal --root <root> ingest
+CMA cases: ok: 50 new
+BEREC: ok: 10 new
+$ signal --root <root> stories --limit 5
+2026-11-11 12:01  CMA cases  Pilgrim’s / Walkers Deli & Sausage Co merger inquiry
+2026-11-11 07:51  BEREC  BEREC views on roaming topics of draft ITRE report
+2026-11-11 07:30  CMA cases  AkzoNobel / Axalta merger inquiry
+2026-11-11 07:02  CMA cases  McCormick / Unilever merger inquiry
+2026-11-10 14:09  CMA cases  Final recommendation that the Secretary of State replace the Assimilated Technology Transfer Block Exemption
+$ signal --root <root> sources list
+1  approved  healthy  2026-11-11 12:01  CMA cases
+2  approved  healthy  2026-11-11 07:51  BEREC
+$ signal --root <root> ingest
+(no output: sources not due within the minimum interval)
+```
+- Known limits: the one system DNS lookup per hop cannot be interrupted; `webfetch.py` reuses its connect timeout for the TLS handshake, so a slow connect plus a hung handshake can run to about twice the 10-second deadline (no request is sent after the deadline); two simultaneous passes may both fetch a due source; Windows not run.
+- Not verified: Windows; a live failing source, redirect, or conditional-GET (etag) against a real server; `ingest --loop`; stories were not compared with the feeds by hand beyond the five lines shown; the "no output" second ingest was read as "not due", not checked against the interval setting.
+
 ## 2026-11-13 — Issuer library screens redrawn from a screen-to-component map; source references and audit material moved to Evidence (branch `claude/report-redesign-evidence`)
 Scope: presentation only, offline, base `517b9fb`, head `d47e3ba` before this entry; no provider or model call, no change to analysis, module instructions or the Python that builds `data.js` (no Python outside `tests/` changed; under `apps/` only the README and `fixtures/shape-key.json` beside the web files changed; under `tests/` 19 files changed, among them `test_library_reader_refs.py`, `test_cpos_launch.py`, `test_run_start_page.py`, `test_library_page_browser.py`, `test_library_changes_browser.py` and the `browser_probe_*.js` helpers, edited to match the new pages). Design: `docs/visualisations/2026-11-13-screen-component-map.md`, plan `docs/superpowers/plans/2026-11-13-library-redesign.md`. Rules applied: findings pages show findings and one trace control per paragraph, row or figure; source references, file names, hashes, ids, calculation ids, registers, gap ledgers and run codes are drawn only on the Evidence page and its drawer; text written for another module is drawn nowhere, search and drawer included; a run is named by period and pathway; nothing is computed or reworded (allowed: counts of listed items, the elapsed clock on Run activity, date display); motion only for live run state.
 Reviews: tasks 0 to 13 each had a task review and fix rounds (T1 1, T2 1, T3 3, T4 1, T5 2, T6 2, T7 1, T8 1, T9 2, T10 3, T11 1, T12 2, T13 1; the third rounds from a root-cause plan); two end batches closed 30 deferred Low items. Whole-branch review at `ac1164f`: changes needed, 2 High (trace controls dead on Forecast and Changes; search and the drawer reached text written for another module), 6 Medium, 8 Low. A simplification review recommended four rewrites and deletions and compacting the classifier answer key (same parsed JSON). Fix wave `7881b72..47b8f28`, round 2 `53f4070`, round 3 `d47e3ba` (an Evidence search hit is matched by module and line together); each round was re-reviewed, and the re-review of `d47e3ba` approved with no High or Medium finding open.
@@ -923,43 +965,3 @@ and end to end wiring." Contract and report: `docs/sweeps/2026-11-10-wiring/`. R
   - `TERM_LABELS` against the builder of `run.facilities` (not traced);
   - the form's download click (its `build()` output was used);
   - Windows paths.
-
-## 2026-11-10 — All-modules live run tdg-all-001 and its corrections (branch `claude/all-modules-live-fixes`)
-
-Owner: "Yes, run it", then "Merge now apply corrections on next PR". Ruling
-`docs/rulings/2026-11-10-all-modules-live-test.md` (cap USD 20); run folder
-`/private/tmp/claude-501/rbot-live7/runs/tdg-all-001` (outside the repo, unchanged here).
-
-- Run (live, sol-medium, TDG 2024-09-30, all 19 analytical modules on #23's methods): 18 modules
-  accepted, USD 10.32 spent against an estimate of USD 4–6. It stopped at CP-5, before any call:
-  "1105073 input-token bound is over the 1050000 supported". No delivery was made.
-- What the run shows: every module now states that CP-OS acceptance stands for lineage and records
-  the helper scripts as not run. CP-1D, CP-2A and CP-2G are no longer blocked (Restricted); CP-1B
-  ran. Still Blocked, each for a missing source only: CP-DR (no external research), CP-1C (no
-  peers), CP-4 (no legal documents), CP-2H (no rating reports), CP-3D and CP-3 (no market data),
-  CP-4C (follows CP-4).
-- Defects found and fixed, each with a test written first and seen failing:
-  1. The pre-send bound counted one byte per token. 817 retained CP-OS live calls measure at least
-     4.11 request bytes per input token (median 4.44); `run_pathway.py` notes 2.51 at the lowest.
-     The bound now counts two (`BYTES_PER_TOKEN_BOUND`); the hold is unchanged, since a Sol call
-     holds its whole context.
-  2. Every module was sent every earlier handoff, so first requests grew from 20 KB (CP-0) to
-     1.01 MB (CP-5). CP-OS now sends only the registry's producers (required, plus optional ones
-     the run selects; CP-5 every analyst before it), and the resume pins and the launcher's
-     retained-prefix match use the same set. On tdg-all-001's handoffs the first requests total
-     5.6 MB instead of 9.6 MB (estimate, not a live measurement).
-  3. Six modules (CP-2H, CP-3D, CP-3C, CP-4C, CP-3, CP-5) had every source read refused by the
-     700,000-byte reads cap. The cap is now 1,100,000 bytes (268,000 tokens at 4.11 bytes per
-     token, under the 272,000-token long-context price).
-- Registry: CP-4 += optional CP-1A (its runbook's upstream; CP-3C is left out because CP-3C already
-  takes CP-4, which would make a cycle), CP-6 += optional CP-1B, CP-1C, CP-4 (its SKILL's upstream). The
-  context form's edge table follows. The transport rules add one sentence saying which handoffs
-  are supplied; this also changes every manifest, so a relaunch into an older run folder is
-  refused ("choose a new --out") rather than re-sending its modules.
-- Gates: CI pytest list plus `tests/test_handoff_loop.py` and `tests/test_context_form.py`, 1529
-  passed, 7 deselected (known failures); quality gate 0 findings. Both exit 0. Two mutations (each resume site reverted to "every earlier module") fail the replay
-  test.
-- Not verified: no live run of the changes; CP-5 and CP-6 have still not completed on TDG; the
-  cost saving and the reads CP-3 and CP-5 now get are estimates from retained requests; the
-  relaunch refusal for old folders was checked by instruction text (old `CP-0.md` lacks the new
-  sentence), not by a launch.
