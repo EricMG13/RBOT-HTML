@@ -363,9 +363,9 @@ Not verified:
 - The shape rules were derived from one run. Other pathways and the modules changed in other
   sessions may produce shapes not listed; those fall to the designed data card.
 - AGENTS.md says source references live in Basis lines and Source columns. That describes what
-  modules write; this map changes only where the library draws them. AGENTS.md needs a matching
-  line when the build lands.
-- No reader check or fidelity check has been run; both are owed at build time.
+  modules write; this map changes only where the library draws them. AGENTS.md needed a matching
+  line when the build landed: done (see `AGENTS.md`).
+- No reader check or fidelity check had been run when this map was written; both were run at build time (done, scope and results in `VERIFICATION.md`, entry 2026-11-13, branch `claude/report-redesign-evidence`).
 
 ## 11. What was built
 
@@ -379,7 +379,7 @@ by `components.js`. Components in use and where the build differs from the map:
 | Report history | Run timeline with state mark, date, pathway | A run is named by period and pathway. |
 | Overview | Verdict panel, findings feed, measure tiles, sided board, left-rule callout, dated timeline, module tiles | The chart index and the "Evidence and audit" link lists were removed, as mapped. An earlier-format Overview lists no dates. |
 | Changes | Before and after cards, module state tiles, empty state for a first run | The differences the build computes are listed in Evidence, not on Changes. The ledger is on the Evidence Gaps tab. |
-| Modules | Verdict panel, findings feed, status checklist, question accordion, fact list, record cards, risk matrix, watch list, dated timeline, pathway map, statement bars with a Bars or Figures toggle, empty and gap states | Component choice follows the shape of the data in `shapes.js`, checked against the hand-written key `apps/issuer-library/fixtures/shape-key.json`. |
+| Modules | Verdict panel, findings feed, status checklist, question accordion, fact list, record cards, risk matrix, watch list, dated timeline, pathway map, statement bars with a Bars or Figures toggle, empty and gap states | Component choice follows the shape of the data in `shapes.js`, checked against the key `apps/issuer-library/fixtures/shape-key.json`. |
 | Forecast | Chart cards with trace controls, empty states | The trace controls work on Forecast (a whole-branch review found them dead and they were fixed). |
 | Evidence | Governance summary, then tabs: Summary, Trace, Sources, Calculations, Gaps, Registers, Run record; trace drawer | Registers draw the tables as written, minus inter-module columns. Run codes and hashes are drawn here only. |
 | Run activity | Run steps and marks | The steps are labelled and connected. Motion is only for live run state, inside the reduced-motion query. |

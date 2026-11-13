@@ -23,7 +23,7 @@ The library draws a run from its handoffs and holds no copy of any delivered rep
 `#W-Reports/...` or `#W-Calendar/...` link opens the run's Report history. It has no run controls:
 runs are made by step 1 and shown by step 2.
 
-**Pages and routes.** The left rail is Start a run (hidden in the page and not shown on a library opened from disk),
+**Pages and routes.** The left rail is Start a run (shown only when the library is served over http),
 Issuer library, Run activity and Search. Routes are hash routes.
 
 | Page | Route | Shows |
@@ -63,9 +63,10 @@ is `docs/visualisations/2026-11-13-screen-component-map.md`.
 
 **Build and test.** `python apps/issuer-library/update_library.py --workspace <folder>` builds the
 library (step 2). The node tests are `node --test apps/issuer-library/credit_os/web/*.test.cjs`. The
-browser tests are `tests/test_library_page_browser.py` and `tests/test_library_changes_browser.py`. `apps/issuer-library/fixtures/shape-key.json` is the hand-written answer key for the
-classifiers in `shapes.js`, one record per line, written from a real run and not from the
-code; `fixtures/build_synthetic_run.py` and `fixtures/synthetic-new-format` make a new-format run.
+browser tests are `tests/test_library_page_browser.py` and `tests/test_library_changes_browser.py`. `apps/issuer-library/fixtures/shape-key.json` is the answer key for the
+classifiers in `shapes.js`, taken from the reference run `tdg-proof-snapshot-opus-002`, one record per line. Its table
+shapes were assigned by section heading, independently of the classifier; its section-role patterns are the
+same patterns `shapes.js` uses, so for roles it detects a change, not an error; `fixtures/build_synthetic_run.py` and `fixtures/synthetic-new-format` make a new-format run.
 
 **Build facts.** `data.js` holds the catalogue and the workspace store as data. Evidence's handoff
 and instruction downloads (and "Download all", a zip) are written under `library/downloads/<run>/`
@@ -161,7 +162,7 @@ is per issuer by evidence date; runs sharing that date are all marked and counte
 ## Starting a run on an issuer
 
 When the library is served over http, the issuer header on every run tab (Report history, Overview, Changes,
-Modules, Forecast, Evidence) has a "Start a run on this issuer" link at the right of its title row; it
+Modules, Forecast, Evidence) has a "Start a run on this issuer" link at the right of its title row (below the title on a narrow screen); it
 works only when that server is the run start service. It opens the start page from the latest
 run listed (`/?from=<run id>`): the issuer ID is locked to that run's, its documents are copied into
 the new submission, and its pathway, answers, module subset and turns per module fill the form. Each
