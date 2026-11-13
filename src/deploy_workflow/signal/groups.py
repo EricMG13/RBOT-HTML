@@ -4,14 +4,23 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime
 
-from deploy_workflow.signal.identity import IdentityError, User, clean_name
+from deploy_workflow.signal.identity import IdentityError, User, _printable, clean_name
 from deploy_workflow.signal.store import StoreError, _utc_text, _write_transaction
 
 VISIBILITIES = ("everyone", "invited")
 MAX_NAME = 60
 _NO_GROUP = "no such group"
+
+
+@dataclass(frozen=True)
+class Act:
+    """Who is acting and when."""
+
+    user: User
+    now: datetime
 
 
 class Forbidden(Exception):
@@ -30,21 +39,17 @@ def _may_manage(user: User) -> bool:
 
 
 def create_group(
-    db: sqlite3.Connection,
-    user: User,
-    name: str,
-    visibility: str,
-    topic_ids: Sequence[int],
-    now: datetime,
+    db: sqlite3.Connection, by: Act, name: str, visibility: str, topic_ids: Sequence[int]
 ) -> int:
+    user = by.user
     if not _may_manage(user):
         raise Forbidden("only writers and the owner can create groups")
     cleaned = _clean(name)
-    if len(" ".join(name.split())) > MAX_NAME:
+    if len(" ".join("".join(_printable(ch) for ch in name).split())) > MAX_NAME:
         raise StoreError(f"a group name is at most {MAX_NAME} characters")
     if visibility not in VISIBILITIES:
         raise StoreError(f"invalid visibility {visibility!r}; expected one of everyone, invited")
-    stamp = _utc_text(now)
+    stamp = _utc_text(by.now)
     with _write_transaction(db):
         for topic_id in topic_ids:
             if db.execute("SELECT 1 FROM topics WHERE id=?", (topic_id,)).fetchone() is None:
@@ -111,8 +116,9 @@ def leave(db: sqlite3.Connection, user_name: str, group_id: int) -> None:
         )
 
 
-def add_member(db: sqlite3.Connection, actor: User, group_id: int, name: str, now: datetime) -> str:
-    stamp = _utc_text(now)
+def add_member(db: sqlite3.Connection, by: Act, group_id: int, name: str) -> str:
+    actor = by.user
+    stamp = _utc_text(by.now)
     with _write_transaction(db):
         require_visible(db, actor.name, group_id)
         if not _may_manage(actor):

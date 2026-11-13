@@ -7,6 +7,7 @@ from hypothesis import strategies as st
 from deploy_workflow.signal import store
 from deploy_workflow.signal.feeds import Entry
 from deploy_workflow.signal.groups import (
+    Act,
     Forbidden,
     add_member,
     can_see,
@@ -61,7 +62,7 @@ def db(tmp_path):
 
 
 def test_a_writer_creates_a_group_and_is_its_first_member(db):
-    gid = create_group(db, AK, "  TMT analysts ", "everyone", [], T0)
+    gid = create_group(db, Act(AK, T0), "  TMT analysts ", "everyone", [])
     assert [tuple(r) for r in list_groups(db, "ak")] == [(gid, "TMT analysts", "everyone", 1, 1, 0)]
     assert members(db, "rd", gid) == ["ak"]
 
@@ -69,7 +70,7 @@ def test_a_writer_creates_a_group_and_is_its_first_member(db):
 @pytest.mark.parametrize("user", [RD, User("nobody", "reader")])
 def test_a_reader_cannot_create_a_group(db, user):
     with pytest.raises(Forbidden):
-        create_group(db, user, "X", "everyone", [], T0)
+        create_group(db, Act(user, T0), "X", "everyone", [])
     assert count(db, "groups") == 0
 
 
@@ -84,37 +85,37 @@ def test_a_reader_cannot_create_a_group(db, user):
 )
 def test_bad_group_input_is_refused(db, name, visibility, topics):
     with pytest.raises(StoreError):
-        create_group(db, AK, name, visibility, topics, T0)
+        create_group(db, Act(AK, T0), name, visibility, topics)
     assert count(db, "groups") == 0
 
 
 def test_group_names_are_unique_ignoring_case(db):
-    create_group(db, AK, "TMT", "everyone", [], T0)
+    create_group(db, Act(AK, T0), "TMT", "everyone", [])
     with pytest.raises(StoreError):
-        create_group(db, ML, "tmt", "invited", [], T0)
+        create_group(db, Act(ML, T0), "tmt", "invited", [])
 
 
 def test_an_invited_group_is_invisible_to_non_members(db):
-    gid = create_group(db, AK, "Deal team", "invited", [], T0)
+    gid = create_group(db, Act(AK, T0), "Deal team", "invited", [])
     assert list_groups(db, "ml") == [] and not can_see(db, "ml", gid)
     for call in (
         lambda: require_visible(db, "ml", gid),
         lambda: members(db, "ml", gid),
         lambda: join(db, "ml", gid, T0),
-        lambda: add_member(db, ML, gid, "ml", T0),
+        lambda: add_member(db, Act(ML, T0), gid, "ml"),
     ):
         with pytest.raises(StoreError, match="^no such group$"):
             call()
     with pytest.raises(StoreError, match="^no such group$"):
         require_visible(db, "ml", 999)  # same text as a missing group
-    assert add_member(db, AK, gid, " ml ", T0) == "ml" and can_see(db, "ml", gid)
+    assert add_member(db, Act(AK, T0), gid, " ml ") == "ml" and can_see(db, "ml", gid)
 
 
 def test_a_reader_member_cannot_add_or_remove_members(db):
-    gid = create_group(db, AK, "Deal team", "invited", [], T0)
-    add_member(db, AK, gid, "rd", T0)
+    gid = create_group(db, Act(AK, T0), "Deal team", "invited", [])
+    add_member(db, Act(AK, T0), gid, "rd")
     for call in (
-        lambda: add_member(db, RD, gid, "x", T0),
+        lambda: add_member(db, Act(RD, T0), gid, "x"),
         lambda: remove_member(db, RD, gid, "ak"),
     ):
         with pytest.raises(Forbidden):
@@ -123,7 +124,7 @@ def test_a_reader_member_cannot_add_or_remove_members(db):
 
 
 def test_join_and_leave_are_idempotent_and_open_groups_only(db):
-    gid = create_group(db, AK, "TMT", "everyone", [], T0)
+    gid = create_group(db, Act(AK, T0), "TMT", "everyone", [])
     join(db, "rd", gid, T0)
     join(db, "rd", gid, T0)
     assert members(db, "ak", gid) == ["ak", "rd"]
@@ -160,10 +161,15 @@ def test_any_group_name_is_stored_cleaned_or_refused(name):
         db = open_db(Path(folder))
         try:
             try:
-                gid = create_group(db, AK, name, "everyone", [], T0)
+                gid = create_group(db, Act(AK, T0), name, "everyone", [])
             except StoreError:
                 assert count(db, "groups") == 0
                 return
             assert rows(db, "SELECT name FROM groups WHERE id=?", gid) == [(clean_name(name),)]
         finally:
             db.close()
+
+
+def test_a_name_of_sixty_visible_characters_with_controls_is_accepted(db):
+    gid = create_group(db, Act(AK, T0), "x" * 30 + "\x00\x01" + "y" * 30, "everyone", [])
+    assert rows(db, "SELECT name FROM groups WHERE id=?", gid) == [("x" * 30 + "y" * 30,)]
