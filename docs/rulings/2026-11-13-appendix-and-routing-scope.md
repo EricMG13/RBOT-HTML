@@ -53,9 +53,10 @@ modules measured".
   `CP0_BLOCK` says the launcher did) must be in the handoff; `ROUTING_RULES` says so and how to
   write one with nothing to report (one row `Not supplied: <reason>`). The checker
   (`required_registers`, `register_issues`, ten modules only) sends back a handoff that lacks one,
-  with one issue naming all of them. A register is recognised by a heading carrying its id, a
-  `<!-- table-id: -->` tag or an id cell; its body is not judged. A module whose front matter says
-  `module_status: Blocked` is exempt (the method's stop). Calibrated over the accepted handoffs of
+  with one issue naming all of them. A register is recognised by a heading that opens with its id (or a list of ids that includes it)
+  or a `<!-- table-id: -->` tag; an id in a table cell or in another register's heading is a
+  citation and does not count; its body is not judged. A module whose front matter says
+  `module_status: Blocked` is exempt (the method's stop; `ROUTING_RULES` asks the module to state it and write the gate register only). Calibrated over the accepted handoffs of
   both retained Sol runs first: zero in-scope registers missing in either.
 - CP-5 is sent, in its head, a generated note listing for each upstream module in the run that has
   a scope section the registers it was told not to write, and that their absence is not a finding;

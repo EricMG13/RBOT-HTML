@@ -1846,7 +1846,8 @@ ROUTING_RULES = (
     "do not restore it and do not block for want of it. Every register the method requires "
     "that is not excluded here or in a `Register scope` section must be present under a heading "
     "or `<!-- table-id: -->` tag that carries its id; one with nothing to report is written "
-    "with one row `Not supplied: <reason>`, never left out.\n\n"
+    "with one row `Not supplied: <reason>`, never left out; a module that stops at its gate "
+    "states `module_status: Blocked` in the front matter and writes the gate register only.\n\n"
 )
 # CP-5 only: it audits the other modules' handoffs. The first line is the marker the tests look for;
 # `{lines}` is one `- <module>: <registers>` line per upstream module that has a scope section.
@@ -2301,8 +2302,9 @@ _MISSING_REGISTERS = (
     "Write each as its own register: a `###` heading that carries its id (`### {first} - <title>`) "
     "or a `<!-- table-id: ... {first} -->` tag above its table. A register with nothing to "
     "report is still written, with one row `Not supplied: <reason>` (or the method's own "
-    "placeholder row), never left out. A module that cannot run at its gate says so with "
-    "`module_status: Blocked` in the front matter and is not asked for them."
+    "placeholder row), never left out. A module that stops at its gate says so with "
+    "`module_status: Blocked` in the front matter and writes the gate register only; it is not "
+    "asked for the others."
 )
 
 
@@ -2357,13 +2359,13 @@ def _blocked_at_gate(text: str) -> bool:
 
 
 def _has_register(text: str, ident: str) -> bool:
-    """A `###` heading naming the id, a `<!-- table-id: ... -->` tag whose last part is the id,
-    or a table row whose first cell is the id: the three forms the retained handoffs use."""
-    named = rf"(?<![\w.]){re.escape(ident)}(?!\w|\.\d)"
+    """A `###` heading that opens with the id (or with a list of ids that includes it), or a
+    `<!-- table-id: ... -->` tag whose last part is the id. An id in a table cell or in the middle
+    of another register's heading is a citation, not the register."""
+    lead = r"[A-Za-z]\w*(?:\.\w+)*\s*(?:,|and|&|/)\s*"
     patterns = (
         re.compile(rf"^<!-- table-id: (?:\S*\.)?{re.escape(ident)} -->\s*$", re.MULTILINE),
-        re.compile(rf"^#{{2,6}} .*{named}", re.MULTILINE),
-        re.compile(rf"^\|\s*{re.escape(ident)}\s*\|", re.MULTILINE),
+        re.compile(rf"^#{{2,6}} (?:{lead})*{re.escape(ident)}(?!\w|\.\d)", re.MULTILINE),
     )
     return any(p.search(text) for p in patterns)
 

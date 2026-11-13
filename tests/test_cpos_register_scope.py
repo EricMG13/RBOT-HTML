@@ -371,8 +371,6 @@ def register(ident: str, form: str = "heading") -> str:
     """One register written the way the retained handoffs write one."""
     if form == "tag":
         return f"### Register\n\n<!-- table-id: cp.{ident} -->\n{NOTHING}"
-    if form == "cell":
-        return f"### Register\n\n| Id | Value |\n| --- | --- |\n| {ident} | Not supplied |\n\n"
     return f"### {ident} — Register\n\n{NOTHING}"
 
 
@@ -412,7 +410,7 @@ def test_a_handoff_with_no_register_is_refused_naming_all_of_the_module(module):
     assert all(ident in issue for ident in REQUIRED[module])
 
 
-@pytest.mark.parametrize("form", ["heading", "tag", "cell"])
+@pytest.mark.parametrize("form", ["heading", "tag"])
 @pytest.mark.parametrize("module", list(REQUIRED))
 def test_each_recognised_form_of_a_register_with_nothing_to_report_is_accepted(module, form):
     assert cpos_launch.register_issues(module, registers(module, form=form)) == ()
@@ -472,3 +470,40 @@ def test_the_checker_sends_a_handoff_without_its_registers_back_with_one_issue(t
     assert len([i for i in issues if "Missing registers" in i]) == 1
     again = text.replace("## Calculations", registers("CP-2") + "## Calculations", 1)
     assert _checked_handoff(task, again.encode(), check) == ()
+
+
+# The reviewer's decoys (probes/t4b_id_cell_from_unrelated_table.py, t4b_heading_crossref.py): a
+# retained handoff carries these shapes, and none of them is the register.
+DECOYS = {
+    ("CP-2", "T2.10"): (
+        "### Coverage definition\n\n| Component | Required fields | Present | Treatment |\n"
+        "|---|---|---|---|\n| T2.10 | 35 | 35 | Five drivers |\n\n"
+    ),
+    ("CP-1A", "transaction_summary"): (
+        "### CP-MODEL snapshot fields\n\n| field_id | value | status | source | locator | date |\n"
+        "|---|---|---|---|---|---|\n"
+        "| transaction_summary | Dividend recap | READY | S1 | p1 | 2024-09-30 |\n\n"
+    ),
+    ("CP-5", "T5.3"): (
+        "### Upstream scope\n\n| Register | Module | Treatment |\n|---|---|---|\n"
+        "| T5.3 | CP-2A event risk register | cut in transport |\n\n"
+    ),
+}
+
+
+@pytest.mark.parametrize(("module", "ident"), list(DECOYS))
+def test_an_id_in_the_first_cell_of_an_unrelated_table_does_not_count(module, ident):
+    text = registers(module, skip=(ident,)) + DECOYS[(module, ident)]
+    assert ident in refusal(module, text)[0]
+
+
+def test_a_heading_that_only_cites_an_id_does_not_count():
+    other = "### T2B.2 - Business model snapshot (inputs from T2B.1)\n\n" + NOTHING
+    text = registers("CP-2A", skip=("T2B.1", "T2B.2")) + other
+    assert re.search(r"T2B\.1(?![\w.])", refusal("CP-2A", text)[0])
+
+
+def test_the_routing_rule_and_the_refusal_both_say_how_a_module_stops_at_its_gate():
+    stop = "`module_status: Blocked` in the front matter and writes the gate register only"
+    assert stop in cpos_launch.ROUTING_RULES
+    assert "`module_status: Blocked` in the front matter" in refusal("CP-6", "x")[0]
