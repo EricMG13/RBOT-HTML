@@ -144,15 +144,30 @@ _SCORE = "docs/reuse/selected-methods/CANON_SHARED.md § CP_CONFIDENCE_SCORE.md"
 # The method each module runs, per METHODOLOGY-REVIEW.md and what the 2026-11-05 live campaigns
 # consumed. prompts/CP-0.md and CP-1-intake.md are TDG case instructions, so they are left out.
 # Owner, 2026-11-10 ("Fix all"): each skill is sent every companion its SKILL.md calls mandatory
-# or binding (a runbook, a phase's method bundle), copied from cp-os at b57a344 and listed in
-# docs/reuse/selected-methods/manifest.json. Companions the SKILL opens only "to resolve an
-# ambiguity" (the schema and system references) are archived, not sent. CANON_SHARED.md is sent
-# only as the two reader-layer sections of READER_LAYER, to every prose module (ruling
-# 2026-11-11, decision 8); the rest of it is archived.
+# or binding (a runbook, a phase's method bundle). Each sent file's own entry in
+# docs/reuse/selected-methods/manifest.json records its source, any named edits and, where
+# recorded, its revision. Companions the SKILL opens only "to resolve an ambiguity" (the schema
+# and system references) are archived, not sent. CANON_SHARED.md is sent only as the reader-layer
+# sections of READER_LAYER, to every prose module (ruling
+# 2026-11-11, decision 8; the Analytical appendix section was added 2026-11-13, Deploy V methods
+# plan, Task 6, because the section above it ends at its heading); the rest of it is archived.
 _SELECTED: dict[str, tuple[str, ...]] = {
-    "CP-0": (_VII + "cp0.md",),
+    # Owner-directed, 2026-11-13 (Deploy V methods plan, Task 3): Deploy V's skill and step file,
+    # byte-identical to Deploy V c4d2e35 (the readiness part; CP-PARSE's own step file, the schema
+    # and system references are archived, not sent). CP0_BLOCK says what the launcher already did.
+    # The DEPLOY VII stand-in (cp0.md, a JSON ReadinessReview) is no longer sent.
+    "CP-0": (
+        _SKILLS + "cp-0-source-readiness/SKILL.md",
+        _SKILLS + "cp-0-source-readiness/references/REF_CP-0_STEPS.md",
+    ),
     "CP-1": ("prompts/CP-1.md",),  # Plus CP1_STEPS; no standalone CP-1 method file exists.
-    "CP-1A": (_VII + "cp1a.md",),
+    # Owner, 2026-11-13 ("Build rec. 1, then run"): Deploy V's skill from cp-os b57a344 with the
+    # bundle its SKILL binds on every run. The DEPLOY VII stand-in (cp1a.md) is no longer sent.
+    "CP-1A": (
+        _SKILLS + "cp-1a-business-transaction-fact-pack/SKILL.md",
+        _SKILLS + "cp-1a-business-transaction-fact-pack/references/REF_CP-1A_STEPS.md",
+        _SKILLS + "cp-1a-business-transaction-fact-pack/references/REF_CP-2C_STEPS.md",
+    ),
     # Deploy V's skill: earnings_delta.md needs the structured runtime's `read_inputs` view, which
     # CP-OS does not give, so it blocked on every CP-OS run (2026-11-09, 2026-11-10).
     "CP-1B": (
@@ -166,12 +181,20 @@ _SELECTED: dict[str, tuple[str, ...]] = {
     "CP-1D": (_SKILLS + "cp-1d-earnings-quality/SKILL.md",),
     # Owner, 2026-11-11: the Short Credit Snapshot's one page, read from CP-1's handoff alone.
     "CP-L10": (_VII + "cpl10.md",),
-    "CP-2": (_VII + "cp2.md",),
+    # Owner, 2026-11-13 ("Build rec. 1, then run"): Deploy V's skill from cp-os b57a344 with the
+    # bundle its SKILL binds on every run. The DEPLOY VII stand-in (cp2.md) is no longer sent.
+    "CP-2": (
+        _SKILLS + "cp-2-fundamental-credit-synthesizer/SKILL.md",
+        _SKILLS + "cp-2-fundamental-credit-synthesizer/references/REF_CP-2_STEPS.md",
+    ),
     "CP-2A": (
         _SKILLS + "cp-2a-downside-pathway/SKILL.md",
         _SKILLS + "cp-2a-downside-pathway/references/REF_CP-2A_STEPS.md",
         _SKILLS + "cp-2a-downside-pathway/references/REF_CP-2B_STEPS.md",
-        _VII + "cp2a.md",
+        # Owner, 2026-11-13 (Deploy V methods plan, Task 6): a CP-OS-only copy of cp2a.md whose
+        # tables are T2DS.n, since cp2a.md's T2B.n collide with the step file's. cp2a.md stays on
+        # disk, unchanged, for the structured runtime.
+        _SKILLS + "cp-2a-downside-pathway/references/CP-2A_STRESS_DESIGN_CPOS.md",
     ),
     "CP-2D": (
         _SKILLS + "cp-2d-liquidity-cash-flow-bridge/SKILL.md",
@@ -199,7 +222,14 @@ _SELECTED: dict[str, tuple[str, ...]] = {
         _SKILLS + "cp-3-relative-value-security-selection/references/CP-3B_RUNBOOK.md",
         _SKILLS + "cp-3-relative-value-security-selection/references/CP-3_SCHEMA_REFERENCE.md",
     ),
-    "CP-3C": (_VII + "cp3c.md",),
+    # Owner-directed, 2026-11-13 (Deploy V methods plan, Task 2): Deploy V's skill with the runbook
+    # and step file its SKILL binds, from Deploy V c4d2e35, plus the named r17 `Scale` edit to
+    # register T3D.2. The DEPLOY VII stand-in (cp3c.md) is no longer sent.
+    "CP-3C": (
+        _SKILLS + "cp-3c-refinancing-lme-risk/SKILL.md",
+        _SKILLS + "cp-3c-refinancing-lme-risk/references/REF_CP-3C_STEPS.md",
+        _SKILLS + "cp-3c-refinancing-lme-risk/references/CP-3C_RUNBOOK.md",
+    ),
     "CP-3D": (
         _SKILLS + "cp-3d-market-implied-risk/SKILL.md",
         _SKILLS + "cp-3d-market-implied-risk/references/REF_CP-3D_STEPS.md",
@@ -230,18 +260,26 @@ _SELECTED: dict[str, tuple[str, ...]] = {
     ),
     # Owner, 2026-11-11: what has changed since the last run (replaces the deliverable comparison).
     "CP-8": (_VII + "cp8.md",),
+    # Owner-directed, 2026-11-13 (Deploy V methods plan, Task 4): one CP-DR text, the cp-os
+    # version 2.0 skill (sha256 0cc76aea, cp-os 5a78f93) with two named edits (open-web limit
+    # conditional on the web-search rules; gap row typed `gap`, missing evidence never Blocked).
+    # `cpdr.md` stays on disk for another runtime; it is no longer sent: it told the model
+    # "Python composes the tables".
     "CP-DR": (
         _SKILLS + "cp-dr-deep-research/SKILL.md",
         _SKILLS + "cp-dr-deep-research/references/REF_CP-DR_STEPS.md",
         _SKILLS + "cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md",
-        _VII + "cpdr.md",
     ),
 }
 _CANON = "docs/reuse/selected-methods/CANON_SHARED.md"
 # The reader-facing layer every prose module is sent (not the data modules).
+_APPENDIX = f"{_CANON} § Analytical appendix"
 READER_LAYER = (
     f"{_CANON} § Reader-facing research layer",
     f"{_CANON} § Credit-research reading order",
+    # PROSE_PASSAGES says the canon's "table and appendix rules still apply"; the first section
+    # ends at the next `####` heading, so the appendix rule needs its own entry.
+    _APPENDIX,
 )
 METHODS: dict[str, tuple[str, ...]] = {
     module: (
@@ -322,6 +360,18 @@ PROSE_PASSAGES = (
     "govern; its table and appendix rules still apply after `### Limitations`, except that the "
     "report selectors' exact headings and table headers govern over the reader layer's table "
     "rules (6 columns and 8 body rows).\n\n"
+)
+# Sent to every module that is sent the canon's Analytical appendix section: that section says
+# `## Analysis` and an appendix heading, while a handoff has the fixed H2s and CP-OS refuses an
+# added `## Analysis`. There is no appendix-specific check. Demoting a report heading to `####`
+# under the appendix heading is refused for `Bottom line` (the first-`###` check) and for the
+# selector headings (`Map: ...`, `Confidence inputs`; the exact-heading checks), but is not
+# refused for `Key findings`, `Contrary evidence and what would change the view` or
+# `Limitations`. Adding `## Analysis` as an H2 is refused (the six-H2 check).
+APPENDIX_HEADING_NOTE = (
+    "Where the canon's Analytical appendix section says `## Analysis`, this handoff's section is "
+    "`## Findings`: write the appendix heading as a `###` heading there, after `### Limitations`; "
+    "the other required `###` headings stay `###` and are not nested under it.\n\n"
 )
 DATA_PASSAGE = (
     "Reader passage. The reader is a portfolio manager or credit committee member who has not "
@@ -1715,12 +1765,12 @@ TRANSPORT_RULES = (
     "it blocks.\n\n"
 )
 # CP-2A only. Its two methods disagree on who sets the stress sizes; run tdg-forecast-005 followed
-# the SKILL, gave no shock, and CP-2G had no stress case to compute. cp2a.md is the later
-# correction (LEAD adaptation, ruling Q2), and the owner allowed labelled judgment for CP-2G's
-# drivers on 2026-11-10 ("Yes, allow judgment").
+# the SKILL, gave no shock, and CP-2G had no stress case to compute. The stress design text is
+# the later correction (LEAD adaptation, ruling Q2), and the owner allowed labelled judgment for
+# CP-2G's drivers on 2026-11-10 ("Yes, allow judgment").
 STRESS_BLOCK = (
     "Stress design: where the method sections below differ on stress magnitudes, "
-    "`src/deploy_vii/methods/cp2a.md` governs. You choose the base period, the scenarios, the "
+    "`CP-2A_STRESS_DESIGN_CPOS.md` governs. You choose the base period, the scenarios, the "
     "shock sizes and the watch levels as labelled analyst assumptions (`Analyst Interpretation`, "
     "confidence never High), each anchored to a stated figure (a decline the sources report, a "
     "calculated break point, a disclosed rate exposure): name the anchor and what the assumption "
@@ -1728,6 +1778,23 @@ STRESS_BLOCK = (
     "magnitude the other sections forbid; an unlabelled or unanchored one still is. State at least "
     "one scenario as a pair, an EBITDA decline and a cash-interest rate increase, each a fraction "
     "from 0 to 1 with at most four decimal places, so a forward model can apply it.\n\n"
+)
+# CP-0 only. The skill's preparation phase assumes a runtime that lists and hashes the sources
+# itself; here the launcher did, before the call. The two rules after it are the later Deploy V
+# corrections in the caos-databricks copy of the skill (D31 V4, G1-18); the skill sent is older.
+CP0_BLOCK = (
+    "Source readiness here: the launcher has already listed, hashed and pinned the sources "
+    "before this call, so the preparation the method describes is done. Do not write the "
+    "registers P1, P2, P4, P6, P7 and P8. Write P3 and P5, the readiness tables (T1 input gate, "
+    "T2 source register, T3 source hierarchy, T4 content-to-module map, T5 gaps and conflicts, "
+    "T6 evidence trace, T7 master index state, T8 recommended run command sheet), the document "
+    "hierarchy and the minimum missing documents. A result is CONDITIONAL only for a source the "
+    "effective-source set does not carry. An upstream analytical handoff that has not been "
+    "produced yet is never a readiness ground and never a `CONDITIONAL` condition: modules are "
+    "put in order by navigation, not by readiness. The package, parse and hash checks were done "
+    "by the launcher: record no result for them. When no "
+    "objective is stated, the objective is the selected pathway's use case; record it in T1 and "
+    "assess readiness against it.\n\n"
 )
 # CP-DR and CP-1C, when the context's peer source is CP-DR and both run (cpdr.md, "The peer pack").
 # Owner, 2026-11-10: "Cp-1c is supposed to get that information from cp-dr by default".
@@ -1737,12 +1804,13 @@ PEER_PACK_BLOCK = (
     "write TDR.4 (candidate peers), TDR.5 (alignment observations: period, definition, currency, "
     "segment) and TDR.6 (located figures, one row per peer and operand: `revenue`, `ebitda`, "
     "`debt`, `interest`, `ffo`, each with unit, currency, period end, source locator and a "
-    "verbatim quote), as `src/deploy_vii/methods/cpdr.md` describes them. "
+    "verbatim quote), as your method's PEER PACK section describes them. "
     "Use every source this run holds "
     "that is not the issuer's own document, and any research or web tool this environment gives "
     "you. Name no peer and type no figure from memory. Where no peer evidence can be reached, "
-    "still write the three tables, each with one row saying what was searched and that nothing "
-    "was found.\n\n"
+    "still write the three tables, each holding one row whose `peer_id` is `none` (row header "
+    "`none.none`) and whose text cells say what was searched and that nothing was found; that row "
+    "cites its TDR.2 gap row.\n\n"
 )
 PEER_READER_BLOCK = (
     "Peer source: the context sets `valuation.peer_source` to `cp_dr_public`, so take the peer set "
@@ -2155,6 +2223,7 @@ def _instructions(
         + SOURCES_RULES
         + READER_PERSONA
         + (DATA_PASSAGE if module in DATA_MODULES else PROSE_PASSAGES)
+        + (APPENDIX_HEADING_NOTE if _APPENDIX in METHODS[module] else "")
         + VOICE_RULES
         + (CHART_NOTE_RULE if "### Chart data:" in selectors else "")
         + (MAP_TEXT_RULE if "### Map:" in selectors else "")
@@ -2466,6 +2535,7 @@ def _prepare(  # noqa: PLR0913, PLR0915 - `prepare`'s body: one keyword per sett
         ("CP-2G", FORECAST_BLOCK, forecast),
         ("CP-1", PERIOD_TABLE_BLOCK, forecast),
         ("CP-1", LAYER1_FORECAST_BLOCK, forecast and "CP-2G" not in ordered),
+        ("CP-0", CP0_BLOCK, True),
         ("CP-2A", STRESS_BLOCK, True),
         ("CP-DR", PEER_PACK_BLOCK, peer_pack),
         ("CP-1C", PEER_READER_BLOCK, peer_pack),
