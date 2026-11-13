@@ -5148,6 +5148,64 @@ def test_a_malformed_event_row_is_sent_back(row, complaint):
     assert any(complaint in i for i in issues), issues
 
 
+# Published is the date of the publication the row is taken from (checker-loop-3, corrected). The
+# 2033 maturity is taken from the FY2024 annual report, whose own date is 2024-11-07.
+TEN_K_ROW = (
+    "| 2033-06-15 | day | {} | 2033 senior secured notes mature | Scheduled \u2014 maturity "
+    "| Annual report FY2024, p.145 | Wall |"
+)
+
+
+def test_the_instructions_for_an_events_module_state_the_published_rule():
+    text = cpos_launch._selector(event_spec("CP-3"))
+    assert "date of the publication the row is taken from" in text
+    assert "only when that document states no date" in text
+
+
+def test_a_published_equal_to_the_event_date_is_accepted_for_a_cited_document():
+    row = (
+        "| 2025-03-31 | day | 2025-03-31 | Results | Historical \u2014 released | 8-K p.1 | Wall |"
+    )
+    assert event_issues(row) == ()
+
+
+def test_the_week_row_with_a_dash_is_refused_for_both_its_precision_and_its_published():
+    issues = event_issues("| 2025 | week | \u2014 | E | S | Src | R |")
+    assert any("Date precision `week` must be one of" in i for i in issues), issues
+    assert any("Published `\u2014`" in i and "Not supplied: <reason>" in i for i in issues), issues
+
+
+@pytest.mark.parametrize(
+    "cell",
+    [
+        "\u2014",
+        "-",
+        "Not stated",
+        "",
+        " ",
+        "n/a",
+        "TBC",
+        "Not supplied:",
+        "Not supplied:   ",
+        "07/11/2024",
+        "2024-11-7",
+        "November 7, 2024",
+        "2024-11",
+        "2024-02-30",
+    ],
+)
+def test_a_published_that_is_not_a_date_or_a_reasoned_gap_is_refused_once_with_the_forms(cell):
+    issues = event_issues(TEN_K_ROW.format(cell))
+    assert len(issues) == 1 and "Not supplied: <reason>" in issues[0], issues
+
+
+@pytest.mark.parametrize(
+    "cell", ["2024-11-07", "2033-06-15", "Not supplied: the memo states no date"]
+)
+def test_a_published_date_or_a_reasoned_gap_is_accepted(cell):
+    assert event_issues(TEN_K_ROW.format(cell)) == ()
+
+
 def test_an_event_table_of_only_not_supplied_is_valid_and_a_mixed_one_is_not():
     gap = "Not supplied: the handoff states no dated event"
     assert event_issues(f"| {gap} |" + f" {gap} |" * 6) == ()
@@ -5367,6 +5425,13 @@ def test_a_real_other_unit_keeps_the_gap_advice_and_the_issue_count():
         DEBT_UNIT_ROW.format("US$m; leverage in times"), DEBT_UNIT_ROW.format("US$m; x")
     )
     assert len(two) == 2
+
+
+@pytest.mark.parametrize("unit", ["US$m / EUR m", "US$m; EUR amounts", "US$m (GBP)"])
+def test_a_unit_cell_naming_another_currency_keeps_the_gap_advice(unit):
+    (issue,) = debt_stack_issues(DEBT_UNIT_ROW.format(unit))
+    assert f"write `Not supplied: reported in {unit}`" in issue
+    assert "must be exactly" not in issue
 
 
 def test_a_second_table_under_one_heading_is_named_not_reported_as_malformed_rows():

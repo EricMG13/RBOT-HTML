@@ -1414,9 +1414,11 @@ def _stated_gap(cell: str) -> bool:
 def _unit_advice(spec: OwnerTable, unit: str) -> str:
     """What to do about a unit cell that is not the chart unit. A cell that begins with the chart
     unit and adds other words is a unit cell holding more than the unit: its amounts are sound, so
-    the advice is to cut the cell, never to replace the amounts with gaps."""
+    the advice is to cut the cell, never to replace the amounts with gaps. When the rest names
+    another currency code or symbol the amounts may really be in it, so the gap advice stays."""
     rest = unit.removeprefix(spec.chart_unit)
-    if rest != unit and rest[:1] and not rest[:1].isalnum():
+    other_currency = re.search(r"\b[A-Z]{3}\b|[$\u20ac\u00a3\u00a5]", rest)
+    if rest != unit and rest[:1] and not rest[:1].isalnum() and not other_currency:
         return (
             f"the Reporting unit must be exactly `{spec.chart_unit}` (the Amount's unit only); "
             "move the rest to Basis and limitation."
