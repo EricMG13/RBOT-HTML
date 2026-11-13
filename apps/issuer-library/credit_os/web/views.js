@@ -1599,7 +1599,7 @@ function libraryLive() {
     const mark=window.Components.runMark(run.stalled?'stalled':run.status==='running'?'running':'queued');
     return `<li class="live-row"><div class="lv-head"><strong class="lv-name">${esc(text(run.issuer_name)||'Run in progress')}</strong>${pathway?`<span class="lv-pathway">${esc(pathway)}</span>`:''}${mark}</div>${window.Components.runSteps(steps)}</li>`;
   };
-  return `<section class="lib-live" aria-labelledby="lib-live-h"><h2 class="eyebrow lib-eyebrow" id="lib-live-h">Running now</h2><ul class="live-rows">${shown.map(row).join('')}</ul></section>`;
+  return `<section class="lib-live" aria-labelledby="lib-live-h"><h2 class="eyebrow lib-eyebrow" id="lib-live-h">${shown.some(run=>run.status==='running')?'Running now':'Waiting'}</h2><ul class="live-rows">${shown.map(row).join('')}</ul></section>`;
 }
 // The section follows a new snapshot in place: redrawn while a run is shown, removed (loader and all) when none is.
 function refreshLibraryLive() {

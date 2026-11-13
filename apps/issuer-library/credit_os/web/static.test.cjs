@@ -1745,6 +1745,10 @@ test('the steps are the run modules in the data order; each carries its name and
   assert.strictEqual(countOf(items[1][2], /class="lat"/g), 1, 'the loader is on the running module');
   assert.ok(items[1][2].includes('<span class="steps-el" data-since="2026-11-09T13:41:00Z"> · 19 min into the run</span>'), html);
   assert.ok(html.includes('<span class="steps-n">1 of 3 done</span>'));
+  // The loaders on a card are bounded: the run mark and the running step, exactly two; a card with no running module draws none.
+  assert.strictEqual(countOf(html, /class="lat"/g), 2, 'a running card: the run mark and the running step, no more');
+  const idle = liveActivityView({ runs: [{ id: 'q1', status: 'queued', issuer_name: 'Qone', modules: [['CP-0', 'waiting'], ['CP-1', 'waiting']] }] }, NOW);
+  assert.strictEqual(countOf(idle, /class="lat"/g), 0, 'a card with no running module carries no loader');
 });
 test('each module state is carried as a mark with its word, not by colour alone and not by hover', () => {
   const html = liveActivityView({ runs: [running({ modules: [['A', 'done'], ['B', 'waiting'], ['C', 'done'], ['D', 'running'], ['E', 'odd']] })] }, NOW);
@@ -3884,7 +3888,7 @@ const pickPage = models => runPage(d => d, [], m => m, { runFields: PICK_RUNS, m
 const pickModel = (id, extra = {}) => ({ id, issuerKey: 'k1', runId: RUN, runFolder: RUN, sources: [], ...extra });
 const HASH_1 = 'a1b2c3d4'.repeat(8), HASH_2 = 'e5f6a7b8'.repeat(8);
 
-test('model picker: one delivery reads run date, pathway and run id, with no hash', () => {
+test('model picker: one delivery reads the run name (date and pathway), with no hash', () => {
   const models = [pickModel(HASH_1)];
   assert.deepEqual(pickPage(models).modelOptionLabels(models), ['31 March 2025 · Credit snapshot']);
 });
@@ -4828,9 +4832,26 @@ test('library home: a running run is a row with the C31 mark and the C13 steps: 
   for (const activity of [undefined, null, 'x', [], { runs: 'x' }, { runs: [] }, { runs: [{ status: 'finished' }] }]) assert.equal(libPage({ activity }).libraryLive(), '', JSON.stringify(activity));
   const bare = libPage({ activity: { runs: [{ status: 'running' }] } }).libraryLive();
   assert.ok(bare.includes('Run in progress') && bare.includes('Running</span>') && !bare.includes('steps-w'));
+  // The heading says what the row holds: Running now when a run is running, Waiting when only queued runs are.
+  const waitingOnly = libPage({ activity: { updated: 'T', runs: [{ id: 'q1', status: 'queued', issuer_name: 'Qone' }] } }).libraryLive();
+  assert.ok(waitingOnly.includes('id="lib-live-h">Waiting</h2>') && !waitingOnly.includes('Running now'));
   // It leads the page, before the filter bar.
   const view = libPage({ activity: LIVE }).libraryView();
   assert.ok(view.indexOf('lib-live') > 0 && view.indexOf('lib-live') < view.indexOf('id="library-filters"'));
+});
+
+test('A20: the previous-running set is seeded at page start only when the opening route draws live runs (Run activity or the library home)', () => {
+  const screen = read('screen.js'), line = /^if\(current\.module==='CP-OS'\|\|current\.module==='W-Library'\)previousRunning=.*$/m.exec(screen);
+  assert.ok(line, 'the seed is guarded by the opening route');
+  const seed = module => {
+    const state = { current: { module }, previousRunning: null };
+    new Function('current', 'activityEnded', 'window', 'state', `let previousRunning=state.previousRunning;${line[0]};state.previousRunning=previousRunning;`)(state.current, () => ({ running: [{ id: 'x', name: 'Xray' }] }), { RUN_ACTIVITY: {} }, state);
+    return state.previousRunning;
+  };
+  assert.deepEqual(seed('CP-OS'), [{ id: 'x', name: 'Xray' }]);
+  assert.deepEqual(seed('W-Library'), [{ id: 'x', name: 'Xray' }]);
+  assert.strictEqual(seed('W-Reports'), null, 'another route draws no run, so none is seeded');
+  assert.strictEqual(seed('CP-1'), null);
 });
 
 test('library home: the live row moves only in the stylesheet\'s no-preference media query; the state is still clear from icon and word when it does not, and nothing moves in print', () => {
@@ -5084,7 +5105,8 @@ test('M3 home: the live row draws running and waiting runs; the reload runs only
     { RUN_ACTIVITY: { runs: [] } }, { current: { module: 'W-Library' } }, () => calls.push('refresh'), () => calls.push('sync'), () => null, () => { throw new Error('the home is not re-rendered whole'); }, () => { throw new Error('no run page body'); }, () => ({ toasts: [], running: [] }), null, null);
   fn();
   assert.deepEqual(calls, ['refresh', 'sync']);
-  assert.ok(!/setInterval\(/.test(screen) && screen.split('setTimeout(').length - 1 === (read('screen.js').match(/setTimeout\(/g) || []).length);
+  assert.ok(!/setInterval\(/.test(screen));
+  assert.strictEqual((screen.match(/activityTimer\s*=\s*setTimeout\(/g) || []).length, 1, 'exactly one setTimeout( call sets the activity timer');
   assert.ok(text.includes('function refreshLibraryLive()'), 'the live section is refreshed in place');
 });
 

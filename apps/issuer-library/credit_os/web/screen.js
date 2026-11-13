@@ -761,5 +761,6 @@ window.onRunActivity=()=>{
 };
 window.addEventListener('hashchange',syncActivityTimer);
 renderRoute();
-previousRunning=activityEnded(null,window.RUN_ACTIVITY).running; // the file loaded with the page is the first load
+// The file loaded with the page is the first load, and its running set is seeded only when the opening route draws live runs (Run activity, the library home): a run the reader never saw running is not announced later.
+if(current.module==='CP-OS'||current.module==='W-Library')previousRunning=activityEnded(null,window.RUN_ACTIVITY).running;
 syncActivityTimer(true);
