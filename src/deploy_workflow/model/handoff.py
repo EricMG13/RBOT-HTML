@@ -18,7 +18,7 @@ import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass, replace
 from datetime import UTC, date, datetime
-from decimal import Decimal, DecimalException, localcontext
+from decimal import Decimal, DecimalException, Inexact, localcontext
 from functools import partial
 from pathlib import Path, PurePath
 from types import MappingProxyType
@@ -73,18 +73,18 @@ from deploy_workflow.model_testing.configs import CONFIGS
 from deploy_workflow.prose_checks import lost_values
 from deploy_workflow.research.contracts import ResearchError
 from deploy_workflow.research.weblookup import (
-    EdgarResult,
-    Refused,
     EVENT_LABEL,
+    EdgarResult,
+    KnownPages,
+    Refused,
     Retained,
     RunScope,
     Runtime,
     WebLookup,
-    KnownPages,
     bare_host_problem,
-    neutralise,
-    names_web_source,
     known_pages,
+    names_web_source,
+    neutralise,
     retained_rows,
     row_cells,
     sources_rows,
@@ -325,11 +325,14 @@ TOOLS: tuple[ToolSpec, ...] = (
     ),
     _tool(
         "calculate",
-        "Use the existing Decimal-38 kernel. Sum signed operands, or divide two operands. "
-        "Values are decimal strings or null for missing; ratios are fractions, not percentages. "
+        "Use the existing Decimal-38 kernel. Sum signed operands, subtract the second of two "
+        "operands from the first (difference), multiply two or more operands (product), or "
+        "divide two operands (ratio). Values are decimal strings or null for missing; a missing "
+        "operand gives null, never zero; ratios are fractions, not percentages. "
+        "A product that would need more than 38 significant digits is refused, not rounded. "
         "A ratio requires a strictly positive denominator; otherwise it returns null with a reason. "
         "Keep period, currency, quantity and source references in your calculation trace.",
-        operation={"type": "string", "enum": ["sum", "ratio"]},
+        operation={"type": "string", "enum": ["sum", "difference", "product", "ratio"]},
         values={
             "type": "array",
             "minItems": 1,
@@ -526,6 +529,41 @@ def _where(dropped: dict[str, str | int]) -> str:
     cells = [c.strip() for c in context.strip("|").split("|")] if context.startswith("|") else []
     label = cells[0] if cells and cells[0] else context[:60]
     return f"{dropped['value']} ({label}, line {dropped['previous_line']} of your previous draft)"
+
+
+_ARITY = {"ratio": (2, 2), "difference": (2, 2), "product": (2, 128)}
+
+
+def _operate(operation: str, cells: list[Cell]) -> Cell | str:
+    """The operation applied to the operands under the active context, or an `ERROR` message."""
+    low, high = _ARITY.get(operation, (1, 128))
+    if not low <= len(cells) <= high:
+        return f"ERROR: {operation} needs {low} to {high} operands"
+    if operation == "ratio":
+        return _ratio([(cells[0], 1)], [(cells[1], 1)])
+    if operation in ("difference", "product"):
+        try:
+            return _exact(operation, cells)
+        except DecimalException:
+            return f"ERROR: {operation} needs more than 38 significant digits or overflows"
+    return calc((cell, 1) for cell in cells)
+
+
+def _exact(operation: str, cells: Sequence[Cell]) -> Cell:
+    """The first operand less the second (`difference`) or all operands multiplied (`product`)
+    under the active context with rounding refused; null with the missing reason when an operand
+    is missing. Raises `DecimalException` when inexact."""
+    if any(cell.value is None for cell in cells):
+        return calc((cell, 1) for cell in cells)  # the kernel's missing-operand result
+    values = [cell.value for cell in cells if cell.value is not None]
+    with localcontext() as context:
+        context.traps[Inexact] = True
+        total = values[0] - values[1] if operation == "difference" else Decimal(1)
+        for value in values if operation == "product" else ():
+            total *= value
+    if total.is_zero():
+        total = Decimal(0)  # a product with a negative operand and a zero is zero, not -0
+    return Cell(total, basis="CALCULATED")
 
 
 class ModuleTools:
@@ -781,11 +819,11 @@ class ModuleTools:
 
     def calculate(self, operation: str, values: list[str | None]) -> str:
         if (
-            operation not in {"sum", "ratio"}
+            operation not in {"sum", "difference", "product", "ratio"}
             or not isinstance(values, list)
             or not 1 <= len(values) <= 128
         ):
-            return "ERROR: expected bounded sum/ratio operands"
+            return "ERROR: expected bounded sum/difference/product/ratio operands"
         cells = []
         for value in values:
             if value is None:
@@ -802,12 +840,9 @@ class ModuleTools:
                 return "ERROR: operand is non-finite or exceeds Decimal-38 input bounds"
             cells.append(Cell(number))
         with localcontext(CONTEXT):
-            if operation == "ratio":
-                if len(cells) != 2:
-                    return "ERROR: ratio needs exactly two operands"
-                result = _ratio([(cells[0], 1)], [(cells[1], 1)])
-            else:
-                result = calc((cell, 1) for cell in cells)
+            result = _operate(operation, cells)
+        if isinstance(result, str):
+            return result
         return dump_json(
             {
                 "value": None if result.value is None else str(result.value),

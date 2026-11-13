@@ -1423,7 +1423,7 @@ function libraryCoverage({runs,coverage,unscreened}) {
 // A ratio's basis is Evidence's, not the library's (library redesign, Task 11): the cell title is the period the figure is for.
 const libraryMetricCell=(run,key)=>{
   const metric=run.metrics[key];
-  return `<td${metric?'':' class="missing"'} title="${esc(metric?(metric.period||'Period not recorded'):'Not available')}">${esc(libraryMetric(metric))}</td>`;
+  return `<td${metric?'':' class="missing"'} title="${esc(metric?(metric.label?metric.label+' · ':'')+(metric.period||'Period not recorded'):'Not available')}">${esc(libraryMetric(metric))}</td>`;
 };
 const libraryRatingText=r=>[r.agency||'Agency not recorded',RATING_SCOPES[r.scope]||'Scope not recorded',libraryDate(r.date)].join(' · ');
 function libraryRatingCell(run) {
@@ -1512,7 +1512,7 @@ function libraryResults({runs,rows,skipped,hidden},shown=libraryState.view??'car
   return `${heading}<div class="lib-block" data-block data-view="${shown}">${bar}${window.Components.pane('cards',libraryCards(rows),shown==='cards')}${window.Components.pane('list',table,shown==='list')}</div><p class="hint">Dates refer to evidence, not execution. Ratios keep their original definitions.</p>`;
 }
 function libraryMetricItem(run,name,metric) {
-  return `<div class="metric-item"><span class="metric-label">${esc(name)}</span><span class="metric-value">${esc(libraryMetric(metric))}${metric&&metric.unit!=='x'&&LibraryLogic.numberOf(metric)!==null?`<small>${esc(metric.unit)}</small>`:''}</span><p>${esc(metric?metric.period:'Not established for this run.')}</p>${metric?.provenance==='user'?'<p>Entered by the user · shown as entered</p>':''}</div>`;
+  return `<div class="metric-item"><span class="metric-label">${esc(name)}</span><span class="metric-value">${esc(libraryMetric(metric))}${metric&&metric.unit!=='x'&&LibraryLogic.numberOf(metric)!==null?`<small>${esc(metric.unit)}</small>`:''}</span>${metric?.label?`<p class="metric-named">${esc(metric.label)}</p>`:''}<p>${esc(metric?metric.period:'Not established for this run.')}</p>${metric?.provenance==='user'?'<p>Entered by the user · shown as entered</p>':''}</div>`;
 }
 // The run's measures as cards; those it does not establish are named in one line under them.
 function libraryMetrics(run) {

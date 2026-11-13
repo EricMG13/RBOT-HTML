@@ -1338,7 +1338,7 @@ function advise(o) {
   }
   const base = pkey(r.current_period);
   if (has('CP-2G') && base && !(base.kind === 'fy' || base.kind === 'q' && base.n === 4)) warn(firstOf(sd, 'current_period'), 'is the forecast base: the forward model forecasts three fiscal years, so use fy-YYYY (or q4-YYYY).');
-  if (r.reporting_currency && r.reporting_currency !== 'USD' && /^[A-Z]{3}$/.test(r.reporting_currency)) warn(firstOf(sd, 'reporting_currency'), 'is not USD: the report\'s chart strip is US$ millions only, so its money cells read "Not supplied".');
+  if (r.reporting_currency && r.reporting_currency !== 'USD' && /^[A-Z]{3}$/.test(r.reporting_currency)) warn(firstOf(sd, 'reporting_currency'), 'is not USD: CP-1\'s money tables are in that currency, but the money tables of CP-2D, CP-3C and CP-4C stay in US$ millions, so their money cells read "Not supplied".');
   if (LEVEL === 'advanced' && o.identity.issuer_name && !o.identity.aliases.length) warn(firstOf(si, 'aliases'), 'None given. If the filings name the issuer differently (a legal suffix, a short name, the ticker), add those names.');
   if (o.identity.listed_equity && !o.identity.ticker) warn(firstOf(si, 'ticker'), 'Add the ticker of the listed equity.');
   // Market rows
@@ -1380,7 +1380,6 @@ const RULES = [
   {s:'run', o:'check', c:f => { const e = calEnd(f.o.run.current_period); return !!e && validDate(f.o.run.as_of) && f.o.run.as_of <= e; }, r:f => `The as-of date (${f.o.run.as_of}) is not after the end of ${f.o.run.current_period} (${calEnd(f.o.run.current_period)}, for a calendar fiscal year): its report cannot have been published yet.`, fix:'Use the date you run the analysis, or check the period.', go:'issuer'},
   {s:'run', k:'investment-grade', o:'information', c:f => f.o.identity.issue_classification === 'investment_grade', r:'Investment grade: the methods are written for high-yield and leveraged-loan credit. The run notes this; whether it changes a conclusion is not asserted.', go:'issuer'},
   {s:'CP-1', k:'cp1-no-financial-report-recognised', o:'check', c:f => f.chk.fin === 'no', r:'No filed financial report among the documents: financials would rest on management claims.', fix:'Add the annual or quarterly report.', go:'documents'},
-  {s:'CP-1', k:'chart-strip-usd', o:'limited', np:true, c:f => /^[A-Z]{3}$/.test(f.o.run.reporting_currency) && f.o.run.reporting_currency !== 'USD', r:'Not USD: the report\'s chart strip is US$ millions only; its money cells read "Not supplied".', fix:'Nothing to add; the report states the limit.', go:'issuer'},
   // Owner ruling 2026-11-11: only the reading's period ends decide this; with two or more recognised the page claims nothing.
   {s:'CP-1B', o:'check', c:f => !!READING && READING.documents.length > 0 && f.periodEnds < 2, r:'Only one reporting period was recognised in the documents. The earnings comparison needs the prior period\'s report.', fix:'Add the prior period\'s report to the documents.', go:'documents'},
   // Owner, 2026-11-10: "Cp-dr supplies the peers, the user does not provide them unless they specifically
@@ -1458,11 +1457,11 @@ function readiness(o) {
     precIn: admitted(o.valuation.precedents, 'date', PRECEDENT_MONTHS, o.run.as_of)};
   f.newest = getC('newest');
   f.periodEnds = new Set(docs.filter(d => FINANCIAL_KINDS.includes(d.kind) && d.period_end).map(d => d.period_end)).size;
-  const fired = RULES.filter(r => (r.s === 'run' || has(r.s)) && r.c(f)).map(r => ({scope:r.s, outcome:r.o, np:!!r.np, reason: typeof r.r === 'function' ? r.r(f) : r.r, fix:r.fix || '', go:r.go || '', key:r.k || '', review:r.rv || '', counted: r.o !== 'information' && !r.nc}));
+  const fired = RULES.filter(r => (r.s === 'run' || has(r.s)) && r.c(f)).map(r => ({scope:r.s, outcome:r.o, reason: typeof r.r === 'function' ? r.r(f) : r.r, fix:r.fix || '', go:r.go || '', key:r.k || '', review:r.rv || '', counted: r.o !== 'information' && !r.nc}));
   const effective = {}, mods = [];
   for (const m of order) {
     const own = fired.filter(x => x.scope === m), items = own.slice();
-    const levels = own.filter(x => !x.np && (x.outcome === 'will_refuse' || x.outcome === 'limited')).map(x => x.outcome);
+    const levels = own.filter(x => x.outcome === 'will_refuse' || x.outcome === 'limited').map(x => x.outcome);
     // Inherited: producers whose effective outcome reaches m (run_expectations._inherit).
     const reach = Object.entries(EDGES[m] || {}).filter(([p]) => p in effective).map(([p, e]) => [p, effective[p] === 'limited' || e === 'r' ? 'limited' : 'will_refuse']);
     if (reach.length) {
@@ -1825,7 +1824,7 @@ const NEEDS_TICK = ['gap', 'limited', 'will_refuse'];
 // keeps this table to them). '' = nothing on this page fixes it.
 const STAGE_OF_RULE = {
   'investment-grade': 'issuer', 'run-financials-management-claims': 'documents', 'cp1-no-financial-report-recognised': 'documents',
-  'chart-strip-usd': 'issuer', 'cp1c-no-peer-source': 'valuation', 'cp2-primary-no-cp1d': 'pathway', 'cp2d-non-usd': 'market',
+  'cp1c-no-peer-source': 'valuation', 'cp2-primary-no-cp1d': 'pathway', 'cp2d-non-usd': 'market',
   'cp2h-no-ratings': 'market', 'cp3-talk-no-observed-quote': 'market', 'cp3-no-quotes-no-talk': 'market', 'cp3d-no-quotes': 'market',
   'cp4-declared-none': 'legal', 'cp4-declared-executed-none-recognised': 'legal', 'cp4-declared-draft-none-recognised': 'legal',
   'cp4-declared-draft-or-primary-no-executed-agreement': 'legal', 'cp4-only-amendment': 'documents',

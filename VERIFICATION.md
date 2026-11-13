@@ -4,6 +4,22 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-13 — CP-1 runs the Deploy V method, adapted; its figures are checked in code at acceptance (branch `claude/cp1-deploy-v-method`, ruling `docs/rulings/2026-11-13-cp1-deploy-v-method-and-acceptance-check.md`)
+Scope: OFFLINE only. Tests, reviewer probes (`.superpowers/sdd/cp1-method/probes/`) and the check run over two retained TDG CP-1 handoffs; no provider or model call, and no handoff written under this method exists. Built, not accepted: Forecast, charts, Overview and Changes read CP-1's tables, so a paid run (the owner's separate action) is needed before acceptance.
+- Method: caos-databricks `dfff264` CP-1 skill, runbook and step file archived byte for byte (`8b9905f`), then named edits (manifest `edit` strings): workbook step and routing removed, step 13's analytical rules restated, project conventions for missing values, gaps and headings, fixed rows for the operands the check reads, debt at carrying value, reported EBITDA primary. `STEP_CONTRACTS` no longer sent. Sent files 78,387 -> about 29,000 characters; every pathway within its unchanged `INSTRUCTION_BUDGET` ceiling (tightest: short_snapshot 157,043 of 157,500).
+- Check (`cpos_cp1_check.py`, through `_owned_issues`): six required tables counted by code; ratio operands readable; leverage and cover recomputed to two places; chart, net debt, statement and cash ties, two-sided; statement identities; ladder sum, principal plus reconciling items, carrying value against gross debt; one heading per read table, laid out so every reader reads the same rows. Expected values are hand-worked from the TDG FY2024 10-K figures (carrying 24,880, reported EBITDA 3,813: 6.53x, 4.88x, 3.29x), typed into the tests; hypothesis properties use an independent Fraction oracle.
+- Retained handoffs (`tools/cp1_check_proof.py`): both refused, "1 of 6 required tables are present" (the Period table only); diagnostics show ladders of 24,319 and 24,806 against a stated principal of 25,068, short by 749 and 262; their leverage is on principal over adjusted EBITDA (6.01x). A CP-1 retained before the check is not resumable.
+- `calculate`: `difference` and `product`, refused when 38 digits cannot hold the result exactly.
+- Reviews: method task review (changes, one fix round); check: spec review, adversarial review and two adversarial re-reviews (three fix rounds, the third from a root-cause plan: five readers located a table differently, so the check now refuses the inputs they disagree on).
+- Gates: `uv run pytest tests/test_cpos_cp1_check.py tests/test_cpos_launch.py tests/test_changes.py tests/test_library_index.py tests/test_handoff_loop.py -q` 1757 passed, 1 skipped (paid), exit 0; `uv run python tools/quality_gate.py` exit 0, 0 findings.
+- Existing expectations changed, each forced by the method or a ruling: scored-module lists and the CP-1 method hash pin; the synthetic CP-1 chart fixture (its old leverage figures implied two EBITDAs for one year) and the Changes expectations that follow from it (2.80, 2.25, 4.00; differences -1.40, -1.60).
+- Whole-branch review: "changes required" on two Mediums. The defect (a correct handoff with `FY2024` chart periods beside a dated register was refused) was fixed in a fourth round the owner approved (`8424d1b`; rows are matched by the period the Period table dates; adversarial re-review pass, 81 period-form layouts accepted, the wrong-figure variant refused in each). Lows are in the ruling.
+- Second pass (coordinator's review, then two owner rulings; still OFFLINE only). Instruction size: CP-1's method text cut by 5,851 characters (`ffa7864`, `c532bb3`; review found four rules made vaguer, restored, re-review pass). Own currency (`fc954e8`, `750bb2d`): CP-1's money tables are in `US$m` for a USD issuer, else the statements' code and `m`; a GBP relabelling of the passing fixture is accepted through `_owned_issues` and the report adapter with figures labelled `GBPm` and facts in `GBP`; `GBP thousands` ties within half a unit; US$ tables on a GBP issuer, two currencies, and a `USD` register Currency are refused; the run expectation `chart-strip-usd` is removed. Adjusted-only EBITDA (`1360c21`): the leverage and interest-cover tables may be headed with the adjusted names (5.96, 4.46, 3.60; 5.82, 4.79, 2.93 accepted; adjusted headers beside any stated reported EBITDA, mixed tables and a chart off its register row refused); the Changes pack marks reported against adjusted "not comparable".
+- Second-pass reviews: adversarial review of the check, "changes required" (one High: an adjusted operand with no statement row was accepted; three Mediums); task review of delivery, library and Changes, one Medium (the run-start form's non-USD warning). Fixed in `be8fc0b`; adversarial re-review closed all five and found one Medium the fix opened (a prefixed symbol such as `C$m` told to restate under `US$m`), fixed in `2cb3087`, re-review pass with one Low (a space inside `C $m`). Reviewer probes: `probe_adv5_*`, `probe_adv6_*`, `probe_c1_*`, `probe_c2_*`, `probe_e_*` exit 0.
+- Fidelity check of the presentation changes (library store and metric card label, delivery strip labels, run-start form warning): tests only, on synthetic handoffs (`tests/test_credit_os_store.py`, `tests/test_credit_os_catalogue.py`, the node suite 546 passed, `tests/test_context_form.py`, the strip tests in `tests/test_cpos_launch.py`); no browser run.
+- Gates on the tree merged with `main` `7c21c1e`: `uv run pytest tests/test_cpos_cp1_check.py tests/test_cpos_launch.py tests/test_cpos_register_scope.py tests/test_changes.py tests/test_library_index.py tests/test_handoff_loop.py tests/test_credit_os_store.py tests/test_credit_os_catalogue.py tests/test_context_form.py -q -m "not browser"` 2385 passed, 1 skipped (paid), exit 0; `uv run python tools/quality_gate.py` exit 0, 0 findings. Sizes: earnings_update 545,434 of 546,000; short_snapshot 155,712 of 157,500; all eight under their ceilings.
+Not verified: any model run under the method: no model output has passed the check, and a CP-1 that cannot satisfy it within three writes stops the run at the second module; at what cost; a real GBP or adjusted-only handoff (VMO2 included); the library and the report drawing `GBPm` tables, an adjusted label or a chart with no unit in a browser; the browser-marked tests on the final tree; agreement of CP-1's figures with the filing (the check proves its tables agree with each other; `FX Effect on Cash`, `Temporary Equity` and `Reconciling items` can absorb an error); interim rows have no statement tie; other modules' money tables stay `US$m`; the full suite, slow gates and `tests/model`.
+
 ## 2026-11-13 — Signal: an unexpected error on one source no longer starves the rest (branch `claude/signal-ingest-starvation`)
 
 Scope is **offline only**: recorded feeds, no network, no live service run. Defect (adversarial
@@ -952,29 +968,3 @@ this macOS host has no `timeout` executable):
   not proof that a model satisfies the new combined chart instructions or a complete TDG pathway.
 - Still outside scope: paid model output for the new contracts, Windows, screen-reader/print
   testing, the pre-existing escaped-pipe parser discrepancy and the weekly full test suite.
-
-## 2026-11-10 — Word documents (.docx) in the issuer folder (branch `claude/optimistic-johnson-bmnwip`, after main `3ac4db6`)
-
-Owner: "Add docx compatibility too". Input only: nothing is written as Word.
-
-- How it reads them:
-  - The launcher now reads `.docx`. Like an HTML filing, a Word file is converted to text pages
-    (`docx_text.py`) and pinned as `<name>.jsonl`, headed by its name and hash.
-  - The text covers body paragraphs in order, table rows as cells joined by ` | `, and tabs and
-    line breaks. Tracked deletions and tab-stop definitions are not text. Headers, footers,
-    footnotes and comments are not read.
-  - Parsing uses the workbook reader's guarded XML parse (no DTD or entity) and its size limits.
-    A file that is not a Word document, or has no text, stops the launch naming the file.
-- Unchanged:
-  - HTML filings convert to the same bytes as before, so existing run folders still resume.
-  - Old `.doc` files are still not read; the form says to save them as PDF.
-- Also updated: the context form's file types (its copy is drift-tested against the launcher's),
-  its help text, and README. The inbox reads the same list.
-- Tests:
-  - `tests/test_docx_text.py` (7) and a launcher test, written first; the tab-stop case found a
-    defect, fixed before commit.
-  - Launcher, context-form, inbox-drops, library-page and Word tests: all pass except 3 inbox
-    permission tests that also fail on main here, because the sandbox runs as root.
-  - Quality gate: 0 findings.
-- Not verified: Word files made by Word itself; the tests build minimal files by hand.
-

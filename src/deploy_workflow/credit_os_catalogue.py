@@ -184,6 +184,14 @@ def run_files(folder: Path, name: str, issues: list[str]) -> list[dict[str, str]
     return found
 
 
+def twin_of(column: str) -> str:
+    """The adjusted twin of a reported chart column (`Total debt / EBITDA` -> `Total debt /
+    adjusted EBITDA`); the column itself when it has none."""
+    from deploy_workflow.owners.cpos_cp1_check import ADJUSTED_TWIN
+
+    return ADJUSTED_TWIN.get(column, column)
+
+
 def handoff_metrics(
     name: str, pin: dict[str, str], text: str, sources: dict[str, Any], issues: list[str]
 ) -> dict[str, dict[str, str]]:
@@ -202,7 +210,8 @@ def handoff_metrics(
         if found is None:
             continue
         row, number = found
-        value = row.get(column, "")
+        held = column if column in row or twin_of(column) not in row else twin_of(column)
+        value = row.get(held, "")
         if value.startswith(_NOT_SUPPLIED):
             continue
         unit, basis, period = (
@@ -227,6 +236,8 @@ def handoff_metrics(
             "source": source,
             "provenance": "cited",
         }
+        if held != column:  # an adjusted name is stated, not implied
+            metrics[key]["label"] = held
     return metrics
 
 

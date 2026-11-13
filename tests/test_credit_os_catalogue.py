@@ -343,3 +343,29 @@ def test_forecast_of_an_earlier_format_delivery_still_shares_the_report_href(tmp
     by_kind, _ = published_forecast(tmp_path, report_page=True)
     assert by_kind["model"]["href"] == by_kind["report"]["href"] != ""
     assert by_kind["model"]["available"] is True
+
+
+ADJUSTED_CHARTS = CHARTS.replace(
+    "| Period | Total debt / EBITDA | Net debt / EBITDA |",
+    "| Period | Total debt / adjusted EBITDA | Net debt / adjusted EBITDA |",
+).replace("| Period | EBITDA / cash interest |", "| Period | Adjusted EBITDA / cash interest |")
+
+
+def test_a_run_on_the_adjusted_names_quotes_them_as_the_label_of_its_measures(tmp_path):
+    make_run(tmp_path, "run-a", cp1_extra=ADJUSTED_CHARTS)
+    metrics = built(tmp_path)["real"][0]["metrics"]
+    assert set(metrics) == {"leverage", "net_leverage", "coverage", "cash", "undrawn"}
+    expected = {
+        "leverage": ("6.57", "Total debt / adjusted EBITDA"),
+        "net_leverage": ("4.93", "Net debt / adjusted EBITDA"),
+        "coverage": ("3.29", "Adjusted EBITDA / cash interest"),
+    }
+    for key, (value, label) in expected.items():
+        assert (metrics[key]["value"], metrics[key]["label"]) == (value, label)
+    assert "label" not in metrics["cash"] and "label" not in metrics["undrawn"]
+
+
+def test_a_run_on_the_reported_names_carries_no_label_on_its_measures(tmp_path):
+    make_run(tmp_path, "run-a", cp1_extra=CHARTS)
+    metrics = built(tmp_path)["real"][0]["metrics"]
+    assert all("label" not in metric for metric in metrics.values())
