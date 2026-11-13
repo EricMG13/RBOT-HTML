@@ -694,10 +694,8 @@ const moduleTableContext=id=>{
 };
 // A finding section of the module page: its prose as written (a method or status note is Evidence's) and each table as the component its shape calls for (components.js render).
 // A table of the output `id` as the component its shape calls for (components.js render), with the context every component reads. `at` is the section that holds the table.
-const tableRenderer=id=>{
-  const shared=moduleTableContext(id),registers=window.Evidence.href('registers',data[id].module,data[id].run);
-  return (block,at)=>window.Components.render(window.Shapes.tableShape(block),block,{...shared,id,section:at,module:data[id].module,evidenceHref:registers,key:row=>`${id}:${row.line}`,trace:(row,label)=>window.Components.traceRow(`${id}:${row.line}`,label),caption:plain(at.heading).replace(METHOD_CODE,'').replace(/^(?:Chart data|Map|Events): /,'')});
-};
+const tableCtx=(id,at)=>({...moduleTableContext(id),id,section:at,module:data[id].module,evidenceHref:window.Evidence.href('registers',data[id].module,data[id].run),key:row=>`${id}:${row.line}`,trace:(row,label)=>window.Components.traceRow(`${id}:${row.line}`,label),caption:plain(at.heading).replace(METHOD_CODE,'').replace(/^(?:Chart data|Map|Events): /,'')});
+const tableRenderer=id=>(block,at,extra={})=>window.Components.render(window.Shapes.tableShape(block),block,{...tableCtx(id,at),...extra});
 const findingSection=(id,section)=>{
   const shared=moduleTableContext(id),registers=window.Evidence.href('registers',data[id].module,data[id].run),table=tableRenderer(id);
   // Ruling 2026-11-13: a prose paragraph of a finding section that holds an identifier or names a calculation is a method note, drawn in Evidence (Registers, or Calculations when it names one).
@@ -848,12 +846,7 @@ function eventLanes(context) {
 }
 // A day is a point; a month, quarter or year is drawn across its whole span (calendar.js eventSpan), never on a day the source does not state.
 // `compact` is the lanes alone, without the intro and the event table. Scenario events have an outline.
-// Where each kind of chart table is drawn besides its module page. The views that draw them and the chart index both read this table.
-// Overview charts and maps are the visuals catalogue's own placement (docs/visualisations/catalogue.csv, window.DESIGN_WORKSPACE.visuals) for a module that is not blocked.
-const onOverview=out=>{const code=aliases[out.module]??out.module;return window.DESIGN_WORKSPACE.visuals.some(visual=>visual.module===code&&/\bOverview\b/.test(visual.placement))&&!blocked(out.sections,out.state);};
-// A lane is not drawn on the Overview: its dated rows feed the Overview's nearest dates (overviewDates), which is what 'Overview' means for a lane.
-const PLACEMENT=[['chart','Overview',onOverview],['map','Overview',onOverview],['lane','Overview',()=>true]];
-const placed=(kind,where,out,name)=>PLACEMENT.some(([k,w,test])=>k===kind&&w===where&&test(out,name));
+// A chart, map or lane table is drawn on its module page; the Overview draws no chart or map (the lead's own events, as the dated timeline, are the one exception and are not listed here).
 const LANE_ROW=20,LANE_BASE=4; // a lane row is one marker (16 px) and its gap; the lane's floor is 28 px
 function eventLanesView(context,{compact=false,only=null,tag='h2',title='Event lanes'}={}) {
   // `only` is one output's own lanes, whichever saved output it is; otherwise the run's lanes (each module's default output).
@@ -932,7 +925,7 @@ const reportMaps=id=>data[id]?.maps?.length?`<section class="part" id="maps"><h3
 const CHART_HEADING=/^(Chart data|Map|Events): /;
 const NOT_STATED='Not stated',NOT_ESTABLISHED='Not established for this run';
 const raised=text=>text.charAt(0).toUpperCase()+text.slice(1);
-const shownIn=(out,kind,name)=>[`${moduleTitle(out.module)} page`,...PLACEMENT.filter(([k,,test])=>k===kind&&test(out,name)).map(([,where])=>where)];
+const shownIn=out=>[`${moduleTitle(out.module)} page`];
 // The part of the module page that holds a chart, map or lane table: charts (earlier format: Key numbers), maps, and for a lane the routable s-<line>
 // section that holds its table, else the page's Timeline part. Every one is an anchor of reportParts, so the link never lands on the page head.
 function tableForm(id,kind,section) {
@@ -960,7 +953,7 @@ function chartRows(context) {
       const period=drawn&&kind==='chart'&&table.headers[0]==='Period'?[...new Set([table.rows[0].cells[0],table.rows.at(-1).cells[0]])].map(plain).join(' to '):NOT_STATED;
       const line=table.rows[0]?.line,key=`${id}:${line}`;
       const form=!drawn?null:routeHref(out.module,tableForm(id,kind,section),null,out.run,out.source);
-      return [{key,title,owner:moduleTitle(out.module),state,limitation,unit,period,where:drawn?shownIn(out,kind,here.name).join(', '):'Not drawn',form,source:evidence.has(key)?evidenceHref(id,line):null,line}];
+      return [{key,title,owner:moduleTitle(out.module),state,limitation,unit,period,where:drawn?shownIn(out).join(', '):'Not drawn',form,source:evidence.has(key)?evidenceHref(id,line):null,line}];
     });
   });
 }
@@ -1385,18 +1378,14 @@ function runGroups(context) {
   return groups.map(([title,items])=>[title,items.map(([module])=>item(module)).filter(item=>item.id||item.choices)]).filter(([,items])=>items.length);
 }
 const stateWord=established=>established===true?'Reaches a conclusion':established===false?'Not assessable':NO_SUMMARY;
-// ---- The Overview (ruling H5): selection and ordering of the handoffs' own passages, text unchanged. Nothing is written, counted or
-// judged here; a passage the handoff lacks is named as missing, never replaced by other text (H7).
+// ---- The Overview (ruling H5; redesign 2026-11-13): selection and ordering of the handoffs' own passages and tables, text unchanged. Nothing is written, counted or
+// judged here except counts of listed items; a passage the handoff lacks is named as missing, never replaced by other text (H7). The page answers, in order: the view
+// (the lead module's Bottom line and the figures it cites), what decides it (the first sided table), why (Key findings), what would change it, what to watch, the modules
+// and what limits the reading. Every block is a shared component (components.js); nothing on the page is audit material.
 // CP-L10 leads only a short snapshot (amendment 2026-11-11 to H5): CP-2 and CP-6 do not run in it.
 const LEAD_MODULES=['CP-6','CP-2','CP-L10'];
 const NO_LEAD='No credit view module completed in this run.';
 const EARLIER_NO_LEAD='This run is in the earlier format: its handoffs carry no reader passages for Overview to select.';
-// The one place a handoff paragraph is drawn (Overview and, later, the module page), so figures can become clickable in one function.
-// The one place a handoff's prose is drawn (Overview and the module page): a list item loses its "- " marker, the Basis line is not printed, and its
-// figures (or one Basis button) open the inspector. `tables` false draws prose only (Overview).
-function passageHtml(section,id,tables=true) {
-  return section?sectionBodyHtml(section,bodyContext(id,tables)):'';
-}
 // The run's modules in the order CP-OS ran them, each with its default output and that output's reader passages.
 function overviewEntries(context) {
   return runModuleCodes(contexts[context]).map(module=>{
@@ -1407,70 +1396,81 @@ function overviewEntries(context) {
   });
 }
 const notAssessable=entry=>Boolean(entry.out)&&blocked(entry.out.sections,entry.out.state);
-const NOT_ASSESSABLE_BADGE='<span class="badge badge-gray">Not assessable</span>';
-function overviewLead(entries,earlier) {
-  const lead=LEAD_MODULES.map(code=>entries.find(entry=>entry.module===code)).find(entry=>entry?.passages?.bottom&&!notAssessable(entry));
-  if(!lead)return {lead:null,html:`<section class="overview-part" id="overview-lead"><h2 class="kicker">Credit view</h2><p class="intro">${earlier?EARLIER_NO_LEAD:NO_LEAD}</p></section>`};
-  const key=lead.passages.key?`<div class="reading-findings"><h3>Key findings</h3>${passageHtml(lead.passages.key,lead.id,false)}</div>`:'';
-  return {lead,html:`<section class="overview-part" id="overview-lead"><h2 class="kicker">Credit view</h2><p class="lead-source kicker">Written by ${moduleLink(lead.module)}</p><div class="reading-headline"><h3 class="sr-only">Bottom line</h3>${passageHtml(lead.passages.bottom,lead.id,false)}</div>${key}</section>`};
+// The lead is the first of CP-6, CP-2, CP-L10 that ran, has a Bottom line and is not blocked; a run with none has no lead.
+const overviewLeadEntry=entries=>LEAD_MODULES.map(code=>entries.find(entry=>entry.module===code)).find(entry=>entry?.passages?.bottom&&!notAssessable(entry));
+// One of the lead's passages as the components take it: its paragraphs, and the controls that open each one's basis in the drawer.
+function leadPassage(lead,key) {
+  const texts=passageTexts(lead.passages[key]);
+  return {texts,...passageControls(texts,bodyContext(lead.id,false))};
 }
-function overviewBottomLines(entries,lead) {
-  const rows=entries.filter(entry=>entry!==lead).map(entry=>{
-    if(!entry.out)return `<div class="bottom-entry"><h3>${moduleLink(entry.module)}</h3><p class="intro">${entry.choices} saved outputs, none chosen. <a class="text-action" href="#${encodeURIComponent(entry.module)}?${new URLSearchParams({c:current.context})}">Choose one</a></p></div>`;
-    const body=entry.passages.bottom?passageHtml(entry.passages.bottom,entry.id,false):'<p class="intro">No bottom line in this handoff.</p>';
-    return `<div class="bottom-entry" data-module="${esc(entry.module)}"><h3>${moduleLink(entry.module)}${notAssessable(entry)?` ${NOT_ASSESSABLE_BADGE}`:''}</h3>${body}</div>`;
+// The tables a module page draws, run order then handoff order: those of a finding section, and of a registers section only when their shape is promoted.
+function overviewTables(entries) {
+  return entries.filter(entry=>entry.out&&isNewFormat(entry.out.sections)).flatMap(entry=>{
+    const {rest,registers}=newFormatSplit(entry.id);
+    const own=section=>(registers.includes(section)?promotedTables(section):section.blocks.filter(block=>block.type==='table'&&block.rows.length>0)).map(block=>({entry,section,block,shape:window.Shapes.tableShape(block)}));
+    return [...rest,...registers].sort((a,b)=>a.line-b.line).flatMap(own);
   });
-  return rows.length?`<section class="overview-part" id="overview-bottom-lines"><h2>Bottom line by module</h2>${rows.join('')}</section>`:'';
 }
-// Every Limitations item of every module, first occurrence kept (verbatim) when the normalised text repeats.
-function overviewLimitations(entries) {
-  const seen=new Set(),items=[];
-  for(const entry of entries)for(const block of (entry.passages?.limits?.blocks||[]).filter(b=>b.type==='text')) {
-    const key=normaliseLimitation(block.text);
-    if(key!==''&&seen.has(key))continue;
-    seen.add(key);
-    const ref=`${entry.id}:${block.line}`,{html}=paragraphView(block.text,ref,{chips:bodyContext(entry.id,false).chips(ref)});
-    items.push(`<li class="limit-item">${html}<small class="limit-module">${moduleLink(entry.module)}</small></li>`);
+const ovHead=(id,title,aside='')=>`<div class="ov-head"><h2 id="${id}">${esc(title)}</h2>${aside}</div>`;
+const fromModule=module=>window.Components.attribution({title:moduleTitle(module),href:moduleHref(module)});
+// C2 and C4: the lead's Bottom line, and beside it the rows of the run's first metric table whose label the Bottom line or Key findings name.
+function overviewLead(entries,earlier,tables) {
+  const lead=overviewLeadEntry(entries);
+  if(!lead)return {lead:null,html:`<section class="overview-part" id="overview-lead"><h2 class="kicker">Credit view</h2><p class="intro">${earlier?EARLIER_NO_LEAD:NO_LEAD}</p></section>`};
+  const bottom=leadPassage(lead,'bottom'),key=leadPassage(lead,'key');
+  const verdict=window.Components.verdictPanel(bottom.texts,bottom.trace,bottom.figure,'h3');
+  const cited=[...bottom.texts,...key.texts].map(entry=>plain(window.Components.paragraphText(entry.text))).join(' ');
+  const metric=tables.find(table=>table.shape==='metric');
+  const strip=metric?window.Components.metricStrip(metric.block,tableCtx(metric.entry.id,metric.section),cited,{href:moduleHref(metric.entry.module),title:moduleTitle(metric.entry.module)}):'';
+  return {lead,html:`<section class="overview-part" id="overview-lead" aria-labelledby="overview-lead-h"><h2 class="sr-only" id="overview-lead-h">Credit view</h2><div class="g24"><div class="${strip?'c16':'c24'}">${verdict}</div>${strip?`<div class="c8">${strip}</div>`:''}</div></section>`};
+}
+// C7: the run's first sided table, drawn by its component and attributed to its module. No sided table, no block.
+function overviewBoard(tables) {
+  const sided=tables.find(table=>table.shape==='sided');
+  const board=sided?tableRenderer(sided.entry.id)(sided.block,sided.section):'';
+  return board?`<section class="overview-part" id="overview-decides" aria-labelledby="overview-decides-h">${ovHead('overview-decides-h','What decides it',fromModule(sided.entry.module))}${board}</section>`:'';
+}
+// C15: the lead module's own events (each lane as the dated timeline), else the run's first dated table of a promoted shape; attributed to the module that holds it.
+function overviewWatch(lead,tables) {
+  const lanes=isNewFormat(lead.out.sections)?(lead.out.events||[]):[];
+  const drawn=lanes.map(lane=>({name:lane.lane,html:tableRenderer(lead.id)(fixtureTable(lead.id,lane.table),drawingSection(lead.id,lane.table),{stacked:true})})).filter(item=>item.html);
+  let module=lead.module,items=drawn;
+  if(!items.length) {
+    const dated=tables.find(table=>table.shape==='dated');
+    items=dated?[{name:'',html:tableRenderer(dated.entry.id)(dated.block,dated.section,{stacked:true})}].filter(item=>item.html):[];
+    module=dated?.entry.module;
   }
-  return `<section class="overview-part" id="overview-limitations"><h2>Limitations</h2>${items.length?`<div class="reading-limits"><ul class="passage-list">${items.join('')}</ul></div>`:'<p class="intro">No handoff in this run states limitations.</p>'}</section>`;
+  if(!items.length)return '';
+  const cards=items.map(item=>`<div class="tl-card">${items.length>1&&item.name?`<h3 class="tl-name">${esc(item.name)}</h3>`:''}${item.html}</div>`).join('');
+  return `<section class="overview-part" id="overview-watch" aria-labelledby="overview-watch-h">${ovHead('overview-watch-h','What to watch',fromModule(module))}${cards}</section>`;
 }
-// The drawn charts and maps of the modules the visuals catalogue places on Overview (PLACEMENT); a blocked module draws none. Lanes are the dates section.
-function overviewCharts(entries,context) {
-  let noted=false;
-  const html=entries.filter(entry=>entry.out).map(({id,out})=>{
-    if(!placed('chart','Overview',out))return '';
-    const charts=out.charts||[];
-    const cards=chartCards(charts.map((chart,at)=>readerChart(id,chart,true,!noted&&at===lastPeriodChart(charts),isNewFormat(out.sections))),!isNewFormat(out.sections));
-    noted=noted||lastPeriodChart(charts)>=0;
-    return `<div class="overview-charts" data-module="${esc(out.module)}">${cards}${mapsView(id,'h3',map=>map.gap===null&&placed('map','Overview',out,map.name))}</div>`;
-  }).filter(html=>/class="(panel-card|map-card)"/.test(html));
-  // The link goes to the chart index on this run's Forecast page: the index is a section of that page, reached by its route (it has no route of its own).
-  const index=`<a class="chart-index-link" href="${routeHref('W-Forecast','run-charts',null,context)}">Chart index</a>`;
-  return html.length?`<section class="overview-part" id="overview-charts"><h2>Key charts</h2>${index}${html.join('')}</section>`:'';
+// C20: one tile per module of the run, in the catalogue's order and groups. A module with saved outputs and none chosen is a plain tile with the way to choose.
+function overviewModules(context) {
+  const groups=runGroups(context).map(([title,items])=>({title,items:items.map(({module,id,out,choices})=>{
+    const base={title:moduleNames[module],href:moduleHref(module)};
+    if(!id)return {...base,choose:{count:choices,href:`#${encodeURIComponent(module)}?${new URLSearchParams({c:context})}`}};
+    return {...base,state:out.state?.declared??null,...leadPassage({id,passages:readerPassages(out.sections)},'bottom')};
+  })}));
+  const tiles=window.Components.moduleTiles(groups);
+  return tiles?`<section class="overview-part" id="overview-modules" aria-labelledby="overview-modules-h">${ovHead('overview-modules-h','By module','<p class="ov-sub">Open one to read its whole bottom line</p>')}${tiles}</section>`:'';
 }
-// Nearest dates: the next five items in all (reader.js nearestDates), day-dated and period-dated in one nearest-first list, from every module's event lanes.
-// A period-dated item (month, quarter or year) is sorted by its period end and shown with that date text as written. The sentence when none is drawn names its cause.
-const runHoldsEventTable=context=>runModuleCodes(contexts[context]).some(module=>{const id=defaultOutput(module,context);return Boolean(id)&&Boolean(eventTable(data[id].sections));});
-function overviewDates(context) {
-  const asOf=contexts[context].asOf;
-  const head='<section class="overview-part" id="overview-dates"><h2>Nearest dates</h2>';
-  if(!asOf)return `${head}<p class="intro">This run records no as-of date, so no nearest dates are selected.</p></section>`;
-  const lanes=eventLanes(context);
-  if(!lanes.length)return `${head}<p class="intro">${runHoldsEventTable(context)?'This run’s handoffs hold an event table but no dated lane, so no nearest dates are selected.':'No event timeline in this run’s handoffs.'}</p></section>`;
-  const items=lanes.filter(lane=>lane.gap===null).flatMap(lane=>fixtureTable(lane.id,lane.table).rows.map(row=>({date:row.cells[0],text:row.cells[3],module:data[lane.id].module,line:row.line})));
-  const next=nearestDates(items,asOf);
-  if(!next.length)return `${head}<p class="intro">No dated item on or after ${esc(asOf)} in this run’s handoffs.</p></section>`;
-  const caption=`The next ${next.length} dated item${next.length===1?'':'s'} on or after ${asOf}`;
-  const table=scrollRegion(caption,`<table class="dates-table"><caption>${esc(caption)}</caption><thead><tr>${['Date','Event','Module'].map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${next.map(item=>`<tr><th scope="row">${esc(item.date)}</th><td>${rich(item.text)}</td><td>${moduleLink(item.module)}</td></tr>`).join('')}</tbody></table>`);
-  return `${head}${table}</section>`;
+// The lead's Limitations and, beside them, the number of gaps the run's handoffs record, with the way to them in Evidence (the count is of listed items).
+function overviewLimitations(lead,entries,context) {
+  const limits=leadPassage(lead,'limits'),gaps=entries.filter(entry=>entry.id).reduce((total,entry)=>total+recordedGaps(entry.id),0);
+  const html=window.Components.limitationsBlock(limits.texts,gaps,window.Evidence.href('gaps',null,context),limits.trace,limits.figure);
+  return html?`<section class="overview-part" id="overview-limitations" aria-labelledby="overview-limitations-h"><div class="rd-card"><h2 class="rd-h" id="overview-limitations-h">Limitations</h2>${html}</div></section>`:'';
 }
 function runReport(context) {
   const entries=overviewEntries(context);
   // A run that holds no module output has nothing to select from: it says so and keeps the way to its sources.
   if(!entries.length)return `<div class="missing-state"><h2>No module output retained for this run</h2><p>The Overview is selected from module handoffs, and this run holds none.</p></div><p class="run-inventory"><a class="text-action" href="${routeHref('W-Evidence','sources',null,context)}">Evidence${icon('arrow-right')}</a></p>`;
-  const {lead,html}=overviewLead(entries,earlierFormat(contexts[context]));
-  // Two columns at wide windows (screen.css): the reading in the main column, the charts and dates in the aside; the document order is the part order.
-  return `<div class="overview-main">${html+overviewBottomLines(entries,lead)+overviewLimitations(entries)}</div><aside class="overview-aside" aria-label="Charts and dates">${overviewCharts(entries,context)+overviewDates(context)}</aside>`;
+  const tables=overviewTables(entries),{lead,html}=overviewLead(entries,earlierFormat(contexts[context]),tables);
+  if(!lead)return `<div class="overview-page">${html+overviewModules(context)}</div>`;
+  const key=leadPassage(lead,'key'),contrary=leadPassage(lead,'contrary');
+  const feed=window.Components.findingsFeed(key.texts,key.trace,key.figure),change=window.Components.callout('What would change the view',contrary.texts,contrary.trace,contrary.figure,'h2'),watch=overviewWatch(lead,tables);
+  const side=change+watch,both=Boolean(feed&&side);
+  const why=feed||side?`<section class="overview-part g24" id="overview-why" aria-label="Why, and what would change the view">${feed?`<div class="${both?'c14':'c24'}"><div class="rd-card"><h2 class="rd-h">Key findings</h2>${feed}</div></div>`:''}${side?`<div class="${both?'c10':'c24'} ov-side">${side}</div>`:''}</section>`:'';
+  return `<div class="overview-page">${html+overviewBoard(tables)+why+overviewModules(context)+overviewLimitations(lead,entries,context)}</div>`;
 }
 // Run activity (ruling decision 10): only what is in progress and the queue. A finished run is reached from the library; the folders the
 // library does not show and the build's issues are on the library page.

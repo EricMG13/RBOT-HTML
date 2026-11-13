@@ -93,6 +93,12 @@ test('timeline: a category column gives each event an icon beside its word; the 
   assert.ok(!html.includes('data-tick') && !/style="[^"]*left:/.test(html), 'no axis, no scaled position');
   assert.ok(!/<span class="tl-cat"><svg[^>]*><\/svg>/.test(html), 'an icon is never alone');
 });
+test('timeline: a page that gives the block a narrow column sets ctx.stacked, and even one or six events run down the page', () => {
+  const six = C.render('dated', blk(DATED, [1, 2, 3, 4, 5, 6].map(n => ev(`2025-0${n}-01`))), { ...ctx(), stacked: true });
+  assert.ok(six.includes('class="tl tl-v"') && !six.includes('tl-h') && count(six, /<li class="tl-i">/g) === 6);
+  assert.ok(C.render('dated', blk(DATED, [ev('2025-03-31')]), { ...ctx(), stacked: true }).includes('class="tl tl-v"'));
+  assert.ok(C.render('dated', blk(DATED, [ev('2025-03-31')]), ctx()).includes('class="tl tl-h"'), 'without it the rule is unchanged');
+});
 test('timeline: one event; six are horizontal; seven are vertical, grouped by year when every date parses with a year', () => {
   const one = C.render('dated', blk(DATED, [ev('2025-03-31')]), ctx());
   assert.ok(one.includes('class="tl tl-h"') && count(one, /<li class="tl-i">/g) === 1);

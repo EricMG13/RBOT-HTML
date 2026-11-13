@@ -764,7 +764,7 @@ test('every drawn cell sits in an element whose CSS wraps a long unbroken token'
 
 test('print: the folds of these components are opened for the print and put back as they were', () => {
   const fold = open => ({ open, dataset: {} }), folds = [fold(false), fold(true)];
-  const root = { querySelectorAll: selector => { assert.equal(selector, '.qa-d, .wl-d, .ms-list'); return folds; } };
+  const root = { querySelectorAll: selector => { assert.equal(selector, '.qa-d, .wl-d, .ms-list, .mt'); return folds; } };
   C.foldsForPrint(root, true);
   assert.deepEqual(folds.map(f => f.open), [true, true]);
   C.foldsForPrint(root, false);
@@ -1063,4 +1063,102 @@ test('fix C: support and supports, contradict and contradicts, are one pair; the
   const heads = words => [...C.sidedBoard({ headers: ['Driver', 'Side'], rows: words.map((s, i) => ({ line: i + 1, cells: [`D${i}`, s] })) }, { key: quietKey }).matchAll(/<p class="sd-hs sd-s\d">.*?<\/i>(.*?)<b/g)].map(m => m[1]).join('|');
   assert.equal(heads(['Neutral', 'Neutral', 'Supports', 'Contradict']), 'Supports|Contradict');
   assert.equal(heads(['Contradicts', 'Support', 'Neutral', 'Supports']), 'Support|Contradicts', 'left is the pair\'s first word, as first written');
+});
+
+// ---- Overview components (library redesign, task 8). Expected text is written by hand in each test.
+const STRIP_BLOCK = {
+  headers: ['Metric', 'FY2024', 'FY2023', 'Source'],
+  rows: [
+    { line: 10, cells: ['Net leverage', '6.01x', '6.40x', 'Annual report, page 4'] },
+    { line: 11, cells: ['Interest cover', '2.1x', '2.5x', 'Annual report, page 5'] },
+    { line: 12, cells: ['Free cash flow', 'USD 1,100 million', 'USD 900 million', 'Annual report, page 6'] },
+    { line: 13, cells: ['EBITDA margin', '40.0%', '39.0%', 'Annual report, page 7'] },
+    { line: 14, cells: ['Revenue growth', '9.0%', '8.0%', 'Annual report, page 8'] },
+    { line: 15, cells: ['Dividend cover', '1.2x', '1.1x', 'Annual report, page 9'] },
+  ],
+};
+const stripCtx = { key: r => `k:${r.line}` }, stripLink = { href: '#CP-1/x', title: 'Financial foundation' };
+const stripLabels = html => [...html.matchAll(/<a class="strip-k"[^>]*>(.*?)<\/a>/g)].map(m => m[1]);
+
+test('metricStrip: only rows whose label is a whole phrase of the text, case aside, in table order, at most four; none matching draws nothing', () => {
+  const text = 'Net leverage is 6.01x. INTEREST COVER holds, and the dividend cover and free cash flow and ebitda margin are fine; revenue growth too.';
+  assert.deepEqual(stripLabels(C.metricStrip(STRIP_BLOCK, stripCtx, text, stripLink)), ['Net leverage', 'Interest cover', 'Free cash flow', 'EBITDA margin'], 'the fifth and sixth matches are dropped, the order is the table\'s');
+  assert.deepEqual(stripLabels(C.metricStrip(STRIP_BLOCK, stripCtx, 'Cover is thin; the leverage is high; margins and growth are fine.', stripLink)), [], 'a part of a label is not the label');
+  assert.equal(C.metricStrip(STRIP_BLOCK, stripCtx, 'Nothing the table names appears here.', stripLink), '');
+  assert.equal(C.metricStrip(STRIP_BLOCK, stripCtx, 'Prenet leverage and interest covers.', stripLink), '', 'a whole phrase: not inside another word');
+  assert.deepEqual(stripLabels(C.metricStrip(STRIP_BLOCK, stripCtx, 'Dividend cover is 1.2x.', stripLink)), ['Dividend cover'], 'one match is one cell, not the first four rows');
+});
+
+test('metricStrip: each cell is the label as a link to its module, the latest period as written, the earlier period beneath, one trace icon, and no Source text', () => {
+  const html = C.metricStrip(STRIP_BLOCK, stripCtx, 'Net leverage and free cash flow.', stripLink);
+  assert.ok(html.includes('<a class="strip-k" href="#CP-1/x" title="Open Financial foundation">Net leverage</a>'), html);
+  assert.ok(html.includes('<p class="strip-v">6.01x</p>') && html.includes('<p class="strip-b">FY2023 6.40x</p>'), html);
+  assert.ok(html.includes('<p class="strip-v">USD 1,100 million</p>') && html.includes('FY2023 USD 900 million'));
+  assert.equal((html.match(/data-evidence="k:1[02]"/g) || []).length, 2);
+  assert.ok(!html.includes('Annual report') && !html.includes('Source'), 'the Source column is not drawn');
+  assert.ok(html.startsWith('<div class="strip" role="group" aria-label="Figures the bottom line cites, FY2024">'));
+});
+
+test('metricStrip: cells with markup characters are escaped; a label held back for an identifier draws no cell', () => {
+  const block = { headers: ['Metric', 'FY2024'], rows: [{ line: 1, cells: ['<b>Cover</b> & "more"', '<i>2x</i> & "y"'] }, { line: 2, cells: ['EV-9', '3x'] }] };
+  const html = C.metricStrip(block, { key: r => `k:${r.line}`, tokens: ['EV-9'] }, 'The <b>Cover</b> & "more" and EV-9 are cited.', stripLink);
+  assert.ok(!html.includes('<b>') && !html.includes('<i>'), html);
+  assert.ok(html.includes('&lt;b&gt;Cover&lt;/b&gt;') && html.includes('&amp;'), html);
+  assert.equal(stripLabels(html).length, 1, 'the identifier row has no cell');
+});
+
+const TILE_TEXTS = [T('Creditors are covered, but only just. Cover is thin.\nBasis: A.pdf, page 4', 5), T('A second paragraph.\nBasis: B.pdf', 7)];
+test('moduleTiles: one details per module, all sharing one name so only one is open; title, state word with its icon, first sentence, then the whole Bottom line and the link when open', () => {
+  const html = C.moduleTiles([{ title: 'Business and evidence', items: [
+    { title: 'Source readiness', href: '#CP-0/x', state: 'Restricted', texts: TILE_TEXTS, trace: mark },
+    { title: 'Financial foundation', href: '#CP-1/x', state: null, texts: [T('One sentence only.', 9)], trace: mark },
+  ] }, { title: 'Empty group', items: [] }]);
+  assert.equal((html.match(/<details class="mt" name="overview-modules">/g) || []).length, 2);
+  assert.ok(!html.includes('Empty group'), 'a group with no module has no heading');
+  const first = html.slice(0, html.indexOf('Financial foundation'));
+  assert.ok(first.includes('<h3 class="eyebrow">Business and evidence</h3>'));
+  assert.ok(first.includes('<span class="state warn">') && first.includes('<span class="state-w">Restricted</span>') && first.includes('<svg'), 'the word is always shown with its icon');
+  assert.ok(first.includes('<span class="mt-lead">Creditors are covered, but only just.</span>'), first);
+  assert.ok(first.includes('<p class="mt-p">Creditors are covered, but only just. Cover is thin.') && first.includes('<p class="mt-p">A second paragraph.'), 'open, the whole Bottom line');
+  assert.equal((first.match(/class="basis-link"/g) || []).length, 2);
+  assert.ok(first.includes('<a class="mt-open" href="#CP-0/x" aria-label="Open Source readiness">Open module'));
+  assert.ok(!html.slice(html.indexOf('Financial foundation')).includes('class="state'), 'a missing state draws no badge');
+  noMarkdown(html);
+});
+
+test('moduleTiles: no Bottom line says so; saved outputs with none chosen is a plain tile with the way to choose; text is escaped', () => {
+  const html = C.moduleTiles([{ title: 'G', items: [
+    { title: '<b>Odd</b> & "name"', href: '#a', state: '<i>x</i>', texts: [] },
+    { title: 'Chosen later', href: '#b', choose: { count: 2, href: '#CP-0?c=run-a' } },
+  ] }]);
+  assert.ok(html.includes('<span class="mt-lead">No bottom line in this handoff.</span>'));
+  assert.ok(html.includes('2 saved outputs, none chosen. <a class="in-ev" href="#CP-0?c=run-a">Choose one</a>') && !html.slice(html.indexOf('Chosen later')).includes('<details'));
+  assert.ok(!html.includes('<b>') && !html.includes('<i>x') && html.includes('&lt;b&gt;Odd&lt;/b&gt; &amp; &quot;name&quot;'), html);
+  assert.equal(C.moduleTiles([]), '');
+});
+
+test('moduleTiles: print opens every tile and puts them back', () => {
+  const fold = { dataset: {}, open: false };
+  const root = { querySelectorAll: selector => (selector.split(',').map(part => part.trim()).includes('.mt') ? [fold] : []) };
+  C.foldsForPrint(root, true);
+  assert.equal(fold.open, true);
+  C.foldsForPrint(root, false);
+  assert.equal(fold.open, false);
+});
+
+test('attribution: a link to the module the block comes from, escaped', () => {
+  assert.equal(C.attribution({ title: 'Committee <decision>', href: '#CP-6/x?a=1&b=2' }).replace(/<svg.*<\/svg>/, ''), '<p class="from"><a href="#CP-6/x?a=1&amp;b=2">From Committee &lt;decision&gt;</a></p>');
+});
+
+test('verdictPanel and callout take the heading level the page needs, h4 when none is given', () => {
+  assert.ok(C.verdictPanel([T('A.', 1)], mark, undefined, 'h3').includes('<h3 class="eyebrow">Bottom line</h3>'));
+  assert.ok(C.verdictPanel([T('A.', 1)], mark).includes('<h4 class="eyebrow">Bottom line</h4>'));
+  const html = C.callout('What would change the view', [T('B.', 2)], mark, undefined, 'h2');
+  assert.ok(html.includes('What would change the view</h2>') && !html.includes('</h4>'));
+});
+
+test('metricStrip: a latest cell longer than a figure is text, set at body size (the wide class), not as a headline figure', () => {
+  const block = { headers: ['Metric', 'FY2024'], rows: [{ line: 1, cells: ['Revolver test', '7.50x net (8.00x after material acquisition) if usage above 40%'] }, { line: 2, cells: ['Cover', '2.1x'] }] };
+  const html = C.metricStrip(block, { key: r => `k:${r.line}` }, 'Revolver test and cover.', stripLink);
+  assert.ok(html.includes('<p class="strip-v wide">7.50x net') && html.includes('<p class="strip-v">2.1x</p>'), html);
 });

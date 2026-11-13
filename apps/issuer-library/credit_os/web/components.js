@@ -134,14 +134,15 @@
   }
 
   // C2: the Bottom line. The first sentence of the first paragraph is the large lead; what follows is at body size, a trace button ends each paragraph.
-  function verdictPanel(texts, trace, figure) {
+  // `tag` is the heading level of the eyebrow: the page that holds the panel sets it so headings stay in order.
+  function verdictPanel(texts, trace, figure, tag = 'h4') {
     const [first, ...later] = paragraphs(texts, figure);
     if (!first) return '';
     const cut = firstSentence(first.body), hasRest = cut.rest[1] > cut.rest[0];
     const row = (inner, entry) => `<div class="row-end"><p class="verdict-body">${inner}</p>${traceOf(trace, entry)}</div>`;
     const lead = `<div class="row-end"><p class="verdict-lead">${first.show(...cut.lead)}</p>${hasRest ? '' : traceOf(trace, first.entry)}</div>`;
     const rest = hasRest ? row(first.show(...cut.rest), first.entry) : '';
-    return `<div class="verdict"><h4 class="eyebrow">Bottom line</h4>${lead}${rest}${later.map(p => row(p.show(0, p.body.length), p.entry)).join('')}</div>`;
+    return `<div class="verdict"><${tag} class="eyebrow">Bottom line</${tag}>${lead}${rest}${later.map(p => row(p.show(0, p.body.length), p.entry)).join('')}</div>`;
   }
 
   // C5: Key findings as a numbered list. A block is one finding: a `**bold lead**` is its title and the rest its body, else the first sentence is the title.
@@ -156,9 +157,9 @@
   }
 
   // C6: the left-rule callout for "what would change the view".
-  function callout(title, texts, trace, figure) {
+  function callout(title, texts, trace, figure, tag = 'h4') {
     const items = paragraphs(texts, figure).map(p => `<p>${p.show(0, p.body.length)}${traceOf(trace, p.entry)}</p>`);
-    return items.length ? `<div class="callout"><h4>${icon('git-compare')}${escapeHtml(title)}</h4>${items.join('')}</div>` : '';
+    return items.length ? `<div class="callout"><${tag}>${icon('git-compare')}${escapeHtml(title)}</${tag}>${items.join('')}</div>` : '';
   }
 
   // The Limitations: a compact list, and beside it the count of gaps the module records, with the way to them in Evidence. No gap, no signal.
@@ -487,6 +488,24 @@
     const table = designedTable(block, cols, ctx);
     return shapeBlock('shape-metric', ctx, 'data-view="tiles"', shapeBar('', traceOfBlock(ctx, block) + viewToggle('Tiles or table', [['tiles', 'Tiles'], ['table', 'Table']])) + pane('tiles', `<div class="tiles tiles-dense">${tiles}</div>`, true) + pane('table', table, false));
   }
+  // C4, the Overview's figure strip: the rows of one metric table whose label the lead text names, as one joined strip. A row is shown when its label, read as plain text,
+  // is a whole phrase of `text` (case aside), in the table's own order and at most four; none matches, no strip. Each cell is the label (a link to the module that holds the
+  // table: `link` is {href, title}), the latest period's cell as written, the earlier periods' numeric cells beneath, and the row's trace control. Nothing is picked by position.
+  const STRIP_MAX = 4;
+  const phraseIn = (phrase, text) => phrase !== '' && new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegex(phrase)}(?![\\p{L}\\p{N}])`, 'iu').test(text);
+  function metricStrip(block, ctx, text, link) {
+    const cols = visibleColumns(block, 'metric', ctx), labelCol = cols[0], periodCols = cols.slice(1).filter(col => col.kind === 'period');
+    if (!labelCol || !periodCols.length || !block.rows.length) return '';
+    const {latest, earlier} = periodOrder(periodCols), reader = readerText();
+    const cells = block.rows
+      .filter(row => fieldHtml(cellText(row, labelCol.at), ctx) !== '' && phraseIn(reader.plainText(cellText(row, labelCol.at)).trim(), reader.plainText(text)))
+      .slice(0, STRIP_MAX).map(row => {
+        const label = cellText(row, labelCol.at);
+        const below = earlier.map(col => [col, cellText(row, col.at)]).filter(([, value]) => value !== '' && startsWithNumber(value)).map(([col, value]) => `${escapeHtml(col.label)} ${fieldHtml(value, ctx)}`).join(' · ');
+        return `<div class="strip-i"><div class="strip-t"><a class="strip-k" href="${escapeHtml(link.href)}" title="${escapeHtml(`Open ${link.title}`)}">${fieldHtml(label, ctx)}</a>${traceFor(ctx, row, rowLabelOf(block, ctx, row, label))}</div><p class="strip-v${cellText(row, latest.at).length > WIDE_AT ? ' wide' : ''}">${valueHtml(cellText(row, latest.at), ctx)}</p>${below ? `<p class="strip-b">${below}</p>` : ''}</div>`;
+      });
+    return cells.length ? `<div class="strip" role="group" aria-label="Figures the bottom line cites, ${escapeHtml(latest.label)}">${cells.join('')}</div>` : '';
+  }
   function measureTiles(block, ctx) {
     const cols = visibleColumns(block, 'measure', ctx), labelCol = cols[0];
     const consequence = cols.find(col => col.kind === 'consequence'), valueCols = cols.slice(1).filter(col => col.kind === 'period');
@@ -649,6 +668,25 @@
     return listGroup('ms-tiles', ctx, tiles.join(''));
   }
 
+  // C20 on the Overview: one native-accordion tile per module, grouped as the module rail groups them. `groups` is [{title, items}]; an item is {title, href, state, texts, trace, figure}
+  // (its Bottom line paragraphs) or {title, href, choose: {count, href}} (saved outputs and none chosen). The collapsed tile shows the module's declared state (word and icon) and the
+  // first sentence of its Bottom line; open, it shows the whole Bottom line and the link to the module. Every tile shares one `name`, so the browser keeps one open at a time.
+  const NO_BOTTOM_LINE = 'No bottom line in this handoff.';
+  function moduleTile(item) {
+    const state = item.state ? stateBadge(item.state, {}) : '';
+    if (item.choose) return `<div class="mt mt-plain"><p class="mt-top"><span class="mt-name">${escapeHtml(item.title)}</span></p><p class="mt-lead">${item.choose.count} saved outputs, none chosen. <a class="in-ev" href="${escapeHtml(item.choose.href)}">Choose one</a></p></div>`;
+    const [first] = paragraphs(item.texts || [], null);
+    const lead = first ? first.show(...firstSentence(first.body).lead) : NO_BOTTOM_LINE;
+    const body = paragraphs(item.texts || [], item.figure).map(p => `<p class="mt-p">${p.show(0, p.body.length)}${traceOf(item.trace, p.entry)}</p>`).join('');
+    return `<details class="mt" name="overview-modules"><summary class="mt-head"><span class="mt-top"><span class="mt-name">${escapeHtml(item.title)}</span>${state}<span class="mt-ch" aria-hidden="true">${icon('chevron-down')}</span></span><span class="mt-lead">${lead}</span></summary><div class="mt-body">${body}<a class="mt-open" href="${escapeHtml(item.href)}" aria-label="${escapeHtml(`Open ${item.title}`)}">Open module${icon('arrow-right')}</a></div></details>`;
+  }
+  function moduleTiles(groups) {
+    const shown = groups.filter(group => group.items.length);
+    return shown.length ? shown.map(group => `<section class="mt-group"><h3 class="eyebrow">${escapeHtml(group.title)}</h3><div class="mt-grid">${group.items.map(moduleTile).join('')}</div></section>`).join('') : '';
+  }
+  // Where a block on the Overview comes from: a link to the module page that holds it.
+  const attribution = ({title, href}) => `<p class="from"><a href="${escapeHtml(href)}">From ${escapeHtml(title)}${icon('arrow-right')}</a></p>`;
+
   // ---- qa: C18, a native accordion; the answer-state column, when the table has one, is the badge
   function qaAccordion(block, ctx) {
     const cols = visibleColumns(block, 'qa', ctx), qCol = cols[0];
@@ -763,7 +801,7 @@
   const absentBlock = (block, ctx, absent) => emptyState(NOT_ESTABLISHED, absent.reasons, `<div class="es-trace">${traceOfBlock(ctx, block)}</div>`);
 
   // ---- dated: C15, the dated timeline. Events stand in the table's own order, equally spaced; a date is drawn as written and no axis is invented.
-  // Six events or fewer run across from 992px, more run down the page (grouped by year when every date opens with one). A category word is drawn with its icon;
+  // Six events or fewer run across from 992px, more run down the page (grouped by year when every date opens with one); a page that gives the block a narrow column sets `ctx.stacked` to run them down. A category word is drawn with its icon;
   // the other cells (status, relevance, ...) are the event's detail; the Source column is the row's trace control only.
   const CATEGORY_ICONS = [[/debt|capital|financ|liquid/i, 'banknote'], [/corporate|company|governance|ownership/i, 'building'], [/legal|covenant|document/i, 'scale'], [/macro|rate|market|econom|currenc|hedg/i, 'globe']];
   const categoryIcon = word => (CATEGORY_ICONS.find(([rx]) => rx.test(word)) ?? [null, 'calendar-days'])[1];
@@ -782,7 +820,7 @@
       return {when, html: `<li class="tl-i"><div class="tl-d">${fieldHtml(when, ctx)}</div><div class="tl-row"><span class="tl-dot" aria-hidden="true">${mark}</span></div><div class="tl-b"><p class="tl-t">${fieldHtml(title, ctx)}</p>${kind}${more ? `<div class="tl-more">${more}</div>` : ''}${traceFor(ctx, row, rowLabelOf(block, ctx, row, title))}</div></li>`};
     });
     const years = items.map(item => ISO_DATE.exec(item.when)?.[1]);
-    const vertical = items.length > HORIZONTAL_MAX, grouped = vertical && years.every(Boolean) && new Set(years).size > 1;
+    const vertical = Boolean(ctx.stacked) || items.length > HORIZONTAL_MAX, grouped = vertical && years.every(Boolean) && new Set(years).size > 1;
     const list = items.map((item, n) => (grouped && years[n] !== years[n - 1] ? `<li class="tl-yr">${years[n]}</li>` : '') + item.html).join('');
     const bar = shapeBar(`<span class="eyebrow"><span data-count>${items.length}</span> ${items.length === 1 ? 'event' : 'events'}</span>`, '');
     return shapeBlock('shape-dated', ctx, '', `${bar}<ol class="tl ${vertical ? 'tl-v' : 'tl-h'}">${list}</ol>`);
@@ -940,7 +978,7 @@
   const render = (shape, block, ctx) => (Object.hasOwn(SHAPE_COMPONENTS, shape) ? SHAPE_COMPONENTS[shape] : recordCards)(block, ctx);
 
   // Print shows the text of a folded <details>: the ones these components draw are opened for the print and put back as they were. `root` is the document.
-  const FOLDS = '.qa-d, .wl-d, .ms-list';
+  const FOLDS = '.qa-d, .wl-d, .ms-list, .mt';
   function foldsForPrint(root, printing) {
     root.querySelectorAll(FOLDS).forEach(fold => {
       if (printing) { if (fold.dataset.wasOpen === undefined) fold.dataset.wasOpen = String(fold.open); fold.open = true; } else if (fold.dataset.wasOpen !== undefined) { fold.open = fold.dataset.wasOpen === 'true'; delete fold.dataset.wasOpen; }
@@ -982,7 +1020,7 @@
     return `<nav class="sec-rail" aria-label="On this page"><p class="eyebrow">On this page</p>${items.map(link).join('')}</nav>`;
   }
 
-  const Components = {icon, traceButton, traceRow, headerChips, placePill, toast, toastHost, tipAttributes, verdictPanel, findingsFeed, callout, limitationsBlock, recordCards, findingCell, render, casesBlock, caseRowsBlock, rankedLadder, statementCard, metricTiles, measureTiles, changeCards, statusChecklist, sidedBoard, moduleStateTiles, qaAccordion, factList, riskMatrix, watchList, datedTimeline, pathwayFlow, emptyState, mapLayers, pathwayDiagram, foldsForPrint, paragraphText, handleClick, sectionRail, ICON_PATHS};
+  const Components = {icon, traceButton, traceRow, headerChips, placePill, toast, toastHost, tipAttributes, verdictPanel, findingsFeed, callout, limitationsBlock, recordCards, findingCell, render, casesBlock, caseRowsBlock, rankedLadder, statementCard, metricTiles, measureTiles, changeCards, statusChecklist, sidedBoard, moduleStateTiles, metricStrip, moduleTiles, attribution, qaAccordion, factList, riskMatrix, watchList, datedTimeline, pathwayFlow, emptyState, mapLayers, pathwayDiagram, foldsForPrint, paragraphText, handleClick, sectionRail, ICON_PATHS};
   if (typeof window !== 'undefined') window.Components = Components;
   if (typeof document !== 'undefined' && document.body) toastHost();
   if (typeof module !== 'undefined') module.exports = Components;
