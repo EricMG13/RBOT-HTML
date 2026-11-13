@@ -832,3 +832,19 @@ text of at most 60 characters; a bottom line of at most 45 words in the first se
 a `### Confidence inputs` table, from which Python computes the score by the method's own formula in
 `CANON_SHARED.md § CP_CONFIDENCE_SCORE.md`; and Financial foundation's `### Post-balance-sheet
 adjustments`. Selected source revision: the ruling above. Limit: offline proof only until a paid run.
+
+**Scope reduction of 2026-11-13 (owner: "cut the part of the appendix the modules write"; "inter
+module communication should [be] handled by orchestrator"; ruling
+`docs/rulings/2026-11-13-appendix-and-routing-scope.md`).** The Deploy V methods are unchanged
+on disk and in the method block, so this marks no run "Earlier methods" by a change to their text;
+the project-written `CPOS_REGISTER_SCOPE.md` is a new last section of the method block of CP-0, CP-1A,
+CP-DR, CP-2, CP-2A, CP-2E, CP-2G, CP-3, CP-5 and CP-6, so the library's method pin for those ten
+changes. It lists the registers each of those modules does not write: the ones with a method id that
+no later module, check, chart, the Forecast page or the library read in either retained Sol run.
+`ROUTING_RULES`, sent to every module, drops the methods' routing text (next-command recommendations,
+Master Index, run command sheet, dependency maps, research requests, registers addressed to receiving
+modules, and the tables `cp2g.cp_model_forecast_drivers` and `cp2b.cp_model_catalysts`); CP-0's block
+no longer asks for T7 and T8. This is a documented scope reduction of Deploy V's appendix contract
+(`required_register_ids`, lossless profile) for those registers only; every other register,
+reader passage and check is as before. Selected source revision: the ruling above. Limit: offline
+proof only until a paid before and after run and the reader check.

@@ -2069,10 +2069,10 @@ def test_cp0_runs_the_deploy_v_skill_not_the_json_stand_in(tmp_path):
     for words in (
         "already listed, hashed and pinned the sources",
         "Do not write the registers P1, P2, P4, P6, P7 and P8",
-        "Write P3 and P5",
-        "T1 input gate, T2 source register, T3 source hierarchy",
-        "T8 recommended run command sheet",
-        "the minimum missing documents",
+        "Do not write T7 or T8: CP-OS orders the modules.",
+        "Write P3 and the readiness tables T1 input gate, T2 source register",
+        "T4 content-to-module map and T6 evidence trace",
+        "State any missing document under `## Gaps`.",
         "only for a source the effective-source set does not carry",
         "never a readiness ground and never a `CONDITIONAL` condition",
         "The package, parse and hash checks were done by the launcher: record no result for them",
@@ -2458,28 +2458,31 @@ def test_every_module_is_told_what_stands_for_acceptance_scripts_and_questions(t
 # CP-8 pin recomputed on 2026-11-13 (merge of origin/main into claude/deploy-v-methods): it is the
 # merge of main's CP-8 method change (cp8.md redesign) with this branch's appendix section. Every
 # other pin is this branch's value; main changed no other method text.
+# Ten pins recomputed on 2026-11-13 (T4, ruling 2026-11-13-appendix-and-routing-scope.md): CP-0,
+# CP-1A, CP-DR, CP-2, CP-2A, CP-2E, CP-2G, CP-3, CP-5 and CP-6 now end their method block with their
+# section of CPOS_REGISTER_SCOPE.md; the added text is that section and nothing else.
 METHOD_TEXT_SHA256_AT_1B41E65 = {
-    "CP-0": "e8d3e77bc48bc98e2fd8595e7b46ee7fc786e859591cf244325f3508b7d5dac9",
+    "CP-0": "b76cab592dd22d35a3438ac627a85240ba61596dd6d7fae87e5cc7a8df8a12b4",
     "CP-1": "02477a91d582f6301b2dbfadd96572ea75f9845493de337d7160a55111b62170",
-    "CP-1A": "4c8efcfafe748cd01e6c856041349397c77384c3c82566b1f36a429535c01639",
+    "CP-1A": "feae0861de156f5cf59bb6d2c284b49e579275fc7aed7e500efefbad5dcea0b2",
     "CP-1B": "38d9fa7b075d1ce5d0cd21bcc216f57f37369cd4db395b3f1fb65498697a509f",
     "CP-1C": "9353afdbce820f59c2dcabc951fc1ff3813174b3c84e79b47bc22bea97f3bbe8",
     "CP-1D": "d4d1ee4507d743cdb9d98bffd865ca3d012a4b4fb79a92a275cfc6a796bff453",
-    "CP-2": "f925b66f13cff7bd7801d1c3cf7120eb1317126c8605bf1ff1875ce62ed3c162",
-    "CP-2A": "5caf04f5b39bae89726bcd5929e8f17ca14b7d753f1ac718d58eda27baf9569f",
+    "CP-2": "7fca788f6e59d19b43699ef9967927b97d19e1e0ec56a24deb01f145fa1f3df8",
+    "CP-2A": "f78cf4678dc51fef5e8c8334067e360650f590da843b9d97f71f47caa74ff701",
     "CP-2D": "fe39c49f842c99f6ffd390bd409cbb44adbbe397720d0a0d4d935b52a34a8fda",
-    "CP-2E": "ab111a4fb0bd201b84dbec916ccdba6e5df92f60671b2d419949ca34d6118e34",
-    "CP-2G": "268a85d82da39c9b7b66474b4052eb23b310f7fc5ce0c9d7efa25766a5699cf2",
+    "CP-2E": "5201bb946a7ee7752be1f8a71b7335569310a1483cf3abe7b68d87a1c061db0b",
+    "CP-2G": "928744aad95091174763dde882cbf9212d43debea297fdc826147186a51ea2a6",
     "CP-2H": "f500af91511584f3dda4d0dd10180766dabe19d81de7df12a99b6da2d92e89b4",
-    "CP-3": "b84b8a08baa01a24a12f9f5e92a24dc735129a9dfec1449b4d8329833deef123",
+    "CP-3": "2bc7ea0813ae5a21cae3925c8fb213cedb87e14d9e8afcdba0180b2baa08892e",
     "CP-3C": "d1038d5097955d6bf47ccae01fee07bdc1db0b2e49eb7b77d0153c07b48768ac",
     "CP-3D": "a35a8a1d6f1b7aaecf7e98613e80a04c4c158f9163f315edbd004647463aa698",
     "CP-4": "a769b7456e5661d70cb25388fc4acb444cfd0aecd8f778554f98369ebadc7f7e",
     "CP-4C": "1d96547563190f89b909c37ea47969ecb04a2c794c5971b6db8f7c94c836b1f8",
-    "CP-5": "9ac221698cc36a06473ce8cd9c2128c1705da362b289163d4ab54fda0d418d76",
-    "CP-6": "115d07e8934f049b920e497834bcf61d53c6fe0cdd0266daf56b87d18d5e1f26",
+    "CP-5": "2b9dc8ce8ebb37a0c1070f332457e5a76a09e1912313efed463ce3e00413bea9",
+    "CP-6": "b6b33691ec6e2f3c3a271a32499b66031315dd6540909d61fc8d14af85da9854",
     "CP-8": "0a0b339a9f9a284328b9a6fb50513a9bd03f2aa58dd45a387fe057b6ce2612c3",
-    "CP-DR": "83aa5447c37db42db2e3df91cdd0cfaf491f37c0436fc8257c0d5fb43e735353",
+    "CP-DR": "c6f40322a8cdf80f4cef2c54cc2035da62771a7760a5e81ca5952a5c5498b73c",
     "CP-L10": "5b0e904dd62e1d1b341ec3d7d1717500d68ce1aee734b347e0dbbdfbe696b006",
 }
 

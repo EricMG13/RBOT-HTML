@@ -144,6 +144,13 @@ _SKILLS = "docs/reuse/selected-methods/skills/"
 _VII = "src/deploy_vii/methods/"
 # The Confidence Score rules `confidence_score.py` applies; the script cannot run in this transport.
 _SCORE = "docs/reuse/selected-methods/CANON_SHARED.md § CP_CONFIDENCE_SCORE.md"
+# Owner, 2026-11-13 (T4, ruling 2026-11-13-appendix-and-routing-scope.md): the registers a module
+# no longer writes, one `## <module>` section each, sent last in the module's method block. Only
+# the ten modules the two retained Sol runs measured have one.
+REGISTER_SCOPE = "docs/reuse/selected-methods/CPOS_REGISTER_SCOPE.md"
+REGISTER_SCOPE_MODULES = (
+    *("CP-0", "CP-1A", "CP-DR", "CP-2", "CP-2A", "CP-2E", "CP-2G", "CP-3", "CP-5", "CP-6"),
+)
 # The method each module runs, per METHODOLOGY-REVIEW.md and what the 2026-11-05 live campaigns
 # consumed. prompts/CP-0.md and CP-1-intake.md are TDG case instructions, so they are left out.
 # Owner, 2026-11-10 ("Fix all"): each skill is sent every companion its SKILL.md calls mandatory
@@ -288,6 +295,7 @@ METHODS: dict[str, tuple[str, ...]] = {
     module: (
         *((*paths, _SCORE) if any(p.startswith(_SKILLS) for p in paths) else paths),
         *(() if module in DATA_MODULES else READER_LAYER),
+        *((f"{REGISTER_SCOPE} § {module}",) if module in REGISTER_SCOPE_MODULES else ()),
     )
     for module, paths in _SELECTED.items()
 }
@@ -1813,6 +1821,42 @@ TRANSPORT_RULES = (
     "only the work that depends on it. Missing evidence still blocks exactly what the method says "
     "it blocks.\n\n"
 )
+# Every module, directly after TRANSPORT_RULES. Owner, 2026-11-13: "inter module communication
+# should [be] handled by orchestrator, so does not need to be held in the instructions". The last
+# sentence is the controller's (T4 ruling R4): the methods' own validators (`required_register_ids`,
+# `appendix_contract`, the lossless profile, `completeness_check.py`) are never run here, but
+# TRANSPORT_RULES has the module do their checks itself, and those would restore what is cut.
+ROUTING_RULES = (
+    "Routing in this transport: CP-OS chooses which modules run and in what order, gives each "
+    "module the handoffs it needs and keeps every handoff; no reader acts on a recommendation "
+    "about what to run next. This overrides every method instruction to return or recommend a "
+    "next command, keep a Master Index, managed workspace, export record or run command sheet, "
+    "map upstream or downstream dependencies, file a research request or brief, or write a "
+    "register whose rows are addressed to receiving modules (cross-module handoff, consumer "
+    "actions, analytical consumption, event use, downstream readiness) or the tables "
+    "`cp2g.cp_model_forecast_drivers` and `cp2b.cp_model_catalysts`: write none of them. Under "
+    "`## Next module` write only: `The orchestrator selects the next module.` A restriction on "
+    "how your results may be used is a limitation: state it in `### Limitations` or `## Gaps`, "
+    "in plain words. Every figure in a reader passage must still appear in a table you write or "
+    "in `## Calculations`. A register or text excluded here or in a `Register scope` section of "
+    "the method block is not required by the method's `required_register_ids`, "
+    "`appendix_contract`, lossless profile or completeness check in this transport: when you "
+    "run those checks yourself, do not restore it and do not block for want of it.\n\n"
+)
+# CP-5 only: it audits the other modules' handoffs. The first line is the marker the tests look for;
+# `{lines}` is one `- <module>: <registers>` line per upstream module that has a scope section.
+UPSTREAM_SCOPE_NOTE = (
+    "Register scope of the handoffs you audit, in this transport:\n"
+    "CP-OS told each module below not to write the registers listed, so their absence is not a "
+    "finding: do not report it as a gap, a missing register, an issue or a must-fix, do not "
+    "lower the clearance for it, and do not ask for it to be restored.\n"
+    "{lines}\n"
+    "The routing rule above holds for every module in the same way: no Master Index, run command "
+    "sheet, `## Next module` recommendation, cross-module handoff, consumer actions, analytical "
+    "consumption, event use or downstream readiness register and neither of the tables "
+    "`cp2g.cp_model_forecast_drivers` and `cp2b.cp_model_catalysts` was asked for, so their "
+    "absence is not a finding either.\n\n"
+)
 # CP-2A only. Its two methods disagree on who sets the stress sizes; run tdg-forecast-005 followed
 # the SKILL, gave no shock, and CP-2G had no stress case to compute. The stress design text is
 # the later correction (LEAD adaptation, ruling Q2), and the owner allowed labelled judgment for
@@ -1834,10 +1878,10 @@ STRESS_BLOCK = (
 CP0_BLOCK = (
     "Source readiness here: the launcher has already listed, hashed and pinned the sources "
     "before this call, so the preparation the method describes is done. Do not write the "
-    "registers P1, P2, P4, P6, P7 and P8. Write P3 and P5, the readiness tables (T1 input gate, "
-    "T2 source register, T3 source hierarchy, T4 content-to-module map, T5 gaps and conflicts, "
-    "T6 evidence trace, T7 master index state, T8 recommended run command sheet), the document "
-    "hierarchy and the minimum missing documents. A result is CONDITIONAL only for a source the "
+    "registers P1, P2, P4, P6, P7 and P8. Do not write T7 or T8: CP-OS orders the modules. Write "
+    "P3 and the readiness tables T1 input gate, T2 source register, T4 content-to-module map "
+    "and T6 evidence trace. State any missing document under `## Gaps`. A result is "
+    "CONDITIONAL only for a source the "
     "effective-source set does not carry. An upstream analytical handoff that has not been "
     "produced yet is never a readiness ground and never a `CONDITIONAL` condition: modules are "
     "put in order by navigation, not by readiness. The package, parse and hash checks were done "
@@ -2228,6 +2272,24 @@ def method_text(module: str) -> str:
     )
 
 
+def register_scope(module: str) -> str:
+    """The registers a module's scope section says not to write, as the section names them
+    (`<id> <title>; <id> <title>`)."""
+    section = dict(method_sections(module))[f"{REGISTER_SCOPE} § {module}"]
+    return section.partition("do not write ")[2].partition(". Any figure")[0]
+
+
+def upstream_scope_note(ordered: Sequence[str]) -> str:
+    """What CP-5 is told about the handoffs it audits: the registers each module of the run planned
+    before it was told not to write. Empty when the run has no CP-5 or none of them has a scope
+    section."""
+    if "CP-5" not in ordered:
+        return ""
+    upstream = ordered[: ordered.index("CP-5")]
+    lines = [f"- {m}: {register_scope(m)}." for m in upstream if m in REGISTER_SCOPE_MODULES]
+    return UPSTREAM_SCOPE_NOTE.format(lines="\n".join(lines)) if lines else ""
+
+
 def _instructions(
     run: Run,
     module: str,
@@ -2264,6 +2326,7 @@ def _instructions(
         "Use calculate for all new arithmetic. Keep exact amounts, units, currencies, periods, "
         "source locators and limitations. Absent evidence stays an explicit gap.\n\n"
         + TRANSPORT_RULES
+        + ROUTING_RULES
         + "A handoff is rejected unless it does all of this:\n"
         f"- name {run.issuer_name} in `## Request`, and state the as-of date {run.as_of} there;\n"
         "- list each issuer source it relied on in `## Sources`, naming the exact file and its "
@@ -2586,6 +2649,7 @@ def _prepare(  # noqa: PLR0913, PLR0915 - `prepare`'s body: one keyword per sett
         ("CP-1", PERIOD_TABLE_BLOCK, forecast),
         ("CP-1", LAYER1_FORECAST_BLOCK, forecast and "CP-2G" not in ordered),
         ("CP-0", CP0_BLOCK, True),
+        ("CP-5", upstream_scope_note(ordered), True),
         ("CP-2A", STRESS_BLOCK, True),
         ("CP-DR", PEER_PACK_BLOCK, peer_pack),
         ("CP-1C", PEER_READER_BLOCK, peer_pack),
