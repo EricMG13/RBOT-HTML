@@ -27,7 +27,9 @@ accepted, the run is delivered without it.
     definition` or `same measure` is replaced by the earlier period's basis text of the same table
     (`definition_resolved: true`; the text as written is `definition_written`); a pointer by
     calculation ID (`C01-C04`) is not followed by Python (`definition_resolved: false`): read the
-    calculation it names in that run's CP-1 handoff yourself;
+    calculation it names in that run's CP-1 handoff yourself. When you write about it, describe the
+    calculation in words (`the earlier run's leverage calculation`); never write a calculation ID in
+    this handoff;
   - `net_debt_change` when both runs state gross debt, net debt and cash under one definition: the
     earlier net debt, the change in gross debt, the change in cash and the current net debt, with
     its sign convention (an increase in cash reduces net debt). It is two balances compared; it does
@@ -46,7 +48,9 @@ accepted, the run is delivered without it.
 1. **Two kinds of change are never mixed.** Either the issuer changed (a new period or a new source
    brought new facts) or the analysis changed (a method change, a correction, or presentation).
    Every row you write carries exactly one cause, from this fixed list: `New period`,
-   `New source`, `Method change`, `Correction`, `Presentation`, `Unresolved`. Use `Unresolved`
+   `New source`, `Method change`, `Correction`, `Presentation`, `Unresolved`, or `None` where this
+   method says so (a measure whose pack difference is zero, an `Unchanged` module that differs in
+   nothing, the `No material change` row). Use `Unresolved`
    when the evidence given does not say which; say what is missing. Issuer rows use `New period`,
    `New source` or `Unresolved`; a measure the pack states for the same period with a non-zero
    difference uses `Correction` or `Method change`, or says `Not comparable` (rule 3). A measure
@@ -69,9 +73,14 @@ accepted, the run is delivered without it.
    (`fell by 0.60x` for -0.60); do not write a sign after a word of direction. Where the pack gives
    no difference, write none. A value the pack states as null is missing, not zero: write that it is
    not stated.
-   - A row that names a pack measure uses the measure's label exactly as the pack gives it, and
-     there is one row per pack measure. A fact
-     row (a refinancing, a new facility, a rating action) may give amounts a handoff states, the
+   - Every pack measure has exactly one row, whatever its `comparable` value and whether or not it
+     changed; the first cell is the measure's label exactly as the pack gives it, in plain text. Its
+     Earlier and Current cells are built from the pack and nothing else: the value, then the unit
+     (attached when the unit is `x` or `%`, after one space otherwise), then the period in
+     brackets: `6.01x (FY2024)`, `6261 US$m (2024-09-30)`. Copy the value, unit and period
+     character for character: no grouping comma, no currency word, no reworded date; leave out a
+     part the pack gives as null. Where the pack's value is null the cell is exactly `Not stated`.
+     A fact row (a refinancing, a new facility, a rating action) may give amounts a handoff states, the
      earlier run's under Earlier and the current run's under Current, but never a pack measure's
      value or a difference; a difference belongs to its measure's own row.
    - `comparable: yes`: the definitions match; report the values and the difference.
@@ -82,9 +91,9 @@ accepted, the run is delivered without it.
      write in that row exactly one of `Same definition` or `Not comparable`, with the reason in
      the last cell: begin the Effect cell with exactly one of them, then the reason
      (`Not comparable: the EBITDA basis changed.`); the words elsewhere in a cell are refused. With `Same definition` report the values and the difference. With
-     `Not comparable` give both values with their periods, never print the difference and draw no
-     trend from the two (no "rose", "fell", "weakened", "improved"). A difference of a measure
-     whose row says `Not comparable` is written nowhere in the handoff, in no passage, register or
+     `Not comparable` give both values with their periods, never print the difference, and in the
+     reason say only how the two definitions differ: describe no movement between the two values.
+     A difference of a measure whose row says `Not comparable` is written nowhere in the handoff, in no passage, register or
      gap, and no passage says that measure moved.
    - **The same period with different values is not the issuer changing.** When `same_period` is
      true and the difference is not zero, the issuer did nothing between the runs: either the
@@ -103,11 +112,14 @@ accepted, the run is delivered without it.
      passages, `## Gaps`, fact rows, the analysis register's Why cells and the ledger's cells. The
      one place a withheld difference may be printed is the Effect cell of that same measure's issuer
      row, said `Same definition` with the cause `Correction` or `Method change`; the net debt
-     change's cash has no such row, so its difference is printed nowhere. A withheld difference
-     is refused without its unit too: a bare number (`Cash fell by 30.`) equal to a withheld size
-     is refused wherever the sized one is, so write a count that happens to equal it another way
-     (a size written in words, `thirty`, is refused as well, also when a line break splits it; the
-     repair names the figure and the measure). A number directly before a count noun (`30 modules`,
+     change's cash difference may be printed only in the Effect cell of the pack's `Cash` measure
+     row, when that row may print its own difference and the two differences are the same number;
+     otherwise it is printed nowhere. A withheld difference is refused without its unit too: a bare
+     number (`Cash fell by 30.`) equal to a withheld size is refused wherever the sized one is. Write every amount, ratio and difference in digits with
+     its unit, never in words (`thirty million`, `fell by thirty`); a number word is only for a count
+     of things (`three modules`). Write a date as `2024-09-30`. Write lists with `-` bullets, never
+     numbered, and keep each paragraph, list item and table row on one line, so a count and its noun
+     are never split. A number directly before a count noun (`30 modules`,
      `30 months`) or after `page`, `note`, `section`, `table`, `row`, `item`, `step` or `appendix` is a
      count and allowed, with no word between; `30 new modules` is refused. A year with a unit
      (`2010 US$m`, `USD 2010`) is a figure, not a year; a bare year or a year after a month or period
@@ -139,13 +151,12 @@ after `### Limitations`, each as one table under its exact heading, columns exac
 | Measure or fact | Earlier | Current | Cause | Effect on the credit view |
 | --- | --- | --- | --- | --- |
 
-One row per material change in the issuer's business or credit profile: a pack measure (the first
-cell is the pack's label, exactly) or a fact the handoffs show changed (a new facility, a
-refinancing, a disposal, a rating action, a change in guidance). For a measure, Earlier and Current
-hold the pack's values with their units and periods; for a fact, plain words. Cause is one of
+One row for every pack measure (rule 3), then one row for each fact the handoffs show changed (a
+new facility, a refinancing, a disposal, a rating action, a change in guidance). For a measure,
+Earlier and Current are the value cells rule 3 defines; for a fact, plain words. Cause is one of
 `New period`, `New source`, `Unresolved`; for a same-period measure with a non-zero difference,
 `Correction` or `Method change` (rule 3); for a measure whose pack difference is zero, `None`.
-If nothing material changed, write one row whose first
+If no fact changed, add one row whose first
 cell is `No material change`, Earlier and Current `—`, Cause `None`, and say why in the last cell.
 
 ### What changed: the analysis
@@ -160,11 +171,12 @@ now and not before, `Not run this time` one that ran before and not now, and the
 earlier and current bottom line as the credit view of that module. Cause is one of the six
 causes, or `None` for an `Unchanged` row that differs in nothing. `Presentation` goes only with
 `Unchanged`. A `New` or `Not run this time` module: when the pack's
-`current.selection` is `preset` and `prior.selection` is `preset` or null (a run that predates the
-field), the pathway's module set changed between the runs, so the
-Cause is `Method change` and the Why says that (the pathway's module set changed between the runs;
-the words "the pack does not say" are refused there); when either run's selection is `explicit`,
-the Cause is `Unresolved` and the Why says what is missing. Why is one sentence.
+`current.selection` and `prior.selection` are both `preset`, the pathway's module set changed
+between the runs, so the Cause is `Method change` and the Why says that; when `prior.selection` is
+null (a run that predates the field) the pack cannot say which modules the earlier run was asked
+for, so the Cause is `Method change` or `Unresolved` and the Why says what the pack does and does
+not show; when either run's selection is `explicit`, the Cause is `Unresolved` and the Why says
+what is missing. Why is one sentence.
 
 ### Limitations ledger
 
@@ -183,11 +195,13 @@ earlier and a current ref is `Remaining`; only a current ref is `New`; only an e
 ### Basis lines
 
 The Basis item forms for this module are stated once, in the run instructions' paragraph that names
-the earlier run (they replace the general forms there). The checker refuses a Basis item that names
-`changes.json` or a `prior/` file, or gives a page for a handoff.
+the earlier run (they replace the general forms there). A Basis item in any other form is refused,
+and so is a handoff of a module that did not run in the run the item names.
 
 Keep the words plain. Module codes (for example `CP-2D`) are written only in the tables' Module
 and What closed it cells, limitation refs (`E1`, `C2`) only in the two ref columns, and neither in
-a sentence; no hashes or page numbers outside the tables' Source-style cells. After the registers
+a sentence. A calculation ID (`C12`) looks like a limitation ref and is refused wherever it is
+written: describe the calculation in words; no hashes or page numbers outside the tables'
+Source-style cells. After the registers
 keep the remaining sections of the handoff as the instructions require: `## Calculations` states
 that CP-8 makes none, and `## Gaps` lists what the pack could not compare.

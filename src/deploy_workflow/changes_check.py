@@ -152,11 +152,6 @@ _NOT_EVIDENCE = frozenset({"", "-", "—", "–", "n/a", "none", "not stated"})
 _DASHES = frozenset({"", "-", "—", "–"})
 _UP = r"rose|rise|risen|rises|increased?|increases|grew|grown|up|higher|gained|added"
 _DOWN = r"fell|fall|fallen|falls|decreased?|decreases|declined?|dropped|down|lower|reduced|shrank"
-_TREND = re.compile(
-    rf"\b(?:{_UP}|{_DOWN}|strengthen\w*|weaken\w*|improv\w*|worsen\w*|deteriorat\w*|better|worse"
-    r"|eased|tightened|trend\w*)\b",
-    re.IGNORECASE,
-)
 _DIRECTION = re.compile(rf"\b(?:(?P<up>{_UP})|(?P<down>{_DOWN}))\b", re.IGNORECASE)
 _SENTENCE_END = re.compile(r"[.;:!?]\s")
 # A figure written as a difference: after `by` or a direction word (ends at the first digit).
@@ -471,8 +466,6 @@ def _definition_issues(where: str, row: Sequence[str], measure: Mapping[str, Any
             f"{where}: the pack marks this measure not comparable ({measure['reason']}); say "
             '"not comparable" and give no difference.'
         )
-    if NOT_COMPARABLE in text and _TREND.search(row[EFFECT]):
-        issues.append(f"{where}: a `Not comparable` row draws no trend from the two values.")
     return issues
 
 
@@ -629,6 +622,14 @@ def _issuer_issues(
         issues += _measure_row_issues(name, row, measure)
         if flagged:
             issues += _same_period_issues(name, row, cause)
+    named = {_plain(row[0]) for row in rows}
+    issues += [
+        f"Issuer register: the pack measure `{label}` has no row; write exactly one row for every "
+        "pack measure, its first cell the pack's label, its Earlier and Current cells the pack's "
+        "values."
+        for label in labels
+        if label not in named
+    ]
     return issues
 
 
@@ -808,7 +809,9 @@ def _outside_ref_issues(lines: list[str], pack: Mapping[str, Any]) -> list[str]:
         )
     return [
         f"{ref} appears outside the ledger's ref columns; a ref may be written only in the "
-        "Earlier ref and Current ref columns, never in a sentence or another cell."
+        "Earlier ref and Current ref columns, never in a sentence or another cell. "
+        f"If `{ref}` is a calculation ID, describe the calculation in words; a limitation ref is "
+        "written only in the two ref columns."
         for ref in found
     ]
 
@@ -845,15 +848,22 @@ def _withheld_sizes(
     pack: Mapping[str, Any], said_nc: frozenset[str], exempt: frozenset[str] = frozenset()
 ) -> dict[Decimal, str]:
     """The non-zero differences a checked line may not print, with their measure's label. `exempt`
-    is the keys of measures whose difference this line may print (`_may_print`); a difference equal
-    to a value of its own measure is no difference."""
+    is the keys of measures whose difference this line may print (`_may_print`), and a difference
+    of one of their sizes is printable with it (the net debt change's cash beside the Cash row); a
+    difference equal to a value of its own measure is no difference."""
     found: dict[Decimal, str] = {}
-    for measure in (*pack["measures"], *_net_debt_cash(pack)):
+    measures = (*pack["measures"], *_net_debt_cash(pack))
+    own = {
+        abs(d)
+        for m in measures
+        if m["key"] in exempt and (d := _signed(m["difference"])) is not None
+    }
+    for measure in measures:
         difference = _signed(measure["difference"])
         barred = measure["comparable"] == "no" or measure["key"] in said_nc
         if difference is None or difference == 0 or not (barred or _flagged(measure)):
             continue
-        if measure["key"] in exempt:
+        if measure["key"] in exempt or abs(difference) in own:
             continue
         if abs(difference) not in {abs(v) for v in _measure_values(measure) - {difference}}:
             found[abs(difference)] = measure["label"]
@@ -1190,6 +1200,7 @@ def _passage_issues(
     passage_differences = _pack_differences(pack, without=withheld)
     register_differences = _pack_differences(pack, without=barred)
     kept = _withheld_sizes(pack, said_nc)
+    labels = {m["label"] for m in pack["measures"]}
     in_issuer, h2 = False, ""
     headers = _header_rows(lines)
     issues: list[str] = []
@@ -1201,10 +1212,13 @@ def _passage_issues(
         text = line.strip()
         row = text.startswith("|") and text.endswith("|")
         sizes = kept
+        whole = None  # the row of a fact, read in every cell by the bare reading
         if in_issuer and row:
             cells = re.split(r"(?<!\\)\|", text[1:-1])
             if exempt := _may_print([c.strip() for c in cells], pack, said_nc):
                 sizes = _withheld_sizes(pack, said_nc, exempt)
+            if _plain(cells[0]) not in labels:
+                whole = " | ".join(c.strip() for c in cells)
             line = cells[-1]
         issues += _direction_issues(
             line, register_differences if row else passage_differences, "A passage"
@@ -1214,7 +1228,8 @@ def _passage_issues(
         line = _DATE.sub(_blanks, line)
         figures = [f.size for f in _figures(line, counts=False, header=i in headers)]
         listed = not row and _starts_list_item(lines, i)
-        bare = _bare_sizes(lines, i, _bare(line, listed=listed), header=i in headers)
+        read = line if whole is None else _DATE.sub(_blanks, whole)
+        bare = _bare_sizes(lines, i, _bare(read, listed=listed), header=i in headers)
         for size in dict.fromkeys([*figures, *bare]):
             if size in sizes:
                 issues.append(
