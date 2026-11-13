@@ -40,12 +40,24 @@ LAYER1_LIMIT = (
     "the arithmetic, are unreviewed. Not analytical review."
 )
 SOURCES = ("CP-2G", "CP-1")
-UNITS = "USD millions"
-SCALE_LIMIT = (
-    "The forecast inputs state base amounts, amount drivers and facility amounts in USD thousands, "
-    "as CP-1 prints them (scale 1000); Python divided each by 1,000 before any calculation. "
-    "Every figure here is USD millions."
-)
+# A block that predates `currency` states none and is read as USD, the only currency the field's
+# absence ever meant. A block that states `scale` without `currency` is refused at acceptance when
+# CP-2G writes it (`cpos_launch._unstated_currency`) and withheld in `parse` when it is a layer-1
+# block; a retained CP-2G block that skipped acceptance still reads USD millions.
+UNSTATED_CURRENCY = "USD"
+CURRENCY_CODE = re.compile(r"[A-Z]{3}")
+
+
+def scale_limit(currency: str | None = None) -> str:
+    code = currency or UNSTATED_CURRENCY
+    return (
+        f"The forecast inputs state base amounts, amount drivers and facility amounts in {code} "
+        "thousands, as CP-1 prints them (scale 1000); Python divided each by 1,000 before any "
+        f"calculation. Every figure here is {code} millions."
+    )
+
+
+SCALE_LIMIT = scale_limit()
 Signed = Annotated[str, Field(pattern=r"^-?[0-9]{1,6}(\.[0-9]{1,4})?$")]
 
 
@@ -121,6 +133,7 @@ class ForecastInputs(Contract):
     years: tuple[Span, Span, Span]
     facilities: Annotated[tuple[Facility, ...], Field(min_length=1, max_length=40)] | None = None
     scale: Literal[1, 1000] | None = None
+    currency: Annotated[str, Field(pattern=r"^[A-Z]{3}$")] | None = None
     scope_limits: tuple[str, ...]
 
     @model_validator(mode="after")
@@ -141,6 +154,8 @@ class ForecastInputs(Contract):
             self.facilities
         ):
             raise ValueError("facility names must be unique")
+        if self.currency is not None and self.scale is None:
+            raise ValueError("`currency` is stated with `scale`: state both or neither")
         return self
 
 
@@ -312,7 +327,29 @@ _NAMES_THOUSANDS = re.compile(rf"\bthousands?\b|[$'\u2019]000s?\b|{_CURRENCY}\s?
 _NAMES_MILLIONS = re.compile(
     rf"\b(?:millions?|billions?)\b|{_CURRENCY}\s?(?:m|mm|mn|bn)\b", re.IGNORECASE
 )
-_UNIT_OF = {1: "USD millions, scale 1", 1000: "USD thousands, scale 1000"}
+# The sign of each currency that has one. `US$` after a letter is not the dollar (`AUS$`); a euro or
+# pound sign is, whatever precedes it (`M\u20ac`, `120m\u00a3`).
+_CURRENCY_SIGN = {"USD": r"(?i:(?<![A-Za-z])US\$)", "EUR": "\u20ac", "GBP": "\u00a3"}
+
+
+def _names_currency(text: str, currency: str) -> bool:
+    """Whether CP-1 names `currency` anywhere, headings included: its code, in capitals, as a whole
+    token or glued to a scale suffix (`GBPm`, `GBPk`, `GBP000`), or, for the three that have one,
+    its sign (`US$`, a euro or pound sign). A bare `$` names no currency; the code is not matched
+    in lower case, so `all` and `net debt` name neither `ALL` nor `NET`.
+    ponytail: presence only. A handoff that names the stated currency anywhere (a USD issuer that
+    mentions a EUR tranche, block wrongly `EUR`) passes, and so does one row in another currency;
+    reading each cell's own currency refused real handoffs."""
+    forms = [rf"(?<![A-Za-z]){currency}(?i:mm|mn|bn|m|k|000s?)?(?![A-Za-z0-9])"]
+    if currency in _CURRENCY_SIGN:
+        forms.append(_CURRENCY_SIGN[currency])
+    return re.search("|".join(forms), text) is not None
+
+
+def _unit_of(scale: int, currency: str | None) -> str:
+    """The block's unit in a refusal text; with no stated currency it names none."""
+    code = f"{currency} " if currency else ""
+    return f"{code}millions, scale 1" if scale == 1 else f"{code}thousands, scale 1000"
 
 
 def _units_named(text: str) -> frozenset[str]:
@@ -351,10 +388,12 @@ def _unit_cells(
     return groups
 
 
-def _unit_problem(text: str, key: str, operand: Operand, scale: int) -> str | None:
+def _unit_problem(
+    text: str, key: str, operand: Operand, scale: int, currency: str | None = None
+) -> str | None:
     """Why the named operand's row is in the other unit than the block's, or None. A row is
     refused when a cell that may state its unit (`_unit_cells`) names the other unit and none of
-    them names the block's."""
+    them names the block's. `currency` only words the message."""
     block, other = ("thousands", "millions") if scale == 1000 else ("millions", "thousands")
     issues = []
     kind = "column" if operand.column is not None else "period"
@@ -367,8 +406,8 @@ def _unit_problem(text: str, key: str, operand: Operand, scale: int) -> str | No
     what, cell = min(issues)
     return (
         f"base {key}: row `{_cut(_plain(operand.row or ''), 60)}` states its {_cut(what, 40)} as "
-        f"`{_cut(_plain(cell), 40)}`, not the block's unit ({_UNIT_OF[scale]}); state a reason "
-        "instead of an amount"
+        f"`{_cut(_plain(cell), 40)}`, not the block's unit ({_unit_of(scale, currency)}); state a "
+        "reason instead of an amount"
     )
 
 
@@ -396,7 +435,12 @@ def _declined(document: dict[str, object], source: str) -> None:
 
 _AMOUNT_DRIVERS = ("dividends", "debt_repayment")
 _THOUSANDS = re.compile(r"-?[0-9]{1,9}(\.[0-9])?")
-_SCALE_REFUSAL = "`scale` must be 1 (CP-1 prints USD millions) or 1000 (USD thousands)"
+
+
+def _scale_refusal(document: dict[str, Any]) -> str:
+    stated = document.get("currency")
+    code = f"{stated} " if isinstance(stated, str) and CURRENCY_CODE.fullmatch(stated) else ""
+    return f"`scale` must be 1 (CP-1 prints {code}millions) or 1000 ({code}thousands)"
 
 
 def _slots(document: dict[str, Any]) -> Iterator[tuple[str, Any, Any]]:
@@ -426,15 +470,15 @@ def _slots(document: dict[str, Any]) -> Iterator[tuple[str, Any, Any]]:
 
 
 def _to_millions(document: dict[str, Any], source: str) -> dict[str, str]:
-    """At `scale` 1000 the block states USD thousands as CP-1 prints them: each amount text is
-    replaced, in place, by its exact USD millions value, and the stated texts are returned by
+    """At `scale` 1000 the block states thousands of its currency as CP-1 prints them: each amount
+    text is replaced, in place, by its exact millions value, and the stated texts are returned by
     slot name. Anything else changes nothing. A scale that is not 1 or 1000, and an amount that is
     not at most nine digits and one decimal place, are refused, never rounded."""
     scale = document.get("scale")
     if scale is None:
         return {}
     if scale not in (1, 1000):
-        raise ValueError(f"{source}: {_SCALE_REFUSAL}")
+        raise ValueError(f"{source}: {_scale_refusal(document)}")
     stated: dict[str, str] = {}
     if scale == 1:
         return stated
@@ -478,7 +522,7 @@ def _check_base(inputs: ForecastInputs, cp1_text: str, source: str, stated: dict
         if named:
             problem = _layer1_problem(cp1_text, key, operand, amount)
             if problem is None and amount is not None and inputs.scale is not None:
-                problem = _unit_problem(cp1_text, key, operand, inputs.scale)
+                problem = _unit_problem(cp1_text, key, operand, inputs.scale, inputs.currency)
             if problem is not None:
                 raise ValueError(f"{source}: {problem}")
         elif amount is not None and not _printed(cp1_text, amount):
@@ -514,6 +558,19 @@ def parse(source_text: str, cp1_text: str, source: str = "CP-2G") -> ForecastInp
     _check_base(inputs, cp1_text, source, stated)
     if inputs.facilities:
         _check_facilities(inputs, inputs.facilities, cp1_text, stated)
+    # A layer-1 handoff holds its own block: its `currency` key must not name itself.
+    named_in = cp1_text.replace("\r\n", "\n")
+    if source == "CP-1":
+        named_in = named_in.replace(_block(source_text, source), "")
+    if inputs.currency is not None and not _names_currency(named_in, inputs.currency):
+        raise ValueError(
+            f"CP-1 nowhere names `{inputs.currency}`: state `currency` as the three-letter code "
+            "of the currency CP-1 reports its figures in."
+        )
+    if source == "CP-1" and inputs.scale is not None and inputs.currency is None:
+        # CP-2G's own block is refused at acceptance (`_unstated_currency`); a layer-1 block is
+        # never checked there, so it is withheld here rather than labelled USD.
+        raise ValueError("the forecast inputs state `scale` but not `currency`")
     return inputs
 
 
@@ -535,7 +592,8 @@ def _check_facilities(
                     f"CP-2G: facility {facility.name} {field} {value}% is not printed in CP-1"
                 )
     debt = inputs.base["debt"].amount
-    divided = ", in USD millions after dividing by scale 1000" if inputs.scale == 1000 else ""
+    code = inputs.currency or UNSTATED_CURRENCY
+    divided = f", in {code} millions after dividing by scale 1000" if inputs.scale == 1000 else ""
     if debt is not None:
         with localcontext(cp2g._EXACT):
             total = sum((Decimal(f.balance) for f in facilities), Decimal(0))
@@ -746,10 +804,17 @@ def model_files(
             **detail,
             # Written only when the block states `scale`, so a block without it is byte for byte
             # what it was.
-            **({} if inputs.scale is None else {"scale": inputs.scale, "units": UNITS}),
+            **(
+                {}
+                if inputs.scale is None
+                else {
+                    "scale": inputs.scale,
+                    "units": f"{inputs.currency or UNSTATED_CURRENCY} millions",
+                }
+            ),
             "scope_limits": [
                 LIMIT if source == "CP-2G" else LAYER1_LIMIT,
-                *([SCALE_LIMIT] if inputs.scale == 1000 else []),
+                *([scale_limit(inputs.currency)] if inputs.scale == 1000 else []),
                 *inputs.scope_limits,
                 *limits,
             ],
