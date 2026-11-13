@@ -779,26 +779,38 @@
   const NOT_ESTABLISHED = 'Not established for this run';
   const STATED_ABSENCE = /^(?:not supplied:|none identified\b)/i;
   const emptyState = (title, reasons, tools = '') => `<div class="empty-state" role="status"><div class="ghost" aria-hidden="true"><i></i><i></i><i></i><i></i></div><div class="es-body"><p class="es-t">${escapeHtml(title)}</p>${reasons.length ? `<ul class="es-r">${reasons.map(html => `<li>${html}</li>`).join('')}</ul>` : ''}</div>${tools}</div>`;
-  // A table whose every visible cell with text is a stated absence ("Not supplied: <reason>", "None identified ...") has no drawing to make: null when any such cell states something else.
-  // The reasons are the distinct cells, each once and as written (findingCell still holds back an identifier). A hidden column's cell that itself states an absence is the module's reason too
-  // (a map's last cell says why no edge can be drawn); every other hidden cell stays a reference for the trace control, and an inter-module cell is drawn nowhere.
-  function absenceOf(block, cols, ctx) {
-    const seen = new Set(), reasons = [], shownAt = new Set(cols.map(col => col.at));
+  // The stated reasons of a table: its cells that state an absence ("Not supplied: <reason>", "None identified ..."), each distinct one once and as written. A visible column's reason goes through
+  // findingCell (an identifier keeps the Evidence link in its place). A hidden column's cell that itself states an absence is the module's reason too (a map's last cell says why no edge can be
+  // drawn), but only when it is clean: findingCell accepts it and it holds no file name, module code or hash; otherwise it is held back (`held`) and the Evidence link stands in.
+  // An inter-module cell is drawn nowhere. `pure`: every visible cell with text states an absence. `found`: how many distinct stated cells there are.
+  const REFERENCE_IN_TEXT = [/[\w-]+\.[A-Za-z]{2,5}\b/, /\bCP-[A-Za-z0-9]+/, /\b[0-9a-f]{32,}\b/i];
+  function statedReasons(block, cols, ctx) {
+    const seen = new Set(), reasons = [], shownAt = new Set(cols.map(col => col.at)), out = {reasons, held: false, pure: true, found: 0};
     const stated = text => STATED_ABSENCE.test(plain(text).trim());
+    const take = (text, hidden) => {
+      if (seen.has(text)) return;
+      seen.add(text); out.found += 1;
+      const cell = findingCell(text, ctx);
+      if (hidden && (cell.html === undefined || REFERENCE_IN_TEXT.some(rx => rx.test(plain(text))))) { out.held = true; return; }
+      const html = fieldHtml(text, ctx);
+      if (html !== '') reasons.push(html);
+    };
     for (const row of block.rows) {
-      const cells = [...cols.map(col => cellText(row, col.at)), ...row.cells.slice(block.headers.length).map(cell => String(cell ?? '').trim())].filter(text => text !== '');
-      if (cells.some(text => !stated(text))) return null;
-      const hiddenReasons = row.cells.slice(0, block.headers.length).map((cell, at) => [String(cell ?? '').trim(), at]).filter(([text, at]) => !shownAt.has(at) && text !== '' && stated(text) && shapes().columnKind(block.headers[at]) !== 'intermodule').map(([text]) => text);
-      for (const text of [...cells, ...hiddenReasons]) {
-        if (seen.has(text)) continue;
-        seen.add(text);
-        const html = fieldHtml(text, ctx);
-        if (html !== '') reasons.push(html);
-      }
+      const visible = [...cols.map(col => cellText(row, col.at)), ...row.cells.slice(block.headers.length).map(cell => String(cell ?? '').trim())].filter(text => text !== '');
+      if (visible.some(text => !stated(text))) out.pure = false;
+      visible.filter(stated).forEach(text => take(text, false));
+      row.cells.slice(0, block.headers.length).forEach((cell, at) => {
+        const text = String(cell ?? '').trim();
+        if (!shownAt.has(at) && text !== '' && stated(text) && shapes().columnKind(block.headers[at]) !== 'intermodule') take(text, true);
+      });
     }
-    return seen.size ? {reasons} : null;
+    return out;
   }
-  const absentBlock = (block, ctx, absent) => emptyState(NOT_ESTABLISHED, absent.reasons, `<div class="es-trace">${traceOfBlock(ctx, block)}</div>`);
+  const absenceOf = (block, cols, ctx) => { const found = statedReasons(block, cols, ctx); return found.pure && found.found > 0 ? found : null; };
+  const stateTools = (block, ctx, held) => `<div class="es-trace">${traceOfBlock(ctx, block)}</div>${held ? evidenceLink(ctx) : ''}`;
+  const absentBlock = (block, ctx, absent) => emptyState(NOT_ESTABLISHED, absent.reasons, stateTools(block, ctx, absent.held));
+  // A drawing whose table states none (a chart the module could not draw): the empty state with the table's stated reasons, the same path as a lane or a map.
+  const gapState = (block, ctx) => { const found = statedReasons(block, visibleColumns(block, 'records', ctx), ctx); return emptyState(NOT_ESTABLISHED, found.reasons, stateTools(block, ctx, found.held)); };
 
   // ---- dated: C15, the dated timeline. Events stand in the table's own order, equally spaced; a date is drawn as written and no axis is invented.
   // Six events or fewer run across from 992px, more run down the page (grouped by year when every date opens with one); a page that gives the block a narrow column sets `ctx.stacked` to run them down. A category word is drawn with its icon;
@@ -821,7 +833,7 @@
     });
     const years = items.map(item => ISO_DATE.exec(item.when)?.[1]);
     const vertical = Boolean(ctx.stacked) || items.length > HORIZONTAL_MAX, grouped = vertical && years.every(Boolean) && new Set(years).size > 1;
-    const list = items.map((item, n) => (grouped && years[n] !== years[n - 1] ? `<li class="tl-yr">${years[n]}</li>` : '') + item.html).join('');
+    const list = items.map((item, n) => (grouped && years[n] !== years[n - 1] ? `<li class="tl-yr" data-tick>${years[n]}</li>` : '') + item.html).join('');
     const bar = shapeBar(`<span class="eyebrow"><span data-count>${items.length}</span> ${items.length === 1 ? 'event' : 'events'}</span>`, '');
     return shapeBlock('shape-dated', ctx, '', `${bar}<ol class="tl ${vertical ? 'tl-v' : 'tl-h'}">${list}</ol>`);
   }
@@ -1020,7 +1032,7 @@
     return `<nav class="sec-rail" aria-label="On this page"><p class="eyebrow">On this page</p>${items.map(link).join('')}</nav>`;
   }
 
-  const Components = {icon, traceButton, traceRow, headerChips, placePill, toast, toastHost, tipAttributes, verdictPanel, findingsFeed, callout, limitationsBlock, recordCards, findingCell, render, casesBlock, caseRowsBlock, rankedLadder, statementCard, metricTiles, measureTiles, changeCards, statusChecklist, sidedBoard, moduleStateTiles, metricStrip, moduleTiles, attribution, qaAccordion, factList, riskMatrix, watchList, datedTimeline, pathwayFlow, emptyState, mapLayers, pathwayDiagram, foldsForPrint, paragraphText, handleClick, sectionRail, ICON_PATHS};
+  const Components = {icon, traceButton, traceRow, headerChips, placePill, toast, toastHost, tipAttributes, verdictPanel, findingsFeed, callout, limitationsBlock, recordCards, findingCell, render, casesBlock, caseRowsBlock, rankedLadder, statementCard, metricTiles, measureTiles, changeCards, statusChecklist, sidedBoard, moduleStateTiles, metricStrip, moduleTiles, attribution, qaAccordion, factList, riskMatrix, watchList, datedTimeline, pathwayFlow, emptyState, gapState, loopNote, mapLayers, pathwayDiagram, foldsForPrint, paragraphText, handleClick, sectionRail, ICON_PATHS};
   if (typeof window !== 'undefined') window.Components = Components;
   if (typeof document !== 'undefined' && document.body) toastHost();
   if (typeof module !== 'undefined') module.exports = Components;

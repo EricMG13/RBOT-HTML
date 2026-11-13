@@ -59,7 +59,12 @@ test('every non-hidden, non-omitted cell of each of the 8 key dated tables is dr
     const block = asBlock(t), html = C.render('dated', block, ctx());
     assert.deepEqual(lost('dated', html, block, ctx()), [], `${t.module} ${t.heading}`);
     const source = t.headers.indexOf('Source');
-    for (const row of t.rows) assert.ok(!html.includes(decode(row[source]).slice(0, 40)) || /^Not supplied/.test(row[source]), `${t.heading}: the Source cell stays in the trace`);
+    for (const row of t.rows) {
+      const cell = decode(row[source]);
+      // A Source cell stays in the trace control. The one exception is a clean stated absence of an absence table: it is the module's reason, drawn once, exactly.
+      if (/^(?:Not supplied:|None identified)/i.test(cell) && html.includes('class="empty-state"')) assert.equal(count(textOf(html), new RegExp(cell.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')), 1, `${t.heading}: the clean reason, once`);
+      else assert.ok(!html.includes(cell.slice(0, 40)), `${t.heading}: the Source cell stays in the trace`);
+    }
   }
 });
 test('every non-hidden, non-omitted cell of each of the 7 key edges tables is drawn', () => {
@@ -106,7 +111,7 @@ test('timeline: one event; six are horizontal; seven are vertical, grouped by ye
   assert.ok(six.includes('class="tl tl-h"') && count(six, /<li class="tl-i">/g) === 6 && !six.includes('tl-yr'));
   const seven = C.render('dated', blk(DATED, [...[1, 2, 3, 4, 5, 6].map(n => ev(`2025-0${n}-01`)), ev('2026-01-15')]), ctx());
   assert.ok(seven.includes('class="tl tl-v"') && count(seven, /<li class="tl-i">/g) === 7);
-  assert.deepEqual([...seven.matchAll(/<li class="tl-yr">(.*?)<\/li>/g)].map(m => m[1]), ['2025', '2026']);
+  assert.deepEqual([...seven.matchAll(/<li class="tl-yr" data-tick>(.*?)<\/li>/g)].map(m => m[1]), ['2025', '2026']);
 });
 test('timeline: dates that do not parse are drawn as written, equally spaced, in the table order, with no year heading and no tick', () => {
   const dates = ['Quarter ended 2024-12-28', 'H2 2025', 'Q1 FY26', 'Before the next refinancing', 'FY2027', '2028-13-45', 'Late 2028'];
@@ -244,4 +249,44 @@ test('handleClick: selecting an edge shows only its panel and presses only it', 
   m.click(m.nodes[0]);
   assert.deepEqual([...m.nodes, ...m.edges].map(p => p.attrs['aria-pressed']), ['true', 'false', 'false', 'false', 'false']);
   assert.deepEqual(m.rels.map(r => r.hidden), [false, true]);
+});
+
+// ---- fix round 1: a reason taken from a hidden column is drawn only when it is clean
+const A = 'Not supplied: not assessable, no executed governing document available';
+const dated7 = source => blk(DATED, [[A, A, A, A, A, source, A]]);
+const edge5 = evidence => blk(EDGE, [[A, A, A, A, evidence]]);
+const LEAKS = [
+  ['edges', edge5('Not supplied: TDG_2024-09-30_10-K.htm.jsonl page 148 lists no guarantor'), 'TDG_2024-09-30_10-K.htm.jsonl'],
+  ['edges', edge5('Not supplied: see CP-0 source readiness register'), 'CP-0'],
+  ['edges', edge5('Not supplied: sha ' + 'a'.repeat(64)), 'a'.repeat(64)],
+  ['dated', dated7('Not supplied: K_10-K.htm.jsonl has no dated legal event'), 'K_10-K.htm.jsonl'],
+  ['dated', dated7('None identified (calculation V03)'), 'V03'],
+  ['dated', dated7('Not supplied: see EV-009 for the legal event'), 'EV-009'],
+  ['dated', dated7('Not supplied: report.pdf is absent'), 'report.pdf'],
+];
+test('a hidden-column reason that names a file, a module code, a hash, an identifier or a calculation is held back; the empty state keeps its label and the Evidence link', () => {
+  for (const [shape, block, ref] of LEAKS) {
+    const html = C.render(shape, block, ctx({tokens: ['EV-009']}));
+    assert.ok(!html.includes(ref), ref);
+    assert.ok(html.includes('class="empty-state"') && textOf(html).includes('Not established for this run') && html.includes('class="in-ev"'), ref);
+    assert.equal(count(textOf(html), /not assessable, no executed governing document available/g), 1);
+  }
+});
+test('a clean hidden-column reason is drawn verbatim, once, with no Evidence link when nothing was held back', () => {
+  const clean = 'Not supplied: guarantor exhibit and indentures absent, so no edge can be drawn';
+  const html = C.render('edges', edge5(clean), ctx());
+  assert.ok(textOf(html).includes(clean) && !html.includes('class="in-ev"'));
+  assert.equal(count(textOf(html), /guarantor exhibit and indentures absent/g), 1);
+  const d = C.render('dated', dated7('None identified before the next review'), ctx());
+  assert.ok(textOf(d).includes('None identified before the next review'));
+});
+test('gapState: the stated reasons of a chart table are its "Not supplied" cells, verbatim and once each, with the clean ones only from hidden columns', () => {
+  const block = blk(['Period', 'Value', 'Reporting unit', 'Source'], [['FY2024', 'Not supplied: no covenant is stated', 'x (net debt to EBITDA)', 'Not supplied: see K.htm.jsonl'], ['FY2025', 'Not supplied: no covenant is stated', 'x', 'p 3']]);
+  const html = C.gapState(block, ctx());
+  assert.ok(html.includes('class="empty-state"') && count(textOf(html), /Not supplied: no covenant is stated/g) === 1);
+  assert.ok(!html.includes('K.htm.jsonl') && !textOf(html).includes('x (net debt to EBITDA)'));
+});
+test('timeline: year headings carry data-tick, so the fidelity probe ignores them', () => {
+  const html = C.render('dated', blk(DATED, [...[1, 2, 3, 4, 5, 6].map(n => ev(`2025-0${n}-01`)), ev('2026-01-15')]), ctx());
+  assert.deepEqual([...html.matchAll(/<li class="tl-yr" data-tick>(.*?)<\/li>/g)].map(m => m[1]), ['2025', '2026']);
 });

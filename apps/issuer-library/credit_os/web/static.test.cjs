@@ -3465,7 +3465,7 @@ test('module page (A1): a chart with no numbers is a card saying Not established
   const order = [...charts.matchAll(/<div class="panel-card" id="s-(\d+)">/g)].map(m => m[1]);
   assert.deepEqual(order, ['35', '40', '50'], 'the gap card sits where its table is');
   const card = new RegExp('<div class="panel-card" id="s-35">.*?(?=<div class="panel-card" id="s-40">)', 's').exec(charts)[0];
-  assert.ok(strip(card).includes('Covenant headroom') && strip(card).includes('Not established for this run') && strip(card).includes('no covenant is stated') && !card.includes('Not supplied') && !card.includes('<details'), 'the reason is shown without its prefix; the table as written is in Evidence (Task 7)');
+  assert.ok(strip(card).includes('Covenant headroom') && strip(card).includes('Not established for this run') && countOf(strip(card), /Not supplied: no covenant is stated/g) === 1 && !card.includes('<details'), 'the stated cell is the reason, verbatim and once; the table as written is in Evidence (Task 7)');
   assert.ok(!html.includes('Chart data:'));
 });
 
@@ -3564,12 +3564,21 @@ test('timeline: a span too thin to hold its number at the right end is drawn fro
 
 // ---- Whole-branch H1, re-pointed by Task 7: a drawing whose table states none is the empty state (C32) with the module's stated reason; its table as written is Evidence's, not a fold on the page.
 const h1Page = (extra, set) => a1Page(a1Sections(extra), { ...a1Set, ...set });
+// Every cell of the table at `line` is in the Evidence page (Registers, Tables as written): what the page no longer folds is not lost.
+// The a1 sections with `extra` placed under Findings (before the level-2 Sources), where Evidence classifies a drawing as written.
+const a1Findings = extra => { const all = a1Sections(); all.splice(all.findIndex(x => x.heading === 'Sources'), 0, ...extra); return all; };
+const inEvidence = (sections, line) => {
+  const block = sections.flatMap(x => x.blocks).find(b => b.type === 'table' && b.line === line), page = strip(evidenceRegisters(sections));
+  // (Evidence's tableView holds a row's cells under the table's headers; a cell beyond them is not in it, a Task 3 matter noted in the Task 7 fix report.)
+  for (const cell of [...block.headers, ...block.rows.flatMap(r => r.cells.slice(0, block.headers.length))]) if (String(cell).trim() !== '') assert.ok(page.includes(String(cell).trim()), `Evidence holds the cell: ${cell}`);
+};
 
 test('module page (H1; Task 7): a chart card with no numbers is the empty state with every distinct reason, and no Table form fold', () => {
   const page = h1Page([sec('Chart data: covenant headroom', 3, 35, 'consumed', [chartTable(37, [[38, 'FY2024', 'Not supplied: no covenant is stated', 'x (net debt to EBITDA)', 'not established for this run and not a compliance opinion']])])], { chartGaps: [{ title: 'Covenant headroom', table: 37, gap: 'no covenant is stated; no test date is stated' }] });
   const html = page.moduleReport(a1Id), card = new RegExp('<div class="panel-card" id="s-35">.*?(?=<div class="panel-card" id="s-40">)', 's').exec(html)[0];
-  assert.ok(card.includes('class="empty-state"') && strip(card).includes('no covenant is stated; no test date is stated') && !card.includes('<details') && !card.includes('Table form'));
+  assert.ok(card.includes('class="empty-state"') && countOf(strip(card), /Not supplied: no covenant is stated/g) === 1 && !card.includes('<details') && !card.includes('Table form'));
   assert.ok(!strip(card).includes('x (net debt to EBITDA)') && !strip(card).includes('not a compliance opinion'), 'the unit and Basis cells are the table as written, in Evidence');
+  inEvidence(a1Findings([sec('Chart data: covenant headroom', 3, 35, 'consumed', [chartTable(37, [[38, 'FY2024', 'Not supplied: no covenant is stated', 'x (net debt to EBITDA)', 'not established for this run and not a compliance opinion']])])]), 37);
 });
 
 test('module page (H1; Task 7): an events lane with no event is the empty state with the module\'s reasons, not a timeline and not a fold', () => {
@@ -3578,6 +3587,7 @@ test('module page (H1; Task 7): an events lane with no event is the empty state 
   const html = page.moduleReport(a1Id), lane = /<div class="tl-card" id="s-310">.*?Legal lane caption\./s.exec(html)[0];
   assert.ok(lane.includes('class="empty-state"') && !lane.includes('tl-i') && strip(lane).includes('Not supplied: no legal event is settled here') && strip(lane).includes('Legal lane caption.'));
   assert.ok(strip(lane).includes('Not supplied: these are undated triggers recorded in other lanes') && !lane.includes('<details'), 'the module\'s last-cell reason too');
+  inEvidence(a1Findings([sec('Events: Legal', 3, 310, 'consumed', [table(312, LANE_HEAD, [row]), text(314, 'Legal lane caption.')])]), 312);
 });
 
 test('module page (H1; Task 7): a map with no edge is the empty state with its reason and one link to the edge table in Evidence; an earlier-format page is unchanged', () => {
@@ -3587,6 +3597,7 @@ test('module page (H1; Task 7): a map with no edge is the empty state with its r
   const card = /<div class="map-card" id="s-410">.*?Map caption\./s.exec(page.moduleReport(a1Id))[0];
   assert.ok(card.includes('class="empty-state"') && !card.includes('<svg role="group"') && !card.includes('<table') && !card.includes('Table form'));
   assert.ok(strip(card).includes('Not supplied: no edge with applicable document and jurisdiction can be drawn') && card.includes('href="#W-Evidence/registers?c=run-a&amp;m=CP-1"') && countOf(card, /class="in-ev"/g) === 1, card);
+  inEvidence(a1Findings([sec('Map: legal entities', 3, 410, 'consumed', [table(412, MAP_HEAD, [[413, 'Not supplied: no edge is stated', 'Not supplied: x', 'Not supplied: x', 'Not supplied: x', 'Not supplied: no edge with applicable document and jurisdiction can be drawn', 'Not supplied: p']]), text(414, 'Map caption.')])]), 412);
 });
 
 // ---- Task 7: events, maps and promoted registers on the module page; the audit material of a drawing is Evidence's.
@@ -3998,4 +4009,24 @@ test('Q4: the toast host is a role=status element that exists before the first m
 
 test('Q5: trace icons do not print', () => {
   assert.match(read('screen.css'), /@media print\{[^@]*\.basis-link[^@]*display:none!important/);
+});
+
+// ---- fix round 1: a plain-page chart has one trace control, the handoff's own characters, and no raw text in a title attribute.
+const plainChart = (mutate, chart) => runPage(mutate).readerChart(outId('CP-1'), chart, false, true, true);
+test('plain-page charts (fix round 1): one trace control, no per-row source button, no classification badge', () => {
+  for (const [mutate, chart] of [[withStructure, STACK], [withBridge, BRIDGE_CHART], [withStructure, BULLET], [withStructure, LIMITS], [withRecovery, RECOVERY]]) {
+    const html = plainChart(mutate, chart);
+    assert.equal(countOf(html, /class="basis-link trace-row"/g), 1, `${chart.kind}: one trace control`);
+    assert.equal(countOf(html, /class="source-link"/g) + countOf(html, /row-classification/g), 0, `${chart.kind}: no key button, no badge`);
+  }
+  assert.ok(countOf(runPage(withStructure).readerChart(outId('CP-1'), STACK), /class="source-link"/g) > 0, 'an earlier-format page keeps its key buttons');
+});
+test('plain-page charts (fix round 1): a cell is drawn as written (no added % or x); a "Not supplied" cell is its own text, never n.a. with the text in a title', () => {
+  const rec = plainChart(withRecovery, RECOVERY);
+  assert.ok(!/·\s*\d+%/.test(rec) && !rec.includes('90%') && !rec.includes('title="Not supplied') && !rec.includes('>n.a.<'), rec.slice(0, 0));
+  assert.ok(strip(rec).includes('Not supplied: no downside value'));
+  const stack = plainChart(withStructure, STACK);
+  assert.ok(!stack.includes('title="Not supplied') && !stack.includes('>n.a.<') && strip(stack).includes('Not supplied: not stated') && !stack.includes('2.4x'));
+  const early = runPage(withRecovery).readerChart(outId('CP-1'), RECOVERY);
+  assert.ok(early.includes('90%') && early.includes('title="Not supplied'), 'earlier format unchanged');
 });

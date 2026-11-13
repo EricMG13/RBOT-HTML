@@ -1515,8 +1515,10 @@ details[open]>summary .ms-ch,details[open]>summary .qa-ch,details[open]>summary 
 .map-hit{fill:none;stroke:transparent;stroke-width:16}
 .map-eg,.map-node[role=button]{cursor:pointer}
 .map-eg:focus-visible,.map-node:focus-visible{outline:none}
+.map-eg:focus-visible .map-hit{stroke:var(--selection);stroke-width:12}
 .map-eg:focus-visible .map-edge,.map-eg.hl .map-edge,.map-eg.on .map-edge{stroke:var(--blue);stroke-width:3}
-.map-node[role=button]:focus-visible rect,.map-node.hl rect{stroke:var(--blue);stroke-width:2.4}
+.map-node[role=button]:focus-visible rect{stroke:var(--blue);stroke-width:4;stroke-dasharray:6 3}
+.map-node.hl rect{stroke:var(--blue);stroke-width:2.4}
 .map-node.on rect{fill:var(--blue-100);stroke:var(--blue);stroke-width:2.4}
 .map-legend{display:flex;flex-wrap:wrap;gap:8px 24px;margin-top:12px;font:400 12px/1.4 'Red Hat Text',sans-serif;color:var(--text-secondary)}
 .map-legend span{display:inline-flex;align-items:center;gap:8px}.map-lg{color:var(--navy);flex:none}
@@ -1609,3 +1611,4 @@ details[open]>summary .ms-ch,details[open]>summary .qa-ch,details[open]>summary 
 }
 @media(forced-colors:active){.strip,.mt,#overview-watch{border:1px solid CanvasText}.strip-i{forced-color-adjust:auto}}
 @media print{.mt-ch{display:none}.mt{break-inside:avoid}.mt[open] .mt-body{animation:none}.mt[open] .mt-lead{display:none}}
+@media(forced-colors:active){.map-node rect{fill:Canvas;stroke:CanvasText}.map-edge{stroke:CanvasText}.map-arrow{fill:CanvasText}.map-node.hl rect,.map-eg.hl .map-edge{stroke:Highlight;stroke-width:3}.map-node.on rect{fill:Canvas;stroke:Highlight;stroke-width:4}.map-eg.on .map-edge{stroke:Highlight;stroke-width:4}.map-node[role=button]:focus-visible rect{stroke:Highlight;stroke-width:4;stroke-dasharray:6 3}.map-eg:focus-visible .map-edge{stroke:Highlight;stroke-width:4;stroke-dasharray:6 3}.map-eg:focus-visible .map-hit{stroke:Highlight;stroke-opacity:.3}}
