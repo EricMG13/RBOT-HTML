@@ -4,6 +4,14 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-13 — No net debt, net leverage or liquidity is published for a forecast year with negative cash (branch `claude/negative-cash-not-calculable`)
+Scope: offline; no provider or model call; no paid run. Owner ruling `docs/rulings/2026-11-13-negative-cash-not-calculable.md`. At publication only (`cpos_forecast._published`): a year whose closing cash is known and below zero writes `net_debt`, `net_leverage` and `liquidity` to `forecast_exact.json` as missing with "Not calculable: cash is negative before funding"; closing cash stays published; zero, positive or missing cash is unchanged; `cp2g.py`, the roll-forward and the break tests are untouched. A block that never reaches negative cash publishes byte-identical files; a delivery already made is not re-derived, and one delivered again with a negative-cash year gets a new delivery beside the old.
+- Fidelity check, scope: ONE real run (`tdg-full-copilot-sol-high-001-resume`, TransDigm, as of 30 September 2024), re-derived by the controller from its own CP-1 and CP-2G handoffs on the branch merged with `main` (exit 0), against the forward credit model's own cells. Downside, shock at 0.3: FY2025 closing cash 1,553.50, net debt 22,746.50, net leverage 6.81x, liquidity 2,396.50 (published); FY2026 (cash -309.77) and FY2027 (cash -2,165.72) each publish the three as missing with the reason, where the module prints "Not calculable: funded closing cash and debt not established"; total leverage 7.28x / 7.25x / 7.22x unchanged. Shock as sent (0.0184): only FY2027 (cash -898.89) is missing. Base, upside and own-drivers cases never reach negative cash and equal the parent byte for byte (reviewer's probe). Page, by reading `store.py` and `views.js` and by the reviewer's grid probe, not in a browser: a missing cell is drawn "n.a." with its reason and listed under "Not available", never 0; charts, the changes comparison and the library metrics do not read this file.
+- Reviews: task review approve, one Low; adversarial review (financial figures): rule correct, no leak found, one Medium (zero cash and missing cash untested, two mutants of the condition survived), closed by tests only in `3b74c22` (the reviewer's mutant script then exits 0, three mutants killed); the 10-decimal comparison of net leverage is now exact at 38 digits.
+- Gates on the merged branch (controller): the new tests with the Downside, facilities, scale, periods and packaging tests 447 passed, exit 0; `tests/test_credit_os_store.py` 254 passed, exit 0; `tests/test_cpos_launch.py -k "forecast or cp2g or case or deliver or model or budget"` 104 passed, exit 0; `uv run python tools/quality_gate.py` exit 0, 0 findings.
+- Open for the owner (all predate this change except the first): a later year whose cash turns positive again after a negative year is published with no caveat, though it rests on an unfunded opening balance; the forward credit model calls accessible liquidity "Not calculable" in every year of every case on this run (undrawn facilities not certified usable) and Python publishes it wherever cash is not negative; the older owner workflow's CP-2G view (`cp2g.py`) still publishes these figures for negative-cash years (read, not run).
+- Not verified: the page in a browser; a mutation tool run (mutants made by hand); a live model; the full suite; Windows.
+
 ## 2026-11-13 — The Forecast page's Downside follows the forward credit model; the shock's interest figure is proportional and checked against the downside module (branch `claude/downside-follows-forward-model`)
 Scope: offline; no provider or model call; no paid run. Owner ruling `docs/rulings/2026-11-13-downside-follows-forward-model.md` (option A, the owner's words relayed by the coordinator session) reverses the 2026-11-10 ruling: the Downside stress case is the downside module's shock applied to the forward credit model's own downside drivers (base drivers when it sets none); `forecast_exact.json` carries `downside_basis` only then and the page label and note follow it; the CP-2G instruction says both shock values are copied unchanged from one CP-2A scenario and `rate_increase` is proportional, never a yield (+171 characters per pathway with CP-2G, every pathway under its unchanged ceiling); the launcher sends back a block whose shock is no scenario of CP-2A's table T2DS.1, only when it read the whole table without doubt, else it lets the block through and logs why at WARNING, which a run with no logging set up prints to the launcher's stderr (seen by the controller with a table-less CP-2A; not traced into the run-start service's record).
 - Fidelity check, scope: ONE real run (`tdg-full-copilot-sol-high-001-resume`, TransDigm, as of 30 September 2024), re-derived by the controller from its own CP-1 and CP-2G handoffs at `5cbe19d` (exit 0), against the forward credit model's printed downside. With the shock as sent (0.2 / 0.0184): revenue 7,940 and EBITDA 3,338.6112 in every year, equal to the module; interest 1,553.21 and coverage 2.15x against the module's 1,982.94 and 1.68x, because 0.0184 is a yield change read as proportional. With `rate_increase` corrected to 0.3 (what CP-2A states): interest 1,982.6872 / 1,936.467 / 1,929.13552 against the module's 1,982.936 / 1,936.71 / 1,929.3776 (it rounded its yield to 0.0797; the test asserts the exact figure, no tolerance), coverage 1.68x / 1.72x / 1.73x as the module, closing cash 1,553.50 / -309.77 / -2,165.72 against 1,553.26 and funding gaps of 310.26 and 2,166.45. Base, upside and own-drivers cases equal the delivered file. The delivered file has no `downside_basis`, so its page keeps the old label. The page itself was not opened in a browser (no `.js` changed); the VMO2 reader check is not listed, retired by the owner's ruling relayed by the coordinator (PR 103).
@@ -937,46 +945,3 @@ against the run's record below. The run folder was not read.
   `tests/test_library_page_browser.py` and `tests/test_context_form.py`: 45 passed. Quality gate: 0
   findings.
 - Not verified: no live run of the changed forecast; one issuer, one date.
-
-## 2026-11-10 — Sweep: end-to-end wiring (branch `claude/sweep-wiring`, base `53a5632`)
-
-Owner: "Move to latest main - run /sweep refactoring and optimisation sweep make sure front to back
-and end to end wiring." Contract and report: `docs/sweeps/2026-11-10-wiring/`. Range `c721a0f..53a5632`
-(PRs 19–27). Offline, canned provider answers, no spend.
-
-- Journeys proved at base:
-  - The live TDG context round-trips through the context form, with only the intended changes. The
-    launcher reads the form's output.
-  - Every pathway: launcher → CP-OS → delivery → real library → five screens and `report.html`,
-    with no console message and no unfilled value.
-  - An inbox drop is run by the real launcher, filed byte for byte and listed. Before this, the
-    watcher tests used stand-in launchers.
-- No product defect was reproduced. Landed, tests and CI only:
-  - `test_each_pathways_run_reaches_the_library_screens` (browser, 6 pathways).
-  - `test_a_drop_is_run_by_the_real_launcher_filed_and_listed` with
-    `tests/fixtures/canned_provider_launcher.py`. Dividing the watcher's `--cap` by 100 fails it
-    and passes the stand-in test.
-  - `test_the_library_screens_value_lists_are_the_codes`: run statuses, classification and rating
-    scope in `views.js` against the Python literals; fails when a status is dropped.
-  - `checks.yml` now runs `test_handoff_loop.py` and `test_context_form.py` on every PR.
-- Performance, median of 5 after one warm-up, noise = max − min. `prepare()` over all 20 modules:
-  23.8 ms (noise 18.0). Library rebuild of 10 run folders: 372.9 ms (noise 37.0), with no single
-  hot spot. Nothing above the floor; page render unmeasured.
-- `prepare(retained=)` and its resume helpers had no production caller. Owner: "Remove it". 127
-  lines are gone from `cpos_launch.py`. The prepared run folder (manifest and instructions) hashes
-  the same before and after for all six pathways. CP-OS's replay of pinned answers stays, and its
-  test now pins them in the manifest directly. Reverting the producers pin check still fails it.
-- Gates on the final tree, all exit 0:
-  - quality gate: 0 findings.
-  - `node --test` static and calendar.
-  - CI pytest list plus the two added files: 1529 passed, 13 deselected (7 known failures, 6
-    browser), after the removal took out two tests.
-  - Browser (`test_library_page_browser.py`, `test_cpos_launch.py`): 29 passed. After the
-    removal, `test_cpos_launch.py`'s 7 browser tests passed again.
-  - Base logs: the same commands at `53a5632`, all exit 0.
-- Not verified:
-  - a live run of the journeys;
-  - page render timing;
-  - `TERM_LABELS` against the builder of `run.facilities` (not traced);
-  - the form's download click (its `build()` output was used);
-  - Windows paths.
