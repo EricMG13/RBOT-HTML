@@ -18,6 +18,7 @@ from deploy_workflow.owners.cpos_launch import (
     CP1_CHECK_BLOCK,
     CURRENCY_CODES,
     DEBT_RECON,
+    OWNER_TABLES,
     PERIOD_REQUIRED_BLOCK,
     _chart_header,
     _cp1_issues,
@@ -436,7 +437,9 @@ def test_the_launcher_text_names_every_fixed_row_and_metric_and_is_short():
     # removed 128 (5,285 -> 5,157), so the bound falls by the same 128; the money-unit sentence
     # replaced the USD-only one (5,157 -> 5,337), so it rises by the same 180; the adjusted-names
     # sentence (owner ruling C2) added 193 (5,337 -> 5,530), so it rises by the same 193
-    assert len(CP1_CHECK_BLOCK) <= 4_498 + 1_200 + 250 + 180 + 193
+    # fix round H: the ratio-table words (the leverage and interest-cover tables stay `x`) and the
+    # shortened reconciliation sentence net +8 (5,530 -> 5,538), so it rises by the same 8
+    assert len(CP1_CHECK_BLOCK) <= 4_498 + 1_200 + 250 + 180 + 193 + 8
 
 
 def test_the_launcher_text_states_every_refusal_of_the_rulings_from_the_constants():
@@ -1762,3 +1765,256 @@ def test_any_chart_cell_of_the_adjusted_only_handoff_off_its_register_value_is_r
         leverage=((values[0], values[1]), (values[2], values[3])), cover=(values[4], values[5])
     )
     assert _cp1_issues(text), (where, changed)
+
+
+# ---- fix round H: two reviews of the own-currency and adjusted-only changes -------------------
+
+
+def adjusted_only_without_the_adjusted_row() -> str:
+    """The adjusted-only handoff with no T4.4 `EBITDA (Adjusted)` row and register adjusted EBITDA
+    3,000 (the statements' answer key is 4,173), chart 8.29 / 6.21 / 2.59."""
+    income = {"Revenue": ("11,000", "9,500"), "EBITDA (Reported)": (ONLY_ADJUSTED, ONLY_ADJUSTED)}
+    rows = {
+        "Total debt / adjusted EBITDA": (("24,880", "3,000", "8.29"), ("19,750", "3,395", "5.82")),
+        "Net debt / adjusted EBITDA": (("18,619", "3,000", "6.21"), ("16,278", "3,395", "4.79")),
+        "Adjusted EBITDA / cash interest": (("3,000", "1,158", "2.59"), ("3,395", "1,160", "2.93")),
+    }
+    return adjusted_only(
+        income=income,
+        reg=register(rows),
+        leverage=(("8.29", "6.21"), ("5.82", "4.79")),
+        cover=("2.59", "2.93"),
+    )
+
+
+def test_a_stated_adjusted_operand_with_no_adjusted_statement_row_is_refused_naming_the_row():
+    text = adjusted_only_without_the_adjusted_row()
+    assert "EBITDA (Adjusted)" not in text.split("### T4.9")[0]
+    issues = [i for i in _cp1_issues(text) if "ties to no statement line" in i]
+    assert issues, _cp1_issues(text)
+    named(issues[0], "EBITDA (Adjusted)", "### T4.4 Income statement", "3,000", "FY2024")
+
+
+def test_a_stated_cash_interest_operand_with_no_statement_row_is_refused_naming_the_row():
+    text = build(cash_flow=without(CASH_FLOW, "Cash Interest Paid"))
+    issues = [i for i in _cp1_issues(text) if "ties to no statement line" in i]
+    assert issues, _cp1_issues(text)
+    named(issues[0], "Cash Interest Paid", "### T4.5 Cash flow statement", "1,158")
+
+
+def test_a_gap_operand_with_no_statement_row_is_not_refused_for_the_missing_row():
+    gaps = {
+        (name, period): [ONLY_ADJUSTED] * 3
+        for name in ADJUSTED_NAMES
+        for period in ("FY2024", "FY2023")
+    }
+    gaps.update({(COVER_NAME, p): [ONLY_ADJUSTED] * 3 for p in ("FY2024", "FY2023")})
+    text = build(
+        income=without(INCOME, "EBITDA (Adjusted)"),
+        reg=register(overrides=gaps),
+        leverage=(("6.53", "4.88"), ("6.27", "5.17")),
+    )
+    assert not any("ties to no statement line" in i for i in _cp1_issues(text))
+
+
+def interim_only_chart_on_adjusted_names() -> str:
+    rows = {k: v for k, v in REGISTER.items() if k in (*ADJUSTED_NAMES, COVER_NAME)}
+    text = build(
+        periods=(
+            *PERIODS,
+            ("9M 2025", "2024-10-01", "2025-06-30"),
+            ("9M 2024", "2023-10-01", "2024-06-30"),
+        ),
+        reg=register(rows),
+        leverage=(("5.96", "4.46"), ("5.82", "4.79")),
+        cover=("3.60", "2.93"),
+    )
+    text = text.replace("FY2024 / 2024-09-30", "2025-06-30").replace(
+        "FY2023 / 2023-09-30", "2024-06-30"
+    )
+    text = re.sub(r"^\| FY2024 \| (?=\d\.\d\d \|)", "| 2025-06-30 | ", text, flags=re.MULTILINE)
+    text = re.sub(r"^\| FY2023 \| (?=\d\.\d\d \|)", "| 2024-06-30 | ", text, flags=re.MULTILINE)
+    text = text.replace(
+        LEVERAGE_HEAD, f"| Period | {ADJUSTED_NAMES[0]} | {ADJUSTED_NAMES[1]} | Reporting unit |"
+    )
+    return text.replace(COVER_HEAD, f"| Period | {COVER_NAME} | Reporting unit |")
+
+
+def test_adjusted_headers_on_an_interim_only_chart_are_refused_while_t44_states_reported_ebitda():
+    text = interim_only_chart_on_adjusted_names()
+    assert "| EBITDA (Reported) | 3,813 | 3,148 |" in text
+    issue = next(i for i in _cp1_issues(text) if "reported EBITDA is stated" in i)
+    named(issue, "FY2024", "FY2023", "the adjusted ratios stay in the register")
+
+
+def test_adjusted_headers_are_refused_when_reported_ebitda_is_stated_for_an_uncharted_period():
+    income = {
+        "Revenue": ("11,000", "9,500", "9,000"),
+        "EBITDA (Reported)": (ONLY_ADJUSTED, ONLY_ADJUSTED, "2,900"),
+        "EBITDA (Adjusted)": ("4,173", "3,395", "3,100"),
+    }
+    header = ["Line item", "FY2024", "FY2023", "FY2022", "Unit", "Basis", "Source"]
+    body = [[k, *v, UNIT, BASIS, "10-K"] for k, v in income.items()]
+    text = adjusted_only(periods=(*PERIODS, ("FY2022", "2021-10-01", "2022-09-30")))
+    start = text.index("### T4.4 Income statement")
+    end = text.index("\n\n### ", start)
+    text = text[:start] + table("T4.4 Income statement", header, body) + text[end:]
+    issue = next(i for i in _cp1_issues(text) if "reported EBITDA is stated" in i)
+    named(issue, "FY2022", "the adjusted ratios stay in the register")
+    assert "FY2024" not in issue and "FY2023" not in issue
+
+
+def test_adjusted_headers_are_refused_when_an_uncharted_register_row_states_reported_ebitda():
+    rows = {k: v for k, v in REGISTER.items() if k in (*ADJUSTED_NAMES, COVER_NAME)}
+    extra = [
+        *("Total debt / EBITDA", "numerator / denominator", "24,000", "10-K", "3,000", "10-K"),
+        *("FY2022", "USD", "US$m", "8.00", "Calculated", "Tier 1", BASIS),
+    ]
+    text = adjusted_only(reg=register(rows)).replace(
+        "\n\n### Chart data: leverage", f"\n| {' | '.join(extra)} |\n\n### Chart data: leverage", 1
+    )
+    issues = _cp1_issues(text)
+    assert any("reported EBITDA is stated for FY2022" in i for i in issues), issues
+
+
+def test_a_ratio_table_header_that_is_neither_set_names_both_accepted_headers():
+    text = complete(adjusted_only()).replace(
+        "Total debt / adjusted EBITDA", "Total debt / Adjusted EBITDA"
+    )
+    (issue,) = [i for i in _owned_issues("CP-1", [], text) if "needs the table headed" in i]
+    reported = "| Period | Total debt / EBITDA | Net debt / EBITDA | Reporting unit |"
+    adjusted = (
+        "| Period | Total debt / adjusted EBITDA | Net debt / adjusted EBITDA | Reporting unit |"
+    )
+    named(issue, reported, adjusted, "states only adjusted EBITDA")
+    cover = complete(adjusted_only()).replace(COVER_NAME, "Adjusted EBITDA / Cash interest")
+    (issue,) = [i for i in _owned_issues("CP-1", [], cover) if "needs the table headed" in i]
+    named(
+        issue, "| Period | EBITDA / cash interest |", f"| Period | {COVER_NAME} |", "only adjusted"
+    )
+
+
+def test_a_table_with_one_header_only_still_names_just_it():
+    text = in_section(complete(build()), "Chart data: liquidity", "| Cash |", "| Cache |")
+    (issue,) = [i for i in _owned_issues("CP-1", [], text) if "needs the table headed" in i]
+    assert "adjusted" not in issue
+
+
+@pytest.mark.parametrize(
+    ("unit", "code", "money_unit"),
+    [
+        ("GBP thousands", "GBP", "GBPm"),
+        ("GBPbn", "GBP", "GBPm"),
+        ("£ thousands", "GBP", "GBPm"),
+        ("USD thousands", "USD", "US$m"),
+    ],
+)
+def test_a_statement_currency_cell_at_another_scale_is_told_to_restate_in_millions(
+    unit, code, money_unit
+):
+    text = complete(relabel(build(), code), money_unit).replace(
+        f"| 12,000 | 3.1 | {money_unit} |", f"| 12,000,000 | 3.1 | {unit} |"
+    )
+    advice = [i for i in chart_issues(text, _spec("Chart data: debt stack"), money=money_unit)]
+    assert advice, unit
+    for issue in advice:
+        named(issue, "restate the figure in millions", f"`{money_unit}`")
+        assert f"use `{money_unit}`" not in issue and "Not supplied" not in issue
+
+
+@pytest.mark.parametrize("unit", ["£m", "GBP m", "GBP millions", "GBPmn", "£ millions"])
+def test_a_millions_spelling_of_the_statement_currency_is_told_to_use_the_money_unit(unit):
+    text = complete(relabel(build()), "GBPm").replace(
+        "| 12,000 | 3.1 | GBPm |", f"| 12,000 | 3.1 | {unit} |"
+    )
+    (issue,) = chart_issues(text, _spec("Chart data: debt stack"), money="GBPm")
+    named(issue, "use `GBPm`")
+    assert "Not supplied" not in issue and "restate" not in issue
+
+
+@pytest.mark.parametrize("unit", ["USDm", "$m", "US$ millions"])
+def test_a_millions_spelling_of_us_dollars_is_told_to_use_us_dollar_m_for_a_usd_issuer(unit):
+    text = complete(build()).replace("| 12,000 | 3.1 | US$m |", f"| 12,000 | 3.1 | {unit} |")
+    (issue,) = chart_issues(text, _spec("Chart data: debt stack"), money="US$m")
+    named(issue, "use `US$m`")
+
+
+@pytest.mark.parametrize("unit", ["EUR thousands", "EURbn", "US$ thousands"])
+def test_another_currency_at_another_scale_keeps_only_the_gap_advice(unit):
+    text = complete(relabel(build()), "GBPm").replace(
+        "| 12,000 | 3.1 | GBPm |", f"| 12,000 | 3.1 | {unit} |"
+    )
+    (issue,) = chart_issues(text, _spec("Chart data: debt stack"), money="GBPm")
+    named(issue, f"write `Not supplied: reported in {unit}`")
+    assert "use `" not in issue and "restate" not in issue
+
+
+def _spec(heading: str):
+    return next(t for t in OWNER_TABLES["CP-1"] if t.heading == heading)
+
+
+def gapped_net_debt_in_us_dollars() -> str:
+    gap = "Not supplied: pending"
+    row = "| FY2024 / 2024-09-30 | 24,880 | 6,261 | 18,619 | GBPm |"
+    base = relabel(build())
+    assert row in base
+    return base.replace(row, f"| FY2024 / 2024-09-30 | {gap} | {gap} | {gap} | US$m |")
+
+
+def test_a_net_debt_row_not_in_the_money_unit_is_refused_even_when_all_its_figures_are_gaps():
+    text = complete(gapped_net_debt_in_us_dollars(), "GBPm")
+    issues = [i for i in _cp1_issues(text) if "Net debt data" in i and "Reporting unit" in i]
+    named(only(tuple(issues)), "FY2024 / 2024-09-30", "`US$m`", "`GBPm`", "money unit")
+
+
+def test_the_register_does_not_demand_the_unit_of_a_net_debt_row_that_is_not_the_money_unit():
+    first = gapped_net_debt_in_us_dollars()
+    second = first.replace("| GBP | GBPm |", "| GBP | US$m |")
+    for text, unit in ((first, "GBPm"), (second, "GBPm")):
+        issues = [
+            i for i in _cp1_issues(complete(text, unit)) if "register" in i.lower() or "T4.9" in i
+        ]
+        assert not any("must equal it" in i and "Reporting unit `US$m`" in i for i in issues), (
+            issues
+        )
+    one = _cp1_issues(complete(first, "GBPm"))
+    assert any("Net debt data" in i and "money unit" in i for i in one)
+
+
+def test_a_leverage_table_written_in_the_money_unit_is_told_to_write_x():
+    text = in_section(
+        complete(relabel(build()), "GBPm"), "Chart data: leverage", "| x |", "| GBPm |"
+    )
+    issues = [i for i in _owned_issues("CP-1", [], text) if "Chart data: leverage" in i]
+    assert issues
+    for issue in issues:
+        named(issue, "write `x`")
+        assert "Not supplied: reported in GBPm" not in issue
+
+
+def test_the_block_says_the_ratio_tables_stay_x():
+    block = CP1_CHECK_BLOCK
+    assert "the leverage and interest-cover tables stay `x`" in block
+    assert "the net debt, chart and reconciliation tables" not in block
+
+
+def test_a_stated_figure_in_a_money_row_table_with_no_money_unit_is_refused_by_the_amount():
+    from deploy_workflow.owners.cpos_launch import NO_MONEY
+
+    text = complete(relabel(build()), "GBPm")
+    issues = chart_issues(text, _spec("Chart data: debt stack"))
+    assert issues == (
+        f"`### Chart data: debt stack` Term loan: Amount 12,000 is stated, but {NO_MONEY}",
+    )
+
+
+def test_the_first_table_that_states_a_figure_may_be_a_chart_on_the_adjusted_names():
+    periods = (("FY2024", GAP, GAP), ("FY2023", GAP, GAP))
+    text = _blocked(periods).replace(
+        LEVERAGE_HEAD, f"| Period | {ADJUSTED_NAMES[0]} | {ADJUSTED_NAMES[1]} | Reporting unit |"
+    )
+    text = text.replace(f"| FY2024 | {GAP} | {GAP} | x |", "| FY2024 | 5.96 | 4.46 | x |")
+    issues = _cp1_issues(text)
+    assert any(
+        "`Period table` row `FY2024`" in i and "`Chart data: leverage` states" in i for i in issues
+    ), issues

@@ -8044,3 +8044,45 @@ def test_the_chart_units_own_currency_or_a_capitalised_word_is_not_another_curre
 def test_a_cell_with_a_different_currency_in_a_currency_position_keeps_the_gap_advice(unit):
     (issue,) = debt_stack_issues(DEBT_UNIT_ROW.format(unit))
     assert f"write `Not supplied: reported in {unit}`" in issue
+
+
+# ---- fix round H (two reviews of the C1 and C2 changes)
+def test_a_non_cp1_us_dollar_strip_route_keeps_currency_usd(tmp_path):
+    """Only CP-1 states its own currency (C1); any other module's `US$m` route is in US dollars
+    and its facts say so, as they did before C1 made it None."""
+    prepared, _task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    routes = tuple(
+        r.model_copy(update={"module_id": "CP-2D"})
+        for r in prepared.layout.routes
+        if r.module_id == "CP-1" and r.kind == "chart"
+    )
+    assert {r.chart_unit for r in routes} == {"x", "US$m"}
+    own = prepared.layout.model_copy(
+        update={
+            "blocks": tuple(dict.fromkeys(r.block_id for r in routes)),
+            "routes": routes,
+            "front": (),
+        }
+    )
+    (tmp_path / "cp-2d.md").write_text(raw)
+    handoff = HandoffInput(path="cp-2d.md", sha256=hashlib.sha256(raw.encode()).hexdigest())
+    request = DeliveryRequest(run=prepared.plan.run, handoffs={"CP-2D": handoff}, layout=own)
+    view = json.loads(markdown_files(request, tmp_path)["view.json"])
+    typed = [
+        f
+        for m in view["modules"]
+        for f in m["facts"]
+        if f["table_id"].startswith("chart-") and f["status"] == "known" and f["unit"] == "MILLIONS"
+    ]
+    assert typed and {f["currency"] for f in typed} == {"USD"}
+
+
+def test_only_the_two_ratio_tables_say_the_adjusted_names_may_head_their_columns():
+    allowed = "adjusted names where `Checked tables` allows"
+    for figure in ("S.1", "S.2"):
+        route = cpos_launch._chart_route("model-chart-strip", figure)
+        assert allowed in cpos_launch._selector(route), figure
+    for figure in ("S.3", "S.4"):
+        route = cpos_launch._chart_route("model-chart-strip", figure)
+        assert "adjusted" not in cpos_launch._selector(route), figure

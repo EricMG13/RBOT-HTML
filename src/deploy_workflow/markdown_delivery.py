@@ -721,7 +721,7 @@ def _numeric_observations(
                         route.chart_unit or ""
                     ],
                     scale=Decimal(1000000) if route.chart_unit == "US$m" else Decimal(1),
-                    currency=(_currency_of(figure_unit) if _is_money(route) else None)
+                    currency=(_currency_of(figure_unit) if _is_money(route) else "USD")
                     if route.chart_unit == "US$m"
                     else None,
                     period=category,

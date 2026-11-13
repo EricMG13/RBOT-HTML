@@ -393,3 +393,40 @@ def test_the_form_describes_the_rates_module_with_its_esg_part() -> None:
         "environmental, social and sustainability (ESG) factors that reach the credit.'],"
     )
     assert expected in constant("MODULES")
+
+
+# ---- fix round H: CP-1's money tables left the "US$ only" rule behind
+def test_the_non_usd_warning_names_only_the_modules_whose_money_tables_stay_in_us_dollars() -> None:
+    """C1 made CP-1's money tables the issuer's own currency; the CP-2D, CP-3C and CP-4C money
+    tables still say `US$m` (read from the launcher), so a non-USD issuer's cells there read
+    "Not supplied". The warning says exactly that and not that the chart strip is US dollars."""
+    from deploy_workflow.owners import cpos_launch
+
+    stays = {
+        module
+        for module, tables in cpos_launch.OWNER_TABLES.items()
+        if module != "CP-1" and any(t.chart_unit == "US$m" for t in tables)
+    }
+    assert stays == {"CP-2D", "CP-3C", "CP-4C"}
+    assert all(
+        t.chart_unit == cpos_launch.MONEY
+        for t in cpos_launch.OWNER_TABLES["CP-1"]
+        if t.heading in ("Net debt data", "Chart data: liquidity", "Chart data: debt maturities")
+    )
+    assert "the report\\'s chart strip is US$ millions only" not in FORM
+    warning = (
+        "is not USD: CP-1\\'s money tables are in that currency, but the money tables of "
+        'CP-2D, CP-3C and CP-4C stay in US$ millions, so their money cells read "Not supplied".'
+    )
+    assert warning in FORM
+
+
+def test_no_expectation_rule_or_page_rule_carries_a_flag_nothing_sets() -> None:
+    """`propagates` and `np` only served the removed `chart-strip-usd` rule."""
+    import dataclasses
+
+    from deploy_workflow.run_expectations import RULES, Rule
+
+    assert "propagates" not in {f.name for f in dataclasses.fields(Rule)}
+    assert not any(hasattr(rule, "propagates") for rule in RULES)
+    assert "np:" not in FORM and ".np" not in FORM and "!x.np" not in FORM

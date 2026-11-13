@@ -593,6 +593,15 @@ def _line_tie(found: Statement, label: str, year: str, side: Side, where: str) -
             f"`{year}`."
         )
         return [text]
+    if label not in found.rows:
+        if _stated(side.cell) is None:
+            return []
+        text = (
+            f"{where}: {side.said} is a figure, but `### {found.spec.heading}` has no `{label}` "
+            f"row, so it ties to no statement line (no difference can be worked); add the row "
+            f"`{label}` to it, stating {year}'s figure, or write `Not supplied: <reason>` here."
+        )
+        return [text]
     per, cell = found.per(label), found.cell(label, at)
     if per is None or (label == INTEREST and (_stated(cell) or 0) < 0):
         return []  # refused where the Unit cell or the sign is read
@@ -907,13 +916,29 @@ def _row_issues(reg: Reg, listed: list[dict[str, str]], code: str | None = None)
             f"{reg.where}: Unit `{unit}` is not `{_money_of(code)}`, the money unit (the "
             "statements' currency code and `m`, `US$m` for USD)."
         )
-    if unit and reg.nd and reg.nd.get("Reporting unit", unit) != unit:
+    nd = reg.nd
+    shown = nd.get("Reporting unit", unit) if nd else unit
+    if nd and unit and shown != unit and (code is None or shown == _money_of(code)):
         issues.append(
-            f"{reg.where}: Unit `{unit}` is not the Reporting unit `{reg.nd['Reporting unit']}` "
-            f"of the `{NET_DEBT_HEADING}` row for {reg.nd['Period']}; the register's Unit must "
+            f"{reg.where}: Unit `{unit}` is not the Reporting unit `{shown}` "
+            f"of the `{NET_DEBT_HEADING}` row for {nd['Period']}; the register's Unit must "
             "equal it."
         )
     return issues
+
+
+def _net_debt_units(net_debt: list[dict[str, str]], code: str | None) -> list[str]:
+    """Each `Net debt data` row's Reporting unit is the money unit whenever the statements state
+    one currency, a row of gaps included: the register's Unit follows it."""
+    if code is None:
+        return []
+    return [
+        f"`{NET_DEBT_HEADING}` {record['Period']}: Reporting unit `{record['Reporting unit']}` is "
+        f"not `{_money_of(code)}`, the money unit; write `{_money_of(code)}` in this row, gap "
+        "rows included."
+        for record in net_debt
+        if record.get("Reporting unit", _money_of(code)) != _money_of(code)
+    ]
 
 
 def _register_cells(
@@ -1100,35 +1125,26 @@ def _identity(header: list[str], heading: str) -> str | None:
     )
 
 
-def _reported_stated(
-    lines: list[str],
-    headings: list[str],
-    regs: list[Reg],
-    income: Statement | None,
-    periods: Periods,
-) -> list[str]:
-    """The charted periods for which reported EBITDA is stated: in `EBITDA (Reported)` of the
-    income statement, or as the EBITDA operand of a reported-metric register row."""
+def _reported_stated(regs: list[Reg], income: Statement | None) -> list[str]:
+    """The periods for which reported EBITDA is stated, charted or not: in a column of the income
+    statement's `EBITDA (Reported)` row, or as the EBITDA operand of a reported-metric register
+    row."""
     stated: dict[str, None] = {}
-    for heading in headings:
-        for record in _records(lines, heading):
-            cell, year = record["Period"], periods.fiscal(record["Period"])
-            at = income.column(year) if income and year else None
-            if income and at is not None and _stated(income.cell(REPORTED, at)) is not None:
-                stated[year or cell] = None
+    if income:
+        for at, period in enumerate(income.periods):
+            if _stated(income.cell(REPORTED, at)) is not None:
+                stated[period] = None
     for reg in regs:
         operand = reg.cells["Numerator Value" if reg.metric.cover else "Denominator Value"]
         if reg.metric.ebitda == REPORTED and _stated(operand) is not None:
-            stated[periods.fiscal(reg.period) or reg.period] = None
+            stated[reg.year or reg.period] = None
     return list(stated)
 
 
-def _chart_identity(
-    lines: list[str], regs: list[Reg], income: Statement | None, periods: Periods
-) -> list[str]:
+def _chart_identity(lines: list[str], regs: list[Reg], income: Statement | None) -> list[str]:
     """The leverage and interest-cover tables are headed with the reported names or the adjusted
     ones, never a mix of the two and never different in the two tables; the adjusted names only
-    while reported EBITDA is stated for no charted period."""
+    while reported EBITDA is stated for no period at all."""
     kinds: dict[str, str] = {}
     issues = []
     for heading in CHART_COLUMNS:
@@ -1152,7 +1168,7 @@ def _chart_identity(
             "both with the reported names or both with the adjusted names."
         )
     adjusted = [h for h, kind in kinds.items() if kind == "adjusted"]
-    stated = _reported_stated(lines, adjusted, regs, income, periods) if adjusted else []
+    stated = _reported_stated(regs, income) if adjusted else []
     if stated:
         issues.append(
             f"{' and '.join(f'`### {h}`' for h in adjusted)} headed with the adjusted names, but "
@@ -1367,9 +1383,10 @@ def cp1_issues(text: str) -> tuple[str, ...]:
         lambda: unreadable,
         lambda: _currency_issues(_currencies(statements, optional=True)),
         lambda: _register_cells(regs, net_debt, code),
+        lambda: _net_debt_units(net_debt, code),
         lambda: _long_cells(lines, net_debt),
         lambda: _ratios(regs),
-        lambda: _chart_identity(lines, regs, income, periods),
+        lambda: _chart_identity(lines, regs, income),
         lambda: _chart_ties(lines, regs, periods) if found_regs is not None else [],
         lambda: _numerator_ties(regs),
         lambda: [i for reg in regs for i in _operand_ties(reg, income, flow)],

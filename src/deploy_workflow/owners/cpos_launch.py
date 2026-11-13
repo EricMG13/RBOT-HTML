@@ -22,7 +22,7 @@ import sys
 import tempfile
 import textwrap
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -718,7 +718,7 @@ NET_DEBT = OwnerTable(
         "other word in the cell (say `pro forma` or `reported` in the Basis and limitation cell)."
         " A row whose three figures are all stated is refused if net debt differs from gross debt"
         " less cash by any amount, and a row is refused if its cash differs from the liquidity "
-        "table's for the same period; a figure you cannot state is `Not supplied: <reason>`."
+        "table's for the same period."
     ),
 )
 
@@ -801,14 +801,14 @@ DEBT_RECON = OwnerTable(
     cp1_check.RECON_COLUMNS,
     MONEY,
     rules=(
-        "One row, for the balance-sheet date the maturity ladder is drawn at; `Period` is written "
-        "as in `Net debt data`. Contractual principal is the sum of the `Debt maturing` rows of "
+        "One row, for the balance-sheet date the maturity ladder is drawn at; `Period` is a Period "
+        "cell of `Net debt data`. Contractual principal is the sum of the `Debt maturing` rows of "
         "`Chart data: debt maturities`. Reconciling items is one signed net figure: issuance "
         "costs, discounts and premiums, and any debt the ladder leaves out, each named in Basis "
         "and limitation and summed in `## Calculations`; a negative has a minus sign and a "
         "positive no plus sign (`561`, not `+561`). Carrying value is the Gross debt of "
         "`Net debt data` for the same period. Principal plus reconciling items must equal "
-        "carrying value exactly. `Period` must be the Period cell of a `Net debt data` row. When "
+        "carrying value exactly. When "
         "the principal is a stated number, every `Debt maturing` cell must be one too."
     ),
 )
@@ -1462,26 +1462,68 @@ _AMOUNT_WORD = r"(?:m|mn|bn|k|thousands?|millions?|billions?|amounts?)"
 _SYMBOL_CODE = {"$": "USD", "\u20ac": "EUR", "\u00a3": "GBP", "\u00a5": "JPY"}
 
 
-def _other_currency(rest: str, chart_unit: str) -> bool:
-    """Whether `rest` (a unit cell without the chart unit) names a currency other than the chart
-    unit's own: a code or symbol of another currency. A code counts in a currency position only:
+def _own_currency(chart_unit: str) -> tuple[set[str], list[str]]:
+    """The currency codes and symbols the chart unit itself names (`GBPm`: GBP; `US$m`: USD)."""
+    codes = {c for c in CURRENCY_CODES if re.search(rf"\b{c}", chart_unit)}
+    codes |= {c for s, c in _SYMBOL_CODE.items() if s in chart_unit}
+    return codes, [s for s, c in _SYMBOL_CODE.items() if c in codes]
+
+
+def _names_currency(text: str, codes: Collection[str], symbols: str) -> bool:
+    """Whether `text` names one of `codes` (or a symbol of `symbols`) in a currency position only:
     next to an amount word or unit (`GBPm`, `EUR millions`, `m EUR`), or standing alone (`(ILS)`,
     `and EUR`). A capitalised word that is also a code (`ALL figures`, `TOP line`) does not."""
-    own_symbols = [s for s in _SYMBOL_CODE if s in chart_unit]
-    own = {c for c in CURRENCY_CODES if re.search(rf"\b{c}", chart_unit)}
-    own |= {_SYMBOL_CODE[s] for s in own_symbols}
-    code = "(?:" + "|".join(sorted(CURRENCY_CODES - own)) + ")"
+    code = "(?:" + "|".join(sorted(codes)) + ")"
     alone = rf"(?:^|[(/;,&]|\band\b|\bor\b)\s*{code}\s*(?=$|[)/;,&])"
     beside = rf"\b{code}\s*{_AMOUNT_WORD}\b|\b{_AMOUNT_WORD}\s+{code}\b"
+    return bool(
+        re.search(f"{alone}|{beside}|[{symbols}]" if symbols else f"{alone}|{beside}", text)
+    )
+
+
+def _other_currency(rest: str, chart_unit: str) -> bool:
+    """Whether `rest` (a unit cell without the chart unit) names a currency other than the chart
+    unit's own: a code or symbol of another currency (`_names_currency`)."""
+    own, own_symbols = _own_currency(chart_unit)
     symbols = "".join(s for s in _SYMBOL_CODE if s not in own_symbols)
-    return bool(re.search(f"{alone}|{beside}|[{symbols}]", rest))
+    return _names_currency(rest, CURRENCY_CODES - own, symbols)
+
+
+_MILLIONS = r"(?i:m|mn|millions?)"
+
+
+def _millions_of(unit: str, codes: Collection[str]) -> bool:
+    """Whether the whole cell is a millions spelling of one of `codes`: `GBP m`, `GBPmn`,
+    `\u00a3m`, `GBP millions`, `millions GBP`."""
+    symbols = [re.escape(s) for s, c in _SYMBOL_CODE.items() if c in codes]
+    symbols += [r"US\$"] * ("USD" in codes)
+    token = "(?:" + "|".join([*sorted(codes), *symbols]) + ")"
+    return bool(re.fullmatch(rf"{token}\s*{_MILLIONS}|{_MILLIONS}\s+{token}", unit.strip()))
+
+
+def _money_advice(money: str, unit: str) -> str:
+    """What to do about a cell that is not a CP-1 money table's unit. Only a millions spelling of
+    the statement currency is told to use the money unit: the same currency at another scale is
+    restated first, so no figure is read 1,000 times too large; another currency keeps the gap."""
+    own, _ = _own_currency(money)
+    gap = f"write `Not supplied: reported in {unit}`"
+    if _millions_of(unit, own):
+        return f"use `{money}`."
+    if _millions_of(unit, CURRENCY_CODES):
+        return f"use `{money}` if the figure is in the statement currency, else {gap}."
+    if _names_currency(unit, own, "".join(_own_currency(money)[1])) and not _other_currency(
+        unit, money
+    ):
+        return f"restate the figure in millions of the statement currency and write `{money}`."
+    return f"{gap}."
 
 
 def _unit_advice(spec: OwnerTable, unit: str) -> str:
     """What to do about a unit cell that is not the chart unit. A cell that holds the chart unit
     and adds other words is a unit cell holding more than the unit: its amounts are sound, so the
     advice is to cut the cell, never to replace the amounts with gaps. When the rest names another
-    currency (`_other_currency`) the amounts may really be in it, so the gap advice stays."""
+    currency (`_other_currency`) the amounts may really be in it, so the gap advice stays. A ratio
+    table written in a money unit is told to write `x`."""
     own = re.compile(rf"{re.escape(spec.chart_unit)}(?!\w)")
     if (
         spec.chart_unit
@@ -1492,11 +1534,10 @@ def _unit_advice(spec: OwnerTable, unit: str) -> str:
             f"the Reporting unit must be exactly `{spec.chart_unit}` (the Amount's unit only); "
             "move the rest to Basis and limitation."
         )
+    if spec.chart_unit == "x" and re.fullmatch(r"US\$m|[A-Z]{3}m", unit):
+        return "write `x`, the unit of a ratio."
     if spec.money_table:
-        return (
-            f"use `{spec.chart_unit}` if the figure is in the statement currency, else write "
-            f"`Not supplied: reported in {unit}`."
-        )
+        return _money_advice(spec.chart_unit, unit)
     return f"write `Not supplied: reported in {unit}`."
 
 
@@ -1781,6 +1822,18 @@ def _stated_header(spec: OwnerTable, rows: list[list[str]]) -> list[str]:
     return header
 
 
+def _header_issue(spec: OwnerTable, heading: str, header: list[str]) -> str:
+    """The refusal of a chart table's header. The two ratio tables name both accepted headers: the
+    adjusted one is for an issuer that states only an adjusted EBITDA."""
+    twin = _adjusted(spec)
+    if twin is None:
+        return f"`{heading}` needs the table headed `| {' | '.join(header)} |`."
+    return (
+        f"`{heading}` needs the table headed `| {' | '.join(_chart_header(spec))} |` or, for an "
+        f"issuer that states only adjusted EBITDA, `| {' | '.join(_chart_header(twin))} |`."
+    )
+
+
 def chart_issues(
     text: str, table: MarkdownRoute | OwnerTable, *, money: str | None = None
 ) -> tuple[str, ...]:
@@ -1796,7 +1849,7 @@ def chart_issues(
     rows = _stated_rows(text, heading)
     header = _stated_header(spec, rows)
     if not rows or rows[0] != header:
-        return (f"`{heading}` needs the table headed `| {' | '.join(header)} |`.",)
+        return (_header_issue(spec, heading, header),)
     if spec.columns:
         return tuple(_row_table_issues(spec, heading, header, rows[2:]))
     stated = []
@@ -2205,15 +2258,15 @@ CP1_CHECK_BLOCK = (
     "numerator over denominator printed to exactly two decimal places, worked with "
     "`calculate`; a zero or negative denominator is "
     "`Not calculable: <reason>`.\n"
-    f"`### {cp1_check.RECON_HEADING}` (selector below) ties the maturity ladder to the carrying "
-    "value in `Net debt data`.\n"
+    f"`### {cp1_check.RECON_HEADING}` is specified by its selector below.\n"
     f"The {cp1_check.PERIOD_TABLE} (a row for every statement column, asked for separately) is "
     "the sixth table: a row is a fiscal-year row when its date is the "
     "`End` of that column's row there, whatever form its Period cell takes (an `FY2024 / date` "
     "cell must name a row and its `End`). The money unit is `US$m` when your statements are in "
     "USD, else their currency code and `m` (`GBPm`), in millions even where a statement prints "
-    "thousands; the net debt, chart and reconciliation tables and the register's fixed rows use "
-    "it, and `Currency` is the statements' code. A figure in another currency is `Not "
+    "thousands; the net debt, reconciliation and money chart tables and the register's fixed "
+    "rows use it (the leverage and interest-cover tables stay `x`), and `Currency` is the "
+    "statements' code. A figure in another currency is `Not "
     "supplied: reported in <unit>`.\n"
     "Refused, naming the row, both figures and the difference: a table or fixed row missing; a "
     "Unit, period header or Period not as above; a cell that is not a plain number or stated gap; "
@@ -2385,10 +2438,11 @@ def _selector(route: MarkdownRoute | OwnerTable) -> str:
         rest = (
             f" {', '.join(others)} is a plain number in the unit its rule states." if others else ""
         )
+        twin = " (adjusted names where `Checked tables` allows)"
         return (
             f"- `### {spec.heading}`: exactly one Markdown table headed "
-            f"`| {' | '.join(_chart_header(spec))} |`, one row per "
-            f"{'step' if spec.steps else spec.noun}. "
+            f"`| {' | '.join(_chart_header(spec))} |`{twin if _adjusted(spec) else ''}, one row "
+            f"per {'step' if spec.steps else spec.noun}. "
             f"Value cells{numbers} are plain numbers {where}, or `Not supplied: <reason>`.{rest} "
             + (CURRENCY_RULE if spec.chart_unit and spec.chart_unit != MONEY else "")
             + f"{'Every other cell is stated, never blank. ' if spec.columns else ''}"

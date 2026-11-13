@@ -348,7 +348,6 @@ class Rule:
     basis: str
     evidence: Literal["per method", "observed offline", "observed live"]
     cite: Callable[[Facts], Guess | None] | None = None  # A guessed document the reason names.
-    propagates: bool = True
 
 
 _SK = "docs/reuse/selected-methods/skills/"
@@ -677,7 +676,7 @@ def expectations(
     for module in facts.ordered:
         own = [r for r in fired if r.scope == module]
         items += [_from_rule(r, facts) for r in own]
-        levels = [r.outcome for r in own if r.propagates and r.outcome in SEVERITY]
+        levels = [r.outcome for r in own if r.outcome in SEVERITY]
         if row := _inherit(module, facts.ordered, registry, effective):
             items.append(row)
             levels.append(row["outcome"])

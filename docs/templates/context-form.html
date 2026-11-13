@@ -1338,7 +1338,7 @@ function advise(o) {
   }
   const base = pkey(r.current_period);
   if (has('CP-2G') && base && !(base.kind === 'fy' || base.kind === 'q' && base.n === 4)) warn(firstOf(sd, 'current_period'), 'is the forecast base: the forward model forecasts three fiscal years, so use fy-YYYY (or q4-YYYY).');
-  if (r.reporting_currency && r.reporting_currency !== 'USD' && /^[A-Z]{3}$/.test(r.reporting_currency)) warn(firstOf(sd, 'reporting_currency'), 'is not USD: the report\'s chart strip is US$ millions only, so its money cells read "Not supplied".');
+  if (r.reporting_currency && r.reporting_currency !== 'USD' && /^[A-Z]{3}$/.test(r.reporting_currency)) warn(firstOf(sd, 'reporting_currency'), 'is not USD: CP-1\'s money tables are in that currency, but the money tables of CP-2D, CP-3C and CP-4C stay in US$ millions, so their money cells read "Not supplied".');
   if (LEVEL === 'advanced' && o.identity.issuer_name && !o.identity.aliases.length) warn(firstOf(si, 'aliases'), 'None given. If the filings name the issuer differently (a legal suffix, a short name, the ticker), add those names.');
   if (o.identity.listed_equity && !o.identity.ticker) warn(firstOf(si, 'ticker'), 'Add the ticker of the listed equity.');
   // Market rows
@@ -1457,11 +1457,11 @@ function readiness(o) {
     precIn: admitted(o.valuation.precedents, 'date', PRECEDENT_MONTHS, o.run.as_of)};
   f.newest = getC('newest');
   f.periodEnds = new Set(docs.filter(d => FINANCIAL_KINDS.includes(d.kind) && d.period_end).map(d => d.period_end)).size;
-  const fired = RULES.filter(r => (r.s === 'run' || has(r.s)) && r.c(f)).map(r => ({scope:r.s, outcome:r.o, np:!!r.np, reason: typeof r.r === 'function' ? r.r(f) : r.r, fix:r.fix || '', go:r.go || '', key:r.k || '', review:r.rv || '', counted: r.o !== 'information' && !r.nc}));
+  const fired = RULES.filter(r => (r.s === 'run' || has(r.s)) && r.c(f)).map(r => ({scope:r.s, outcome:r.o, reason: typeof r.r === 'function' ? r.r(f) : r.r, fix:r.fix || '', go:r.go || '', key:r.k || '', review:r.rv || '', counted: r.o !== 'information' && !r.nc}));
   const effective = {}, mods = [];
   for (const m of order) {
     const own = fired.filter(x => x.scope === m), items = own.slice();
-    const levels = own.filter(x => !x.np && (x.outcome === 'will_refuse' || x.outcome === 'limited')).map(x => x.outcome);
+    const levels = own.filter(x => x.outcome === 'will_refuse' || x.outcome === 'limited').map(x => x.outcome);
     // Inherited: producers whose effective outcome reaches m (run_expectations._inherit).
     const reach = Object.entries(EDGES[m] || {}).filter(([p]) => p in effective).map(([p, e]) => [p, effective[p] === 'limited' || e === 'r' ? 'limited' : 'will_refuse']);
     if (reach.length) {
