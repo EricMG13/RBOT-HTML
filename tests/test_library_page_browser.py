@@ -2319,7 +2319,7 @@ def test_the_chart_index_route_lands_on_the_run_charts_and_the_overview_links_no
     assert seen["tabBefore"] and seen["tabAfter"] == seen["tabBefore"], seen
 
 
-def two_model_workspace(workspace: Path) -> Path:
+def two_model_workspace(workspace: Path, model_ids=("model-a", "model-b")) -> Path:
     """The synthetic new-format run (with its Chart index link) listing two forecast models."""
     page = synthetic_workspace(workspace, with_chart_and_event)
     data_js = page.parent / "data.js"
@@ -2345,7 +2345,7 @@ def two_model_workspace(workspace: Path) -> Path:
             "register": None,
             "cashflow": None,
         }
-        for model_id in ("model-a", "model-b")
+        for model_id in model_ids
     ]
     data_js.write_text(prefix + update_library.embedded_json(data) + ";\n", encoding="utf-8")
     return page
@@ -2597,3 +2597,109 @@ def test_search_and_the_drawer_do_not_reach_text_written_for_another_module(tmp_
     assert seen["rowIndexed"] and seen["rowLabels"] == ["Exposure", "Effect"], seen
     assert seen["drawerOpen"] and "Cushion narrows over time." in seen["drawer"], seen
     assert "Consequence for" not in seen["drawer"] and "stated constraint" not in seen["drawer"]
+
+
+MODEL_HEADING_PROBE = """
+(async () => {
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const seen = {};
+  for (const route of PROBE.routes) {
+    location.hash = route;
+    await sleep(700);
+    seen[route] = {
+      title: document.getElementById('section-title')?.textContent ?? null,
+      announcement: document.getElementById('announcement').textContent,
+      option: document.querySelector('#model-select option:checked')?.textContent ?? null,
+    };
+  }
+  const out = document.createElement('pre');
+  out.id = 'probe';
+  out.textContent = JSON.stringify(seen);
+  document.body.appendChild(out);
+})();
+"""
+
+
+def test_a_forecast_model_is_named_for_assistive_technology_as_the_select_names_it(tmp_path):
+    """Review M3: the page's section heading and live announcement are the model's label, never its
+    64-character id."""
+    ids = ("a" * 64, "b" * 64)
+    page = two_model_workspace(tmp_path, ids)
+    routes = [
+        f"#W-Forecast/{ids[0]}?c={NEW_FORMAT_RUN}",
+        f"#W-Forecast/run-charts?c={NEW_FORMAT_RUN}",
+    ]
+    seen = read_probe(page, routes[0], 1280, MODEL_HEADING_PROBE, {"routes": routes})
+    for route, entry in seen.items():
+        assert entry["option"] and entry["title"] == entry["option"], (route, entry)
+        assert entry["option"] in entry["announcement"], (route, entry)
+        assert ids[0] not in entry["title"] + entry["announcement"], (route, entry)
+
+
+ROUTE_FAILURE_PROBE = """
+(async () => {
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  for (let i = 0; i < 200 && !document.querySelector('header.issuer h1'); i++) await sleep(50);
+  // A classifier that fails while the route is being read, before any block is placed.
+  window.Shapes.tableShape = () => { throw new Error('probe: cannot classify'); };
+  location.hash = PROBE.route;
+  await sleep(700);
+  const seen = {
+    header: document.querySelector('header.issuer h1')?.textContent ?? '',
+    content: document.getElementById('content').innerText,
+    tabs: document.querySelectorAll('.workspace-tabs a').length,
+  };
+  const out = document.createElement('pre');
+  out.id = 'probe';
+  out.textContent = JSON.stringify(seen);
+  document.body.appendChild(out);
+})();
+"""
+
+
+def test_a_route_that_cannot_be_drawn_says_so_under_the_issuer_header_and_logs_it(tmp_path):
+    """Review M4 (c): the documented, logged fail-open of the route render keeps the issuer header
+    and states the failure; it never leaves the page empty."""
+    page = synthetic_workspace(tmp_path, with_chart_and_event)
+    inject_probe(page, ROUTE_FAILURE_PROBE, {"route": f"#CP-2/head?c={NEW_FORMAT_RUN}"})
+    dom, console = visit(page, f"#W-Overview?c={NEW_FORMAT_RUN}")
+    seen = probe_json(dom)
+    assert seen["header"] and seen["tabs"] > 0, seen
+    assert "Couldn\u2019t present this page" in seen["content"], seen
+    assert any("The route could not be drawn" in line for line in console), console
+
+
+SEARCH_AUDIT_PROBE = """
+(async () => {
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const search = document.getElementById('module-search');
+  search.value = PROBE.query;
+  search.dispatchEvent(new Event('input', {bubbles: true}));
+  await sleep(300);
+  const hits = [...document.querySelectorAll('#search-results a.search-hit')].map(a => ({
+    text: a.innerText.replace(/\\s+/g, ' ').trim(),
+    label: a.getAttribute('aria-label'),
+    href: a.getAttribute('href'),
+  }));
+  const out = document.createElement('pre');
+  out.id = 'probe';
+  out.textContent = JSON.stringify({hits});
+  document.body.appendChild(out);
+})();
+"""
+
+
+def test_a_search_hit_in_an_audit_section_is_named_by_its_module_and_evidence_tab(tmp_path):
+    """Review M5: the query still matches a source file's name, but the hit says only which module's
+    Evidence tab holds it, and opens that tab at the row."""
+    page = synthetic_workspace(tmp_path, with_chart_and_event)
+    config = {"query": "annual-report.pdf"}
+    seen = read_probe(page, f"#W-Overview?c={NEW_FORMAT_RUN}", 1280, SEARCH_AUDIT_PROBE, config)
+    assert seen["hits"], seen
+    for hit in seen["hits"]:
+        assert ".pdf" not in hit["text"] + hit["label"], hit
+    sources = [hit for hit in seen["hits"] if "Sources" in hit["text"]]
+    assert sources, seen
+    assert all(re.search(r"^#W-Evidence/sources\?", hit["href"]) for hit in sources), sources
+    assert any("Fundamental credit Sources" in hit["label"] for hit in sources), sources
+    assert any(re.search(r"[?&]r=\d+", hit["href"]) for hit in sources), sources

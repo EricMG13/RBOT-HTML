@@ -385,7 +385,8 @@
 
   // ---- caseRows: one row per case
   const LEVEL = {high: 3, medium: 2, low: 1};
-  const meter = (word, header) => `<span class="cr-conf"><span class="k">${escapeHtml(header)}</span><span class="meter" aria-hidden="true">${[1, 2, 3].map(n => (n <= LEVEL[word.toLowerCase()] ? '<i class="f"></i>' : '<i></i>')).join('')}</span><span class="meter-w">${escapeHtml(word)}</span></span>`;
+  const levelOf = word => (Object.hasOwn(LEVEL, word.toLowerCase()) ? LEVEL[word.toLowerCase()] : 0);
+  const meter = (word, header) => `<span class="cr-conf"><span class="k">${escapeHtml(header)}</span><span class="meter" aria-hidden="true">${[1, 2, 3].map(n => (n <= levelOf(word) ? '<i class="f"></i>' : '<i></i>')).join('')}</span><span class="meter-w">${escapeHtml(word)}</span></span>`;
   const isLevel = text => Object.hasOwn(LEVEL, text.toLowerCase());
   // "a, b, c": items short enough to be chips; the commas stay in the text (hidden) so the cell reads as written.
   function chipItems(text) {
@@ -609,7 +610,7 @@
   // The cells of a row beyond the table's headers have no label to stand under; each is drawn unlabelled, through findingCell, after the row's other fields.
   const extraList = (block, row, ctx) => extrasOf(block, row, ctx).map(html => `<p class="rec-x">${html}</p>`).join('');
   const levelColumn = (block, at) => { const cells = block.rows.map(row => cellText(row, at)).filter(text => text !== ''); return cells.length > 0 && cells.every(isLevel); };
-  const levelMeter = word => `<span class="cr-conf"><span class="meter" aria-hidden="true">${[1, 2, 3].map(n => (n <= LEVEL[word.toLowerCase()] ? '<i class="f"></i>' : '<i></i>')).join('')}</span><span class="meter-w">${escapeHtml(word)}</span></span>`;
+  const levelMeter = word => `<span class="cr-conf"><span class="meter" aria-hidden="true">${[1, 2, 3].map(n => (n <= levelOf(word) ? '<i class="f"></i>' : '<i></i>')).join('')}</span><span class="meter-w">${escapeHtml(word)}</span></span>`;
   // The columns of a row that a card shows as label and value; a level column (every cell High, Medium or Low) is the three-segment meter with its word (C29).
   function fieldList(row, cols, ctx, levels = new Set()) {
     const items = cols.map(col => {
@@ -877,6 +878,7 @@
 
   // ---- watch: indicator, a leading or lagging icon with its word, the threshold as written, the limitation folded
   const WATCH_ICON = {leading: 'arrow-up-right', lagging: 'history'};
+  const watchIcon = word => (Object.hasOwn(WATCH_ICON, word) ? WATCH_ICON[word] : 'activity');
   function watchList(block, ctx) {
     const cols = visibleColumns(block, 'watch', ctx), leadCol = cols.find(col => /leading/.test(labelNorm(col))), nameCol = cols.find(col => col !== leadCol);
     if (!leadCol || !nameCol || !block.rows.length) return recordCards(block, ctx);
@@ -884,7 +886,7 @@
     const rest = cols.filter(col => ![leadCol, nameCol, limitCol, thresholdCol].includes(col));
     const items = block.rows.map(row => {
       const title = cellText(row, nameCol.at), word = cellText(row, leadCol.at), wordHtml = fieldHtml(word, ctx), threshold = thresholdCol ? fieldHtml(cellText(row, thresholdCol.at), ctx) : '';
-      const mark = wordHtml === '' ? '' : `<span class="wl-lead">${icon(WATCH_ICON[plain(word).trim().toLowerCase()] || 'activity')}${wordHtml}</span>`;
+      const mark = wordHtml === '' ? '' : `<span class="wl-lead">${icon(watchIcon(plain(word).trim().toLowerCase()))}${wordHtml}</span>`;
       const limit = limitCol ? fieldHtml(cellText(row, limitCol.at), ctx) : '', more = fieldList(row, rest, ctx) + extraList(block, row, ctx);
       const head = `<span class="wl-t">${fieldHtml(title, ctx)}</span>${mark}${threshold ? `<span class="wl-th">${threshold}</span>` : ''}`;
       const body = `${limit ? `<p class="wl-lim"><b>${escapeHtml(limitCol.label)}</b> ${limit}</p>` : ''}${more}`;
@@ -1116,7 +1118,16 @@
   // The dispatch: one component per shape; every shape without one (and any table a component cannot place) is a record card.
   const SHAPE_COMPONENTS = {cases: casesBlock, caseRows: caseRowsBlock, ranked: rankedLadder, statement: statementCard, metric: metricTiles, measure: measureTiles, change: changeCards,
     status: statusChecklist, sided: sidedBoard, moduleState: moduleStateTiles, qa: qaAccordion, facts: factList, records: recordCards, matrix: riskMatrix, watch: watchList, dated: datedTimeline, edges: pathwayFlow};
-  const render = (shape, block, ctx) => (Object.hasOwn(SHAPE_COMPONENTS, shape) ? SHAPE_COMPONENTS[shape] : recordCards)(block, ctx);
+  // Documented fail-open (review M4): a table a component cannot draw is logged (its caption and the error) and drawn as this stated empty state with its Evidence link; the other blocks of the page are untouched.
+  const BLOCK_FAILED = 'This table could not be drawn';
+  function render(shape, block, ctx) {
+    try {
+      return (Object.hasOwn(SHAPE_COMPONENTS, shape) ? SHAPE_COMPONENTS[shape] : recordCards)(block, ctx);
+    } catch (error) {
+      console.error(`Components.render: the ${shape} table "${ctx?.caption ?? (block?.headers ?? []).join(' | ')}" could not be drawn`, error);
+      return emptyState(BLOCK_FAILED, [], ctx ? evidenceLink(ctx) : '');
+    }
+  }
 
   // Print shows the text of a folded <details>: the ones these components draw are opened for the print and put back as they were. `root` is the document.
   const FOLDS = '.qa-d, .wl-d, .ms-list, .mt, .chg-fold, .change-module';

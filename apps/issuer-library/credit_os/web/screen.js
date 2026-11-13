@@ -263,13 +263,26 @@ function renderSearch(query) {
     const plotted=visual&&tables.find(s=>s.blocks.some(b=>b.line===visual.table));
     return [...(plotted?[[id,visual.title,plotted.heading]]:[]),...tables.map(s=>[id,plain(s.heading.replace(METHOD_CODE,'')),s.heading])];
   }).filter(([id,label])=>has(label,data[id].module));
+  // A hit inside an audit section (Sources, Calculations, Registers, Gaps) is named by its module and Evidence tab only, with the number of rows that match when more than one, and opens that tab (at the row); the query still matches the audit text (review M5).
+  const auditHit=(module,tab,rows,line)=>hit('Reference',moduleNames[module]||module,rows>1?`${evidenceTabName(tab)} · ${rows} matching rows`:evidenceTabName(tab),window.Evidence.href(tab,module,context,line));
+  const inputs=new Map();
+  for(const input of Object.values(store.inputs))if(input.run===context&&has(input.source))inputs.set(input.module,(inputs.get(input.module)||0)+1);
   const files=[
     ...outputs.filter(id=>has(data[id].source,data[id].label)).map(id=>hit('Source',code(id),handoffLabel(data[id].source),href(id,modules[id].first))),
-    ...Object.values(store.inputs).filter(input=>input.run===context&&has(input.source)).map(input=>hit('Source',moduleNames[input.module]||input.module,input.source,routeHref('W-Evidence','sources',null,context))),
+    ...[...inputs].map(([module,rows])=>auditHit(module,'sources',rows)),
   ];
   const items=[...evidence.entries()].filter(([,item])=>item.run===context&&has(item.title,...item.fields.map(field=>field[1]))).sort((a,b)=>outputs.indexOf(a[1].output)-outputs.indexOf(b[1].output));
+  const audit=new Map(),plainItems=[];
+  for(const entry of items) {
+    const item=entry[1],tab=auditTab(item.output,item.section);
+    if(tab===null){plainItems.push(entry);continue;}
+    const at=`${data[item.output].module}|${tab}`;
+    if(!audit.has(at))audit.set(at,{module:data[item.output].module,tab,rows:0,line:item.line});
+    audit.get(at).rows+=1;
+  }
+  const references=[...[...audit.values()].map(found=>auditHit(found.module,found.tab,found.rows,found.line)),...plainItems.map(([key,item])=>hit('Reference',code(item.output),itemLabel(item),hitHref(item.output,item.section,item.line,key)))];
   $('search-results').innerHTML=group('Figures',figures.length,figures.slice(0,6).map(([id,label,heading])=>hit('Figure',code(id),label,hitHref(id,heading))))
-    +group('Sources',files.length+items.length,[...files.slice(0,4),...items.slice(0,4).map(([key,item])=>hit('Reference',code(item.output),itemLabel(item),hitHref(item.output,item.section,item.line,key)))]);
+    +group('Sources',files.length+references.length,[...files.slice(0,4),...references.slice(0,4)]);
   nameCodes($('search-results'),null,false); // hits come from several outputs, so no step title is borrowed from the open one (a step id reads "a method step"); register references stay as they are
 }
 function renderNavigator(module) {
@@ -401,9 +414,10 @@ function moduleBody({module,context,output}) {
   } catch(error) {
     // Documented fail-open: logged, and the reader keeps the new header and the original file.
     console.error(error);
-    return `<div class="missing-state"><div class="empty-symbol">${icon('file-text')}</div><h2>Couldn’t present this output</h2><p>The screen could not render this view. The saved file is unchanged.</p>${output?`<a class="text-action" href="${esc(data[output].href)}" download>Download the original handoff</a>`:''}</div>`;
+    return couldNotPresent('output',output);
   }
 }
+const couldNotPresent=(what,output)=>`<div class="missing-state"><div class="empty-symbol">${icon('file-text')}</div><h2>Couldn’t present this ${what}</h2><p>The screen could not render this view. The saved file is unchanged.</p>${output?`<a class="text-action" href="${esc(data[output].href)}" download>Download the original handoff</a>`:''}</div>`;
 let cancelModelFrame=null;
 // A number box with text it cannot read is 'invalid', which excludes every run rather than being ignored.
 function readLibraryFilters() {
@@ -554,7 +568,22 @@ function watchRail() {
   for(const part of parts)railObservers[0].observe(part);
   railObservers[1].observe(parts.at(-1));
 }
+// Documented fail-open (review M4): a route that cannot be drawn is logged and says so on the page, under the issuer header; it never leaves the page empty.
+// A block a component cannot draw is caught earlier, in Components.render, and costs only that block.
 function renderRoute() {
+  try {drawRoute();}
+  catch(error) {
+    console.error('The route could not be drawn',error);
+    const raw=location.hash.slice(1).split('?')[0].split('/')[0],requested=new URLSearchParams(location.hash.split('?')[1]).get('c');
+    const module=Object.hasOwn(moduleNames,raw)?raw:'W-Library',context=Object.hasOwn(contexts,requested)?requested:current?.context||Object.keys(contexts)[0]||null;
+    current={module,output:null,file:null,section:'',label:moduleNames[module],context,evidence:null,chip:null,part:null,tab:null,row:null,evidenceModule:null};
+    $('module-head').innerHTML=moduleHead(current);
+    updateWorkspaceChrome(module);
+    $('inspector').hidden=true;
+    $('content').innerHTML=couldNotPresent('page');
+  }
+}
+function drawRoute() {
   const next=parseRoute(), previous=current;
   // Moving between the parts of one report scrolls; it draws nothing again.
   const sameReport=reportPage(next)&&reportPage(previous)&&next.module===previous.module&&next.output===previous.output&&next.context===previous.context;

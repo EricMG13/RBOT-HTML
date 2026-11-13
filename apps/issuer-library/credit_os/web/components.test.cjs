@@ -778,6 +778,29 @@ test('watchList: indicator, a leading or lagging icon with its word, the thresho
   assert.ok(!plain.includes('<details') && plain.includes('Above 400bp') && plain.includes(`<span class="wl-lead">${C.icon('activity')}Concurrent</span>`));
 });
 
+test('a lookup keyed by handoff text reads own keys only: a word named like an Object.prototype member draws as an unknown word', () => {
+  const watch = word => C.watchList({ headers: ['Indicator', 'Leading / Lagging', 'Threshold', 'Limitation'], rows: [{ line: 1, cells: ['Spread', word, 'Above 400bp', ''] }] }, { key: r => `k:${r.line}` });
+  for (const word of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) {
+    assert.ok(watch(word).includes(`<span class="wl-lead">${C.icon('activity')}${word}</span>`), word);
+  }
+});
+
+test('render: a table a component cannot draw is logged and drawn as the stated empty state with its Evidence link; the next block is untouched (review M4)', () => {
+  const block = { headers: ['Indicator', 'Leading / Lagging', 'Threshold'], rows: [{ line: 1, cells: ['Spread', 'Leading', 'Above 400bp'] }] };
+  const bad = { key: () => { throw new Error('probe failure'); }, evidenceHref: '#W-Evidence/registers?c=r', caption: 'Monitoring flags' };
+  const logged = [], original = console.error;
+  console.error = (...args) => logged.push(args);
+  let html, next;
+  try {
+    html = C.render('watch', block, bad);
+    next = C.render('watch', block, { key: r => `k:${r.line}` });
+  } finally { console.error = original; }
+  assert.ok(html.includes('This table could not be drawn') && html.includes('<a class="in-ev" href="#W-Evidence/registers?c=r">In Evidence</a>') && html.includes('role="status"'));
+  assert.equal(logged.length, 1);
+  assert.ok(String(logged[0][0]).includes('Monitoring flags') && logged[0][1] instanceof Error && logged[0][1].message === 'probe failure');
+  assert.ok(next.includes('Above 400bp') && !next.includes('could not be drawn'));
+});
+
 test('every drawn cell sits in an element whose CSS wraps a long unbroken token', () => {
   const css = fs.readFileSync(path.join(__dirname, 'screen.css'), 'utf8');
   for (const cls of ['ck-label', 'sd-name', 'sd-fig', 'ms-title', 'qa-q', 'fl-v', 'rm-t', 'wl-t', 'wl-th', 'state']) {

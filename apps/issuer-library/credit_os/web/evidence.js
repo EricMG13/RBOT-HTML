@@ -215,7 +215,7 @@
   function gapCards(view, c) {
     const severity = view.headers.findIndex(h => /severity/i.test(h)), title = Math.max(0, view.headers.findIndex(h => shapes.columnKind(h) !== 'id'));
     return `<div data-group>${view.rows.map(row => {
-      const level = severity < 0 ? 0 : SEVERITY[row.cells[severity].trim().toLowerCase()] || 0;
+      const word = severity < 0 ? '' : row.cells[severity].trim().toLowerCase(), level = Object.hasOwn(SEVERITY, word) ? SEVERITY[word] : 0;
       const meter = level ? `<span class="ev-meter" aria-hidden="true">${[1, 2, 3].map(n => `<i${n <= level ? ' class="f"' : ''}></i>`).join('')}</span>` : '';
       const fields = view.headers.map((header, at) => (at === title || row.cells[at] === '' ? '' : `<div><div class="ev-l">${esc(header)}</div><div class="ev-v">${at === severity ? meter : ''}${rich(row.cells[at])}</div></div>`)).join('');
       return `<div class="ev-gap" data-hay="${hay(c.name, row.cells.join(' '))}"><div class="ev-gap-t">${icon('triangle-alert')}<span>${rich(row.cells[title])}</span></div><div class="ev-gap-f">${fields}</div></div>`;

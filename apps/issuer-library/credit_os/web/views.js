@@ -1057,8 +1057,8 @@ function historyView(context) {
   return `<div class="history">${window.Components.datedTimeline(block,{stacked:true,unit:['run','runs'],caption:`Runs of ${ctx.issuer||ctx.title}, latest as-of date first`,current:(row,n)=>keyOf.get(runs[n])===context,slot})}</div>`;
 }
 function forecastSections(context) {
-  const models=runModels(context);
-  return models.length?models.map(m=>[m.id,m.id,[]]):[['none','Forecast availability',[]]];
+  const models=runModels(context),labels=modelOptionLabels(models); // a model is named as the Model select names it; its id stays the route's section
+  return models.length?models.map((m,i)=>[m.id,labels[i],[]]):[['none','Forecast availability',[]]];
 }
 function navigationSections(module,context,output=defaultOutput(module,context)) {
   if(module==='W-Evidence')return [['summary','Evidence',[]]];
@@ -1109,9 +1109,15 @@ function navigatorView(module,query) {
 // A search hit on a table whose section the module page does not hold: the Evidence tab that holds the section (Sources, Calculations, Registers or Gaps) for its module, with the hit's row
 // (its handoff line) in view; null for a section no tab holds, which keeps the module route.
 const EVIDENCE_HIT_TABS=['sources','calculations','registers','gaps'];
-function evidenceHit(id,heading,line=null) {
+// The Evidence tab a section of an output belongs to by role (Sources, Calculations, Registers or Gaps), or null.
+function auditTab(id,heading) {
   const role=window.Evidence.classify(data[id].sections,data[id].placement).find(entry=>entry.section.heading===heading)?.role;
-  return EVIDENCE_HIT_TABS.includes(role)?window.Evidence.href(role,data[id].module,data[id].run,line):null;
+  return EVIDENCE_HIT_TABS.includes(role)?role:null;
+}
+const evidenceTabName=tab=>window.Evidence.TABS.find(entry=>entry[0]===tab)[1];
+function evidenceHit(id,heading,line=null) {
+  const tab=auditTab(id,heading);
+  return tab===null?null:window.Evidence.href(tab,data[id].module,data[id].run,line);
 }
 const moduleHref=id=>routeHref(id,lastSection.get(current?.context+':'+id)||firstSection(id,current?.context));
 function moduleLink(id,label){return `<a class="text-action" href="${moduleHref(id)}">${esc(label||moduleNames[id])}${icon('arrow-right')}</a>`;}
