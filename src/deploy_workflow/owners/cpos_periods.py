@@ -468,11 +468,11 @@ NOT_DATED = (
     "them, so the last twelve months are not checked for a short or changed fiscal year."
 )
 NO_YTD = "the latest reported period is fiscal year {label}; there is no year to date"
-NEEDS = "needs {labels}, which CP-1 does not print"
+NEEDS = "needs {labels}, which the table holding the named row does not print"
 NO_PF = "no handoff states pro forma adjustments"
 NOT_EXACT = "the figures cannot be added exactly"
 PART_YEAR = "a ratio to part-year earnings is not shown"
-NO_COLUMN = "CP-1 prints no {group} column Python can read"
+NO_COLUMN = "the tables holding the named rows print no {group} column Python can read"
 NO_ANCHOR = "no base line was found under a period header of CP-1"
 DATED = "The last twelve months were checked against CP-1's period dates ({days} days)."
 NOT_CONTINUOUS = (

@@ -338,11 +338,11 @@ def test_prior_ltm_names_the_period_cp1_does_not_print():
     record = history(TABLES, OPERANDS)
     assert cell(record, "PRIOR_LTM", "revenue") == {
         "amount": None,
-        "reason": "needs 9M 2023, which CP-1 does not print",
+        "reason": "needs 9M 2023, which the table holding the named row does not print",
     }
     assert (
         cell(record, "PRIOR_LTM", "interest")["reason"]
-        == "needs FY2023, 9M 2023, which CP-1 does not print"
+        == "needs FY2023, 9M 2023, which the table holding the named row does not print"
     )
     assert cell(record, "PRIOR_LTM", "closing_debt")["amount"] == "620"
 
@@ -400,12 +400,14 @@ def test_a_fiscal_year_anchor_has_no_year_to_date():  # Review Focus 4
     assert D(cell(record, "LTM", "revenue")["amount"]) == D("1000")
     assert D(cell(record, "PRIOR_LTM", "revenue")["amount"]) == D("940")
     assert cell(record, "PRIOR_LTM", "interest")["reason"] == (
-        "needs FY2023, which CP-1 does not print"
+        "needs FY2023, which the table holding the named row does not print"
     )
     labels = [c["label"] for c in record["columns"]]
     assert labels[:1] == ["Quarter"] and "LTM FY2024" in labels
     placeholder = record["columns"][0]
-    assert placeholder["reason"] == "CP-1 prints no quarter column Python can read"
+    assert placeholder["reason"] == (
+        "the tables holding the named rows print no quarter column Python can read"
+    )
 
 
 def test_a_missing_quarter_cell_keeps_its_reason():
@@ -426,7 +428,9 @@ def test_a_quarter_without_its_year_to_date_period_is_not_summed():
         "| Adjusted EBITDA | 84 | 300 |\n"
     )
     record = history(cpos_forecast._tables(cp1), OPERANDS)
-    assert cell(record, "YTD", "revenue")["reason"] == "needs 9M 2025, which CP-1 does not print"
+    assert cell(record, "YTD", "revenue")["reason"] == (
+        "needs 9M 2025, which the table holding the named row does not print"
+    )
     assert cell(record, "LTM", "revenue")["reason"].startswith("needs ")
     assert cell(record, "Q3 2025", "revenue")["amount"] == "270"
 
@@ -523,7 +527,7 @@ def test_a_fourth_quarter_is_a_fiscal_year_anchor():
     assert cell(record, "YTD", "revenue")["reason"] == no_ytd
     assert cell(record, "LTM", "revenue") == {
         "amount": None,
-        "reason": "needs FY2025, which CP-1 does not print",
+        "reason": "needs FY2025, which the table holding the named row does not print",
     }
     assert D(cell(record, "PRIOR_LTM", "revenue")["amount"]) == D("1000")
     assert D(cell(record, "Q4 2025", "revenue")["amount"]) == D("260")
@@ -895,7 +899,7 @@ def test_an_ltm_that_cannot_be_built_is_not_called_checked():
     assert record["limits"][0] == NOT_BUILT and (ltm["start"], ltm["end"]) == (None, None)
     assert ltm["values"]["revenue"] == {
         "amount": None,
-        "reason": "needs FY2024, which CP-1 does not print",
+        "reason": "needs FY2024, which the table holding the named row does not print",
     }
 
 
@@ -1377,7 +1381,9 @@ def test_the_unread_headers_limit_lists_the_headers_of_located_lines_only():
 # --- Task E1: `column` names a cell of a period-row table ---------------------------------------
 PINNED_FILES = {  # sha256 of the files before `column` existed: a block without it is unchanged
     "annual.md": "6b2a22771cdc76eb8735645c457db14eea4db57c0ecea10552cabd571bd63ca9",
-    "calculation.json": "c3691af45dd03b055f5a70b512ba359e409c96477b53ea0043b1fb9df825ace4",
+    # F1 reworded the NEEDS reason (11 cells of this file, nothing else): the pin before it was
+    # c3691af45dd03b055f5a70b512ba359e409c96477b53ea0043b1fb9df825ace4.
+    "calculation.json": "7c4c73bc4084a4e68473b8ae5e348c50b9833073a75dc5fa9256dda5596e02ad",
     "forecast.md": "fb1471c434a81a15af24362b963077f77c88f83f54cdac2648395a067bea43ea",
     "forecast_exact.json": "0e27b0a291c29ad6c8e72713190adfaf7b955fc9b178db9aea27a1c9cc831303",
     "quarter.md": "2ebd4cd19a8d654820261be9ed74bfecc81da5ebf89b39fbc2d963434a49e74f",
@@ -1984,3 +1990,32 @@ def test_a_block_whose_only_naming_key_is_column_is_judged_as_named():  # M06
             _e1_cp1(1000, unit="n.a.", first="USD thousands").encode(),
             _e1_block(1000, base=base).encode(),
         )
+
+
+# --- the reason for a withheld amount names what is true (F1, defect D7.0) ----------------------
+SPLIT_TABLES = """| Reported label | Q3 2025 | 9M 2025 | 9M 2024 revised | Locator |
+| --- | --- | --- | --- | --- |
+| Total revenue | 1,121 | 3,202 | 3,197 | p.2 |
+
+| Reported label | FY2024 | Locator |
+| --- | --- | --- |
+| Total revenue | 4,305 | p.135 |
+"""
+
+
+def test_a_line_printed_in_two_tables_is_withheld_for_the_reason_that_is_true():
+    """CP-1 prints the 9M 2025 and 9M 2024 revenue in one table and FY2024 revenue in another, so
+    the last twelve months cannot be built from the table holding the named row. The reason says
+    that; it does not say CP-1 prints nothing, because CP-1 does print the amount."""
+    tables = cpos_forecast._tables(SPLIT_TABLES)
+    ops = cp2g.Operands(
+        revenue=cp2g.Val(D("3202"), None),
+        **{k: cp2g.Val(None, "not used") for k in BASE if k != "revenue"},
+    )
+    record = history(
+        tables, ops, named={"revenue": ("Total revenue", "9M 2025")}, forecast_year=2026
+    )
+    ltm = cell(record, "LTM", "revenue")
+    assert ltm["amount"] is None
+    assert ltm["reason"] == "needs FY2024, which the table holding the named row does not print"
+    assert "CP-1 does not print" not in json.dumps(record)

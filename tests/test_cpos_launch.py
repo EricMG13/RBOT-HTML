@@ -5333,9 +5333,11 @@ def test_both_forecast_instructions_ask_for_the_scale():
     ):
         for words in (
             (
-                f"`scale` is `1` when {tables} statement tables print USD millions and `1000` "
-                "when they print USD thousands"
+                "`currency` is the three-letter code of the currency "
+                f"{tables} statement tables are printed in (`USD`, `GBP`, `EUR`), and `scale` is "
+                "`1` when they print millions of it and `1000` when they print thousands"
             ),
+            "so every published figure is millions of that currency",
             "Python divides by `scale`",
             "Do not convert an amount yourself",
             'a cell printing 2,620,995 is `"2620995"`',
@@ -5353,10 +5355,10 @@ def test_both_forecast_instructions_ask_for_the_scale():
 def test_both_forecast_instructions_state_what_the_unit_check_enforces():
     for block in (cpos_launch.FORECAST_BLOCK, cpos_launch.LAYER1_FORECAST_BLOCK):
         assert (
-            "State `scale` in every block, as the statements print it (`1000` for thousands, `1` "
-            "for millions), and state every amount in the block in that one unit exactly as "
-            "printed; an amount printed in the other unit is stated as missing, with the reason, "
-            "not converted." in block
+            "State `currency` and `scale` in every block, as the statements print them (`1000` for "
+            "thousands, `1` for millions), and state every amount in the block in that one unit "
+            "exactly as printed; an amount printed in the other unit is stated as missing, with "
+            "the reason, not converted." in block
         )
         assert "or absent" not in block
 
@@ -5793,3 +5795,50 @@ def test_the_forecast_instruction_sentences_say_what_python_does():  # whole-bra
         assert "Those tables are in US$ million: at `scale` 1000 do not name them" in block
     assert "(your `Chart data:` tables and `Net debt data`)" in cpos_launch.LAYER1_FORECAST_BLOCK
     assert "(CP-1's `Chart data:` tables" in cpos_launch.FORECAST_BLOCK
+
+
+def test_cp1_is_told_the_net_debt_period_forms_and_to_print_each_line_once():
+    assert "or both as `FY2024 / 2024-09-30`: one of these forms for every row" in (
+        cpos_launch.NET_DEBT.rules
+    )
+    assert "and no other word in the cell (say `pro forma` or `reported` in the Basis" in (
+        cpos_launch.NET_DEBT.rules
+    )
+    text = cpos_launch.PERIOD_TABLE_BLOCK
+    assert "Print each statement line once, in one table that has a column for every period" in text
+    assert "a line split across two tables cannot be combined" in text
+    assert "(`USD millions`), the same in every statement table" in text
+
+
+# --- the Net debt data Period is one the pack can order (F1, defect D2.1) -----------------------
+def _net_debt_text(*periods):
+    rows = "\n".join(f"| {p} | 1400 | 275 | 1125 | US$m | Synthetic. |" for p in periods)
+    return (
+        "### Net debt data\n\n"
+        "| Period | Gross debt | Cash | Net debt | Reporting unit | Basis and limitation |\n"
+        "| --- | --- | --- | --- | --- | --- |\n" + rows + "\n"
+    )
+
+
+@pytest.mark.parametrize("period", ["FY2024", "2024-09-30", "FY2024 / 2024-09-30"])
+def test_each_stated_form_of_the_net_debt_period_is_accepted(period):
+    assert cpos_launch._net_debt_issues(_net_debt_text(period)) == ()
+
+
+@pytest.mark.parametrize(
+    ("periods", "cell"),
+    [
+        (("2024-09-30 reported",), "2024-09-30 reported"),
+        (("FY2024 (2024-09-30)",), "FY2024 (2024-09-30)"),
+        (("2024-02-31",), "2024-02-31"),
+        (("FY2024", "2025-06-30"), "2025-06-30"),
+        (("FY2024", "FY2024"), "FY2024"),
+    ],
+)
+def test_a_net_debt_period_the_pack_cannot_order_is_refused_with_the_form_to_write(periods, cell):
+    (issue,) = cpos_launch._net_debt_issues(_net_debt_text(*periods))
+    assert issue == (
+        f"`### Net debt data` Period `{cell}` cannot be ordered: write `FY2024`, `2024-09-30` or "
+        "`FY2024 / 2024-09-30`, one form for the whole table and each period once; put any "
+        "other word in the Basis and limitation cell."
+    )

@@ -47,6 +47,7 @@ from deploy_workflow.changes import (
 )
 from deploy_workflow.changes_check import cp8_issues
 from deploy_workflow.context import CONTEXT_SOURCE_ID, RunContext, load_context
+from deploy_workflow.credit_os_catalogue import chart_row, period_order
 from deploy_workflow.docx_text import docx_text
 from deploy_workflow.handoff_delivery import (
     DeliveryRequest,
@@ -651,7 +652,11 @@ NET_DEBT = OwnerTable(
         "leases). Cash is the same figure as the Cash column of the `Chart data: liquidity` table "
         "for that period. Net debt is gross debt less cash, worked with `calculate` and listed in "
         "`## Calculations`. Write one row per period you state, at least the latest balance-sheet "
-        "date. A row whose three figures are all stated is refused if net debt differs from gross "
+        "date. `Period` is the fiscal period `FY2024`, the balance-sheet date `2024-09-30`, or "
+        "both as `FY2024 / 2024-09-30`: one of these forms for every row of the table, each "
+        "period once, and no other word in the cell (say `pro forma` or `reported` in the Basis "
+        "and limitation cell). A row whose three figures are all stated is refused if net debt "
+        "differs from gross "
         "debt less cash by any amount, and a row is refused if its cash differs from the "
         "liquidity table's for the same period; a figure you cannot state is "
         "`Not supplied: <reason>`."
@@ -663,10 +668,34 @@ def _decimal(cell: str) -> Decimal | None:
     return Decimal(cell.replace(",", "")) if PLAIN_NUMBER.fullmatch(cell) else None
 
 
+def _unorderable_period(lines: list[str], rows: list[list[str]]) -> str | None:
+    """The Period cell that keeps the pack from ordering the net debt table, or None when the
+    table orders. The pack's own reader (`chart_row`) decides; only its ValueError is caught. The
+    cell named is the first the reader's `period_order` rejects, else the first whose form differs
+    from the first row's or that repeats an earlier one; a row of the wrong width is
+    `chart_issues`'s, not this check's."""
+    try:
+        chart_row(lines, NET_DEBT_HEADING, prefix="")
+    except ValueError:
+        pass
+    else:
+        return None
+    ordered: list[tuple[str, tuple[int, ...]]] = []
+    for row in (r for r in rows[2:] if len(r) == len(rows[0])):
+        key = period_order(row[0])
+        if key is None:
+            return row[0]
+        ordered.append((row[0], key))
+    for number, (period, key) in enumerate(ordered):
+        if key[0] != ordered[0][1][0] or any(key == earlier for _, earlier in ordered[:number]):
+            return period
+    return None
+
+
 def _net_debt_issues(text: str) -> tuple[str, ...]:
     """Each stated row of the net debt table holds net debt = gross debt - cash exactly, and its
-    cash is the liquidity table's for the same period. A figure that is not stated is not checked;
-    the table's own shape is `chart_issues`'s."""
+    cash is the liquidity table's for the same period; its Period cells are ones the pack can
+    order. A figure that is not stated is not checked; the table's own shape is `chart_issues`'s."""
     heading, liquidity = f"### {NET_DEBT_HEADING}", "### Chart data: liquidity"
     lines = text.splitlines()
     rows = _stated_rows(text, heading) if heading in lines else []
@@ -675,6 +704,13 @@ def _net_debt_issues(text: str) -> tuple[str, ...]:
     liquid = _stated_rows(text, liquidity) if liquidity in lines else []
     cash_of = [(row[0], row[1]) for row in liquid[2:] if len(row) == 5 and liquid[0][1] == "Cash"]
     issues = []
+    unordered = _unorderable_period(lines, rows)
+    if unordered is not None:
+        issues.append(
+            f"`{heading}` Period `{unordered}` cannot be ordered: write `FY2024`, `2024-09-30` or "
+            "`FY2024 / 2024-09-30`, one form for the whole table and each period once; put any "
+            "other word in the Basis and limitation cell."
+        )
     for row in rows[2:]:
         if len(row) != len(rows[0]):
             continue
@@ -1743,18 +1779,20 @@ PEER_READER_BLOCK = (
 )
 # Goes into CP-2G's instructions before METHOD_MARK, never into the method block.
 UNIT_RULE = (
-    "State `scale` in every block, as the statements print it (`1000` for thousands, `1` for "
-    "millions), and state every amount in the block in that one unit exactly as printed; an "
-    "amount printed in the other unit is stated as missing, with the reason, not converted. "
+    "State `currency` and `scale` in every block, as the statements print them (`1000` for "
+    "thousands, `1` for millions), and state every amount in the block in that one unit "
+    "exactly as printed; an amount printed in the other unit is stated as missing, with the "
+    "reason, not converted. "
 )
 FORECAST_BLOCK = (
     f"Forecast inputs: write `{cpos_forecast.HEADING}` inside `## Findings`, holding exactly "
     "one fenced json block and no other fence. You state "
     "inputs only; Python computes every forecast figure, so put no forecast figure in the block. "
-    "`scale` is `1` when CP-1's statement tables print USD millions and `1000` when they print "
-    "USD thousands; every amount in this block is stated in that one unit, exactly as CP-1 "
-    "prints it, and Python divides by `scale`, so every published figure is USD millions. Do not "
-    "convert an amount yourself. "
+    "`currency` is the three-letter code of the currency CP-1's statement tables are printed in "
+    "(`USD`, `GBP`, `EUR`), and `scale` is `1` when they print millions of it and `1000` when "
+    "they print thousands; every amount in this block is stated in that one currency and unit, "
+    "exactly as CP-1 prints it, and Python divides by `scale`, so every published figure is "
+    "millions of that currency. Do not convert an amount yourself. "
     + UNIT_RULE
     + '`base` holds exactly these ten operands, each `{"amount": "<decimal>", '
     '"reason": null, "row": "<label>", "period": "<header>"}` or '
@@ -1855,7 +1893,11 @@ PERIOD_TABLE_BLOCK = (
     "financial tables. `Period` is that header's text exactly as you print it (for example "
     "`9M 2025` or `FY2024`); `Start` and `End` are the period's first and last day as "
     "YYYY-MM-DD. Head period columns as `FY2024`, `Q3 2025`, `H1 2025` or `9M 2025`, the year "
-    "being the fiscal year the period belongs to. Python uses this table to check that the "
+    "being the fiscal year the period belongs to. Print each statement line once, in one table "
+    "that has a column for every period you state for it; a line split across two tables "
+    "cannot be combined. Where a table states its unit, write it as the three-letter currency "
+    "code and `millions` or `thousands` (`USD millions`), the same in every statement table. "
+    "Python uses this table to check that the "
     "last twelve months are twelve months and to date a balance printed under an `LTM Qn YYYY` "
     "label; add no figure to it. Where another table labels a row or column `LTM Qn YYYY`, give "
     "that exact label a row in this table with its Start and End dates. "
@@ -1869,11 +1911,12 @@ PERIOD_TABLE_BLOCK = (
 LAYER1_FORECAST_BLOCK = (
     f"Forecast inputs: write `{cpos_forecast.HEADING}` inside `## Findings`, holding exactly "
     "one fenced json block and no other fence, after your tables. You state inputs only; Python "
-    "computes every forecast figure, so put no forecast figure in the block. `scale` is `1` when "
-    "your statement tables print USD millions and `1000` when they print USD thousands; every "
-    "amount in this block is stated in that one unit, exactly as your tables print it, and "
-    "Python divides by `scale`, so every published figure is USD millions. Do not convert an "
-    "amount yourself. "
+    "computes every forecast figure, so put no forecast figure in the block. `currency` is the "
+    "three-letter code of the currency your statement tables are printed in (`USD`, `GBP`, "
+    "`EUR`), and `scale` is `1` when they print millions of it and `1000` when they print "
+    "thousands; every amount in this block is stated in that one currency and unit, exactly as "
+    "your tables print it, and Python divides by `scale`, so every published figure is millions "
+    "of that currency. Do not convert an amount yourself. "
     + UNIT_RULE
     + '`base` holds exactly these ten operands, each `{"amount": "<decimal>", "reason": null, '
     '"row": "<label>", "period": "<header>"}` or '
@@ -2691,7 +2734,7 @@ def _forecast_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
     if task.module_id != "CP-2G" or "CP-1" not in task.handoffs:
         return ()
     try:
-        cpos_forecast.parse(text, task.handoffs["CP-1"].decode("utf-8"))
+        inputs = cpos_forecast.parse(text, task.handoffs["CP-1"].decode("utf-8"))
     except ValueError as error:
         message = str(error)
         operand = re.search(r"^[\w-]+: base (\w+)\b", message)
@@ -2721,7 +2764,16 @@ def _forecast_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
             fix = "Correct the block; if you cannot, set every driver's values to "
             advice = f"{fix}[null, null, null] and say why in scope_limits."
         return (f"Forecast inputs: {error}. {advice}",)
-    return ()
+    return _unstated_currency(inputs)
+
+
+def _unstated_currency(inputs: cpos_forecast.ForecastInputs) -> tuple[str, ...]:
+    """Reading a block without `currency` stays USD (blocks that predate the field); a block
+    written now that states `scale` says which currency its statements are printed in."""
+    if inputs.scale is None or inputs.currency is not None:
+        return ()
+    asked = "state `currency`, the three-letter code CP-1's statement tables are printed in"
+    return (f"Forecast inputs: {asked} (`USD`).",)
 
 
 def _cap(text: str) -> Decimal:
