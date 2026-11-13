@@ -673,13 +673,35 @@ def dated_alone(text: str) -> str:
     return text
 
 
-def test_a_register_period_that_matches_no_net_debt_row_is_refused():
-    text = dated_alone(build())  # Net debt rows `2024-09-30`, register still `FY2024 / ...`
+def fiscal_register_beside_dated_net_debt(**given) -> str:
+    """Net debt rows and the reconciliation by the day alone; register rows by `FY2024`/`FY2023`."""
+    text = dated_alone(build(**given))
     text = text.replace(f"| {DATED} | USD", "| FY2024 | USD")
-    text = text.replace("| FY2023 / 2023-09-30 | USD", "| FY2023 | USD")
+    return text.replace("| FY2023 / 2023-09-30 | USD", "| FY2023 | USD")
+
+
+def test_a_register_by_fiscal_year_beside_date_only_net_debt_ties_across_the_forms():
+    assert _cp1_issues(fiscal_register_beside_dated_net_debt()) == ()
+    reg = register(overrides={("Total debt / EBITDA", "FY2024"): ["25,068", "3,813", "6.53"]})
+    text = fiscal_register_beside_dated_net_debt(reg=reg)
+    issues = [i for i in _cp1_issues(text) if "the numerator" in i]
+    named(only(tuple(issues)), "Total debt / EBITDA", "25,068", "24,880", "188")
+
+
+def test_a_register_period_that_resolves_to_a_period_with_no_net_debt_row_is_refused():
+    periods = (*PERIODS, ("FY2022", "2021-10-01", "2022-09-30"))
+    text = build(periods=periods)
+    row = re.search(
+        r"^\| Total debt / EBITDA \|.*\| FY2024 / 2024-09-30 \|.*$", text, re.MULTILINE
+    )[0]
+    text = text.replace(row, row + "\n" + row.replace("FY2024 / 2024-09-30", "FY2022"))
     issues = [i for i in _cp1_issues(text) if "matches no Period cell" in i]
-    assert len(issues) == 12, issues  # six fixed rows in each of two periods
-    named(issues[0], "Total debt / EBITDA", "FY2024", "`2024-09-30`", "`2023-09-30`")
+    named(
+        only(tuple(issues)),
+        "Total debt / EBITDA",
+        "FY2022",
+        "FY2024 / 2024-09-30",
+    )
 
 
 def test_a_reconciliation_period_that_matches_no_net_debt_row_is_refused():
@@ -1298,3 +1320,50 @@ def test_a_period_row_without_dates_beside_stated_figures_is_refused():
 def test_a_blocked_module_with_no_period_table_is_still_counted():
     issue = only(_cp1_issues(_blocked(())))
     named(issue, "5 of 6 required tables")
+
+
+# --- one period key for every match between tables (R11) -----------------------------------
+
+
+def dated_register_layout(text: str) -> str:
+    """Net debt, the register and the reconciliation by the day alone; the charts left as built."""
+    return text.replace("FY2024 / 2024-09-30", "2024-09-30").replace(
+        "FY2023 / 2023-09-30", "2023-09-30"
+    )
+
+
+def test_charts_by_fiscal_year_beside_a_date_only_register_pass():
+    text = dated_register_layout(build())
+    assert "| FY2024 | 6.53 | 4.88 |" in text and "| 2024-09-30 | USD | US$m | 6.53 |" in text
+    assert _cp1_issues(text) == ()
+
+
+def test_a_wrong_chart_figure_beside_a_date_only_register_is_refused():
+    text = dated_register_layout(build(leverage=(("6.01", "4.88"), ("6.27", "5.17"))))
+    named(only(_cp1_issues(text)), "Chart data: leverage", "FY2024", "6.01", "6.53", "0.52")
+
+
+def test_charts_dated_beside_a_register_in_the_fiscal_year_form_pass():
+    text = build()
+    text = re.sub(r"^\| FY2024 \| (6\.53|3\.29)", r"| 2024-09-30 | \1", text, flags=re.MULTILINE)
+    text = re.sub(r"^\| FY2023 \| (6\.27|2\.71)", r"| 2023-09-30 | \1", text, flags=re.MULTILINE)
+    assert "| 2024-09-30 | 6.53 |" in text and "FY2024 / 2024-09-30" in text
+    assert _cp1_issues(text) == ()
+
+
+def test_a_chart_row_with_no_register_row_says_so_and_does_not_call_a_figure_unstated():
+    text = build().replace("| FY2023 | 6.27 |", "| FY2022 | 6.27 |")
+    issues = _cp1_issues(text)
+    assert len(issues) == 2, issues  # one per leverage column the row states
+    named(issues[0], "Chart data: leverage", "FY2022", "6.27", "no Total debt / EBITDA row")
+    assert all("not stated" not in i and "Not supplied" not in i for i in issues)
+
+
+def test_a_chart_row_dated_with_an_interim_end_does_not_match_the_fiscal_year_row():
+    periods = (*PERIODS, ("Q1 FY2025", "2024-10-01", "2024-12-31"))
+    text = build(periods=periods).replace("| FY2024 | 3.29 |", "| 2024-12-31 | 3.29 |")
+    issue = only(_cp1_issues(text))
+    named(
+        issue, "Chart data: interest cover", "2024-12-31", "3.29", "no EBITDA / cash interest row"
+    )
+    assert "not stated" not in issue and "Not supplied" not in issue

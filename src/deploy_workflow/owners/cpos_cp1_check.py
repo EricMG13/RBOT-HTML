@@ -26,7 +26,6 @@ from fractions import Fraction
 from typing import NamedTuple
 
 from deploy_vii.model._cells import beyond_rounding, half_unit
-from deploy_workflow.changes import same_period
 from deploy_workflow.credit_os_catalogue import period_order
 from deploy_workflow.handoff_delivery import heading_of, plain
 from deploy_workflow.model_handoff_delivery import BOLD_LABEL
@@ -366,6 +365,18 @@ class Periods:
         years = [k for k, end in self.ends.items() if _FY_HEADER.fullmatch(k) and end == day]
         return min(years, default=None) if day else None
 
+    def key(self, cell: str) -> str:
+        """The one key every cross-table match uses: the day the period ends. `FY2024`,
+        `FY2024 / 2024-09-30` and the day alone of that fiscal row's `End` share a key; an interim's
+        `End` is its own; a fiscal label the table does not date once (a year-only match), or any
+        other text, stands for itself."""
+        text = cell.strip()
+        found = _FISCAL.fullmatch(text)
+        if found is None:
+            return text
+        end = self.ends.get(found[1])
+        return end.isoformat() if end else found[1]
+
 
 def _periods(lines: list[str]) -> Periods:
     seen: dict[str, set[tuple[date, date]]] = {}
@@ -476,8 +487,10 @@ def _listed(net_debt: list[dict[str, str]]) -> str:
     return ", ".join(f"`{r['Period']}`" for r in net_debt)
 
 
-def _net_row(net_debt: list[dict[str, str]], period: str) -> dict[str, str] | None:
-    return next((r for r in net_debt if same_period(period, r["Period"])), None)
+def _net_row(
+    net_debt: list[dict[str, str]], period: str, periods: Periods
+) -> dict[str, str] | None:
+    return next((r for r in net_debt if periods.key(period) == periods.key(r["Period"])), None)
 
 
 def _register(
@@ -499,14 +512,15 @@ def _register(
             )
             continue
         cells = dict(zip(REGISTER_COLUMNS, row, strict=True))
-        nd = _net_row(net_debt, cells["Period"])
+        nd = _net_row(net_debt, cells["Period"], periods)
         year = periods.fiscal(cells["Period"]) or (nd and periods.fiscal(nd["Period"])) or None
         regs.append(Reg(_METRIC[row[0]], cells, nd, year))
     return regs, issues
 
 
-def _find(regs: list[Reg], name: str, period: str) -> Reg | None:
-    return next((r for r in regs if r.metric.name == name and same_period(r.period, period)), None)
+def _find(regs: list[Reg], name: str, period: str, periods: Periods) -> Reg | None:
+    key = periods.key(period)
+    return next((r for r in regs if r.metric.name == name and periods.key(r.period) == key), None)
 
 
 # --- two-sided ties ------------------------------------------------------------------------
@@ -970,14 +984,21 @@ def _long_cells(lines: list[str], net_debt: list[dict[str, str]]) -> list[str]:
 # --- 2d: chart ties ------------------------------------------------------------------------
 
 
-def _chart_ties(lines: list[str], regs: list[Reg]) -> list[str]:
+def _chart_ties(lines: list[str], regs: list[Reg], periods: Periods) -> list[str]:
     issues = []
     for heading, columns in CHART_COLUMNS.items():
         for record in _records(lines, heading):
             for column in columns:
                 if column not in record:
                     continue  # the chart table's own check says so
-                reg = _find(regs, column, record["Period"])
+                reg = _find(regs, column, record["Period"], periods)
+                if reg is None and _stated(record[column]) is not None:
+                    issues.append(
+                        f"`{heading}` {record['Period']}: {column} {record[column]} is a figure, "
+                        f"but `{REGISTER_HEADING}` has no {column} row for that period; add the "
+                        "register row for it or correct the chart's Period cell."
+                    )
+                    continue
                 value = reg.cells["Calculated Value"] if reg else None
                 issue = _tie(
                     f"`{heading}` {record['Period']}",
@@ -1136,7 +1157,9 @@ def ladder_issues(
     return issues
 
 
-def _reconciliation(lines: list[str], net_debt: list[dict[str, str]]) -> list[str]:
+def _reconciliation(
+    lines: list[str], net_debt: list[dict[str, str]], periods: Periods
+) -> list[str]:
     table = _table(lines, RECON_HEADING)
     if not table or table[0] != RECON_HEADER:
         return []  # absent or misheaded: `_completeness` says so
@@ -1158,7 +1181,7 @@ def _reconciliation(lines: list[str], net_debt: list[dict[str, str]]) -> list[st
         shown = unreadable[0] if len(unreadable[0]) <= MAX_CELL else f"{unreadable[0][:30]}..."
         return [f"`{RECON_HEADING}` or `{LADDER_HEADING}`: `{shown}` is not {PLAIN}."]
     issues = ladder_issues(ladder, figures[0], figures[1], figures[2], period)
-    nd = _net_row(net_debt, period)
+    nd = _net_row(net_debt, period, periods)
     if nd is None and net_debt:
         issues.append(
             f"`{RECON_HEADING}` Period `{period}` matches no Period cell of `{NET_DEBT_HEADING}` "
@@ -1208,12 +1231,12 @@ def cp1_issues(text: str) -> tuple[str, ...]:
         lambda: _register_cells(regs, net_debt),
         lambda: _long_cells(lines, net_debt),
         lambda: _ratios(regs),
-        lambda: _chart_ties(lines, regs) if found_regs is not None else [],
+        lambda: _chart_ties(lines, regs, periods) if found_regs is not None else [],
         lambda: _numerator_ties(regs),
         lambda: [i for reg in regs for i in _operand_ties(reg, income, flow)],
         lambda: _net_debt_ties(balance, net_debt, periods),
         lambda: _statement_sums(balance, BALANCE_RULES),
         lambda: _statement_sums(flow, CASH_RULES),
-        lambda: _reconciliation(lines, net_debt),
+        lambda: _reconciliation(lines, net_debt, periods),
     ]
     return tuple(dict.fromkeys(issue for step in steps for issue in step()))
