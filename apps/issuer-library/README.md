@@ -18,28 +18,61 @@ is a separate service.) There is no compiled executable. Both steps run with a c
 The run start page's service (below) runs both steps for a shared folder, so analysts do neither
 by hand.
 
-`library/` is the Credit OS library (one row per listed run) and, for each run, its issuer report
-with tabs for Report history, Overview, Changes, Modules, Forecast and Evidence, in that order.
-Overview selects each module's own bottom line, key findings and limitations and the nearest dates;
-Changes is what moved since the issuer's previous run of the same pathway, drawn from the run's
-`changes.json` and CP-8's handoff (a first run says so and shows nothing else); Modules
-is the flat navigator and each module's page (its charts, maps and timeline included); Forecast is
-the cash flow model and the chart index; Evidence lists the source files used, the handoffs (each
-downloadable), the calculation and Model files and the run record. The Report history tab is
-the issuer's history: one row per run of that issuer, latest as-of date first, with its
-pathway, the modules it ran, its status and an "Earlier format" mark for a run whose handoffs
-predate the reader format; each row opens that run's Overview. Every run page carries one line
-under the tabs naming the run it shows (as-of date, pathway, run code) with a link back to the
-history. The left rail is Start a run, Issuer library, Run activity and Search. The library holds
-no copy of any delivered report and shows none: an old `#W-Reports/...` or `#W-Calendar/...` link
-opens the run's Report history. It has no run controls: runs are made by step 1 and shown by step 2.
-`data.js` holds the catalogue and the workspace store as data. Evidence's handoff and instruction
-downloads (and "Download all", a zip) are written under `library/downloads/<run>/` as the bytes the
-build hash-checked, so they also open when the library is served; other links to run files are
-relative (`../runs/...`) and the run start page's service does not serve those. The page opens from disk
-(`file://`) and blocks every network request through its content security policy. Its hashes are
-checked when it is built: update it after new runs. The page parts are `credit_os/web/`; the
-store and its sources are listed in `credit_os/SOURCE.md`.
+`library/` is the Credit OS library: one card or row per issuer, and for each run its issuer report.
+The library draws a run from its handoffs and holds no copy of any delivered report; an old
+`#W-Reports/...` or `#W-Calendar/...` link opens the run's Report history. It has no run controls:
+runs are made by step 1 and shown by step 2.
+
+**Pages and routes.** The left rail is Start a run (hidden in the page and not shown on a library opened from disk),
+Issuer library, Run activity and Search. Routes are hash routes.
+
+| Page | Route | Shows |
+| :--- | :--- | :--- |
+| Issuer library | `#W-Library/cases` | Search and filter chips, Cards or List, one issuer per card with the latest view's lead sentence; the folders left out under "Not shown" |
+| Report history | `#W-Report/history` | The issuer's runs as a timeline, latest as-of date first, each with pathway, state and the modules it ran |
+| Overview | `#W-Overview` | Each module's own bottom line, key findings and limitations, and the nearest dates |
+| Changes | `#W-Changes` | What moved since the issuer's previous run of the same pathway, from the run's `changes.json` and CP-8's handoff; a first run says so |
+| Modules | `#<module id>/<section>` | The navigator and each module's page, charts, maps and timeline included |
+| Forecast | `#W-Forecast` | The cash flow model and the run's charts |
+| Evidence | `#W-Evidence` | Tabs: Summary, Trace, Sources, Calculations, Gaps, Registers, Run record; the handoffs, each downloadable |
+| Run activity | `#CP-OS/activity` | Runs by state, with labelled, connected steps |
+
+**Where audit material is drawn.** Source references, file names, hashes, ids, calculation ids,
+registers, gap ledgers and run codes are drawn only on the Evidence page and in the trace drawer.
+Every other page shows findings and one trace control per paragraph, row or figure; the control opens
+the drawer. Text a module wrote for another module (Request, Next module, inter-module columns) is
+drawn nowhere, in search and the drawer included; it stays in the downloadable handoff. A run is
+named by its as-of date and pathway. The standing rule is in `AGENTS.md`; the screen-to-component map
+is `docs/visualisations/2026-11-13-screen-component-map.md`.
+
+**The page parts** are in `credit_os/web/`, plain JavaScript and CSS with no build step:
+
+| File | Purpose |
+| :--- | :--- |
+| `shapes.js` | Classifies sections, tables and columns (placement, role, which are hidden) |
+| `components.js` | Draws each shape: verdict panel, findings feed, measure tiles, statement bars with a Bars or Figures toggle, run steps, empty and gap states, toast |
+| `evidence.js` | The Evidence page and the trace drawer |
+| `views.js` | The pages: module page, Overview, Forecast, library home, Report history, Run activity |
+| `changes.js` | The Changes page |
+| `screen.js` | Routing, search and events |
+| `screen.css` | All styling; motion only for live run state, inside the reduced-motion query |
+
+`static-boot.js` loads the scripts after `data.js`. `calendar.js`, `reader.js`, `shared.js`,
+`hydrate.js` and `screening.js` are helpers. The store and its sources are listed in
+`credit_os/SOURCE.md`.
+
+**Build and test.** `python apps/issuer-library/update_library.py --workspace <folder>` builds the
+library (step 2). The node tests are `node --test apps/issuer-library/credit_os/web/*.test.cjs`. The
+browser tests are `tests/test_library_page_browser.py` and `tests/test_library_changes_browser.py`. `apps/issuer-library/fixtures/shape-key.json` is the hand-written answer key for the
+classifiers in `shapes.js`, one record per line, written from a real run and not from the
+code; `fixtures/build_synthetic_run.py` and `fixtures/synthetic-new-format` make a new-format run.
+
+**Build facts.** `data.js` holds the catalogue and the workspace store as data. Evidence's handoff
+and instruction downloads (and "Download all", a zip) are written under `library/downloads/<run>/`
+as the bytes the build hash-checked, so they also open when the library is served; other links to
+run files are relative (`../runs/...`) and the run start page's service does not serve those. The
+page opens from disk (`file://`) and blocks every network request through its content security
+policy. Its hashes are checked when it is built: update it after new runs.
 
 ## Automated: the run start page
 
@@ -127,7 +160,7 @@ is per issuer by evidence date; runs sharing that date are all marked and counte
 
 ## Starting a run on an issuer
 
-When the library is served over http, the issuer header on every run tab (Report, Overview, Changes,
+When the library is served over http, the issuer header on every run tab (Report history, Overview, Changes,
 Modules, Forecast, Evidence) has a "Start a run on this issuer" link at the right of its title row; it
 works only when that server is the run start service. It opens the start page from the latest
 run listed (`/?from=<run id>`): the issuer ID is locked to that run's, its documents are copied into

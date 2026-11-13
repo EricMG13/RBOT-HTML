@@ -1,7 +1,8 @@
 # Issuer library redesign: screen and component map (2026-11-13)
 
-Status: for the owner's review. Nothing here is built. Three mock pages (Overview, Downside,
-Evidence) accompany it; the build starts only on the owner's go.
+Status: built, 2026-11-13, on branch `claude/report-redesign-evidence` (head `53f4070` when this
+status was written). The tables below are the map as drawn before the build; "What was built" at
+the end lists where the build differs. Records of the build are in `VERIFICATION.md`.
 
 Case used: TransDigm Group, as of 2024-09-30, Credit Snapshot, run `tdg-proof-snapshot-opus-002`
 (13 modules). It is a historical case written under earlier methods; it shows layout and data
@@ -365,3 +366,24 @@ Not verified:
   modules write; this map changes only where the library draws them. AGENTS.md needs a matching
   line when the build lands.
 - No reader check or fidelity check has been run; both are owed at build time.
+
+## 11. What was built
+
+Built as plain JavaScript and CSS in `apps/issuer-library/credit_os/web/` (no library code, no build
+step). The mapped tables above are unchanged. The shape classifier is `shapes.js`; each shape is drawn
+by `components.js`. Components in use and where the build differs from the map:
+
+| Screen | Components in use | Differences from the map as drawn |
+|---|---|---|
+| Library home | Search with filter chips and counts, Cards or List toggle, issuer cards | The Leverage basis filter was removed. Excluded run folders are listed under "Not shown". |
+| Report history | Run timeline with state mark, date, pathway | A run is named by period and pathway. |
+| Overview | Verdict panel, findings feed, measure tiles, sided board, left-rule callout, dated timeline, module tiles | The chart index and the "Evidence and audit" link lists were removed, as mapped. An earlier-format Overview lists no dates. |
+| Changes | Before and after cards, module state tiles, empty state for a first run | The differences the build computes are listed in Evidence, not on Changes. The ledger is on the Evidence Gaps tab. |
+| Modules | Verdict panel, findings feed, status checklist, question accordion, fact list, record cards, risk matrix, watch list, dated timeline, pathway map, statement bars with a Bars or Figures toggle, empty and gap states | Component choice follows the shape of the data in `shapes.js`, checked against the hand-written key `apps/issuer-library/fixtures/shape-key.json`. |
+| Forecast | Chart cards with trace controls, empty states | The trace controls work on Forecast (a whole-branch review found them dead and they were fixed). |
+| Evidence | Governance summary, then tabs: Summary, Trace, Sources, Calculations, Gaps, Registers, Run record; trace drawer | Registers draw the tables as written, minus inter-module columns. Run codes and hashes are drawn here only. |
+| Run activity | Run steps and marks | The steps are labelled and connected. Motion is only for live run state, inside the reduced-motion query. |
+
+Open readings the owner has not ruled on, and checks not made, are in the `VERIFICATION.md` entry
+for 2026-11-13. Rule 7 was built as "drawn nowhere": text written for another module is not drawn in
+search or the drawer either.
