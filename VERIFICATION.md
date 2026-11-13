@@ -20,6 +20,7 @@ set `DEPLOY_WORKFLOW_SEC_USER_AGENT` and is a separate paid action.
   - `uv run pytest tests/test_run_start_submissions.py tests/test_run_start_page.py tests/test_run_start_service.py -q`: 375 passed, exit=0 (headless Chrome; two earlier runs under load lost one or two Chrome launches each, exit status 2, and those tests pass alone).
   - `uv run pytest tests/test_cpos_launch.py -q`: 806 passed, 1 skipped (the paid test), exit=0.
   - `uv run python tools/quality_gate.py`: 0 findings in 28 changed files, exit=0 (fix round 1).
+  - Instruction size (Task 6): `earnings_update` 521,231 -> 520,888 characters (-343; `INSTRUCTION_BUDGET` unchanged), from the CP-DR method text only (named edit 2c names the two web paragraphs once as "a web paragraph"); `WEB_LOOKUP_RULES` (sent at call time, not in the total) 2,775 -> 2,613 (-162). Probe: `.superpowers/sdd/t5-cpdr-lookup/probes/t6_instruction_size.py`.
 - Scope of the acceptance tests (fix round 3): 15 cases (five `test_rt_*` tests) run the launcher's real checker on a CP-DR handoff in the method's register layout (TDR.1 to
   TDR.6, the house Basis-line citation form); the remaining acceptance tests call
   `web_handoff_issues` directly or a stub checker (unit scope). Two launcher tests cover the
