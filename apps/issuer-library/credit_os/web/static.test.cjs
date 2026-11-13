@@ -5277,13 +5277,21 @@ test('ESG part: the part stands where the first ESG section stood among the body
   assert.equal(ids[at + 1], 's-301', 'before the section that followed T2G.8');
   assert.ok(!ids.some(id => ['s-232', 's-238', 's-247', 's-256', 's-269', 's-275', 's-282', 's-292'].includes(id)), 'no ESG section is a part of its own');
 });
-test('ESG part (h3 fixture): the register sections draw their tables in the part and Evidence still lists the same tables', () => {
-  const sections = esgSections(esgLines('h3')), page = esgPage('h3', sections), part = strip(page.reportParts(esgId).find(p => p[0] === 'esg')[2]).replace(/&amp;/g, '&');
-  const register = sections.find(s => /^T2G\.2 /.test(s.heading)).blocks.find(b => b.type === 'table');
-  assert.ok(register.rows.length > 1);
-  for (const row of register.rows) assert.ok(part.includes(row.cells[0]), `drawn in the part: ${row.cells[0]}`);
-  const evidence = strip(evidenceRegisters(sections, 'CP-2E')).replace(/&amp;/g, '&');
-  for (const row of register.rows) assert.ok(evidence.includes(row.cells[0]), `still in Evidence: ${row.cells[0]}`);
+test('ESG part (h3 fixture): a register section of a shape that is not promoted is listed with an In Evidence link and none of its table is drawn; Evidence still lists the tables', () => {
+  const sections = esgSections(esgLines('h3')), page = esgPage('h3', sections), parts = page.reportParts(esgId), part = parts.find(p => p[0] === 'esg')[2], html = page.moduleReport(esgId);
+  const text = strip(part).replace(/&amp;/g, '&'), evidence = strip(evidenceRegisters(sections, 'CP-2E')).replace(/&amp;/g, '&');
+  const lines = esgLines('h3'), firstCell = code => { const at = lines.findIndex(line => line.startsWith(`### ${code} `)), sep = lines.findIndex((line, n) => n > at && /^\|[\s:|-]+\|$/.test(line)); return lines[sep + 1].split('|')[1].trim(); };
+  const href = `#W-Evidence/registers?c=${RUN}&amp;m=CP-2E`;
+  for (const [code, title] of [['T2G.2', 'Environmental and transition register'], ['T2G.3', 'Social and operational register']]) {
+    const cell = firstCell(code), table = sections.find(s => s.heading.startsWith(`${code} `)).blocks.find(b => b.type === 'table');
+    assert.ok(cell && table.rows[0].cells[0] === cell);
+    assert.ok(!text.includes(cell) && !strip(html).replace(/&amp;/g, '&').includes(cell), `not drawn on the module page: ${cell}`);
+    const at = part.indexOf(`>${title}</h`), end = part.indexOf('class="analysis-section"', at), own = part.slice(at, end < 0 ? undefined : end);
+    assert.ok(at > 0, title);
+    assert.equal(countOf(own, /class="in-ev"/g), 1, `one In Evidence link under ${title}`);
+    assert.ok(own.includes(`<p class="sec-moved"><a class="in-ev" href="${href}">In Evidence</a></p>`), own);
+    assert.ok(evidence.includes(cell), `still in Evidence: ${cell}`);
+  }
 });
 test('ESG part: a new-format handoff with no ESG heading has no esg part', () => {
   const ids = fixturePage().reportParts(outId('CP-2')).map(p => p[0]);

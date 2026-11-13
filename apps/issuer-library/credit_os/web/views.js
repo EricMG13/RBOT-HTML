@@ -674,7 +674,6 @@ const passageSections=id=>Object.values(readerPassages(data[id].sections)).filte
 const drawsSomething=section=>section.blocks.some(block=>block.type==='table'?block.rows.length>0&&window.Shapes.hiddenColumns(block.headers,'records',block.rows).length<block.headers.length:window.Shapes.blockRole(block.text)!=='note');
 // Ruling 2026-11-13: a table of a registers section whose shape is promoted (Shapes.promoted) is drawn on the page, in its shape's component; the table as written stays in Evidence.
 // A registers table of any other shape is Evidence only.
-const drawableTable=block=>block.type==='table'&&block.rows.length>0&&window.Shapes.hiddenColumns(block.headers,'records',block.rows).length<block.headers.length;
 const promotedTables=section=>section.blocks.filter(block=>block.type==='table'&&block.rows.length>0&&window.Shapes.promoted(window.Shapes.tableShape(block))&&window.Shapes.hiddenColumns(block.headers,'records',block.rows).length<block.headers.length);
 // Ruling 2026-11-12, decisions 1 and 2. A chart, map or timeline is drawn once, in its panel: the `Chart data:`, `Map:` or `Events:` section the store drew is `drawings`
 // (its numbers are the drawing's Table form, its prose the caption). A drawing section the store could not draw has no drawing, so it stays in the body with the
@@ -684,8 +683,8 @@ function newFormatSplit(id) {
   const split={rest:[],drawings:[],registers:[],esg:[]};
   for(const {section,role} of window.Evidence.classify(data[id].sections,data[id].placement)) {
     if(held.has(section)||!section.blocks.length)continue;
-    // The ESG analysis (T2G sections) is one named part of the page (newFormatParts): its finding sections and every drawable table of its registers sections. It is also listed in rest or registers as before, so the Overview is unchanged.
-    if(window.Shapes.isEsgHeading(plain(section.heading))&&(role==='registers'?section.blocks.some(drawableTable):['finding','drawing','passage'].includes(role)&&drawsSomething(section)))split.esg.push({section,role});
+    // The ESG analysis (T2G sections) is one named part of the page (newFormatParts): its finding sections, and its registers sections that hold a table with a row (each draws its promoted tables only and links to Evidence for the rest). It is also listed in rest or registers as before, so the Overview is unchanged.
+    if(window.Shapes.isEsgHeading(plain(section.heading))&&(role==='registers'?section.blocks.some(block=>block.type==='table'&&block.rows.length>0):['finding','drawing','passage'].includes(role)&&drawsSomething(section)))split.esg.push({section,role});
     if(role==='drawing'&&section.blocks.some(block=>block.type==='table'&&drawnTables.has(block.line)))split.drawings.push(section);
     else if(['finding','drawing','passage'].includes(role)&&drawsSomething(section))split.rest.push(section);
     else if(role==='registers'&&promotedTables(section).length)split.registers.push(section);
@@ -782,9 +781,15 @@ const findingSection=(id,section)=>{
   return `<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,newFormatTag(section))}${body}${link}</div>`;
 };
 // A registers section on the module page: its heading and the tables its shape promotes, each as its component. Its prose and its other tables are Evidence's.
-const registerSection=(id,section,tables=promotedTables(section))=>{
+const registerSection=(id,section)=>{
   const table=tableRenderer(id);
-  return `<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,newFormatTag(section))}${tables.map(block=>table(block,section)).join('')}</div>`;
+  return `<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,newFormatTag(section))}${promotedTables(section).map(block=>table(block,section)).join('')}</div>`;
+};
+// An ESG registers section: as registerSection, and when it holds a table that is not drawn there, the link to where that table is (Evidence, Registers).
+const esgRegisterSection=(id,section)=>{
+  const html=registerSection(id,section),drawn=new Set(promotedTables(section));
+  if(!section.blocks.some(block=>block.type==='table'&&block.rows.length>0&&!drawn.has(block)))return html;
+  return `${html.slice(0,-'</div>'.length)}<p class="sec-moved"><a class="in-ev" href="${esc(window.Evidence.href('registers',data[id].module,data[id].run))}">In Evidence</a></p></div>`;
 };
 const passageTexts=section=>(section?section.blocks.filter(block=>block.type==='text').map(block=>({text:block.text,line:block.line})):[]);
 // The rail's count is of the items the section draws, read from its own markup: a feed item, a limitation, and one per table row that has its trace control (a row held back or not drawn has none).
@@ -819,9 +824,9 @@ function newFormatParts(id) {
     const html=findingSection(id,section),rows=drawnRows(html);
     body.push([section.line,[`s-${section.line}`,plain(section.heading.replace(METHOD_CODE,'')),`<section class="part">${html}</section>`,...(rows?[rows]:[])]]);
   }
-  // The ESG analysis stands where its first section stood: one named part, each section under its own heading, in handoff order. A registers section draws its heading and every drawable table (its prose stays in Evidence).
+  // The ESG analysis stands where its first section stood: one named part, each section under its own heading, in handoff order. A registers section draws its heading and its promoted tables, with an In Evidence link when it holds a table not drawn (its prose and its other tables stay in Evidence).
   if(split.esg.length) {
-    const html=split.esg.map(({section,role})=>role==='registers'?registerSection(id,section,section.blocks.filter(drawableTable)):findingSection(id,section)).join(''),rows=drawnRows(html);
+    const html=split.esg.map(({section,role})=>role==='registers'?esgRegisterSection(id,section):findingSection(id,section)).join(''),rows=drawnRows(html);
     body.push([split.esg[0].section.line,['esg',ESG_LABEL,`<section class="part" id="esg"><h3>${ESG_LABEL}</h3>${html}</section>`,...(rows?[rows]:[])]]);
   }
   parts.push(...body.sort((a,b)=>(a[0]<b[0]?-1:a[0]>b[0]?1:0)).map(([,part])=>part));
