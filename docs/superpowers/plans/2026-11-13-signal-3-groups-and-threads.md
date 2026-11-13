@@ -24,6 +24,7 @@
 | P8 | A thread holds at most 500 comments; a comment is 1 to 4,000 characters; a note title 1 to 120; a group name 1 to 60. The thread panel loads the whole thread, no paging. | Keeps one request and one render per thread. | Paging in the thread route. |
 | P9 | No search over comments. | Spec 5.4 indexes stories only. | An FTS table later. |
 | P10 | Renaming a group, changing its visibility or topics after creation waits for slice 4. | Settings slice. | None. |
+| P11 | (added during the build) The quality gate allows five parameters. The writer actions that take both the user and the time take them as one value, `groups.Act(user: User, now: datetime)`, in the user's position: `create_group`, `add_member`, `share_story`, `start_note`, `add_comment`, `edit_comment`, `delete_comment`. Where a signature or test below shows `USER, ..., now` for these, read `Act(USER, now), ...`. Expected values are unchanged. | Six parameters fail ruff PLR0913 and suppressions are not allowed. | A mechanical change of call sites. |
 
 ## Prior art (searched 2026-11-13)
 
