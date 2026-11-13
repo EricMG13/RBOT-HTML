@@ -1772,12 +1772,13 @@ PEER_PACK_BLOCK = (
     "write TDR.4 (candidate peers), TDR.5 (alignment observations: period, definition, currency, "
     "segment) and TDR.6 (located figures, one row per peer and operand: `revenue`, `ebitda`, "
     "`debt`, `interest`, `ffo`, each with unit, currency, period end, source locator and a "
-    "verbatim quote), as `src/deploy_vii/methods/cpdr.md` describes them. "
+    "verbatim quote), as your method's PEER PACK section describes them. "
     "Use every source this run holds "
     "that is not the issuer's own document, and any research or web tool this environment gives "
     "you. Name no peer and type no figure from memory. Where no peer evidence can be reached, "
     "still write the three tables, each holding one row whose `peer_id` is `none` (row header "
-    "`none.none`) and whose text cells say what was searched and that nothing was found.\n\n"
+    "`none.none`) and whose text cells say what was searched and that nothing was found; that row "
+    "cites its TDR.2 gap row.\n\n"
 )
 PEER_READER_BLOCK = (
     "Peer source: the context sets `valuation.peer_source` to `cp_dr_public`, so take the peer set "

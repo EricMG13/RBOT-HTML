@@ -36,9 +36,9 @@
       "consumed_path": "skills/cp-dr-deep-research/SKILL.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-dr-deep-research/SKILL.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-dr-deep-research/SKILL.md",
-      "sha256": "6831667c5b430c397783f0a62fdbc2d55c76b9d0ed7aae752a9ac8896215fd8b",
+      "sha256": "97580b90453a39ad8132f3efd87e46785645be1a476ac1d1901bd7b3aaa079e5",
       "source_sha256": "0cc76aea6e227ff923ca466fc000a80b1f2f6ef3b1fb74b78203e8601d507207",
-      "edit": "Replaced 2026-11-13 by cp-os version 2.0 (cp-os HEAD b57a344, file last changed in 5a78f93), byte-for-byte, then named edits 2a and 2b: (2a) the open-web limits in RESEARCH ITEMS, ANSWER RULES (LOCAL limitation) and CAPABILITY GATE made conditional on the project's web-search rules, with section C of the step bundle governing web use when granted; (2b) the UNRESOLVED gap row's claim_type is `gap` and missing evidence is Complete with Gaps, never Blocked (wording from caos-databricks vendor/deploy-v c746ad67); sha256 is this edited file, source_sha256 the byte-for-byte copy of cp-os"
+      "edit": "Replaced 2026-11-13 by cp-os version 2.0 (cp-os HEAD b57a344, file last changed in 5a78f93), byte-for-byte, then named edits 2a and 2b: (2a) the open-web limits in RESEARCH ITEMS, ANSWER RULES (LOCAL limitation) and CAPABILITY GATE, and (2a-4, fix round 1) the pack-tools-only reading and TDR.6 quote clauses, made conditional on the project's web-search rules, with section C of the step bundle governing web use when granted; (2b) the UNRESOLVED gap row's claim_type is `gap` and missing evidence is Complete with Gaps, never Blocked (wording from caos-databricks vendor/deploy-v c746ad67); sha256 is this edited file, source_sha256 the byte-for-byte copy of cp-os"
     },
     {
       "consumed_path": "skills/cp-dr-deep-research/references/REF_CP-DR_STEPS.md",

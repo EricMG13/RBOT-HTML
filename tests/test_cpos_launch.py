@@ -1890,6 +1890,8 @@ CPDR_QUESTIONS = (
     "`regulation`",
 )
 OPEN_WEB_SENTENCE = "There is no open-web discovery in this host. Never substitute"
+PACK_TOOLS_ONLY_QUOTE = "returned by `read_pages` or `search_source`; `period_end`"
+PACK_TOOLS_ONLY_READ = "read only with `list_sources`, `read_pages` and `search_source`. Item text"
 
 
 def test_cpdr_runs_one_method_text_the_cp_os_version_2_skill():
@@ -1957,6 +1959,10 @@ def test_cpdr_open_web_limit_is_conditional_on_the_web_search_rules(tmp_path, pr
         for question in CPDR_QUESTIONS:
             assert question in system
         assert "Never type an amount that is not inside the quote" in system
+        # Named edit 2a-4: the reading and TDR.6 quote clauses no longer name pack tools alone.
+        assert PACK_TOOLS_ONLY_QUOTE not in system
+        assert PACK_TOOLS_ONLY_READ not in system
+        assert 'or, when the paragraph that begins "web_search reaches' in system
         assert "Python composes the tables" not in system
         assert "search_pack" not in system
 
@@ -2149,7 +2155,7 @@ METHOD_TEXT_SHA256_AT_1B41E65 = {
     "CP-5": "a0b02519822dbd84ba928f026b0e3aa8a7a82ba71604059e9f7ceec9f395bb90",
     "CP-6": "32fdd06787a47c6351924f1371b90a8b6937c11fbfcb04404eb6590de0ec3b0b",
     "CP-8": "560e6026abc340b8240a2fb4397f43a52ccb9386c5810ae1cc3b74e063e45075",
-    "CP-DR": "54230660f9b5da28a185f3ffed40236ceb4c65240123e072a0137839e413da4f",
+    "CP-DR": "4dadb9548e497ed59c4be2acbf93534a7e8080f8fe8ac345a5b453df20b0723e",
     "CP-L10": "527d90f10ce7c541cc15f2e702f73502199f6628335c95e66b64920e7cfba18d",
 }
 
@@ -2332,6 +2338,9 @@ def test_cpdr_is_asked_for_the_peer_pack_cp1c_reads_by_default(
         for phrase in ("TDR.4", "TDR.5", "TDR.6", "`revenue`, `ebitda`, `debt`, `interest`, `ffo`"):
             assert phrase in research, phrase
         assert "Name no peer and type no figure from memory" in research
+        assert "cpdr.md" not in research  # CP-DR is no longer sent that file
+        assert "as your method's PEER PACK section describes them" in research
+        assert "that row cites its TDR.2 gap row" in research
         benchmark = texts["CP-1C"].partition(cpos_launch.METHOD_MARK)[0]
         assert "take the peer set and its figures from the CP-DR handoff's TDR.4" in benchmark
         assert "You own inclusion, comparability, normalisation and every statistic" in benchmark
