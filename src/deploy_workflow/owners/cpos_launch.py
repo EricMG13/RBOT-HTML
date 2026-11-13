@@ -142,11 +142,11 @@ _SCORE = "docs/reuse/selected-methods/CANON_SHARED.md § CP_CONFIDENCE_SCORE.md"
 # The method each module runs, per METHODOLOGY-REVIEW.md and what the 2026-11-05 live campaigns
 # consumed. prompts/CP-0.md and CP-1-intake.md are TDG case instructions, so they are left out.
 # Owner, 2026-11-10 ("Fix all"): each skill is sent every companion its SKILL.md calls mandatory
-# or binding (a runbook, a phase's method bundle). Each sent file's source, revision and named
-# edits are recorded in its own entry in docs/reuse/selected-methods/manifest.json. Companions the
-# SKILL opens only "to resolve an ambiguity" (the schema and system references) are archived, not
-# sent. CANON_SHARED.md is sent
-# only as the reader-layer sections of READER_LAYER, to every prose module (ruling
+# or binding (a runbook, a phase's method bundle). Each sent file's own entry in
+# docs/reuse/selected-methods/manifest.json records its source, any named edits and, where
+# recorded, its revision. Companions the SKILL opens only "to resolve an ambiguity" (the schema
+# and system references) are archived, not sent. CANON_SHARED.md is sent only as the reader-layer
+# sections of READER_LAYER, to every prose module (ruling
 # 2026-11-11, decision 8; the Analytical appendix section was added 2026-11-13, Deploy V methods
 # plan, Task 6, because the section above it ends at its heading); the rest of it is archived.
 _SELECTED: dict[str, tuple[str, ...]] = {
