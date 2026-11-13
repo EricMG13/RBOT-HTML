@@ -390,9 +390,15 @@ def test_headers_sent_on_the_first_request():
     run(wire, etag=None, modified=None)
     ((path, headers),) = wire.requests
     assert path == "/x"
-    assert set(headers) == {"Host", "User-Agent", "Accept", "Connection"}
+    assert set(headers) == {"Host", "User-Agent", "Accept", "Accept-Encoding", "Connection"}
     assert headers["User-Agent"] == fetch_module.USER_AGENT
-    assert "Accept-Encoding" not in headers
+    assert headers["Accept-Encoding"] == "identity"
+
+
+def test_identity_encoding_is_asked_for_on_every_hop():
+    wire = Wire(redirect("https://other.example.org/y"), ok())
+    run(wire)
+    assert [headers["Accept-Encoding"] for _, headers in wire.requests] == ["identity", "identity"]
 
 
 def test_a_port_on_the_first_address_is_connected_to_and_named_in_host():
@@ -403,7 +409,7 @@ def test_a_port_on_the_first_address_is_connected_to_and_named_in_host():
 
 
 # Status and body
-def test_304_returns_no_body_and_the_validators_sent():
+def test_304_returns_no_body_and_the_validators_sent():  # none came back, so the sent ones stay
     wire = Wire(Reply(304))
     got = run(wire, etag='"abc"', modified="Fri, 13 Nov 2026 09:00:00 GMT")
     assert got == Fetched(None, '"abc"', "Fri, 13 Nov 2026 09:00:00 GMT")
@@ -412,6 +418,52 @@ def test_304_returns_no_body_and_the_validators_sent():
 def test_304_prefers_the_validators_the_server_sent():
     got = run(Wire(Reply(304, headers={"ETag": '"new"', "Last-Modified": "Sat"})), etag='"abc"')
     assert got == Fetched(None, '"new"', "Sat")
+
+
+BAD_VALIDATORS = {
+    "obs-fold": '"a"\r\n X-Folded: evil',
+    "nul": '"a\x00b"',
+    "del": '"a\x7fb"',
+    "tab": '"a\tb"',
+    "empty": "",
+    "long": "M" * 60000,
+    "just over": "M" * 257,
+}
+
+
+@pytest.mark.parametrize("bad", BAD_VALIDATORS.values(), ids=BAD_VALIDATORS)
+def test_a_malformed_validator_on_a_200_is_not_returned(bad):
+    got = run(Wire(Reply(200, b"<rss/>", {"ETag": bad, "Last-Modified": bad})))
+    assert got == Fetched(b"<rss/>", None, None)
+
+
+def test_a_validator_of_the_longest_allowed_size_is_returned():
+    got = run(Wire(Reply(200, b"<rss/>", {"ETag": "E" * 256})))
+    assert got.etag == "E" * 256
+
+
+def test_validators_on_a_200_after_a_redirect_are_not_returned():
+    wire = Wire(
+        redirect("https://other.example.org/y"),
+        Reply(200, b"<rss/>", {"ETag": '"h"', "Last-Modified": "Sat"}),
+    )
+    assert run(wire) == Fetched(b"<rss/>", None, None)
+
+
+def test_a_304_after_a_redirect_is_refused():
+    wire = Wire(redirect("https://other.example.org/y"), Reply(304, headers={"ETag": '"h"'}))
+    with pytest.raises(FetchRefused, match="304"):
+        run(wire, etag='"abc"')
+
+
+def test_a_304_with_a_malformed_validator_keeps_the_one_sent():
+    reply = Reply(304, headers={"ETag": '"a"\r\n X: y', "Last-Modified": "M" * 60000})
+    assert run(Wire(reply), etag='"abc"', modified="Fri") == Fetched(None, '"abc"', "Fri")
+
+
+def test_a_304_with_one_clean_validator_mixes_it_with_the_one_sent():
+    reply = Reply(304, headers={"ETag": '"new"', "Last-Modified": "\x00"})
+    assert run(Wire(reply), etag='"abc"', modified="Fri") == Fetched(None, '"new"', "Fri")
 
 
 def test_200_returns_body_and_validators():
@@ -453,6 +505,18 @@ def test_a_body_matching_its_declared_length_is_accepted():
     assert run(Wire(Reply(200, b"<rss/>", {"Content-Length": "6"}))).body == b"<rss/>"
 
 
+@pytest.mark.parametrize("length", ["+1000", "1_000", "1" * 19, "5, 5", "٥"])
+def test_an_unusable_content_length_is_refused(length):
+    with pytest.raises(FetchRefused, match="unusable length"):
+        run(Wire(Reply(200, b"<rss/>", {"Content-Length": length})))
+
+
+@pytest.mark.parametrize("length", ["", "-5", "0x10", "abc"])
+def test_a_length_http_client_ignores_is_undeclared(length):
+    got = run(Wire(Reply(200, b"<rss/>", {"Content-Length": length})))
+    assert got.body == b"<rss/>"
+
+
 @pytest.mark.parametrize("encoding", ["gzip", "br", "deflate"])
 def test_a_content_encoding_is_refused(encoding):
     with pytest.raises(FetchRefused, match="content encoding"):
@@ -472,8 +536,6 @@ def test_identity_content_encoding_is_accepted():
         ssl.SSLCertVerificationError("certificate verify failed"),
         http.client.BadStatusLine("garbage"),
         http.client.IncompleteRead(b"ab", 5),
-        webfetch.FetchRefusal("pinned refusal"),
-        webfetch.UrlRefused("url refused"),
         ValueError("bad header"),
     ],
     ids=lambda error: type(error).__name__,
@@ -492,10 +554,45 @@ def test_a_failure_while_connecting_is_a_refusal():
         fetch(URL, None, None, resolve=PUBLIC, wiring=Wiring(connect))
 
 
+def _assert_short_line(error, absent=()):
+    text = str(error)
+    assert len(text) <= 200 and "\n" not in text and "\r" not in text
+    assert all(piece not in text for piece in absent)
+
+
+def test_a_long_scheme_is_not_echoed_and_the_reason_is_short():
+    with pytest.raises(FetchRefused) as refused:
+        check_address("s" * 60000 + "://feeds.example.org/", resolve=PUBLIC)
+    _assert_short_line(refused.value, absent=("sss",))
+
+
+def test_a_long_host_keeps_every_reason_within_200_characters():
+    host = ".".join(["a" * 63] * 3 + ["b" * 61])
+    assert len(host) == 253
+    for resolve in (lambda h: ["10.0.0.1"], lambda h: []):
+        with pytest.raises(FetchRefused) as refused:
+            check_address(f"https://{host}/", resolve=resolve)
+        _assert_short_line(refused.value)
+
+
+def test_a_failure_reason_is_200_characters_in_all():
+    with pytest.raises(FetchRefused) as refused:
+        run(Wire(OSError("Q" * 5000)))
+    _assert_short_line(refused.value)
+    assert str(refused.value).startswith("fetch failed: ")
+
+
+def test_a_reply_without_a_status_line_puts_no_server_text_in_the_reason():
+    with pytest.raises(FetchRefused) as refused:
+        run(Wire(http.client.BadStatusLine("secret-looking body line")))
+    _assert_short_line(refused.value, absent=("secret",))
+    assert "BadStatusLine" in str(refused.value)
+
+
 def test_error_text_is_cut_to_one_short_line():
     with pytest.raises(FetchRefused) as refused:
         run(Wire(OSError("Q" * 5000 + "\nline two")))
-    assert len(str(refused.value)) < 300 and "\n" not in str(refused.value)
+    _assert_short_line(refused.value)
 
 
 def test_a_failure_that_is_not_a_fetch_error_is_not_hidden():

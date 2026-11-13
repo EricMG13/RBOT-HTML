@@ -57,11 +57,15 @@ Clock = Callable[[], float]
 _LABEL = r"(?:[a-z0-9]|[a-z0-9][a-z0-9-]{0,61}[a-z0-9])"
 _NETLOC = re.compile(rf"({_LABEL}(?:\.{_LABEL})+)(?::[0-9]{{1,5}})?")
 _DIGITS = re.compile(r"[0-9]{1,18}")
+_VALIDATOR = re.compile(r"[\x20-\x7e]{1,256}")
 _EMBEDDING_V4 = (ipaddress.ip_network("64:ff9b::/96"), ipaddress.ip_network("::/96"))
 
 
 class FetchRefused(ValueError):
-    """A fetch rule was broken; the message names the rule."""
+    """A fetch rule was broken; the message names it, in at most 200 characters."""
+
+    def __init__(self, reason: object) -> None:
+        super().__init__(_short(reason))
 
 
 @dataclass(frozen=True)
@@ -135,7 +139,7 @@ def _locate(url: str, *, redirect: bool) -> _Place:
     except ValueError as error:
         raise FetchRefused(f"feed address is not valid: {_short(error)}") from error
     if parts.scheme != "https":
-        raise FetchRefused(f"only https addresses are fetched, not {parts.scheme or 'none'}")
+        raise FetchRefused("only https addresses are fetched")
     if not parts.netloc:
         raise FetchRefused("address has no host")
     host = _plain_host(parts.netloc)
@@ -176,8 +180,22 @@ def check_address(url: str, resolve: Resolver | None = None) -> None:
 
 
 def _declared_length(response: ResponseLike) -> int | None:
-    declared = (response.getheader("Content-Length") or "").strip()
-    return int(declared) if _DIGITS.fullmatch(declared) else None
+    """The declared length, None if none that http.client would use; refuses the forms it would."""
+    raw = response.getheader("Content-Length")  # repeated headers arrive joined with ", "
+    declared = (raw or "").strip()
+    if _DIGITS.fullmatch(declared):
+        return int(declared)
+    if "," in declared:
+        raise FetchRefused("the response declared an unusable length")
+    try:
+        usable = (
+            int(declared) >= 0
+        )  # "+1000", "1_000", 19 digits: http.client reads these as lengths
+    except ValueError:
+        return None  # http.client ignores what int() rejects
+    if usable:
+        raise FetchRefused("the response declared an unusable length")
+    return None
 
 
 def _read_body(response: ResponseLike, budget: _Budget) -> bytes:
@@ -212,14 +230,27 @@ def _redirect_url(current: str, response: ResponseLike, hops: int) -> str:
         raise FetchRefused("the redirect has no usable location") from error
 
 
+def _validator(response: ResponseLike, name: str) -> str | None:
+    value = response.getheader(name)
+    return value if value is not None and _VALIDATOR.fullmatch(value) else None
+
+
 def _answer(
-    response: ResponseLike, etag: str | None, modified: str | None, budget: _Budget
+    response: ResponseLike,
+    etag: str | None,
+    modified: str | None,
+    budget: _Budget,
+    *,
+    redirected: bool,
 ) -> Fetched:
     if response.status == 304:
+        if redirected:
+            raise FetchRefused("a redirect target answered 304, but it was sent no validators")
+        # Decision (controller ruling): a clean validator in the 304 replaces the one sent.
         return Fetched(
             None,
-            response.getheader("ETag") or etag,
-            response.getheader("Last-Modified") or modified,
+            _validator(response, "ETag") or etag,
+            _validator(response, "Last-Modified") or modified,
         )
     if response.status != 200:
         raise FetchRefused(f"server answered HTTP {response.status}")
@@ -227,7 +258,9 @@ def _answer(
     if encoding not in ("", "identity"):
         raise FetchRefused("feed uses a content encoding")
     body = _read_body(response, budget)
-    return Fetched(body, response.getheader("ETag"), response.getheader("Last-Modified"))
+    if redirected:  # validators belong to the first address only
+        return Fetched(body, None, None)
+    return Fetched(body, _validator(response, "ETag"), _validator(response, "Last-Modified"))
 
 
 def fetch(
@@ -250,10 +283,10 @@ def fetch(
         return _follow(url, etag, modified, budget)
     except FetchRefused:
         raise
-    except (webfetch.UrlRefused, webfetch.FetchRefusal) as refusal:
-        raise FetchRefused(_short(refusal.reason)) from refusal
+    except http.client.HTTPException as error:  # its text can carry what the server sent
+        raise FetchRefused(f"fetch failed: {type(error).__name__}") from error
     # ValueError: http.client refusing a header value or a request line it cannot encode.
-    except (OSError, http.client.HTTPException, ValueError) as error:
+    except (OSError, ValueError) as error:
         raise FetchRefused(f"fetch failed: {_short(error) or type(error).__name__}") from error
 
 
@@ -269,6 +302,7 @@ def _follow(url: str, etag: str | None, modified: str | None, budget: _Budget) -
             "Host": place.host if place.port == _DEFAULT_PORT else f"{place.host}:{place.port}",
             "User-Agent": USER_AGENT,
             "Accept": ACCEPT,
+            "Accept-Encoding": "identity",
             "Connection": "close",
         }
         if hops == 0:  # the validators belong to the first address only
@@ -285,7 +319,7 @@ def _follow(url: str, etag: str | None, modified: str | None, budget: _Budget) -
             response = connection.getresponse()
             budget.check()
             if response.status not in _REDIRECT_STATUSES:
-                return _answer(response, etag, modified, budget)
+                return _answer(response, etag, modified, budget, redirected=hops > 0)
             current = _redirect_url(current, response, hops)
         finally:
             connection.close()
