@@ -402,7 +402,7 @@ class ModuleTools:
         self.writes = 0
         self.draft = task.draft
         self.accepted = False
-        self.rejected: tuple[str, list[str]] | None = None  # the last rejected write and its issues
+        self.rejected: list[tuple[str, list[str]]] = []  # every rejected write and its issues
 
     def call(self, name: str, args: dict[str, Any]) -> str:
         if name not in {t.name for t in TOOLS}:
@@ -554,9 +554,15 @@ class ModuleTools:
         self.accepted = not issues
         dropped: list[dict[str, str | int]] | None = None
         try:  # the review is written once, whatever happens to the comparison, even an interrupt
-            if self.rejected is not None:  # a repair: say what it removed that no issue named
+            if self.rejected:  # a repair: say what it removed that no issue named
                 try:
-                    dropped = lost_values(self.rejected[0], markdown, self.rejected[1])
+                    dropped = []
+                    for before, named in self.rejected:  # a value any earlier draft held
+                        dropped += [
+                            d
+                            for d in lost_values(before, markdown, named)
+                            if d["value"] not in {k["value"] for k in dropped}
+                        ]
                     review["dropped_values"] = dropped
                 except Exception as exc:  # noqa: BLE001 -- documented, logged fail-open below
                     # Fail-open by design: this comparison is an auxiliary record. A fault in it
@@ -589,7 +595,7 @@ class ModuleTools:
                     count=len(dropped),
                 )
             return "ACCEPTED" + note
-        self.rejected = (markdown, issues)
+        self.rejected.append((markdown, issues))
         writes_left = MAX_WRITES - self.writes
         if self.events is not None:
             append_event(
