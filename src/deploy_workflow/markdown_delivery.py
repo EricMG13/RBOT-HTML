@@ -617,6 +617,25 @@ def _unitless(figure: Figure) -> Figure:
     return figure.model_copy(update={"chart": chart})
 
 
+def _headed_route(
+    route: MarkdownRoute, module: ModuleView, meta: dict[str, tuple[str, str]]
+) -> MarkdownRoute:
+    """A CP-1 leverage or interest-cover route reads the adjusted names when its table is headed
+    with them (an issuer that states only an adjusted EBITDA), so the strip is labelled with
+    them; a table headed with neither set, or a mix, is left to the selector's own refusal."""
+    from deploy_workflow.owners.cpos_cp1_check import ADJUSTED_TWIN
+
+    twin = tuple(ADJUSTED_TWIN.get(c, "") for c in route.value_columns)
+    if route.kind != "chart" or route.module_id != "CP-1" or "" in twin:
+        return route
+    for table in module.tables:
+        labels = {c.label for c in table.columns}
+        headed = meta[table.table_id] == (route.heading, "table") and set(twin) <= labels
+        if headed and not set(route.value_columns) & labels:
+            return route.model_copy(update={"value_columns": twin})
+    return route
+
+
 def _handoff_money(raw: bytes | None) -> str | None:
     """The money unit the handoff's statement tables state (`US$m`, `GBPm`); None when they state
     no single currency, so nothing is assumed."""
@@ -1010,8 +1029,9 @@ def markdown_files(  # noqa: C901, PLR0912, PLR0915 - pre-existing complexity
     strip_charts: dict[
         str, dict[str, tuple[str, str, str, tuple[str, ...], tuple[_ChartPoint, ...], UnitClass]]
     ] = {}
-    for route in layout.routes:
-        module = next(m for m in module_views if m.module_id == route.module_id)
+    for planned in layout.routes:
+        module = next(m for m in module_views if m.module_id == planned.module_id)
+        route = _headed_route(planned, module, metadata[module.module_id])
         tables = [
             t
             for t in module.tables

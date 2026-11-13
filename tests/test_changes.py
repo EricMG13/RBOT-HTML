@@ -4407,3 +4407,75 @@ def test_a_count_and_its_noun_on_two_lines_is_no_count():
 @pytest.mark.parametrize("sentence", ["It ran at 30 September 2024.", "It ran on 2024-09-30."])
 def test_a_written_date_beside_a_withheld_size_is_no_size(sentence):
     assert _w_issues(sentence) == ()
+
+
+# ---- C2 (owner ruling, 2026-11-13): a leverage table headed with the adjusted names is read as
+# the measure of that name; a run on adjusted against a run on reported is two labels, not a change.
+def adjusted_leverage(*rows: str) -> str:
+    return leverage(*rows).replace(
+        "| Period | Total debt / EBITDA | Net debt / EBITDA |",
+        "| Period | Total debt / adjusted EBITDA | Net debt / adjusted EBITDA |",
+    )
+
+
+def test_a_leverage_table_on_the_adjusted_names_is_read_with_the_adjusted_label():
+    row = "| FY2024 | 5.96 | 4.46 | x | Carrying debt over adjusted EBITDA. |"
+    seen = observations(handoff("CP-1", "x", tables=adjusted_leverage(row)))
+    assert (seen["leverage"].label, seen["leverage"].value) == (
+        "Total debt / adjusted EBITDA",
+        "5.96",
+    )
+    assert (seen["net_leverage"].label, seen["net_leverage"].value) == (
+        "Net debt / adjusted EBITDA",
+        "4.46",
+    )
+
+
+def test_interest_cover_on_the_adjusted_name_is_read_with_the_adjusted_label():
+    cover = (
+        "### Chart data: interest cover\n\n"
+        "| Period | Adjusted EBITDA / cash interest | Reporting unit | Basis and limitation |\n"
+        "| --- | --- | --- | --- |\n| FY2024 | 3.60 | x | Adjusted EBITDA over cash interest. |\n\n"
+    )
+    seen = observations(handoff("CP-1", "x", tables=cover))
+    assert (seen["coverage"].label, seen["coverage"].value) == (
+        "Adjusted EBITDA / cash interest",
+        "3.60",
+    )
+
+
+def test_a_run_on_adjusted_against_a_run_on_reported_is_not_a_change_in_one_measure():
+    prior = handoff(
+        "CP-1", "x", tables=leverage("| FY2024 | 6.53 | 4.88 | x | Carrying debt over EBITDA. |")
+    )
+    current = handoff(
+        "CP-1",
+        "x",
+        tables=adjusted_leverage("| FY2024 | 5.96 | 4.46 | x | Carrying debt over EBITDA. |"),
+    )
+    found = measures_of(pair_pack(prior, current))
+    for key, was, now in (
+        ("leverage", "Total debt / EBITDA", "Total debt / adjusted EBITDA"),
+        ("net_leverage", "Net debt / EBITDA", "Net debt / adjusted EBITDA"),
+    ):
+        measure = found[key]
+        assert measure["label"] == now
+        assert (measure["prior"]["label"], measure["current"]["label"]) == (was, now)
+        assert (measure["comparable"], measure["difference"]) == ("no", None)
+        assert f"`{was}`" in measure["reason"] and f"`{now}`" in measure["reason"]
+    assert "-0.57" not in repr(found["leverage"])
+
+
+def test_two_runs_on_the_adjusted_names_compare_as_one_measure():
+    prior = handoff(
+        "CP-1", "x", tables=adjusted_leverage("| FY2023 | 6.50 | 5.00 | x | Debt over EBITDA. |")
+    )
+    current = handoff(
+        "CP-1", "x", tables=adjusted_leverage("| FY2024 | 5.96 | 4.46 | x | Debt over EBITDA. |")
+    )
+    found = measures_of(pair_pack(prior, current))["leverage"]
+    assert (found["label"], found["comparable"], found["difference"]) == (
+        "Total debt / adjusted EBITDA",
+        "yes",
+        "-0.54",
+    )

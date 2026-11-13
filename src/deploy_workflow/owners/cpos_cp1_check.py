@@ -137,6 +137,13 @@ METRICS = (
     Metric("Adjusted EBITDA / cash interest", None, ADJUSTED),
 )
 _METRIC = {m.name: m for m in METRICS}
+# Each reported metric's adjusted twin. A chart table may be headed with either set (an issuer that
+# states only an adjusted EBITDA heads it with the adjusted names), never a mix of the two.
+ADJUSTED_TWIN = {m.name: a.name for m, a in zip(METRICS[:3], METRICS[3:], strict=True)}
+_READ_COLUMNS = {
+    heading: (*columns, *(ADJUSTED_TWIN[c] for c in columns))
+    for heading, columns in CHART_COLUMNS.items()
+}
 CORRECT = "correct whichever figure is wrong"
 IDENTITY = (
     f"{CORRECT}; if the filing itself prints the difference, write `Not supplied: <reason>` on "
@@ -725,7 +732,7 @@ def _first_stated(
     figures.append((NET_DEBT_HEADING, [r.get(c) for r in net_debt for c in NET_DEBT_COLUMNS]))
     figures += [
         (heading, [r.get(c) for r in _records(lines, heading) for c in names])
-        for heading, names in CHART_COLUMNS.items()
+        for heading, names in _READ_COLUMNS.items()
     ]
     recon = _records(lines, RECON_HEADING, RECON_HEADER)
     figures.append((RECON_HEADING, [r[c] for r in recon for c in RECON_COLUMNS]))
@@ -1017,7 +1024,7 @@ def _ratios(regs: list[Reg]) -> list[str]:
 
 def _long_cells(lines: list[str], net_debt: list[dict[str, str]]) -> list[str]:
     """A figure cell of the chart or Net debt tables longer than MAX_CELL is not a plain number."""
-    tables = [(h, c, _records(lines, h)) for h, c in CHART_COLUMNS.items()]
+    tables = [(h, c, _records(lines, h)) for h, c in _READ_COLUMNS.items()]
     tables.append((NET_DEBT_HEADING, NET_DEBT_COLUMNS, net_debt))
     return [
         f"`{heading}` {record['Period']} {column}: `{record[column][:30]}...` is not {PLAIN}."
@@ -1033,11 +1040,11 @@ def _long_cells(lines: list[str], net_debt: list[dict[str, str]]) -> list[str]:
 
 def _chart_ties(lines: list[str], regs: list[Reg], periods: Periods) -> list[str]:
     issues = []
-    for heading, columns in CHART_COLUMNS.items():
+    for heading, columns in _READ_COLUMNS.items():
         for record in _records(lines, heading):
             for column in columns:
                 if column not in record:
-                    continue  # the chart table's own check says so
+                    continue  # the chart table's own check says so (or it is the other name set)
                 reg = _find(regs, column, record["Period"], periods)
                 if reg is None and _stated(record[column]) is not None:
                     issues.append(
@@ -1071,6 +1078,87 @@ def _numerator_ties(regs: list[Reg]) -> list[str]:
         )
         if issue:
             issues.append(issue)
+    return issues
+
+
+# --- 2d': which EBITDA the chart columns are on ----------------------------------------------
+
+
+def _identity(header: list[str], heading: str) -> str | None:
+    """`reported` or `adjusted` for the names a chart table's header holds, `mixed` for both,
+    None for neither."""
+    reported = any(c in header for c in CHART_COLUMNS[heading])
+    adjusted = any(ADJUSTED_TWIN[c] in header for c in CHART_COLUMNS[heading])
+    return (
+        "mixed"
+        if reported and adjusted
+        else "adjusted"
+        if adjusted
+        else "reported"
+        if reported
+        else None
+    )
+
+
+def _reported_stated(
+    lines: list[str],
+    headings: list[str],
+    regs: list[Reg],
+    income: Statement | None,
+    periods: Periods,
+) -> list[str]:
+    """The charted periods for which reported EBITDA is stated: in `EBITDA (Reported)` of the
+    income statement, or as the EBITDA operand of a reported-metric register row."""
+    stated: dict[str, None] = {}
+    for heading in headings:
+        for record in _records(lines, heading):
+            cell, year = record["Period"], periods.fiscal(record["Period"])
+            at = income.column(year) if income and year else None
+            if income and at is not None and _stated(income.cell(REPORTED, at)) is not None:
+                stated[year or cell] = None
+    for reg in regs:
+        operand = reg.cells["Numerator Value" if reg.metric.cover else "Denominator Value"]
+        if reg.metric.ebitda == REPORTED and _stated(operand) is not None:
+            stated[periods.fiscal(reg.period) or reg.period] = None
+    return list(stated)
+
+
+def _chart_identity(
+    lines: list[str], regs: list[Reg], income: Statement | None, periods: Periods
+) -> list[str]:
+    """The leverage and interest-cover tables are headed with the reported names or the adjusted
+    ones, never a mix of the two and never different in the two tables; the adjusted names only
+    while reported EBITDA is stated for no charted period."""
+    kinds: dict[str, str] = {}
+    issues = []
+    for heading in CHART_COLUMNS:
+        rows = _table(lines, heading)
+        header = rows[0] if rows else []
+        kind = _identity(header, heading)
+        if kind == "mixed":
+            held = _names([c for c in header if c in _READ_COLUMNS[heading]])
+            issues.append(
+                f"`### {heading}` is headed with a reported name and an adjusted one ({held}); "
+                "head every column of the table with the reported names or every column with "
+                "the adjusted names, never both."
+            )
+        elif kind:
+            kinds[heading] = kind
+    if len(set(kinds.values())) > 1:
+        first, second = list(kinds)[:2]
+        issues.append(
+            f"`### {first}` is headed with the {kinds[first]} names but `### {second}` with "
+            f"the {kinds[second]} ones, so the two tables are different EBITDA measures; head "
+            "both with the reported names or both with the adjusted names."
+        )
+    adjusted = [h for h, kind in kinds.items() if kind == "adjusted"]
+    stated = _reported_stated(lines, adjusted, regs, income, periods) if adjusted else []
+    if stated:
+        issues.append(
+            f"{' and '.join(f'`### {h}`' for h in adjusted)} headed with the adjusted names, but "
+            f"reported EBITDA is stated for {', '.join(stated)}, so the chart columns are the "
+            "reported ones; the adjusted ratios stay in the register."
+        )
     return issues
 
 
@@ -1281,6 +1369,7 @@ def cp1_issues(text: str) -> tuple[str, ...]:
         lambda: _register_cells(regs, net_debt, code),
         lambda: _long_cells(lines, net_debt),
         lambda: _ratios(regs),
+        lambda: _chart_identity(lines, regs, income, periods),
         lambda: _chart_ties(lines, regs, periods) if found_regs is not None else [],
         lambda: _numerator_ties(regs),
         lambda: [i for reg in regs for i in _operand_ties(reg, income, flow)],

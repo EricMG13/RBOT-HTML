@@ -1730,6 +1730,25 @@ def _unit_issue(spec: OwnerTable, unit: str) -> str | None:
     return None
 
 
+def _adjusted(spec: OwnerTable) -> OwnerTable | None:
+    """CP-1's leverage or interest-cover table headed with the adjusted names; None for any other
+    table (only those two have a twin)."""
+    columns = cp1_check.CHART_COLUMNS.get(spec.heading)
+    if columns is None or spec.value_columns != columns:
+        return None
+    return replace(spec, value_columns=tuple(cp1_check.ADJUSTED_TWIN[c] for c in columns))
+
+
+def _stated_header(spec: OwnerTable, rows: list[list[str]]) -> list[str]:
+    """The header a chart table is asked for: its own, or for CP-1's two ratio tables the one with
+    the adjusted names when that is what the handoff wrote (an issuer that states only an adjusted
+    EBITDA)."""
+    header, twin = _chart_header(spec), _adjusted(spec)
+    if rows and twin is not None and rows[0] == _chart_header(twin):
+        return rows[0]
+    return header
+
+
 def chart_issues(
     text: str, table: MarkdownRoute | OwnerTable, *, money: str | None = None
 ) -> tuple[str, ...]:
@@ -1743,7 +1762,7 @@ def chart_issues(
     if spec.scored:
         return _confidence_issues(text, heading)
     rows = _stated_rows(text, heading)
-    header = _chart_header(spec)
+    header = _stated_header(spec, rows)
     if not rows or rows[0] != header:
         return (f"`{heading}` needs the table headed `| {' | '.join(header)} |`.",)
     if spec.columns:
@@ -2099,7 +2118,9 @@ CP1_CHECK_BLOCK = (
     + ", ".join(f"`{m.name}`" for m in cp1_check.METRICS[:3])
     + "; and, only when the issuer states an adjusted EBITDA, "
     + ", ".join(f"`{m.name}`" for m in cp1_check.METRICS[3:])
-    + ". `Period` is the Period cell of the "
+    + ". Where `EBITDA (Reported)` is `Not supplied:` in every period and `EBITDA (Adjusted)` is "
+    "stated, head the leverage and interest-cover columns with the adjusted names instead; never "
+    "mix the two. `Period` is the Period cell of the "
     "`Net debt data` row the ratio belongs to (`FY2024 / 2024-09-30` or the date alone, which "
     "must be the `End` of a Period-table row), "
     "`Unit` is that row's Reporting unit, `Currency` the code. Numerator and Denominator Value "

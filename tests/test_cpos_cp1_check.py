@@ -434,8 +434,9 @@ def test_the_launcher_text_names_every_fixed_row_and_metric_and_is_short():
     assert "| " + " | ".join(check.REGISTER_COLUMNS) + " |" in CP1_CHECK_BLOCK
     # 4,498 at 4de3482; round 2 may add 1,200; round 3 added 378 (4,907 -> 5,285); the budget cut
     # removed 128 (5,285 -> 5,157), so the bound falls by the same 128; the money-unit sentence
-    # replaced the USD-only one (5,157 -> 5,337), so it rises by the same 180
-    assert len(CP1_CHECK_BLOCK) <= 4_498 + 1_200 + 250 + 180
+    # replaced the USD-only one (5,157 -> 5,337), so it rises by the same 180; the adjusted-names
+    # sentence (owner ruling C2) added 193 (5,337 -> 5,530), so it rises by the same 193
+    assert len(CP1_CHECK_BLOCK) <= 4_498 + 1_200 + 250 + 180 + 193
 
 
 def test_the_launcher_text_states_every_refusal_of_the_rulings_from_the_constants():
@@ -1622,3 +1623,142 @@ def test_a_handoff_passes_with_its_own_currencys_money_unit_and_fails_with_any_o
     if other != code:
         wrong = relabel(base, code).replace(money(code), money(other))
         assert owned(complete(wrong, money(other)))
+
+
+# ---- C2 (owner ruling, 2026-11-13): an issuer that states only an adjusted EBITDA may head the
+# leverage and interest-cover columns with the adjusted names. Figures are the contract's answer
+# key (adjusted EBITDA 4,173 / 3,395): FY2024 5.96, 4.46, 3.60; FY2023 5.82, 4.79, 2.93.
+ADJUSTED_NAMES = ("Total debt / adjusted EBITDA", "Net debt / adjusted EBITDA")
+COVER_NAME = "Adjusted EBITDA / cash interest"
+ONLY_ADJUSTED = "Not supplied: the issuer states adjusted EBITDA only"
+LEVERAGE_HEAD = "| Period | Total debt / EBITDA | Net debt / EBITDA | Reporting unit |"
+COVER_HEAD = "| Period | EBITDA / cash interest | Reporting unit |"
+ADJUSTED_FIGURES = {
+    "leverage": (("5.96", "4.46"), ("5.82", "4.79")),
+    "cover": ("3.60", "2.93"),
+}
+
+
+def adjusted_only(*, headed: bool = True, **given) -> str:
+    """The passing fixture with reported EBITDA a stated gap, the reported register rows removed,
+    the adjusted ones kept and (`headed`) both chart tables headed with the adjusted names."""
+    rows = {k: v for k, v in REGISTER.items() if k in (*ADJUSTED_NAMES, COVER_NAME)}
+    use = {
+        "income": {**INCOME, "EBITDA (Reported)": (ONLY_ADJUSTED, ONLY_ADJUSTED)},
+        "reg": register(rows),
+        **ADJUSTED_FIGURES,
+        **given,
+    }
+    text = build(**use)
+    if not headed:
+        return text
+    text = text.replace(
+        LEVERAGE_HEAD, f"| Period | {ADJUSTED_NAMES[0]} | {ADJUSTED_NAMES[1]} | Reporting unit |"
+    )
+    return text.replace(COVER_HEAD, f"| Period | {COVER_NAME} | Reporting unit |")
+
+
+def test_the_adjusted_only_handoff_passes_and_states_the_answer_keys_figures():
+    text = adjusted_only()
+    assert _cp1_issues(text) == ()
+    assert owned(complete(text)) == []
+    for figure in ("5.96", "4.46", "3.60", "5.82", "4.79", "2.93"):
+        assert f"| {figure} |" in text or f"| {figure} " in text, figure
+    assert "Total debt / EBITDA" not in text and "| EBITDA / cash interest" not in text
+
+
+def test_the_adjusted_only_handoff_relabelled_gbp_passes():
+    assert owned(complete(relabel(adjusted_only()), "GBPm")) == []
+
+
+def test_the_unchanged_reported_fixture_still_passes_through_the_whole_check():
+    assert owned(complete(build())) == []
+
+
+def test_adjusted_headers_beside_stated_reported_ebitda_are_refused_naming_the_period():
+    text = adjusted_only(income=INCOME, reg=register())  # reported 3,813 is stated for FY2024
+    issue = next(i for i in _cp1_issues(text) if "so the chart columns are the reported" in i)
+    named(issue, "reported EBITDA is stated for FY2024", "the adjusted ratios stay in the register")
+
+
+def test_adjusted_headers_are_refused_when_reported_ebitda_is_stated_for_one_period_only():
+    income = {**INCOME, "EBITDA (Reported)": (ONLY_ADJUSTED, "3,148")}
+    issues = _cp1_issues(adjusted_only(income=income))
+    issue = only(tuple(i for i in issues if "reported EBITDA is stated" in i))
+    named(issue, "reported EBITDA is stated for FY2023, so the chart columns are the reported")
+    assert "FY2024" not in issue
+
+
+def test_adjusted_headers_are_refused_when_a_reported_register_row_states_its_operand():
+    text = adjusted_only(reg=register())  # T4.4 reported is a gap, the register states 3,813
+    assert any("reported EBITDA is stated for FY2024" in i for i in _cp1_issues(text))
+
+
+def test_a_table_mixing_reported_and_adjusted_names_is_refused():
+    text = adjusted_only().replace(
+        f"| Period | {ADJUSTED_NAMES[0]} |", "| Period | Total debt / EBITDA |"
+    )
+    issues = _cp1_issues(text)
+    assert any("Total debt / EBITDA" in i and "Net debt / adjusted EBITDA" in i for i in issues)
+    assert any("never both" in i or "all with the" in i for i in issues), issues
+    assert any("Net debt / adjusted EBITDA" in i for i in owned(complete(text)))
+
+
+def test_leverage_on_adjusted_names_with_interest_cover_on_the_reported_name_is_refused():
+    text = adjusted_only().replace(f"| Period | {COVER_NAME} | Reporting unit |", COVER_HEAD)
+    issues = _cp1_issues(text)
+    assert any("different EBITDA" in i and "Chart data: interest cover" in i for i in issues)
+
+
+def test_a_chart_figure_that_differs_from_the_adjusted_register_row_is_refused():
+    text = adjusted_only(leverage=(("6.01", "4.46"), ("5.82", "4.79")))
+    issue = only(_cp1_issues(text))
+    named(issue, "Total debt / adjusted EBITDA", "6.01", "5.96", "difference 0.05")
+
+
+def test_an_adjusted_operand_that_is_not_the_adjusted_statement_line_is_refused():
+    rows = {k: v for k, v in REGISTER.items() if k in (*ADJUSTED_NAMES, COVER_NAME)}
+    rows[COVER_NAME] = (("4,000", "1,158", "3.45"), rows[COVER_NAME][1])
+    text = adjusted_only(reg=register(rows), cover=("3.45", "2.93"))
+    issue = only(_cp1_issues(text))
+    named(issue, "4,000", "4,173", "EBITDA (Adjusted)", "difference 173")
+
+
+def test_reported_headers_carrying_the_adjusted_ratios_are_refused():
+    text = adjusted_only(headed=False)  # 5.96 stated under `Total debt / EBITDA`, no reported row
+    issues = _cp1_issues(text)
+    assert any("Total debt / EBITDA" in i and "5.96" in i and "no" in i for i in issues), issues
+
+
+def test_an_adjusted_column_with_a_figure_and_no_adjusted_register_row_is_refused():
+    rows = {k: v for k, v in REGISTER.items() if k in ADJUSTED_NAMES[:1] + (COVER_NAME,)}
+    issues = _cp1_issues(adjusted_only(reg=register(rows)))
+    issue = next(i for i in issues if "Net debt / adjusted EBITDA" in i)
+    named(issue, "4.46", "no Net debt / adjusted EBITDA row")
+
+
+def test_an_issuer_states_adjusted_only_reads_the_chart_and_register_by_the_twin_names():
+    assert check.ADJUSTED_TWIN == dict(
+        zip((m.name for m in check.METRICS[:3]), (m.name for m in check.METRICS[3:]), strict=True)
+    )
+    assert check.ADJUSTED_TWIN["EBITDA / cash interest"] == COVER_NAME
+
+
+@settings(deadline=None, max_examples=60)
+@given(
+    where=st.integers(0, 5),
+    cents=st.integers(0, 99_999),
+)
+def test_any_chart_cell_of_the_adjusted_only_handoff_off_its_register_value_is_refused(
+    where, cents
+):
+    truth = ["5.96", "4.46", "5.82", "4.79", "3.60", "2.93"]
+    changed = f"{cents // 100}.{cents % 100:02d}"
+    if changed == truth[where]:
+        return
+    values = [*truth[:4], *truth[4:]]
+    values[where] = changed
+    text = adjusted_only(
+        leverage=((values[0], values[1]), (values[2], values[3])), cover=(values[4], values[5])
+    )
+    assert _cp1_issues(text), (where, changed)

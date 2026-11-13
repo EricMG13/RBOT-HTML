@@ -33,6 +33,7 @@ from deploy_workflow.model.adapter import (
 from deploy_workflow.model.handoff import _pages
 from deploy_workflow.model.providers import build
 from deploy_workflow.model.turn import Compaction, ToolCall, Turn, Usage, hosted_kind
+from deploy_workflow.owners import cpos_cp1_check as cp1_check
 from deploy_workflow.owners import cpos_forecast, cpos_launch
 from deploy_workflow.owners.cpos import (
     HandoffPlan,
@@ -7885,3 +7886,127 @@ def test_a_non_usd_reporting_currency_no_longer_limits_the_chart_strip():
     assert "chart-strip-usd" not in {rule.key for rule in RULES}
     key_text = (ROOT / "tests/fixtures/run-expectations/outcome-key.json").read_text()
     assert "chart-strip-usd" not in key_text and "US$m only" not in key_text
+
+
+# ---- C2 (owner ruling, 2026-11-13): an issuer that states only an adjusted EBITDA heads the
+# leverage and interest-cover columns with the adjusted names, tied to the adjusted register rows.
+ADJ_LEVERAGE = ("Total debt / adjusted EBITDA", "Net debt / adjusted EBITDA")
+ADJ_COVER = "Adjusted EBITDA / cash interest"
+# CP-1's instruction text at c532bb3 per pathway (measured in a checkout of that commit with the
+# size probe, not by this code); a change to it may not exceed these.
+CP1_TEXT_AT_C532BB3 = {
+    "short_snapshot": 56_488,
+    "credit_snapshot": 57_650,
+    "earnings_update": 62_050,
+    "covenant_refinancing": 57_569,
+    "distressed_restructuring": 57_573,
+    "lite_credit_assessment": 56_582,
+    "portfolio_decision": 61_967,
+    "relative_value": 61_963,
+}
+
+
+def adjusted_only_answer(raw: str, unit: str = "USD millions") -> str:
+    """The checked fixture as an issuer states it that gives only an adjusted EBITDA: reported
+    EBITDA a stated gap, the three register rows and both chart tables on the adjusted names."""
+    reported = f"| EBITDA (Reported) | 400 | 500 | {unit} | Synthetic. | annual.txt |"
+    adjusted = reported.replace("Reported", "Adjusted")
+    swaps = (
+        (reported, reported.replace("400 | 500", f"{GAP} | {GAP}") + "\n" + adjusted),
+        ("| Total debt / EBITDA | n / d |", f"| {ADJ_LEVERAGE[0]} | n / d |"),
+        ("| Net debt / EBITDA | n / d |", f"| {ADJ_LEVERAGE[1]} | n / d |"),
+        ("| EBITDA / cash interest | n / d |", f"| {ADJ_COVER} | n / d |"),
+        (
+            "| Period | Total debt / EBITDA | Net debt / EBITDA |",
+            f"| Period | {ADJ_LEVERAGE[0]} | {ADJ_LEVERAGE[1]} |",
+        ),
+        ("| Period | EBITDA / cash interest |", f"| Period | {ADJ_COVER} |"),
+    )
+    for old, new in swaps:
+        assert old in raw, old
+        raw = raw.replace(old, new)
+    return raw
+
+
+def test_chart_issues_accept_the_adjusted_names_for_the_two_ratio_tables_only():
+    lev = (
+        "### Chart data: leverage\n\n| Period | {} | {} | Reporting unit | Basis and limitation |\n"
+    )
+    lev += "| --- | --- | --- | --- | --- |\n| FY2024 | 5.96 | 4.46 | x | Synthetic. |\n"
+    cover = "### Chart data: interest cover\n\n"
+    cover += "| Period | {} | Reporting unit | Basis and limitation |\n"
+    cover += "| --- | --- | --- | --- |\n| FY2024 | 3.60 | x | Synthetic. |\n"
+    s1, s2 = (
+        cpos_launch._chart_route("model-chart-strip", "S.1"),
+        cpos_launch._chart_route("model-chart-strip", "S.2"),
+    )
+    assert cpos_launch.chart_issues(lev.format(*ADJ_LEVERAGE), s1) == ()
+    assert cpos_launch.chart_issues(cover.format(ADJ_COVER), s2) == ()
+    mixed = cpos_launch.chart_issues(lev.format("Total debt / EBITDA", ADJ_LEVERAGE[1]), s1)
+    assert mixed and "needs the table headed" in mixed[0]
+    # Any other table keeps its one header: liquidity has no adjusted twin.
+    liquidity = cpos_launch._chart_route("model-chart-strip", "S.3")
+    wrong = CHART_TABLES["Chart data: liquidity"].replace("| Cash |", "| Adjusted cash |")
+    assert cpos_launch.chart_issues(
+        f"### Chart data: liquidity\n\n{wrong}\n", liquidity, money="US$m"
+    )
+
+
+def test_the_check_block_says_when_the_adjusted_names_head_the_chart_columns():
+    words = (
+        "Where `EBITDA (Reported)` is `Not supplied:` in every period and `EBITDA (Adjusted)` is "
+        "stated, head the leverage and interest-cover columns with the adjusted names instead; "
+        "never mix the two."
+    )
+    block = cpos_launch.CP1_CHECK_BLOCK
+    assert words in block
+    adjusted = ", ".join(f"`{m.name}`" for m in cp1_check.METRICS[3:])
+    assert block.index(adjusted) < block.index(words) < block.index("`Period` is the Period cell")
+
+
+@pytest.mark.parametrize("pathway", sorted(CP1_TEXT_AT_C532BB3))
+def test_cp1s_instruction_text_is_no_longer_than_it_was_at_c532bb3(tmp_path, pathway):
+    _, texts = all_instructions(tmp_path, pathway)
+    assert len(texts["CP-1"]) <= CP1_TEXT_AT_C532BB3[pathway], pathway
+
+
+@pytest.mark.parametrize("currency", ["USD", "GBP"])
+def test_an_adjusted_only_handoff_is_accepted_and_its_strip_says_adjusted(tmp_path, currency):
+    prepared, task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    raw = adjusted_only_answer(*((gbp(raw), "GBP millions") if currency == "GBP" else (raw,)))
+    assert _checked_handoff(task, raw.encode(), checker(prepared.layout)) == ()
+    block = strip_of(prepared, raw, tmp_path, "model-chart-strip")
+    lead, cover = block.figures[0], block.figures[1]
+    assert lead.chart.series == ADJ_LEVERAGE and cover.chart.series == (ADJ_COVER,)
+    assert [m.value for m in lead.chart.marks] == [
+        Decimal("3.75"),
+        Decimal("3.00"),
+        Decimal("2.80"),
+        Decimal("2.25"),
+    ]
+    # The reported names label no adjusted figure anywhere in what delivery writes.
+    routes = tuple(r for r in prepared.layout.routes if r.module_id == "CP-1")
+    own = prepared.layout.model_copy(
+        update={
+            "blocks": tuple(dict.fromkeys(r.block_id for r in routes)),
+            "routes": routes,
+            "front": (),
+        }
+    )
+    handoff = HandoffInput(path="cp-1.md", sha256=hashlib.sha256(raw.encode()).hexdigest())
+    request = DeliveryRequest(run=prepared.plan.run, handoffs={"CP-1": handoff}, layout=own)
+    (tmp_path / "cp-1.md").write_text(raw)
+    for name, content in markdown_files(request, tmp_path).items():
+        text = content.decode() if isinstance(content, bytes) else content
+        assert "Total debt / EBITDA" not in text and "Net debt / EBITDA" not in text, name
+
+
+def test_adjusted_names_beside_stated_reported_ebitda_are_sent_back(tmp_path):
+    prepared, task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    swapped = adjusted_only_answer(raw).replace(
+        f"| EBITDA (Reported) | {GAP} | {GAP} |", "| EBITDA (Reported) | 400 | 500 |"
+    )
+    issues = _checked_handoff(task, swapped.encode(), checker(prepared.layout))
+    assert any("so the chart columns are the reported ones" in i for i in issues), issues

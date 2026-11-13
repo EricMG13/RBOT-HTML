@@ -32,19 +32,21 @@ a decimal string; missing is null, never zero):
   same_period}`; `prior` and `current` are `{label, unit, value, period, definition,
   definition_resolved, definition_written}` or null when the run does
   not state the measure. `difference` is current minus prior, computed here with Decimal whenever
-  both values are stated and the units are equal. `comparable` is "no" when the units differ or a
-  value or a run is missing (no difference), "yes" when the label and the definition texts (the
-  table's "Basis and limitation") are equal once digits, page and locator words and punctuation
-  are removed, and otherwise "judge": the difference is given, both definition texts are in the
-  pack, and CP-8 states for that row `Same definition` or `Not comparable` (the checker enforces
-  it). `reason` says why there is no difference or why a judgement is needed. `same_period` is true
-  when both runs state the measure for the same fiscal year or period (`FY2024 / 2024-09-30` and
-  `FY2024` are the same): two values for one period mean a definition or a correction, never the
-  issuer changing. `definition` is the table's basis text, but where it says `identical definition`
-  or `same measure` it is the basis of the table's row for the period before (`definition_resolved`
-  true, the text as written in `definition_written`); a pointer by calculation ID is not followed
-  (`definition_resolved` false). A year after an instrument word (`notes 2027`, `due 2030`) is part
-  of the definition; page and locator numbers are not.
+  both values are stated and the units are equal. `comparable` is "no" when the units differ, a
+  value or a run is missing, or one run states a reported EBITDA metric and the other its adjusted
+  twin (`Total debt / EBITDA` against `Total debt / adjusted EBITDA`: no difference), "yes" when
+  the label and the definition texts (the table's "Basis and limitation") are equal once digits,
+  page and locator words and punctuation are removed, and otherwise "judge": the difference is
+  given, both definition texts are in the pack, and CP-8 states for that row `Same definition` or
+  `Not comparable` (the checker enforces it). `reason` says why there is no difference or why a
+  judgement is needed. `same_period` is true when both runs state the measure for the same fiscal
+  year or period (`FY2024 / 2024-09-30` and `FY2024` are the same): two values for one period
+  mean a definition or a correction, never the issuer changing. `definition` is the table's basis
+  text, but where it says `identical definition` or `same measure` it is the basis of the table's
+  row for the period before (`definition_resolved` true, the text as written in
+  `definition_written`); a pointer by calculation ID is not followed (`definition_resolved` false).
+  A year after an instrument word (`notes 2027`, `due 2030`) is part of the definition; page and
+  locator numbers are not.
 - `net_debt_change`: `{unit, prior_net_debt, change_in_gross_debt, change_in_cash,
   current_net_debt, convention, same_period, prior_period, current_period, prior_gross_debt,
   prior_cash, current_gross_debt, current_cash}`, only when both runs state gross debt, net debt
@@ -99,6 +101,7 @@ from deploy_workflow.library_index import (
     read_pinned,
     reader_summary,
 )
+from deploy_workflow.owners.cpos_cp1_check import ADJUSTED_TWIN
 from deploy_workflow.prose_checks import (
     bottom_line_text,
     is_earlier_format,
@@ -432,20 +435,30 @@ def _followed(lines: list[str], chart: str, period: str, text: str | None) -> st
     return None if POINTER.search(earlier) else earlier
 
 
+def _held(row: Mapping[str, str], column: str) -> str | None:
+    """The column a chart row holds for a measure: its reported name, else its adjusted twin (an
+    issuer that states only an adjusted EBITDA heads the table with it); None when neither."""
+    twin = ADJUSTED_TWIN.get(column)
+    return column if column in row else twin if twin in row else None
+
+
 def _chart_observation(lines: list[str], chart: str, column: str) -> Reading:
     try:
         found = chart_row(lines, chart, prefix="" if chart == NET_DEBT_TABLE else CHART_PREFIX)
     except ValueError:  # Periods that cannot be ordered: never guess which row is the latest.
         return "has periods in its table that cannot be ordered"
-    if found is None or column not in found[0]:
+    if found is None:
         return None
     row = found[0]
+    held = _held(row, column)  # the reported name, else its adjusted twin
+    if held is None:
+        return None
     written = row.get("Basis and limitation") or None
     resolved = _followed(lines, chart, row.get("Period", ""), written)
     return Observation(
-        column,
+        held,
         row.get("Reporting unit") or None,
-        number(row[column]),
+        number(row[held]),
         row.get("Period") or None,
         resolved or written,
         written if resolved else None,
@@ -556,6 +569,11 @@ def same_period(a: str, b: str) -> bool:
     return year_a is not None and year_a == year_b
 
 
+def _other_ebitda(first: str, second: str) -> bool:
+    """Whether two labels are a reported metric and its adjusted twin."""
+    return ADJUSTED_TWIN.get(first) == second or ADJUSTED_TWIN.get(second) == first
+
+
 def _compare(
     key: str,
     prior: Observation | None,
@@ -576,6 +594,11 @@ def _compare(
     )
     if prior is None or current is None:
         reason = _clause(*(("earlier", prior_why) if prior is None else ("current", current_why)))
+    elif _other_ebitda(prior.label, current.label):
+        reason = (
+            f"the earlier run states `{prior.label}` and the current run `{current.label}`: "
+            "different EBITDA measures, not one measure changing"
+        )
     elif (
         prior.unit is None
         or current.unit is None

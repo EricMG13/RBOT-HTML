@@ -2637,6 +2637,19 @@ test('library panel: a delivered report is named, never linked; the run opens fr
   assert.ok(other.includes('<li><span>Board pack</span><small>Accepted</small></li>'), other);
 });
 
+test('library panel: a measure quoted on the adjusted names draws that label; one with no label draws no extra line', () => {
+  const page = runPage();
+  page.libraryState.selected = RUN;
+  const adjusted = zedRun({ metrics: { leverage: { value: '5.96', unit: 'x', basis: 'Carrying debt over EBITDA.', period: 'FY2024', label: 'Total debt / adjusted EBITDA' } } });
+  const html = page.libraryDetail({ rows: [adjusted] });
+  assert.ok(html.includes('<p class="metric-named">Total debt / adjusted EBITDA</p>'), html);
+  assert.ok(!page.libraryDetail({ rows: [zedRun()] }).includes('metric-named'));
+  // The list view says it too, in the cell's title, so an adjusted figure is never read as the reported one.
+  const list = run => page.libraryRow(run, false, false);
+  assert.ok(list(adjusted).includes('title="Total debt / adjusted EBITDA \u00b7 FY2024"'), list(adjusted));
+  assert.ok(list(zedRun()).includes('title="FY2024"') && !list(zedRun()).includes('adjusted'));
+});
+
 test('library filters: Reset shows only while something is filtered or sorted; Completeness is offered once a run records one', () => {
   const page = runPage(d => d, [], m => m, { catalogue: [zedRun()] });
   const idle = page.libraryPanel();
