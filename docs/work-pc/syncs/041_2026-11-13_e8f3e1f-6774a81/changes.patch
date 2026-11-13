@@ -1,0 +1,952 @@
+diff --git a/src/deploy_vii/methods/cp8.md b/src/deploy_vii/methods/cp8.md
+index 44bc467..c8c69f1 100644
+--- a/src/deploy_vii/methods/cp8.md
++++ b/src/deploy_vii/methods/cp8.md
+@@ -27,7 +27,9 @@ accepted, the run is delivered without it.
+     definition` or `same measure` is replaced by the earlier period's basis text of the same table
+     (`definition_resolved: true`; the text as written is `definition_written`); a pointer by
+     calculation ID (`C01-C04`) is not followed by Python (`definition_resolved: false`): read the
+-    calculation it names in that run's CP-1 handoff yourself;
++    calculation it names in that run's CP-1 handoff yourself. When you write about it, describe the
++    calculation in words (`the earlier run's leverage calculation`); never write a calculation ID in
++    this handoff;
+   - `net_debt_change` when both runs state gross debt, net debt and cash under one definition: the
+     earlier net debt, the change in gross debt, the change in cash and the current net debt, with
+     its sign convention (an increase in cash reduces net debt). It is two balances compared; it does
+@@ -46,7 +48,9 @@ accepted, the run is delivered without it.
+ 1. **Two kinds of change are never mixed.** Either the issuer changed (a new period or a new source
+    brought new facts) or the analysis changed (a method change, a correction, or presentation).
+    Every row you write carries exactly one cause, from this fixed list: `New period`,
+-   `New source`, `Method change`, `Correction`, `Presentation`, `Unresolved`. Use `Unresolved`
++   `New source`, `Method change`, `Correction`, `Presentation`, `Unresolved`, or `None` where this
++   method says so (a measure whose pack difference is zero, an `Unchanged` module that differs in
++   nothing, the `No material change` row). Use `Unresolved`
+    when the evidence given does not say which; say what is missing. Issuer rows use `New period`,
+    `New source` or `Unresolved`; a measure the pack states for the same period with a non-zero
+    difference uses `Correction` or `Method change`, or says `Not comparable` (rule 3). A measure
+@@ -69,9 +73,14 @@ accepted, the run is delivered without it.
+    (`fell by 0.60x` for -0.60); do not write a sign after a word of direction. Where the pack gives
+    no difference, write none. A value the pack states as null is missing, not zero: write that it is
+    not stated.
+-   - A row that names a pack measure uses the measure's label exactly as the pack gives it, and
+-     there is one row per pack measure. A fact
+-     row (a refinancing, a new facility, a rating action) may give amounts a handoff states, the
++   - Every pack measure has exactly one row, whatever its `comparable` value and whether or not it
++     changed; the first cell is the measure's label exactly as the pack gives it, in plain text. Its
++     Earlier and Current cells are built from the pack and nothing else: the value, then the unit
++     (attached when the unit is `x` or `%`, after one space otherwise), then the period in
++     brackets: `6.01x (FY2024)`, `6261 US$m (2024-09-30)`. Copy the value, unit and period
++     character for character: no grouping comma, no currency word, no reworded date; leave out a
++     part the pack gives as null. Where the pack's value is null the cell is exactly `Not stated`.
++     A fact row (a refinancing, a new facility, a rating action) may give amounts a handoff states, the
+      earlier run's under Earlier and the current run's under Current, but never a pack measure's
+      value or a difference; a difference belongs to its measure's own row.
+    - `comparable: yes`: the definitions match; report the values and the difference.
+@@ -82,9 +91,9 @@ accepted, the run is delivered without it.
+      write in that row exactly one of `Same definition` or `Not comparable`, with the reason in
+      the last cell: begin the Effect cell with exactly one of them, then the reason
+      (`Not comparable: the EBITDA basis changed.`); the words elsewhere in a cell are refused. With `Same definition` report the values and the difference. With
+-     `Not comparable` give both values with their periods, never print the difference and draw no
+-     trend from the two (no "rose", "fell", "weakened", "improved"). A difference of a measure
+-     whose row says `Not comparable` is written nowhere in the handoff, in no passage, register or
++     `Not comparable` give both values with their periods, never print the difference, and in the
++     reason say only how the two definitions differ: describe no movement between the two values.
++     A difference of a measure whose row says `Not comparable` is written nowhere in the handoff, in no passage, register or
+      gap, and no passage says that measure moved.
+    - **The same period with different values is not the issuer changing.** When `same_period` is
+      true and the difference is not zero, the issuer did nothing between the runs: either the
+@@ -103,11 +112,14 @@ accepted, the run is delivered without it.
+      passages, `## Gaps`, fact rows, the analysis register's Why cells and the ledger's cells. The
+      one place a withheld difference may be printed is the Effect cell of that same measure's issuer
+      row, said `Same definition` with the cause `Correction` or `Method change`; the net debt
+-     change's cash has no such row, so its difference is printed nowhere. A withheld difference
+-     is refused without its unit too: a bare number (`Cash fell by 30.`) equal to a withheld size
+-     is refused wherever the sized one is, so write a count that happens to equal it another way
+-     (a size written in words, `thirty`, is refused as well, also when a line break splits it; the
+-     repair names the figure and the measure). A number directly before a count noun (`30 modules`,
++     change's cash difference may be printed only in the Effect cell of the pack's `Cash` measure
++     row, when that row may print its own difference and the two differences are the same number;
++     otherwise it is printed nowhere. A withheld difference is refused without its unit too: a bare
++     number (`Cash fell by 30.`) equal to a withheld size is refused wherever the sized one is. Write every amount, ratio and difference in digits with
++     its unit, never in words (`thirty million`, `fell by thirty`); a number word is only for a count
++     of things (`three modules`). Write a date as `2024-09-30`. Write lists with `-` bullets, never
++     numbered, and keep each paragraph, list item and table row on one line, so a count and its noun
++     are never split. A number directly before a count noun (`30 modules`,
+      `30 months`) or after `page`, `note`, `section`, `table`, `row`, `item`, `step` or `appendix` is a
+      count and allowed, with no word between; `30 new modules` is refused. A year with a unit
+      (`2010 US$m`, `USD 2010`) is a figure, not a year; a bare year or a year after a month or period
+@@ -139,13 +151,12 @@ after `### Limitations`, each as one table under its exact heading, columns exac
+ | Measure or fact | Earlier | Current | Cause | Effect on the credit view |
+ | --- | --- | --- | --- | --- |
+ 
+-One row per material change in the issuer's business or credit profile: a pack measure (the first
+-cell is the pack's label, exactly) or a fact the handoffs show changed (a new facility, a
+-refinancing, a disposal, a rating action, a change in guidance). For a measure, Earlier and Current
+-hold the pack's values with their units and periods; for a fact, plain words. Cause is one of
++One row for every pack measure (rule 3), then one row for each fact the handoffs show changed (a
++new facility, a refinancing, a disposal, a rating action, a change in guidance). For a measure,
++Earlier and Current are the value cells rule 3 defines; for a fact, plain words. Cause is one of
+ `New period`, `New source`, `Unresolved`; for a same-period measure with a non-zero difference,
+ `Correction` or `Method change` (rule 3); for a measure whose pack difference is zero, `None`.
+-If nothing material changed, write one row whose first
++If no fact changed, add one row whose first
+ cell is `No material change`, Earlier and Current `—`, Cause `None`, and say why in the last cell.
+ 
+ ### What changed: the analysis
+@@ -160,11 +171,12 @@ now and not before, `Not run this time` one that ran before and not now, and the
+ earlier and current bottom line as the credit view of that module. Cause is one of the six
+ causes, or `None` for an `Unchanged` row that differs in nothing. `Presentation` goes only with
+ `Unchanged`. A `New` or `Not run this time` module: when the pack's
+-`current.selection` is `preset` and `prior.selection` is `preset` or null (a run that predates the
+-field), the pathway's module set changed between the runs, so the
+-Cause is `Method change` and the Why says that (the pathway's module set changed between the runs;
+-the words "the pack does not say" are refused there); when either run's selection is `explicit`,
+-the Cause is `Unresolved` and the Why says what is missing. Why is one sentence.
++`current.selection` and `prior.selection` are both `preset`, the pathway's module set changed
++between the runs, so the Cause is `Method change` and the Why says that; when `prior.selection` is
++null (a run that predates the field) the pack cannot say which modules the earlier run was asked
++for, so the Cause is `Method change` or `Unresolved` and the Why says what the pack does and does
++not show; when either run's selection is `explicit`, the Cause is `Unresolved` and the Why says
++what is missing. Why is one sentence.
+ 
+ ### Limitations ledger
+ 
+@@ -183,11 +195,13 @@ earlier and a current ref is `Remaining`; only a current ref is `New`; only an e
+ ### Basis lines
+ 
+ The Basis item forms for this module are stated once, in the run instructions' paragraph that names
+-the earlier run (they replace the general forms there). The checker refuses a Basis item that names
+-`changes.json` or a `prior/` file, or gives a page for a handoff.
++the earlier run (they replace the general forms there). A Basis item in any other form is refused,
++and so is a handoff of a module that did not run in the run the item names.
+ 
+ Keep the words plain. Module codes (for example `CP-2D`) are written only in the tables' Module
+ and What closed it cells, limitation refs (`E1`, `C2`) only in the two ref columns, and neither in
+-a sentence; no hashes or page numbers outside the tables' Source-style cells. After the registers
++a sentence. A calculation ID (`C12`) looks like a limitation ref: describe the calculation in words and
++write no calculation ID; no hashes or page numbers outside the tables'
++Source-style cells. After the registers
+ keep the remaining sections of the handoff as the instructions require: `## Calculations` states
+ that CP-8 makes none, and `## Gaps` lists what the pack could not compare.
+diff --git a/src/deploy_workflow/changes_check.py b/src/deploy_workflow/changes_check.py
+index 57c9d8e..a71ea6b 100644
+--- a/src/deploy_workflow/changes_check.py
++++ b/src/deploy_workflow/changes_check.py
+@@ -20,8 +20,7 @@ it refuses, naming the line, a CP-8 handoff in which:
+ - a row of a pack measure does not print that measure's earlier and current value, with its sign
+   and unit, in the right columns (K5);
+ - a measure the pack marks `judge` is said neither or both of `Same definition` and
+-  `Not comparable`, one the pack marks `no` is not said `Not comparable`, or a `Not comparable`
+-  row draws a trend (K6);
++  `Not comparable`, or one the pack marks `no` is not said `Not comparable` (K6);
+ - a measure the two runs state for one period with different values is given the cause
+   `New period` or `New source`, or is neither `Not comparable` nor `Same definition` with the
+   cause `Correction` or `Method change` (K7);
+@@ -47,9 +46,12 @@ it refuses, naming the line, a CP-8 handoff in which:
+ - a figure of a checked line is held in no evidence (K10): the pack's values, the figures of its
+   definition texts, the handoffs CP-8 was sent (this run's) and the earlier run's. Checked lines
+   are all but the `## Request`, `## Sources`, `## Calculations` and `## Next module` sections; of
+-  an issuer row only the Effect cell. No figure is rounded or worked out;
++  an issuer row of a pack measure only the Effect cell, while a fact row (its first cell not a
++  pack label) is read in every cell by the bare reading. No figure is rounded or worked out;
+ - a fact row (a row naming no pack measure) prints a figure equal to a pack measure's earlier or
+-  current value, or one held in no evidence (K11).
++  current value, or one held in no evidence (K11);
++- a pack measure has no row of its own in the issuer register: every pack measure needs exactly
++  one, its first cell the pack's label (K14).
+ 
+ A "figure" is a number that is not a date, a period label, a year or (in a passage) a whole number
+ below 100 without a unit (a count); in a measure's Earlier and Current cells every number counts.
+@@ -152,11 +154,6 @@ _NOT_EVIDENCE = frozenset({"", "-", "—", "–", "n/a", "none", "not stated"})
+ _DASHES = frozenset({"", "-", "—", "–"})
+ _UP = r"rose|rise|risen|rises|increased?|increases|grew|grown|up|higher|gained|added"
+ _DOWN = r"fell|fall|fallen|falls|decreased?|decreases|declined?|dropped|down|lower|reduced|shrank"
+-_TREND = re.compile(
+-    rf"\b(?:{_UP}|{_DOWN}|strengthen\w*|weaken\w*|improv\w*|worsen\w*|deteriorat\w*|better|worse"
+-    r"|eased|tightened|trend\w*)\b",
+-    re.IGNORECASE,
+-)
+ _DIRECTION = re.compile(rf"\b(?:(?P<up>{_UP})|(?P<down>{_DOWN}))\b", re.IGNORECASE)
+ _SENTENCE_END = re.compile(r"[.;:!?]\s")
+ # A figure written as a difference: after `by` or a direction word (ends at the first digit).
+@@ -450,8 +447,7 @@ def _value_cell_issues(
+ 
+ 
+ def _definition_issues(where: str, row: Sequence[str], measure: Mapping[str, Any]) -> list[str]:
+-    """The row's statement on whether the two values share a definition; a row that says
+-    `Not comparable` draws no trend."""
++    """The row's statement on whether the two values share a definition."""
+     text = " ".join(_plain(cell) for cell in row).lower()
+     issues = []
+     for word in (SAME, NOT_COMPARABLE):
+@@ -471,8 +467,6 @@ def _definition_issues(where: str, row: Sequence[str], measure: Mapping[str, Any
+             f"{where}: the pack marks this measure not comparable ({measure['reason']}); say "
+             '"not comparable" and give no difference.'
+         )
+-    if NOT_COMPARABLE in text and _TREND.search(row[EFFECT]):
+-        issues.append(f"{where}: a `Not comparable` row draws no trend from the two values.")
+     return issues
+ 
+ 
+@@ -584,7 +578,12 @@ def _issuer_issues(
+ ) -> list[str]:
+     issues: list[str] = []
+     if not rows:
+-        return [f"`### {ISSUER}` needs a row; if nothing changed, one `{NO_CHANGE}` row."]
++        return [
++            (
++                f"`### {ISSUER}` needs a row: one row per pack measure, then, if nothing "
++                f"changed, one `{NO_CHANGE}` row after them."
++            )
++        ]
+     labels = {m["label"]: m for m in pack["measures"]}
+     looks_like = {_alnum(label) for label in labels}
+     first = {key: found[0] for key, found in _rows_by_measure(rows, pack).items()}
+@@ -629,6 +628,14 @@ def _issuer_issues(
+         issues += _measure_row_issues(name, row, measure)
+         if flagged:
+             issues += _same_period_issues(name, row, cause)
++    named = {_plain(row[0]) for row in rows}
++    issues += [
++        f"Issuer register: the pack measure `{label}` has no row; write exactly one row for every "
++        "pack measure, its first cell the pack's label, its Earlier and Current cells the pack's "
++        "values."
++        for label in labels
++        if label not in named
++    ]
+     return issues
+ 
+ 
+@@ -808,7 +815,9 @@ def _outside_ref_issues(lines: list[str], pack: Mapping[str, Any]) -> list[str]:
+         )
+     return [
+         f"{ref} appears outside the ledger's ref columns; a ref may be written only in the "
+-        "Earlier ref and Current ref columns, never in a sentence or another cell."
++        "Earlier ref and Current ref columns, never in a sentence or another cell. "
++        f"If `{ref}` is a calculation ID, describe the calculation in words; a limitation ref is "
++        "written only in the two ref columns."
+         for ref in found
+     ]
+ 
+@@ -845,15 +854,22 @@ def _withheld_sizes(
+     pack: Mapping[str, Any], said_nc: frozenset[str], exempt: frozenset[str] = frozenset()
+ ) -> dict[Decimal, str]:
+     """The non-zero differences a checked line may not print, with their measure's label. `exempt`
+-    is the keys of measures whose difference this line may print (`_may_print`); a difference equal
+-    to a value of its own measure is no difference."""
++    is the keys of measures whose difference this line may print (`_may_print`), and a difference
++    of one of their sizes is printable with it (the net debt change's cash beside the Cash row); a
++    difference equal to a value of its own measure is no difference."""
+     found: dict[Decimal, str] = {}
+-    for measure in (*pack["measures"], *_net_debt_cash(pack)):
++    measures = (*pack["measures"], *_net_debt_cash(pack))
++    own = {
++        abs(d)
++        for m in measures
++        if m["key"] in exempt and (d := _signed(m["difference"])) is not None
++    }
++    for measure in measures:
+         difference = _signed(measure["difference"])
+         barred = measure["comparable"] == "no" or measure["key"] in said_nc
+         if difference is None or difference == 0 or not (barred or _flagged(measure)):
+             continue
+-        if measure["key"] in exempt:
++        if measure["key"] in exempt or abs(difference) in own:
+             continue
+         if abs(difference) not in {abs(v) for v in _measure_values(measure) - {difference}}:
+             found[abs(difference)] = measure["label"]
+@@ -1190,6 +1206,7 @@ def _passage_issues(
+     passage_differences = _pack_differences(pack, without=withheld)
+     register_differences = _pack_differences(pack, without=barred)
+     kept = _withheld_sizes(pack, said_nc)
++    labels = {m["label"] for m in pack["measures"]}
+     in_issuer, h2 = False, ""
+     headers = _header_rows(lines)
+     issues: list[str] = []
+@@ -1201,10 +1218,13 @@ def _passage_issues(
+         text = line.strip()
+         row = text.startswith("|") and text.endswith("|")
+         sizes = kept
++        whole = None  # the row of a fact, read in every cell by the bare reading
+         if in_issuer and row:
+             cells = re.split(r"(?<!\\)\|", text[1:-1])
+             if exempt := _may_print([c.strip() for c in cells], pack, said_nc):
+                 sizes = _withheld_sizes(pack, said_nc, exempt)
++            if _plain(cells[0]) not in labels:
++                whole = " | ".join(c.strip() for c in cells)
+             line = cells[-1]
+         issues += _direction_issues(
+             line, register_differences if row else passage_differences, "A passage"
+@@ -1214,7 +1234,8 @@ def _passage_issues(
+         line = _DATE.sub(_blanks, line)
+         figures = [f.size for f in _figures(line, counts=False, header=i in headers)]
+         listed = not row and _starts_list_item(lines, i)
+-        bare = _bare_sizes(lines, i, _bare(line, listed=listed), header=i in headers)
++        read = line if whole is None else _DATE.sub(_blanks, whole)
++        bare = _bare_sizes(lines, i, _bare(read, listed=listed), header=i in headers)
+         for size in dict.fromkeys([*figures, *bare]):
+             if size in sizes:
+                 issues.append(
+diff --git a/src/deploy_workflow/prose_checks.py b/src/deploy_workflow/prose_checks.py
+index a27eb16..d90a1c3 100644
+--- a/src/deploy_workflow/prose_checks.py
++++ b/src/deploy_workflow/prose_checks.py
+@@ -486,35 +486,8 @@ def _is_id_header(header: str) -> bool:
+     return folded == "id" or folded.endswith(" id")
+ 
+ 
+-PERIOD_LABEL = re.compile(
+-    r"(?:FY\d+E?|[QH]\d|LTM|\d+M)(?:\s+\d{4})?", re.IGNORECASE
+-)  # A period, not an ID.
+-
+-
+-def _calculation_tables(text: str) -> list[list[list[str]]]:
+-    """Pipe tables under `## Calculations`, up to the next H2 outside a fence."""
+-    kept: list[str] = []
+-    in_calculations = fenced = False
+-    for line in text.splitlines():
+-        if line.lstrip().startswith(FENCE):
+-            fenced = not fenced
+-        heading = None if fenced else HEADING.fullmatch(line)
+-        if heading is not None and len(heading[1]) <= 2:
+-            in_calculations = heading[2] == "Calculations"
+-        if in_calculations:
+-            kept.append(line)
+-    return _tables("\n".join(kept))
+-
+-
+ def _register_ids(text: str) -> set[str]:
+     ids: set[str] = set()
+-    for rows in _calculation_tables(text):
+-        header = len(rows) >= 2 and all(re.fullmatch(r":?-+:?", c) for c in rows[1])
+-        ids.update(
+-            row[0]
+-            for row in rows[2 if header else 0 :]
+-            if row and _has_letter_and_digit(row[0]) and not PERIOD_LABEL.fullmatch(row[0])
+-        )
+     for rows in _tables(text):
+         if len(rows) < 3 or not all(re.fullmatch(r":?-+:?", c) for c in rows[1]):
+             continue
+diff --git a/tests/fixtures/canned_provider_launcher.py b/tests/fixtures/canned_provider_launcher.py
+index fa095ec..eeece20 100644
+--- a/tests/fixtures/canned_provider_launcher.py
++++ b/tests/fixtures/canned_provider_launcher.py
+@@ -25,14 +25,14 @@ def cp8_answer(context: dict, out: Path) -> str:
+     that read the pack would write them. The checker stays the real one."""
+     pack = json.loads((out / "inputs" / context["sources"]["changes.json"]).read_text())
+ 
+-    def shown(side: dict, unit: str) -> str:
++    def shown(side: dict | None, unit: str) -> str:
++        if side is None or side["value"] is None:
++            return "Not stated"
+         joined = f"{side['value']}{unit}" if unit in ("x", "%") else f"{side['value']} {unit}"
+         return f"{joined} ({side['period']})"
+ 
+     issuer = []
+-    for m in pack["measures"]:
+-        if m["difference"] is None:
+-            continue
++    for m in pack["measures"]:  # one row for every pack measure, a missing value `Not stated`
+         effect = (
+             f"The pack's difference is {m['difference']}."
+             if m["comparable"] == "yes"
+diff --git a/tests/test_changes.py b/tests/test_changes.py
+index cfe70e5..aa0c15c 100644
+--- a/tests/test_changes.py
++++ b/tests/test_changes.py
+@@ -1180,7 +1180,12 @@ CLOSED_ROW = (
+     "| E1 | — | The covenant package gap. | Closed "
+     "| The Macro handoff (CP-2E) now shows the package. |"
+ )
+-REGISTERS = """## Findings
++COVER_ROW = (
++    "| EBITDA / cash interest | Not stated | 3.60x (FY2024) | New source "
++    "| Not comparable: the earlier run does not state it. |"
++)
++REGISTERS = (
++    """## Findings
+ 
+ ### What changed: the issuer
+ 
+@@ -1188,6 +1193,7 @@ REGISTERS = """## Findings
+ | --- | --- | --- | --- | --- |
+ | Total debt / EBITDA | 4.20x (FY2023) | 3.60x (FY2024) | New period | Leverage fell by 0.60x. |
+ @@CASH@@
++@@COVER@@
+ 
+ ### What changed: the analysis
+ 
+@@ -1206,7 +1212,10 @@ REGISTERS = """## Findings
+ | E2 | C2 | Segment data is missing. | Remaining | — |
+ 
+ ## Calculations
+-""".replace("@@CASH@@", CASH_ROW).replace("@@CLOSED@@", CLOSED_ROW)
++""".replace("@@CASH@@", CASH_ROW)
++    .replace("@@COVER@@", COVER_ROW)
++    .replace("@@CLOSED@@", CLOSED_ROW)
++)
+ 
+ 
+ def issues_after(old: str, new: str) -> tuple[str, ...]:
+@@ -1256,11 +1265,6 @@ def test_a_complete_cp8_handoff_is_accepted():
+             "Not comparable: cash fell by 50 US$m.",
+             "difference",
+         ),  # not comparable: the difference is not printed
+-        (
+-            "Same definition: cash fell by 50 US$m.",
+-            "Not comparable: the definition differs, so cash weakened.",
+-            "trend",
+-        ),  # not comparable: no trend is drawn
+         (
+             "Same definition: cash fell by 50 US$m.",
+             "Same definition, and not comparable: cash fell by 50 US$m.",
+@@ -1313,21 +1317,15 @@ def test_a_fact_row_without_figures_is_free_text_and_one_with_a_figure_names_a_m
+ def test_a_measure_the_pack_cannot_compare_is_stated_as_not_stated_or_not_comparable():
+     row = (
+         "| EBITDA / cash interest | not stated | 3.60x (FY2024) | New source "
+-        "| The earlier run does not state it, so it is not comparable. |\n"
+-    )
+-    text = REGISTERS.replace(
+-        "\n### What changed: the analysis", row + "\n### What changed: the analysis", 1
++        "| The earlier run does not state it, so it is not comparable. |"
+     )
++    text = REGISTERS.replace(COVER_ROW, row, 1)  # the pack measure's own row, worded differently
+     assert cp8_issues(text, PACK) == ()
+     bare = row.replace("The earlier run does not state it, so it is not comparable.", "Cover rose.")
+-    again = REGISTERS.replace(
+-        "\n### What changed: the analysis", bare + "\n### What changed: the analysis", 1
+-    )
++    again = REGISTERS.replace(COVER_ROW, bare, 1)
+     assert any("not comparable" in i.lower() for i in cp8_issues(again, PACK))
+     wrong = row.replace("not stated |", "2.90x (FY2023) |")
+-    third = REGISTERS.replace(
+-        "\n### What changed: the analysis", wrong + "\n### What changed: the analysis", 1
+-    )
++    third = REGISTERS.replace(COVER_ROW, wrong, 1)
+     assert any("earlier figure 2.90" in i for i in cp8_issues(third, PACK))
+ 
+ 
+@@ -1461,10 +1459,9 @@ def test_a_register_with_a_header_and_no_row_or_no_table_is_refused():
+ 
+ def test_a_row_for_no_material_change_is_accepted_with_cause_none():
+     text = REGISTERS.replace(
+-        REGISTERS[
+-            REGISTERS.index("| Total debt") : REGISTERS.index("### What changed: the analysis")
+-        ],
+-        "| No material change | — | — | None | Nothing material moved. |\n\n",
++        "\n\n### What changed: the analysis",
++        "\n| No material change | — | — | None | Nothing material moved. |\n\n"
++        "### What changed: the analysis",
+     )
+     assert cp8_issues(text, PACK) == ()
+ 
+@@ -1713,6 +1710,22 @@ def cp8_answer(context: dict) -> str:
+             "| Cash | 300 US$m (FY2023) | 275 US$m (FY2024) | Unresolved "
+             "| Not comparable: definition differs. |"
+         ),
++        (
++            "| Undrawn committed facilities | 450 US$m (FY2023) | 400 US$m (FY2024) | Unresolved "
++            "| Not comparable: the facility definitions differ. |"
++        ),
++        (
++            "| EBITDA / cash interest | Not stated | 3.40x (FY2024) | New source "
++            "| Not comparable: the earlier run does not state it. |"
++        ),
++        (
++            "| Gross debt | Not stated | 1400 US$m (FY2024) | New source "
++            "| Not comparable: the earlier run does not state it. |"
++        ),
++        (
++            "| Net debt | Not stated | 1125 US$m (FY2024) | New source "
++            "| Not comparable: the earlier run does not state it. |"
++        ),
+         "",
+         "### What changed: the analysis",
+         "",
+@@ -2680,6 +2693,24 @@ def test_equal_net_debt_rows_of_one_period_are_flagged_with_zero_differences():
+     assert (change["change_in_gross_debt"], change["change_in_cash"]) == ("0", "0")
+ 
+ 
++# The rows of the two net debt measures `_ndpack` adds: a pack measure needs its own row, and
++# both say `Not comparable` so that they print nothing.
++ND_GROSS = (
++    "| Gross debt | 7100 US$m (FY2024) | 6990 US$m (FY2024) | Unresolved "
++    "| Not comparable: the basis differs. |"
++)
++ND_NET = (
++    "| Net debt | 6190 US$m (FY2024) | 6110 US$m (FY2024) | Unresolved "
++    "| Not comparable: the basis differs. |"
++)
++
++
++def nd_row(row: str, passage: str = "", gaps: str = "") -> str:
++    """`with_row` for `_ndpack`: its Gross debt and Net debt rows, unless `row` brings its own."""
++    extra = [r for r in (ND_GROSS, ND_NET) if r.split("|")[1] not in row]
++    return with_row("\n".join([row, *extra]), passage, gaps)
++
++
+ def _nd_measure(key, label, values, difference, same_period=True):
+     prior, current = values
+     side = {**CASH_PRIOR, "label": label, "period": "FY2024"}
+@@ -2736,17 +2767,17 @@ def _ndpack(same_period=True, with_flag=True):
+     ],
+ )
+ def test_a_same_period_net_debt_difference_is_printed_in_no_passage(sentence):
+-    assert cp8_issues(with_row(LEVERAGE_ROW, sentence + "\n\n"), _ndpack()), "accepted"
++    assert cp8_issues(nd_row(LEVERAGE_ROW, sentence + "\n\n"), _ndpack()), "accepted"
+ 
+ 
+ def test_the_two_values_of_a_same_period_net_debt_may_be_stated():
+     said = "Net debt is 6,190 US$m earlier and 6,110 US$m now; cash is 910 and 880 US$m.\n\n"
+-    assert cp8_issues(with_row(LEVERAGE_ROW, said), _ndpack()) == ()
++    assert cp8_issues(nd_row(LEVERAGE_ROW, said), _ndpack()) == ()
+ 
+ 
+ @pytest.mark.parametrize("pack", [_ndpack(same_period=False), _ndpack(with_flag=False)])
+ def test_a_net_debt_change_of_two_periods_or_without_the_flag_may_be_said_to_have_moved(pack):
+-    assert cp8_issues(with_row(LEVERAGE_ROW, "Cash fell by 30 US$m.\n\n"), pack) == ()
++    assert cp8_issues(nd_row(LEVERAGE_ROW, "Cash fell by 30 US$m.\n\n"), pack) == ()
+ 
+ 
+ # --- a withheld difference is printed in no register cell but its own issuer row's Effect ------
+@@ -2776,16 +2807,16 @@ WITHHELD_KINDS = {
+         "Leverage fell by 0.56x.",
+         "0.56",
+     ),
+-    "net debt, cash": (_ndpack(), with_row(LEVERAGE_ROW), "Cash fell by 30 US$m.", "30"),
++    "net debt, cash": (_ndpack(), nd_row(LEVERAGE_ROW), "Cash fell by 30 US$m.", "30"),
+     "net debt, net debt": (
+         _ndpack(),
+-        with_row(LEVERAGE_ROW),
++        nd_row(LEVERAGE_ROW),
+         "Net debt is 80 US$m lower.",
+         "80",
+     ),
+     "net debt, gross debt": (
+         _ndpack(),
+-        with_row(LEVERAGE_ROW),
++        nd_row(LEVERAGE_ROW),
+         "Gross debt fell by 110 US$m.",
+         "110",
+     ),
+@@ -2812,7 +2843,7 @@ def test_the_exemption_is_that_measures_issuer_row_only():
+     found = cp8_issues(_in_cell(handoff, WHY_CELL, "Leverage fell by 0.56x."), PACK2)
+     assert any("0.56" in i and "difference" in i for i in found), found
+     fact = "| Refinancing | — | — | New source | Net debt fell by 80 US$m. |"
+-    found = cp8_issues(with_row(LEVERAGE_ROW + "\n" + fact), _ndpack())
++    found = cp8_issues(nd_row(LEVERAGE_ROW + "\n" + fact), _ndpack())
+     assert any("80" in i and "difference" in i for i in found), found
+ 
+ 
+@@ -2839,11 +2870,11 @@ def _own_value_pack():
+     ("pack", "handoff", "sentence"),
+     [
+         (PACK2, with_row(NC_ROW), "Leverage is 6.57x earlier and 6.01x now."),
+-        (_ndpack(), with_row(LEVERAGE_ROW), "Net debt is 6,190 US$m earlier and 6,110 US$m now."),
++        (_ndpack(), nd_row(LEVERAGE_ROW), "Net debt is 6,190 US$m earlier and 6,110 US$m now."),
+         (_zero_pack(), with_row(LEVERAGE_ROW), "Net debt is 6,190 US$m in both runs."),
+-        (_ndpack(same_period=False), with_row(LEVERAGE_ROW), "Cash fell by 30 US$m."),
+-        (_ndpack(), with_row(LEVERAGE_ROW), "Total debt / EBITDA was 4.20x earlier."),
+-        (_own_value_pack(), with_row(LEVERAGE_ROW), "Cash is 60 US$m earlier and 30 US$m now."),
++        (_ndpack(same_period=False), nd_row(LEVERAGE_ROW), "Cash fell by 30 US$m."),
++        (_ndpack(), nd_row(LEVERAGE_ROW), "Total debt / EBITDA was 4.20x earlier."),
++        (_own_value_pack(), nd_row(LEVERAGE_ROW), "Cash is 60 US$m earlier and 30 US$m now."),
+     ],
+     ids=["both values", "net debt values", "zero", "unflagged", "other measure", "own value"],
+ )
+@@ -2927,7 +2958,7 @@ def _cash_nc_text(**kw):
+ 
+ 
+ def _lever_text(**kw):
+-    return with_row(LEVERAGE_ROW, **kw)
++    return nd_row(LEVERAGE_ROW, **kw)
+ 
+ 
+ def _nc_text(**kw):
+@@ -2963,12 +2994,12 @@ def test_a_withheld_difference_without_a_unit_is_refused_wherever_one_with_a_uni
+ 
+ @pytest.mark.parametrize("sentence", ["Cash moved -30.", "Cash fell by -30.", "Cash fell by 30 ."])
+ def test_a_signed_or_spaced_bare_withheld_difference_is_refused(sentence):
+-    found = cp8_issues(with_row(LEVERAGE_ROW, sentence + "\n\n"), _ndpack())
++    found = cp8_issues(nd_row(LEVERAGE_ROW, sentence + "\n\n"), _ndpack())
+     assert any("30" in i and "difference" in i for i in found), found
+ 
+ 
+ def test_the_refusal_names_the_figure_and_the_measure():
+-    found = cp8_issues(with_row(LEVERAGE_ROW, "Cash fell by 30.\n\n"), _ndpack())
++    found = cp8_issues(nd_row(LEVERAGE_ROW, "Cash fell by 30.\n\n"), _ndpack())
+     assert any("figure 30" in i and "difference of Cash" in i for i in found), found
+ 
+ 
+@@ -2986,13 +3017,13 @@ def test_a_bare_decimal_withheld_difference_is_refused():
+     ],
+ )
+ def test_a_bare_count_that_equals_no_withheld_size_is_accepted(sentence):
+-    assert cp8_issues(with_row(LEVERAGE_ROW, sentence + "\n\n"), _ndpack()) == ()
++    assert cp8_issues(nd_row(LEVERAGE_ROW, sentence + "\n\n"), _ndpack()) == ()
+ 
+ 
+ def test_a_module_code_or_list_number_is_no_bare_count():
+     pack = _ndpack()
+     pack["net_debt_change"] |= {"change_in_cash": "-2", "current_cash": "908"}
+-    text = with_row(LEVERAGE_ROW, "1. The credit view (CP-2) ran.\n\n")
++    text = nd_row(LEVERAGE_ROW, "1. The credit view (CP-2) ran.\n\n")
+     assert cp8_issues(text, pack) == ()
+ 
+ 
+@@ -3003,16 +3034,16 @@ def test_a_bare_withheld_difference_is_accepted_in_its_own_issuer_row():
+         "| Net debt | 6190 US$m (FY2024) | 6110 US$m (FY2024) | Correction "
+         "| Same definition; net debt is 80 lower after the correction. |"
+     )
+-    assert cp8_issues(with_row(LEVERAGE_ROW + "\n" + net), _ndpack()) == ()
++    assert cp8_issues(nd_row(LEVERAGE_ROW + "\n" + net), _ndpack()) == ()
+     elsewhere = net.replace("Net debt |", "Refinancing |")
+-    found = cp8_issues(with_row(LEVERAGE_ROW + "\n" + elsewhere), _ndpack())
++    found = cp8_issues(nd_row(LEVERAGE_ROW + "\n" + elsewhere), _ndpack())
+     assert any("80" in i and "difference" in i for i in found), found
+ 
+ 
+ def test_a_bare_size_equal_to_the_measures_own_value_is_accepted():
+     pack = _ndpack()
+     pack["net_debt_change"] |= {"prior_cash": "60", "current_cash": "30", "change_in_cash": "-30"}
+-    assert cp8_issues(with_row(LEVERAGE_ROW, "Cash is 60 earlier and 30 now.\n\n"), pack) == ()
++    assert cp8_issues(nd_row(LEVERAGE_ROW, "Cash is 60 earlier and 30 now.\n\n"), pack) == ()
+ 
+ 
+ def test_a_zero_difference_withholds_nothing():
+@@ -3039,13 +3070,13 @@ def test_a_bare_count_is_still_no_figure_of_a_held_line():
+     ],
+ )
+ def test_a_number_starting_a_continuation_line_is_a_figure(passage, size):
+-    found = cp8_issues(with_row(LEVERAGE_ROW, passage), _ndpack())
++    found = cp8_issues(nd_row(LEVERAGE_ROW, passage), _ndpack())
+     assert any(size in i for i in found), found
+ 
+ 
+ def test_a_number_starting_a_fact_rows_effect_cell_is_a_figure():
+     row = "| Refinancing | — | — | New source | 80. Net debt is lower. |"
+-    found = cp8_issues(with_row(LEVERAGE_ROW + "\n" + row), _ndpack())
++    found = cp8_issues(nd_row(LEVERAGE_ROW + "\n" + row), _ndpack())
+     assert any("80" in i and "difference" in i for i in found), found
+ 
+ 
+@@ -3058,7 +3089,7 @@ def test_a_number_starting_a_fact_rows_effect_cell_is_a_figure():
+     ],
+ )
+ def test_a_real_list_item_number_equal_to_a_withheld_size_is_accepted(passage):
+-    assert cp8_issues(with_row(LEVERAGE_ROW, passage), _ndpack()) == ()
++    assert cp8_issues(nd_row(LEVERAGE_ROW, passage), _ndpack()) == ()
+ 
+ 
+ @pytest.mark.parametrize(
+@@ -3071,12 +3102,12 @@ def test_a_real_list_item_number_equal_to_a_withheld_size_is_accepted(passage):
+     ],
+ )
+ def test_a_day_of_month_equal_to_a_withheld_size_is_no_size(sentence):
+-    assert cp8_issues(with_row(LEVERAGE_ROW, sentence + "\n\n"), _ndpack()) == ()
++    assert cp8_issues(nd_row(LEVERAGE_ROW, sentence + "\n\n"), _ndpack()) == ()
+ 
+ 
+ def test_a_number_near_but_not_beside_a_month_is_still_a_size():
+     said = "Cash fell by 30 in September.\n\n"
+-    found = cp8_issues(with_row(LEVERAGE_ROW, said), _ndpack())
++    found = cp8_issues(nd_row(LEVERAGE_ROW, said), _ndpack())
+     assert any("30" in i and "difference" in i for i in found), found
+ 
+ 
+@@ -3093,7 +3124,7 @@ def test_the_verdict_words_doubled_in_another_cell_and_the_effect_cell_are_refus
+ 
+ 
+ def _says(passage, pack=None):
+-    return cp8_issues(with_row(LEVERAGE_ROW, passage + "\n\n"), pack or _ndpack())
++    return cp8_issues(nd_row(LEVERAGE_ROW, passage + "\n\n"), pack or _ndpack())
+ 
+ 
+ @pytest.mark.parametrize(
+@@ -3218,9 +3249,9 @@ def test_a_size_in_words_is_accepted_in_its_own_issuer_row():
+         "| Net debt | 6190 US$m (FY2024) | 6110 US$m (FY2024) | Correction "
+         "| Same definition; net debt is eighty lower after the correction. |"
+     )
+-    assert cp8_issues(with_row(LEVERAGE_ROW + "\n" + net), _ndpack()) == ()
++    assert cp8_issues(nd_row(LEVERAGE_ROW + "\n" + net), _ndpack()) == ()
+     elsewhere = net.replace("Net debt |", "Refinancing |")
+-    found = cp8_issues(with_row(LEVERAGE_ROW + "\n" + elsewhere), _ndpack())
++    found = cp8_issues(nd_row(LEVERAGE_ROW + "\n" + elsewhere), _ndpack())
+     assert any("80" in i and "difference" in i for i in found), found
+ 
+ 
+@@ -3310,7 +3341,7 @@ def test_a_unicode_hyphen_does_not_split_a_spelled_size(hyphen):
+ 
+ 
+ def _hold(text, pack=None, held=()):
+-    return cp8_issues(with_row(LEVERAGE_ROW, text + "\n\n"), pack or _ndpack(), held)
++    return cp8_issues(nd_row(LEVERAGE_ROW, text + "\n\n"), pack or _ndpack(), held)
+ 
+ 
+ @pytest.mark.parametrize(
+@@ -3857,3 +3888,210 @@ def test_the_currency_code_list_holds_the_fixed_set():
+         "AED", "QAR", "KWD", "ILS", "EGP", "NGN", "CLP", "COP", "PEN", "ARS",
+     ]  # fmt: skip
+     assert sorted(_CODES.split("|")) == sorted(wanted)
++
++
++# --- C1: a pack measure with no row, the trend list, a calculation ID, own-row differences -------
++
++
++def _held(key, label, prior, current, difference):
++    side = {"label": label, "unit": "US$m", "period": "FY2024", "definition": "Cash."}
++    return {
++        "key": key,
++        "label": label,
++        "unit": "US$m",
++        "comparable": "yes",
++        "reason": None,
++        "prior": {**side, "value": prior},
++        "current": {**side, "value": current},
++        "difference": difference,
++        "same_period": True,
++    }
++
++
++# One period, two values, for four measures: the sizes 30 (cash), 100 (gross debt), 130 (net debt)
++# and 8 (undrawn) are all withheld. The limitation ref C12 is a legitimate ref number.
++PACKC = {
++    "measures": [
++        _held("cash", "Cash", "6261", "6231", "-30"),
++        _held("gross_debt", "Gross debt", "25068", "25168", "100"),
++        _held("net_debt", "Net debt", "18807", "18937", "130"),
++        _held("undrawn", "Undrawn committed facilities", "843", "851", "8"),
++    ],
++    "net_debt_change": {
++        "unit": "US$m",
++        "prior_net_debt": "18807",
++        "change_in_gross_debt": "100",
++        "change_in_cash": "-30",
++        "current_net_debt": "18937",
++        "convention": "an increase in cash reduces net debt",
++        "same_period": True,
++        "prior_period": "FY2024",
++        "current_period": "FY2024",
++        "prior_gross_debt": "25068",
++        "prior_cash": "6261",
++        "current_gross_debt": "25168",
++        "current_cash": "6231",
++    },
++    "modules": [{"module": "CP-2", "ran_prior": True, "ran_current": True}],
++    "limitations": {
++        "earlier": [{"ref": "E1", "module": "CP-2", "text": "The covenant package is missing."}],
++        "current": [{"ref": "C12", "module": "CP-2", "text": "The covenant package is missing."}],
++    },
++}
++CASH_C = (
++    "| Cash | 6261 US$m (FY2024) | 6231 US$m (FY2024) | Correction "
++    "| Same definition: corrected by USD 30 million. |"
++)
++GROSS_C = (
++    "| Gross debt | 25068 US$m (FY2024) | 25168 US$m (FY2024) | Method change "
++    "| Same definition: the method now counts leases. |"
++)
++NET_C = (
++    "| Net debt | 18807 US$m (FY2024) | 18937 US$m (FY2024) | Method change "
++    "| Not comparable: net debt follows the gross debt basis. |"
++)
++UNDRAWN_C = (
++    "| Undrawn committed facilities | 843 US$m (FY2024) | 851 US$m (FY2024) | Method change "
++    "| Same definition: the method now counts the revolver. |"
++)
++FACT_C = "| Term loan refinancing | Not announced | Announced | New source | Maturities extended. |"
++
++
++def registers_c(*rows: str, passage: str = "") -> str:
++    return f"""## Findings
++
++{passage}### What changed: the issuer
++
++| Measure or fact | Earlier | Current | Cause | Effect on the credit view |
++| --- | --- | --- | --- | --- |
++{chr(10).join(rows)}
++
++### What changed: the analysis
++
++| Module | Status | Cause | Why |
++| --- | --- | --- | --- |
++| Credit view (CP-2) | Unchanged | None | Same view. |
++
++### Limitations ledger
++
++| Earlier ref | Current ref | Limitation | Status | What closed it |
++| --- | --- | --- | --- | --- |
++| E1 | C12 | The covenant package is missing. | Remaining | — |
++
++## Calculations
++"""
++
++
++def test_the_valid_c_fixture_is_accepted():
++    assert cp8_issues(registers_c(CASH_C, GROSS_C, NET_C, UNDRAWN_C, FACT_C), PACKC) == ()
++
++
++def test_every_pack_measure_needs_its_own_row():
++    assert cp8_issues(REGISTERS, PACK) == ()
++    cash = cp8_issues(REGISTERS.replace(CASH_ROW + "\n", "", 1), PACK)
++    assert len(cash) == 1 and "the pack measure `Cash` has no row" in cash[0], cash
++    cover = cp8_issues(REGISTERS.replace(COVER_ROW + "\n", "", 1), PACK)  # comparable: no
++    assert len(cover) == 1 and "the pack measure `EBITDA / cash interest` has no row" in cover[0]
++    both = cp8_issues(REGISTERS.replace(CASH_ROW + "\n", "").replace(COVER_ROW + "\n", ""), PACK)
++    assert len(both) == 2
++
++
++def test_a_row_for_no_material_change_comes_after_the_measure_rows_not_instead_of_them():
++    row = "| No material change | — | — | None | Nothing else changed. |\n"
++    assert cp8_issues(REGISTERS.replace(COVER_ROW + "\n", COVER_ROW + "\n" + row), PACK) == ()
++
++
++def test_not_comparable_may_say_that_no_trend_is_drawn():
++    said = "Not comparable: the EBITDA basis changed, so no trend is drawn."
++    assert issues_after("Same definition: cash fell by 50 US$m.", said) == ()
++
++
++def test_not_comparable_still_refuses_a_movement_of_a_pack_difference():
++    moved = "Not comparable: the EBITDA basis changed, and leverage rose by 0.60x."
++    found = issues_after("Same definition: cash fell by 50 US$m.", moved)
++    assert found and any("0.60" in issue for issue in found), found
++
++
++def test_a_calculation_id_is_refused_with_the_way_to_write_it():
++    passage = "### Bottom line\n\nPer calculation C12 of the earlier financial data handoff.\n\n"
++    text = registers_c(CASH_C, GROSS_C, NET_C, UNDRAWN_C, passage=passage)
++    found = cp8_issues(text, PACKC)
++    assert len(found) == 1, found
++    assert "C12" in found[0] and "describe the calculation in words" in found[0], found
++
++
++def test_the_cash_row_may_print_its_own_difference_and_a_passage_may_not():
++    text = registers_c(CASH_C, GROSS_C, NET_C, UNDRAWN_C)
++    assert cp8_issues(text, PACKC) == ()
++    said = "### Bottom line\n\nCash fell by USD 30 million.\n\n"
++    found = cp8_issues(registers_c(CASH_C, GROSS_C, NET_C, UNDRAWN_C, passage=said), PACKC)
++    assert any("figure 30" in issue and "Cash" in issue for issue in found), found
++
++
++# Gross debt and net debt both differ by 120; gross debt may print it, net debt says Not comparable.
++PACK_120 = {
++    **PACKC,
++    "measures": [
++        _held("gross_debt", "Gross debt", "25068", "25188", "120"),
++        _held("net_debt", "Net debt", "18807", "18927", "120"),
++    ],
++    "net_debt_change": {
++        **PACKC["net_debt_change"],
++        "change_in_gross_debt": "120",
++        "change_in_cash": "0",
++        "current_net_debt": "18927",
++        "current_gross_debt": "25188",
++        "current_cash": "6261",
++        "prior_cash": "6261",
++    },
++}
++GROSS_120 = (
++    "| Gross debt | 25068 US$m (FY2024) | 25188 US$m (FY2024) | Correction "
++    "| Same definition: the current run corrects the earlier total by 120 US$m. |"
++)
++NET_120 = (
++    "| Net debt | 18807 US$m (FY2024) | 18927 US$m (FY2024) | Method change "
++    "| Not comparable: net debt follows the gross debt basis. |"
++)
++
++
++def test_gross_debt_may_print_its_difference_when_net_debt_differs_by_the_same_size():
++    assert cp8_issues(registers_c(GROSS_120, NET_120), PACK_120) == ()
++    net = NET_120.replace("follows the gross debt basis", "moved by 120 US$m")
++    found = cp8_issues(registers_c(GROSS_120, net), PACK_120)
++    assert any("figure 120" in issue and "Net debt" in issue for issue in found), found
++    said = "### Bottom line\n\nNet debt moved by 120 US$m.\n\n"
++    found = cp8_issues(registers_c(GROSS_120, NET_120, passage=said), PACK_120)
++    assert any("figure 120" in issue for issue in found), found
++
++
++def fact_issues(row: str) -> tuple[str, ...]:
++    # The Cash row says `Not comparable` and prints nothing, so only the fact row can print a size.
++    cash = CASH_C.replace("Same definition: corrected by USD 30 million.", "Not comparable: basis.")
++    return cp8_issues(registers_c(cash, GROSS_C, NET_C, UNDRAWN_C, row), PACKC)
++
++
++def test_a_fact_row_prints_no_withheld_size_in_any_of_its_cells():
++    earlier = fact_issues(
++        "| Term loan refinancing | 30 (FY2024) | Announced | New source | Done. |"
++    )
++    assert any("figure 30" in i and "Cash" in i for i in earlier), earlier
++    first = fact_issues("| Cash fell by 30 | Not announced | Announced | New source | Done. |")
++    assert any("figure 30" in i and "Cash" in i for i in first), first
++    count = "| Term loan refinancing | 8 findings | Announced | New source | Done. |"
++    assert fact_issues(count) == ()  # a count noun after the number: a count, not the size 8
++    assert fact_issues(FACT_C) == ()
++
++
++def test_an_empty_issuer_register_is_told_one_row_per_measure_then_no_material_change():
++    lev = (
++        "| Total debt / EBITDA | 4.20x (FY2023) | 3.60x (FY2024) | New period "
++        "| Leverage fell by 0.60x. |\n"
++    )
++    empty = REGISTERS.replace(lev, "").replace(CASH_ROW + "\n", "").replace(COVER_ROW + "\n", "")
++    wording = (
++        "one row per pack measure, then, if nothing changed, "
++        "one `No material change` row after them"
++    )
++    found = cp8_issues(empty, PACK)
++    assert any(wording in i for i in found), found
+diff --git a/tests/test_cpos_launch.py b/tests/test_cpos_launch.py
+index a7f5518..7503afb 100644
+--- a/tests/test_cpos_launch.py
++++ b/tests/test_cpos_launch.py
+@@ -1824,7 +1824,7 @@ METHOD_TEXT_SHA256_AT_1B41E65 = {
+     "CP-4C": "2e70ce4fd894deba7bc2a6234953689f898d73c0ac093336806d70fd16815d8e",
+     "CP-5": "a0b02519822dbd84ba928f026b0e3aa8a7a82ba71604059e9f7ceec9f395bb90",
+     "CP-6": "32fdd06787a47c6351924f1371b90a8b6937c11fbfcb04404eb6590de0ec3b0b",
+-    "CP-8": "560e6026abc340b8240a2fb4397f43a52ccb9386c5810ae1cc3b74e063e45075",
++    "CP-8": "5f847e42e65147f6bc0f9d14f5d12931b026fda7a7487620b62f3d75382c7a51",
+     "CP-DR": "54a57f559181087df17e476d271b71c67b00f38e87288f95c7831cbd3e3a056e",
+     "CP-L10": "527d90f10ce7c541cc15f2e702f73502199f6628335c95e66b64920e7cfba18d",
+ }
+diff --git a/tests/test_prose_checks.py b/tests/test_prose_checks.py
+index d71f6bf..a12fd0f 100644
+--- a/tests/test_prose_checks.py
++++ b/tests/test_prose_checks.py
+@@ -197,14 +197,25 @@ def test_check_6_whole_token_only() -> None:
+     assert prose_issues(bottom("Cases AC-1 and C-12 differ.", CALCULATIONS)) == ()
+ 
+ 
+-def test_check_6_a_calculations_first_column_id_is_refused_outside_calculations_not() -> None:
+-    # Owner 2026-11-11 (L1): an ID in `## Calculations` is its first column's letter+digit cell.
++def test_check_6_a_first_column_cell_under_another_header_is_not_an_id() -> None:
++    # Controller 2026-11-13 (E7, supersedes L1): an ID is a cell of a column headed `ID`
++    # or ending ` ID`; a first-column cell under any other header is not one.
+     table = "\n## Calculations\n\n| Calculation | Value |\n| --- | --- |\n| C3 | 5 |\n"
+-    assert found(prose_issues(bottom("See C3 for it.", table))) == [(6, 7)]
++    assert prose_issues(bottom("See C3 for it.", table)) == ()
+     elsewhere = "\n## Gaps\n\n| Metric | Value |\n| --- | --- |\n| M2 | 5 |\n"
+     assert prose_issues(bottom("Measure M2 is high.", elsewhere)) == ()
+ 
+ 
++def test_check_6_a_label_first_column_cell_is_not_an_id() -> None:
++    table = (
++        "\n## Calculations\n\n| ID | Value |\n| --- | --- |\n| C-1 | 3.1x |\n\n"
++        "| Carried reader metric | Value |\n| --- | --- |\n"
++        "| FY2024 gross debt | USD 25,068 million |\n"
++    )
++    assert prose_issues(bottom("FY2024 gross debt is large.", table)) == ()
++    assert found(prose_issues(bottom("Leverage per C-1 is high.", table))) == [(6, 7)]
++
++
+ def test_check_6_an_id_column_cell_is_an_id_in_any_table() -> None:
+     keyed = "\n## Calculations\n\n| Metric | ID |\n| --- | --- |\n| Leverage | M2 |\n"
+     assert found(prose_issues(bottom("Measure M2 is high.", keyed))) == [(6, 7)]
+@@ -726,7 +737,7 @@ def test_a_section_after_a_data_section_is_read_again() -> None:
+ 
+ 
+ def test_check_6_stays_on_the_reader_passages() -> None:
+-    table = "\n## Calculations\n\n| Calculation | Value |\n| --- | --- |\n| C3 | 5 |\n"
++    table = "\n## Calculations\n\n| ID | Value |\n| --- | --- |\n| C3 | 5 |\n"
+     assert prose_issues(under("### Method", "Measure C3 is high.") + table) == ()
+     assert [c for c, _, _ in named(prose_issues(bottom("Measure C3 is high.", table)))] == [6]
+ 
