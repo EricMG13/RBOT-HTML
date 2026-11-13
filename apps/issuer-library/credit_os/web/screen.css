@@ -1076,7 +1076,7 @@ td .basis-link{margin-left:4px}
   .ev-guide-card,.ev-dl,.ev-fc,.ev-tab{transition:border-color .2s,color .2s,background-color .2s}
 }
 @media(forced-colors:active){.ev-fc[aria-current=true],.ev-tab[aria-current=page]{border:2px solid}.ev-meter i{border:1px solid}.ev-ring .rt,.ev-ring .rf{stroke:CanvasText}.ev-gb i{background:CanvasText}}
-@media print{.ev-cpy,.ev-fbar,.ev-more{display:none!important}.ev-grp-h{position:static}.ev-trow-b{animation:none}}
+@media print{.ev-cpy,.ev-fbar,.ev-more{display:none!important}.ev-trow[hidden]{display:block!important}.ev-grp-h{position:static}.ev-trow-b{animation:none}}
 
 /* ---- Library redesign, module page (task 4): the 24-column grid, verdict panel, findings feed, callout, limitations with the gap signal, record cards and the section rail. Colours are the tokens above. ---- */
 .g24{display:grid;grid-template-columns:repeat(24,minmax(0,1fr));gap:24px min(16px,4%)}
@@ -1374,7 +1374,10 @@ td .basis-link{margin-left:4px}
 .sd-line.sd-s2{margin-top:10px}
 .sd-entry{min-width:0;padding:14px 16px;border:1px solid var(--rule);border-radius:12px;background:var(--quiet)}
 .sd-top{display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;min-height:24px}
-.sd-top .basis-link{margin-left:auto}
+.sd-head{display:flex;align-items:flex-start;gap:8px}
+.sd-head>.sd-fig,.sd-head>.sd-name{flex:1;min-width:0;margin-top:0}
+.sd-head .basis-link{margin-left:auto;flex:none}
+.sd-top+.sd-head{margin-top:6px}
 .sd-side{display:inline-flex;align-items:center;gap:6px;font:600 12px/1.4 'Red Hat Text',sans-serif;color:var(--text-secondary)}
 .q-tag{margin-top:0}
 .sd-fig{margin:6px 0 0;font:700 24px/1.15 'Red Hat Display',sans-serif;letter-spacing:-.015em;font-variant-numeric:tabular-nums;color:var(--text-primary);overflow-wrap:anywhere}

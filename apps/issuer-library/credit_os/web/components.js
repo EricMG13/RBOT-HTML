@@ -275,7 +275,8 @@
     const cell = findingCell(text, ctx);
     return cell.html ?? (cell.inEvidence ? evidenceLink(ctx) : '');
   }
-  const MISSING = '<span class="na" title="Empty in the handoff">n.a.</span>';
+  // An empty cell is a dash that says so, not a word: "n.a." would read as the module's own n/a. The dash is read aloud as the title says.
+  const MISSING = '<span class="na" role="img" title="Empty in the handoff" aria-label="Empty in the handoff">—</span>';
   const valueHtml = (text, ctx) => (String(text).trim() === '' ? MISSING : fieldHtml(text, ctx));
   // A row can hold more cells than the table has headers. Those cells have no label to draw under, but they are the handoff's: each goes through
   // findingCell like any other and is drawn after the row's other fields.
@@ -494,10 +495,17 @@
     if (!labelCol || !periodCols.length || !block.rows.length) return recordCards(block, ctx);
     const captions = cols.slice(1).filter(col => !periodCols.includes(col));
     const parsed = block.rows.map(row => periodCols.map(col => numberOf(cellText(row, col.at))));
-    const all = parsed.flat().filter(n => n !== null);
-    const high = Math.max(0, ...all), low = Math.min(0, ...all), span = (high - low) || 1, zero = percent(-low / span * 100);
+    // One bar scale for the rows that share a unit. When the table's Unit cells differ, a row's bars are scaled within the rows of its own unit, and a row whose unit no other row shares draws its figures with no bar.
+    const unitCol = captions.find(col => /^units?$/i.test(col.label.trim())), unitKey = row => (unitCol ? cellText(row, unitCol.at) : '');
+    const mixed = new Set(block.rows.map(unitKey)).size > 1, group = n => block.rows.map((row, at) => at).filter(at => !mixed || unitKey(block.rows[at]) === unitKey(block.rows[n]));
+    const scaleOf = n => {
+      const all = group(n).flatMap(at => parsed[at]).filter(value => value !== null);
+      const high = Math.max(0, ...all), low = Math.min(0, ...all), span = (high - low) || 1;
+      return {low, span, zero: percent(-low / span * 100)};
+    };
     const rows = block.rows.map((row, n) => {
-      const bars = periodCols.map((col, k) => {
+      const {low, span, zero} = scaleOf(n), alone = mixed && group(n).length < 2;
+      const bars = alone ? '' : periodCols.map((col, k) => {
         const value = parsed[n][k];
         if (value === null) return '';
         const width = percent(Math.abs(value) / span * 100), from = value < 0 ? `right:${percent(100 - Number(zero))}%` : `left:${zero}%`;
@@ -599,7 +607,9 @@
       }
       const fields = others.map(col => [col, fieldHtml(cellText(row, col.at), ctx)]).filter(([, html]) => html !== '').map(([col, html]) => `<div><dt>${escapeHtml(col.label)}</dt><dd>${html}</dd></div>`).join('');
       const side = (col, text) => `<div class="chg-side"><p class="chg-k">${escapeHtml(col.label)}</p><p class="chg-v">${valueHtml(text, ctx)}</p></div>`;
-      return `<article class="chg-card"><div class="chg-head"><p class="chg-title">${fieldHtml(title, ctx)}</p>${traceFor(ctx, row, rowLabelOf(block, ctx, row, title))}</div><div class="chg-pair">${side(before, a)}<span class="chg-arrow">${icon('arrow-right')}</span>${side(after, b)}</div>${dumb}${fields ? `<dl class="rec-fields">${fields}</dl>` : ''}${extrasOf(block, row, ctx).map(html => `<p class="chg-x">${html}</p>`).join('')}</article>`;
+      // A tile whose earlier and current cells are both empty has no pair to show: the empty marks beside an arrow would read as a change from nothing to nothing.
+      const pair = a === '' && b === '' ? '' : `<div class="chg-pair">${side(before, a)}<span class="chg-arrow">${icon('arrow-right')}</span>${side(after, b)}</div>`;
+      return `<article class="chg-card"><div class="chg-head"><p class="chg-title">${fieldHtml(title, ctx)}</p>${traceFor(ctx, row, rowLabelOf(block, ctx, row, title))}</div>${pair}${dumb}${fields ? `<dl class="rec-fields">${fields}</dl>` : ''}${extrasOf(block, row, ctx).map(html => `<p class="chg-x">${html}</p>`).join('')}</article>`;
     });
     return `<div class="chg-cards"${ctx.caption ? ` role="group" aria-label="${escapeHtml(ctx.caption)}"` : ''}>${cards.join('')}</div>`;
   }
@@ -694,7 +704,10 @@
       const side = word === '' && entry.qualifier === '' ? '' : `${word}${qualifierTag(entry.qualifier, ctx)}`;
       // With one more field, its header is said once by the board; with several, each card keeps its labels.
       const fields = caption ? [rest[0]].map(col => fieldHtml(cellText(entry.row, col.at), ctx)).filter(html => html !== '').map(html => `<p class="sd-read">${html}</p>`).join('') : fieldList(entry.row, rest, ctx);
-      const card = `<article class="sd-entry"><div class="sd-top">${side || '<span></span>'}${traceFor(ctx, entry.row, rowLabelOf(block, ctx, entry.row, title))}</div>${figure ? `<p class="sd-fig">${figure}</p>` : ''}<p class="sd-name">${fieldHtml(title, ctx)}</p>${fields}${extraList(block, entry.row, ctx)}</article>`;
+      // The trace control sits in the card's head row, beside the figure (beside the name when there is no figure); the side word and qualifier, when drawn, are a row above it.
+      const name = `<p class="sd-name">${fieldHtml(title, ctx)}</p>`, fig = figure ? `<p class="sd-fig">${figure}</p>` : '';
+      const drawnSide = (at === 2 && entry.wordHtml !== '') || entry.qualifier !== '';
+      const card = `<article class="sd-entry">${drawnSide ? `<div class="sd-top">${side}</div>` : side}<div class="sd-head">${fig || name}${traceFor(ctx, entry.row, rowLabelOf(block, ctx, entry.row, title))}</div>${fig ? name : ''}${fields}${extraList(block, entry.row, ctx)}</article>`;
       return `<div class="sd-line sd-s${at}">${card}</div>`;
     };
     // Each side is its own column, its entries from the top in the table's order; a row on neither side stands full width beneath.

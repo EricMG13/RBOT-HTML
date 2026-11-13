@@ -648,7 +648,8 @@ test('statusChecklist: the state tone comes from the word; an unknown word is ne
   const block = { headers: ['Item', 'Status', 'Confidence'], rows: [['A', 'Passed', 'High'], ['B', 'Gate fails', 'Low'], ['C', 'Not found', 'Medium'], ['D', 'Unchanged', 'Low'], ['E', 'New', 'High'], ['F', 'Frobnicated', 'Low'], ['G', '', 'Low']].map((cells, i) => ({ line: i + 1, cells })) };
   const html = C.statusChecklist(block, { key: r => `k:${r.line}` });
   assert.deepEqual([...html.matchAll(/<span class="state (\w+)">/g)].map(m => m[1]), ['ok', 'bad', 'warn', 'same', 'new', 'info', 'info']);
-  assert.ok(html.includes('<span class="na" title="Empty in the handoff">n.a.</span>'));
+  // L2: the empty state was the word "n.a." (old form); it is now an em dash with the same title and an aria-label, so it is not read as a module's own "n/a".
+  assert.ok(html.includes('<span class="na" role="img" title="Empty in the handoff" aria-label="Empty in the handoff">—</span>') && !html.includes('n.a.'));
   assert.equal(countOf(html, /<span class="meter-w">/g), 7);
   assert.ok(html.includes('<span class="meter-w">Medium</span>') && !html.includes('<dd>High</dd>'));
 });
@@ -1513,4 +1514,50 @@ test('M1(b): a table whose audit columns are headed Reference, Where found, Hash
   const words = {type: 'table', line: 1, headers: ['Item', 'Reference rate', 'Currency code', 'Code'], rows: [{line: 2, cells: ['Loan', 'SONIA plus 3.5%', 'GBP', 'Floating']}, {line: 3, cells: ['Bond', 'Fixed', 'USD', 'Senior']}]};
   const kept = C.render('records', words, {key: r => `k${r.line}`, evidenceHref: '#e'});
   for (const text of ['SONIA plus 3.5%', 'GBP', 'Floating', 'Senior', 'Reference rate', 'Currency code']) assert.ok(kept.includes(text), `${text} was held back`);
+});
+
+test('L2: an empty cell of a figure table is an em dash with an aria-label and the title, and the page writes no word of its own; a module\'s own n/a stays as written', () => {
+  const block = {type: 'table', line: 1, headers: ['Line', 'FY2023', 'FY2024'], rows: [{line: 2, cells: ['Net debt', '0', '']}, {line: 3, cells: ['EBITDA', 'n/a', '331']}]};
+  const html = C.render('statement', block, {key: r => `k${r.line}`});
+  assert.equal((html.match(/<span class="na" role="img" title="Empty in the handoff" aria-label="Empty in the handoff">—<\/span>/g) || []).length, 1, 'one empty cell, one dash');
+  assert.ok(!html.includes('n.a.') && html.includes('n/a'), 'the module\'s own n/a is the only such word');
+});
+
+test('L5: a statement card scales bars within the rows that share a unit; a row whose unit no other row shares has its figures and no bar; one unit throughout keeps one scale', () => {
+  const rows = [['Net debt', '1,000', '2,000', 'USD m'], ['Cash', '500', '1,000', 'USD m'], ['Margin', '12.5', '25', '%'], ['Cover', '3.1', '3.4', 'x'], ['Ratio', '4', '8', 'x']];
+  const block = {type: 'table', line: 1, headers: ['Line', 'FY2023', 'FY2024', 'Unit'], rows: rows.map((cells, i) => ({line: i + 2, cells}))};
+  const html = C.render('statement', block, {key: r => `k${r.line}`});
+  assert.equal(require('./shapes.js').tableShape(block), 'statement');
+  const rowsHtml = html.split('<div class="st-row">').slice(1);
+  const widths = row => [...row.matchAll(/class="st-bar [^"]*" style="[^"]*width:([\d.]+)%/g)].map(m => Number(m[1]));
+  assert.deepEqual(widths(rowsHtml[0]), [50, 100], 'USD m: 2,000 is the largest of its own unit');
+  assert.deepEqual(widths(rowsHtml[1]), [25, 50]);
+  assert.deepEqual(widths(rowsHtml[2]), [], 'Margin (%) shares its unit with no row: its figures, no bar');
+  assert.ok(rowsHtml[2].includes('>12.5<') && rowsHtml[2].includes('>25<'), 'the figures stay');
+  assert.deepEqual(widths(rowsHtml[3]), [38.75, 42.5], 'x: scaled to 8, not to the table\'s 2,000');
+  assert.deepEqual(widths(rowsHtml[4]), [50, 100]);
+  const single = {...block, rows: block.rows.slice(0, 2)};
+  assert.deepEqual(widths(C.render('statement', single, {key: r => `k${r.line}`}).split('<div class="st-row">')[1]), [50, 100], 'one unit: bars as before');
+  const noUnit = {type: 'table', line: 1, headers: ['Line', 'FY2023', 'FY2024'], rows: [{line: 2, cells: ['A', '10', '20']}, {line: 3, cells: ['B', '1', '2']}]};
+  assert.deepEqual(widths(C.render('statement', noUnit, {key: r => `k${r.line}`}).split('<div class="st-row">')[2]), [5, 10], 'no Unit column: the table\'s one scale');
+});
+
+test('Changes tiles: a card whose earlier and current cells are both empty draws no pair; one empty side still draws its dash beside the other', () => {
+  const block = {type: 'table', line: 1, headers: ['Measure', 'Earlier', 'Current', 'Note'], rows: [{line: 2, cells: ['Coverage', '', '', 'Not stated in either run']}, {line: 3, cells: ['Leverage', '3.1x', '', 'Current not stated']}]};
+  const cards = C.render('change', block, {key: r => `k${r.line}`}).split('<article class="chg-card">').slice(1);
+  assert.ok(!cards[0].includes('chg-pair') && !cards[0].includes('chg-arrow') && !cards[0].includes('—') && cards[0].includes('Not stated in either run'), 'no pair, no dashes, the other fields stay');
+  assert.ok(cards[1].includes('chg-pair') && cards[1].includes('3.1x') && cards[1].includes('aria-label="Empty in the handoff">—'), 'one side empty: the pair stays');
+});
+
+test('Sided cards: the trace control is in the head row beside the figure, with no band of its own above it; a drawn side word or qualifier is a row above', () => {
+  const block = {type: 'table', line: 1, headers: ['Point', 'Side', 'Weight', 'Reading'], rows: [{line: 2, cells: ['Margin pressure', 'Supports', '2.5x', 'Stated']}, {line: 3, cells: ['Pricing power', 'Contradicts (weakly)', '1.1x', 'Stated']}, {line: 4, cells: ['Other note', 'Mixed', '', 'Stated']}]};
+  const html = C.render('sided', block, {key: r => `k${r.line}`, trace: (r, l) => C.traceRow(`k${r.line}`, l)});
+  const cards = html.split('<article class="sd-entry">').slice(1).map(card => card.split('</article>')[0]);
+  const first = cards.find(card => card.includes('Margin pressure'));
+  assert.ok(/^<span class="sr-only">Supports<\/span><div class="sd-head"><p class="sd-fig">2\.5x<\/p><button[^>]*trace-row/.test(first), `the figure and the trace share the head row; the side word is read, not drawn as a band: ${first.slice(0, 260)}`);
+  assert.ok(!first.includes('class="sd-top"'), 'no band of its own above the figure');
+  const qualified = cards.find(card => card.includes('Pricing power'));
+  assert.ok(/^<div class="sd-top">[^]*?weakly[^]*?<\/div><div class="sd-head"><p class="sd-fig">1\.1x<\/p><button/.test(qualified), 'a qualifier is its own row above the head row');
+  const noFigure = cards.find(card => card.includes('Other note'));
+  assert.ok(/<div class="sd-head"><p class="sd-name">Other note<\/p><button/.test(noFigure), 'with no figure the control sits beside the name');
 });

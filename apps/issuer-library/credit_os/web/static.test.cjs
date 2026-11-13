@@ -5168,3 +5168,14 @@ test('B6: a Forecast stack says its four field labels once in a header row over 
   const css = read('screen.css');
   assert.ok(/@container \(min-width:560px\)\{[^]*\.fc-card \.stack-key \.stack-facts dt\{position:absolute/.test(css), 'the per-row labels are hidden only when the header stands over them');
 });
+
+test('L3: a printed Trace tab lists every statement: the rows past the first page are in the DOM, hidden on screen only, and "Show more" is not printed', () => {
+  const E = require('./evidence.js'), sec = (heading, level, line, blocks = []) => ({ heading, level, line, blocks });
+  const paragraphs = Array.from({ length: 45 }, (_, n) => ({ type: 'text', line: 10 + n, text: `Statement ${n + 1} holds.\nBasis: report.pdf, page ${n + 1}` }));
+  const input = { run: { context: 'r', code: 'R', evidence: { sources: [], unused: [], unrecorded: [], noSourcesModules: [], handoffs: [], zip: null, downloads: [], record: { hashes: [], instructions: [], calls: [], cap: null } }, methodChanges: [], steps: [] }, modules: [{ id: 'CP-1', outputs: [{ id: 'o1', sections: [sec('Findings', 2, 1), sec('Key findings', 3, 3, paragraphs)], placement: ['view', 'view'] }] }], chips: {}, deps: { moduleTitle: code => code, hashLabel: n => n, methodChange: l => l } };
+  const html = E.view(input, { tab: 'trace', module: null });
+  assert.equal((html.match(/class="ev-trow"/g) || []).length, 45, 'every statement is in the DOM');
+  assert.equal((html.match(/class="ev-trow" hidden/g) || []).length, 5, 'five are paged on screen');
+  const css = read('screen.css'), print = css.split('@media print{').slice(1).map(block => block.slice(0, block.indexOf('}}') + 1)).join('\n');
+  assert.ok(/\.ev-more[^{]*\{[^}]*display:none/.test(print) && /\.ev-trow\[hidden\][^{]*\{[^}]*display:block/.test(print), 'print hides the pager and un-hides the paged rows');
+});
