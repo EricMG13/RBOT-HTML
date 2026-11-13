@@ -22,3 +22,6 @@ scratchpad workspace, outside this repository and every retained run directory.
 It runs alongside the medium run; the two differ only in effort. It proves this dated case and route
 only; automated checks cover handoff structure, not analytical accuracy. Outputs are candidates until
 reviewed.
+
+Extension (same day): this run stopped at CP-5 and is picked up in a copy of its folder; see the
+extension in `2026-11-13-tdg-full-copilot-sol-rerun.md`.
