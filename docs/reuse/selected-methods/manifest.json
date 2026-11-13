@@ -37,7 +37,8 @@
     {
       "consumed_path": "skills/cp-dr-deep-research/SKILL.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-dr-deep-research/SKILL.md",
-      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-dr-deep-research/SKILL.md",
+      "exact_copy_found_at": null,
+      "note": "not a copy of the live cp-os file: this file is the live cp-os file (b57a344, sha256 0cc76aea..., which is source_sha256) plus the named edits in `edit`",
       "sha256": "97580b90453a39ad8132f3efd87e46785645be1a476ac1d1901bd7b3aaa079e5",
       "source_sha256": "0cc76aea6e227ff923ca466fc000a80b1f2f6ef3b1fb74b78203e8601d507207",
       "edit": "Replaced 2026-11-13 by cp-os version 2.0 (cp-os HEAD b57a344, file last changed in 5a78f93), byte-for-byte, then named edits 2a and 2b: (2a) the open-web limits in RESEARCH ITEMS, ANSWER RULES (LOCAL limitation) and CAPABILITY GATE, and (2a-4, fix round 1) the pack-tools-only reading and TDR.6 quote clauses, made conditional on the project's web-search rules, with section C of the step bundle governing web use when granted; (2b) the UNRESOLVED gap row's claim_type is `gap` and missing evidence is Complete with Gaps, never Blocked (wording from caos-databricks vendor/deploy-v c746ad67); sha256 is this edited file, source_sha256 the byte-for-byte copy of cp-os"
@@ -118,7 +119,8 @@
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-6-ic-debate-challenge/SKILL.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-6-ic-debate-challenge/SKILL.md",
-      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-6-ic-debate-challenge/SKILL.md",
+      "exact_copy_found_at": null,
+      "note": "not a copy of the live cp-os file (sha256 57e995fc...): this file is the cp-os initial-commit text (a31f3f5, sha256 0ae74db0...) plus the named edits in `edit`",
       "sha256": "31a9286b6fc23f7c683f8c9a746db9bc9ce7bdcc45d7598ef7f789b28e7cfac8",
       "use": "selected methodology with named CP-5/CP-6 ordering edits (see `edit`); historical source is evidence, not inherited authority",
       "source_sha256": "0ae74db02dd569fe7805e62a661f22cd436494183ba5cb928f8be37aa549a96b",
@@ -821,9 +823,9 @@
     {
       "consumed_path": "skills/cp-3-relative-value-security-selection/SKILL.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-3-relative-value-security-selection/SKILL.md",
-      "exact_copy_found_at": null,
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-3-relative-value-security-selection/SKILL.md",
       "sha256": "9e4ad1c1f383323f93d5f7d49865621af7d599df32c64b989f8d8fe7ea53dbe4",
-      "note": "archived before 2026-11-10; cp-os at b57a344 holds a later revision",
+      "note": "archived before 2026-11-10 as the cp-os initial-commit text (a31f3f5); after the named edit below it is identical to the live cp-os file (cp-os b57a344, file last changed in 115f664)",
       "source_sha256": "7e85b2f545fffcb3ad17f4997e5c577ae9620d279f1ffe8e12aefa8ce38abcd1",
       "edit": "named edit: `not assessable` dropped from the critical_cell_values_casefold blocklist in all three places: CP-3 and its CP-3A and CP-3B copies (cp-os 115f664, skills/cp-3-relative-value-security-selection/SKILL.md); wording from cp-os 115f664; sha256 is this edited file, source_sha256 the previously archived file"
     },
@@ -1073,5 +1075,5 @@
       "edit": "named edits to the copy only: (1) every table ID T2B.n renamed T2DS.n (nine IDs, six prose mentions; T2B collides with REF_CP-2A_STEPS.md); (2) HTML-comment clause \"; no r14 CP-2A text exists in the repo\" removed; (3) \", computed in Python\" removed from the Purpose sentence (\"base period, computed in Python from settled CP-1 facts\" -> \"base period from settled CP-1 facts\"). sha256 is this edited file, source_sha256 the byte-for-byte copy of src/deploy_vii/methods/cp2a.md in this repo at 7c12a1c"
     }
   ],
-  "companions_note": "2026-11-10 (owner: keep a copy of the methodology in the repo): companion references, CANON_SHARED.md, the CP-DR research brief and the cp-1b-earnings-delta skill copied read-only from cp-os at commit b57a344. Four SKILL.md files archived earlier (cp-2h, cp-3, cp-6, cp-dr) differ from cp-os at that commit and are kept as archived. Not copied: scripts (not run in this transport) and the three .xlsx deployment placeholders (CP-3 Sector RV, CP-3B portfolio constraints, CP-6A debate inputs)."
+  "companions_note": "2026-11-10 (owner: keep a copy of the methodology in the repo): companion references, CANON_SHARED.md, the CP-DR research brief and the cp-1b-earnings-delta skill copied read-only from cp-os at commit b57a344. Four SKILL.md files were archived earlier (cp-2h, cp-3, cp-6, cp-dr) as the cp-os initial-commit text (a31f3f5), which differs from cp-os at b57a344; as of 2026-11-13 each is stated by its own entry: cp-2h and cp-3 are the live cp-os (b57a344) files exactly, after one named edit each (the 115f664 blocklist change); cp-dr is the live cp-os v2.0 text (b57a344) plus named edits 2a and 2b; cp-6 is the initial-commit text plus named CP-5/CP-6 ordering edits and is not the live cp-os file. Not copied: scripts (not run in this transport) and the three .xlsx deployment placeholders (CP-3 Sector RV, CP-3B portfolio constraints, CP-6A debate inputs)."
 }

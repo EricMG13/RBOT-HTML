@@ -697,7 +697,9 @@ read-only into `docs/reuse/selected-methods/` and listed with hashes in its `man
 - Archived but not sent: the rest of `CANON_SHARED.md` (its reader layer is selected for
   sending from 2026-11-11; see the top of this file) and the schema and system references, which
   the SKILLs open only to resolve a named ambiguity. Not archived: the skills' scripts (not run in
-  this transport) and three `.xlsx` deployment placeholders (enterprise data replaces them).
+  this transport) and the three `.xlsx` workbooks (CP-3 Sector RV, CP-3B portfolio constraints,
+  CP-6A debate inputs): two hold sample portfolio data and the third is a deployment placeholder;
+  all three stay unused input, none is sent or read here.
 - CP-2A stress sizes: `src/deploy_vii/methods/cp2a.md` (analyst-chosen, labelled, anchored
   assumptions) governs where it and the SKILL ("no unsupported stress magnitude") differ.
 - Dependency edges added as optional (order and supply, never a block): CP-2A after CP-1B and CP-2;
@@ -721,6 +723,41 @@ Deploy V's skills, copied from `~/Documents/cp-os` at `b57a344` (hashes in `mani
 - cp-os `amendments/CP-2.md` and `amendments/CP-1A.md` exist and cp-os sent them as "binding"; they
   are not applied here (reported to the owner).
 - Proven offline only.
+
+**Method selections of 2026-11-13 (owner: the Deploy V methods change; plan `deploy-v-methods`).**
+Each line names the source revision CP-OS now sends. Sources: Deploy V `c4d2e35`; caos-databricks
+`vendor/deploy-v` at repo HEAD `dfff264` (file last-change commit given); cp-os `b57a344` (file
+last-change commit given). Hashes and the named edits are in `manifest.json`.
+
+- CP-0: Deploy V `cp-0-source-readiness` skill and `REF_CP-0_STEPS.md` (`c4d2e35`), unedited, plus a
+  CP-OS block that retires P1, P2, P4, P6, P7, P8, bars CONDITIONAL for a missing handoff and records no
+  package/parse/hash result (wording from caos `dfff264`). `cp0.md` is no longer sent.
+- CP-3C: Deploy V skill, runbook and step bundle (`c4d2e35`) with one named edit, the r17 `Scale` column in
+  T3D.2 (wording from caos `dfff264`). `cp3c.md` is no longer sent.
+- CP-DR: cp-os `b57a344` version 2.0 skill (file last changed `5a78f93`) with named edits 2a (open-web
+  limits conditional on the web-search rules) and 2b (gap row `gap`; Complete with Gaps, never Blocked;
+  caos `c746ad67`), and the v1 step bundle with edit 2b. `cpdr.md` is no longer sent.
+- CP-2D, CP-4, CP-4C: caos `dfff264` texts (files last changed `592ee83a`, `2975872f`, `1aeaa27f`), byte-for-byte,
+  with named edits: the `qa_status` map removed from rule 10 (all three), the LITE route removed from
+  CP-4C, CP-4C Dependencies wording (E4).
+- CP-5: caos `dfff264` ordering text (`c746ad67`) in `CP-5_RUNBOOK.md` and `REF_CP-5A_STEPS.md`: CP-6 and
+  CP-6A run after CP-5 and are not its input; SKILL.md unchanged.
+- CP-6: the archived cp-os initial-commit skill (`a31f3f5`) plus caos (`99069f83`) ordering edits: CP-5 is its
+  upstream QA gate, never its consumer. It is not the live cp-os file.
+- CP-2: PR #83 Deploy V skill (cp-os `b57a344`) plus the T2.10 correction (caos `99069f83`): Direction is
+  Positive or Negative, a two-way driver is split, `None supported` takes a row.
+- CP-1A: PR #83 Deploy V skill and step bundles (cp-os `b57a344`), no later edit.
+- CP-1D: archived Deploy V skill plus caos (`99069f83`) rule 7: an empty CP-1 bridge gives one `NONE` row.
+- CP-2G: step bundle plus caos (`592ee83a`) assumption-register rule: `base` and `downside` rows.
+- CP-2H, CP-3: now the live cp-os `b57a344` files (last changed `115f664`) after one named edit each: `unknown`
+  (CP-2H) and `not assessable` (CP-3) dropped from the critical-cell blocklist.
+- CP-2A: a CP-OS-only copy of the short stress text, `CP-2A_STRESS_DESIGN_CPOS.md`, from this repo's
+  `cp2a.md` (`5c6e61b`) with its tables named `T2DS.n`; `cp2a.md` stays on disk for the other runtime.
+- Canon Analytical appendix section (`CANON_SHARED.md`): now sent to every prose module, with a CP-OS
+  sentence that the canon's `## Analysis` is this transport's `## Findings`.
+- The "copied from cp-os at `b57a344`" statement above is exact only for the companions and CP-1B; the
+  four earlier SKILL.md files are stated one by one in `manifest.json`.
+- Proven offline only; no model run and no reader check against the September VMO2 reference.
 
 **Presets of 2026-11-11 (owner: decisions M1, M2, M5 in
 `docs/rulings/2026-11-11-module-presets-and-changes.md`).** CP-DR and CP-2E are now selected for every

@@ -142,7 +142,8 @@ _SCORE = "docs/reuse/selected-methods/CANON_SHARED.md § CP_CONFIDENCE_SCORE.md"
 # The method each module runs, per METHODOLOGY-REVIEW.md and what the 2026-11-05 live campaigns
 # consumed. prompts/CP-0.md and CP-1-intake.md are TDG case instructions, so they are left out.
 # Owner, 2026-11-10 ("Fix all"): each skill is sent every companion its SKILL.md calls mandatory
-# or binding (a runbook, a phase's method bundle), copied from cp-os at b57a344 and listed in
+# or binding (a runbook, a phase's method bundle). The companions and CP-1B were copied from cp-os
+# at b57a344; each SKILL.md has its own source and named edits, stated per file in
 # docs/reuse/selected-methods/manifest.json. Companions the SKILL opens only "to resolve an
 # ambiguity" (the schema and system references) are archived, not sent. CANON_SHARED.md is sent
 # only as the reader-layer sections of READER_LAYER, to every prose module (ruling
@@ -360,7 +361,9 @@ PROSE_PASSAGES = (
 )
 # Sent to every module that is sent the canon's Analytical appendix section: that section says
 # `## Analysis` and an appendix heading, while a handoff has the fixed H2s and CP-OS refuses an
-# added `## Analysis` or `###` headings nested under the appendix heading (cpos.py).
+# added `## Analysis`. There is no appendix-specific check: a `###` heading nested under the
+# appendix heading is refused by the exact-heading selector checks, which require the report's
+# `###` headings.
 APPENDIX_HEADING_NOTE = (
     "Where the canon's Analytical appendix section says `## Analysis`, this handoff's section is "
     "`## Findings`: write the appendix heading as a `###` heading there, after `### Limitations`; "
