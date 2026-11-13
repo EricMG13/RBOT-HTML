@@ -1313,6 +1313,60 @@ def test_a_completion_that_arrives_after_the_boundary_is_drained_when_the_module
     assert adapter.drain_compactions(DIGEST) == ()  # drained once
 
 
+def test_a_drain_that_times_out_is_logged_not_silent(
+    rig: Rig, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    import logging
+
+    adapter = rig.make(tool_script())
+    call(adapter, request())
+    monkeypatch.setattr(copilot_adapter, "_OUTER_SLACK_S", 0.2)
+    assert adapter._loop is not None
+    adapter._loop.call_soon_threadsafe(time.sleep, 1.0)  # the loop does not answer in time
+    with caplog.at_level(logging.WARNING):
+        assert adapter.drain_compactions(DIGEST) == ()
+    assert any("drain" in r.getMessage() and r.levelno == logging.WARNING for r in caplog.records)
+
+
+def test_a_summary_running_at_the_module_end_is_swept_before_close(
+    rig: Rig, tmp_path: Path
+) -> None:
+    """The adapter is closed before the launcher totals the run: a summary that completes after
+    the module's end drain is taken by the sweep that precedes the close."""
+    import asyncio
+
+    from deploy_workflow.run_events import read_events
+    from tests.model._compaction import COMPLETE_CP8, START_CP8
+    from tests.test_handoff_loop import GOOD
+
+    script: list[Step] = [
+        Emit(wire("session.compaction_start", START_CP8)),
+        said(""),
+        usage(finishReason="tool_calls", numToolCalls=1, copilotUsage={"totalNanoAiu": 123456}),
+        Invoke("c1", "write_handoff", {"markdown": GOOD.decode()}),
+        Await(),
+    ]
+    adapter = rig.make(script)
+    run = tmp_path / "run"
+    run.mkdir()
+    executor = HandoffExecutor(
+        run / "live", adapter=adapter, cap_usd=Decimal(25), check=check, events=run
+    )
+    assert executor(task()) == GOOD
+    names = [e["event"] for e in read_events(run / "events.jsonl")]
+    assert "compaction_uncharged" in names and "compaction_charge_late" not in names
+    assert adapter._loop is not None
+    adapter._loop.call_soon_threadsafe(
+        rig.session.deliver, wire("session.compaction_complete", COMPLETE_CP8)
+    )
+    asyncio.run_coroutine_threadsafe(asyncio.sleep(0.05), adapter._loop).result(5)
+    executor.drain_late()
+    (late,) = [
+        e for e in read_events(run / "events.jsonl") if e["event"] == "compaction_charge_late"
+    ]
+    assert Decimal(late["usd"]) == Decimal("0.0996381")
+
+
 def test_draining_an_unknown_or_closed_exchange_gives_nothing(rig: Rig) -> None:
     adapter = rig.make(text_script())
     assert adapter.drain_compactions("e" * 64) == ()

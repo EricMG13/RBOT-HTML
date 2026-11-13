@@ -3,7 +3,7 @@
   for (let i = 0; i < 200 && !document.querySelector('#findings .basis-link'); i++) await sleep(50);
   const de = document.documentElement, style = el => getComputedStyle(el), box = el => el.getBoundingClientRect();
   const header = document.querySelector('header.issuer'), bar = document.getElementById('context-bar');
-  const back = header.querySelector('a'), h1 = header.querySelector('h1'), code = bar.querySelector('.code');
+  const back = header.querySelector('a'), h1 = header.querySelector('h1');
   const all = bar.querySelector('a[href^="#W-Report/history"]');
   const item = document.querySelector('.module-item[aria-current]'), heading = document.querySelector('.nav-heading');
   const seen = {
@@ -16,7 +16,8 @@
     headingTransform: style(heading).textTransform, headingSize: style(heading).fontSize,
     itemBackground: style(item).backgroundColor, itemWeight: style(item).fontWeight,
     allGap: box(bar).right - box(all).right, allText: all.textContent,
-    codeTransform: style(code).textTransform, codeText: code.textContent,
+    // The run is named by its period and pathway: the bar draws no run code.
+    barRun: bar.querySelector('.context-run')?.textContent ?? null, barCodes: bar.querySelectorAll('.code').length,
     fits: de.scrollWidth <= innerWidth,
   };
   const chip = document.querySelector('#findings .basis-link');

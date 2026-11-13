@@ -2,22 +2,22 @@
 @font-face{font-family:Red Hat Text;src:url(fonts/RedHatText-Regular.woff2) format('woff2');font-weight:400;font-display:swap}
 @font-face{font-family:Red Hat Text;src:url(fonts/RedHatText-SemiBold.woff2) format('woff2');font-weight:600;font-display:swap}
 @font-face{font-family:Red Hat Mono;src:url(fonts/RedHatMono-Medium.woff2) format('woff2');font-weight:500;font-display:swap}
-:root{--fs-label:11px;--fs-compact:12px;--fs-body:13px;--fs-control:14px;--navy:#000533;--blue:#001aff;--ground:#f4f4f5;--rule:#e8e9eb;--muted:#474a4f;--quiet:#fafafb;--selection:#e5e8ff;--amber:#806300;--amber-bg:#fff4cc;--amber-border:#f2dc8c;--red:#8e413e;--green:#0f8048;--depth:0 8px 28px rgba(0,5,51,.085);--series-1:#001aff;--series-2:#1eff8f;--series-3:#eaff00;--series-4:#a29aff;--series-1-ln:#001aff;--series-2-ln:#0f8048;--series-3-ln:#758000;--series-4-ln:#514d80}
+:root{--on-navy-quiet:#d9dcf8;--fs-label:11px;--fs-compact:12px;--fs-body:13px;--fs-control:14px;--navy:#000533;--blue:#001aff;--ground:#f4f4f5;--rule:#e8e9eb;--muted:#474a4f;--quiet:#fafafb;--selection:#e5e8ff;--amber:#806300;--amber-bg:#fff4cc;--amber-border:#f2dc8c;--red:#8e413e;--green:#0f8048;--depth:0 8px 28px rgba(0,5,51,.085);--series-1:#001aff;--series-2:#1eff8f;--series-3:#eaff00;--series-4:#a29aff;--series-1-ln:#001aff;--series-2-ln:#0f8048;--series-3-ln:#758000;--series-4-ln:#514d80}
 *{box-sizing:border-box}html,body{margin:0;min-height:100%;color:var(--navy);background:var(--ground);font:var(--fs-body)/1.55 'Red Hat Text',sans-serif}body{height:100dvh;overflow:hidden}button,input,select{font:inherit;color:inherit}button,a,input,select,summary{outline-offset:3px}button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--blue)}a{color:var(--blue-700);text-underline-offset:3px}button{cursor:pointer}button:disabled{cursor:default;opacity:.35}::selection{background:var(--selection);color:var(--navy)}input{caret-color:var(--blue)}*{scrollbar-width:thin;scrollbar-color:var(--dot-quiet) transparent}h1,h2,h3,h4,p{margin:0}h1,h2,h3{font-family:'Red Hat Display',sans-serif;font-weight:700}h1{font-size:27px;letter-spacing:-.025em;line-height:1.2}h2{font-size:20px;letter-spacing:-.02em;line-height:1.3}h3{font-size:var(--fs-control);line-height:1.45}h4{font:600 var(--fs-label)/1.5 'Red Hat Text',sans-serif;color:var(--muted)}img{display:block}button img,a img{width:16px;height:16px}button{border:0;background:none}a:hover,button:hover{color:var(--blue)}[hidden]{display:none!important}.sr-only,.skip{position:fixed;top:-50px;left:70px;z-index:20;background:#fff;padding:10px}.skip:focus{top:4px}
-.rail{width:56px;height:100dvh;position:fixed;left:0;top:0;background:var(--navy);display:flex;align-items:center;flex-direction:column;padding:20px 8px;gap:14px;z-index:5}.rail .symbol{width:27px;height:30px;object-fit:contain}.rail-rule{width:25px;height:1px;background:#30365e;margin:10px 0}.rail>a,.rail>span:not(.rail-rule){width:38px;height:38px;display:grid;place-items:center;border-radius:var(--radius-control)}.rail img:not(.symbol){width:18px;height:18px;filter:brightness(0) invert(1)}.rail-active{background:#ffffff20}.rail-bottom{margin-top:auto;opacity:.65}.app{margin-left:56px;padding:18px;display:flex;flex-direction:column;height:100dvh;min-width:0}.code{font-family:'Red Hat Mono',monospace;color:var(--navy);background:var(--quiet);padding:2px 6px;border-radius:var(--radius-inline)}.workbench{flex:1;min-height:0;background:#fff;display:grid;grid-template-columns:196px minmax(0,1fr);border-radius:0 0 var(--radius-card) var(--radius-card);box-shadow:var(--depth);overflow:hidden}.workbench.has-evidence{grid-template-columns:196px minmax(0,1fr) 280px}.navigator{background:var(--gray-50);border-right:1px solid var(--rule);padding:15px 10px 18px;overflow:auto;min-height:0}.search{display:flex;gap:6px;align-items:center;padding:8px;border:1px solid var(--gray-300);background:#fff;border-radius:var(--radius-inline)}.search img{width:14px;height:14px;opacity:.65}.search input{border:0;background:none;min-width:0;width:100%;font-size:var(--fs-label)}.search input:focus{outline:none}.search:focus-within{outline:2px solid var(--blue);outline-offset:2px}.nav-filter{margin-top:12px;display:flex;justify-content:space-between;font-size:var(--fs-compact);font-weight:600;padding:0 4px}.nav-filter span{color:var(--muted);font-family:'Red Hat Mono',monospace;font-size:var(--fs-label)}.nav-group{border-top:1px solid var(--rule);padding:10px 0}.module-item{display:flex;flex-direction:column;gap:3px;padding:8px 9px;border-radius:var(--radius-inline);text-decoration:none;color:var(--navy);margin:2px 0}.module-label{font-size:var(--fs-compact);font-weight:600;line-height:1.35}.module-item.selected{background:var(--selection);color:var(--blue)}a.module-item:hover{background:var(--gray-100)}.pending{color:var(--text-quaternary)}.empty{padding:16px 5px;color:var(--muted);font-size:var(--fs-compact)}.mobile-modules{display:none}
+.rail{width:56px;height:100dvh;position:fixed;left:0;top:0;background:var(--navy);display:flex;align-items:center;flex-direction:column;padding:20px 8px;gap:14px;z-index:5}.rail .symbol{width:27px;height:30px;object-fit:contain}.rail-rule{width:25px;height:1px;background:#30365e;margin:10px 0}.rail>a,.rail>span:not(.rail-rule){width:38px;height:38px;display:grid;place-items:center;border-radius:var(--radius-control)}.rail img:not(.symbol){width:18px;height:18px;filter:brightness(0) invert(1)}.rail-active{background:#ffffff20}.rail-bottom{margin-top:auto;opacity:.65}.app{margin-left:56px;padding:18px;display:flex;flex-direction:column;height:100dvh;min-width:0}.code{font-family:'Red Hat Mono',monospace;color:var(--navy);background:var(--quiet);padding:2px 6px;border-radius:var(--radius-inline)}.workbench{flex:1;min-height:0;background:#fff;display:grid;grid-template-columns:196px minmax(0,1fr);border-radius:0 0 var(--radius-card) var(--radius-card);box-shadow:var(--depth);overflow:hidden}.navigator{background:var(--gray-50);border-right:1px solid var(--rule);padding:15px 10px 18px;overflow:auto;min-height:0}.search{display:flex;gap:6px;align-items:center;padding:8px;border:1px solid var(--gray-300);background:#fff;border-radius:var(--radius-inline)}.search img{width:14px;height:14px;opacity:.65}.search input{border:0;background:none;min-width:0;width:100%;font-size:var(--fs-label)}.search input:focus{outline:none}.search:focus-within{outline:2px solid var(--blue);outline-offset:2px}.nav-filter{margin-top:12px;display:flex;justify-content:space-between;font-size:var(--fs-compact);font-weight:600;padding:0 4px}.nav-filter span{color:var(--muted);font-family:'Red Hat Mono',monospace;font-size:var(--fs-label)}.nav-group{border-top:1px solid var(--rule);padding:10px 0}.module-item{display:flex;flex-direction:column;gap:3px;padding:8px 9px;border-radius:var(--radius-inline);text-decoration:none;color:var(--navy);margin:2px 0}.module-label{font-size:var(--fs-compact);font-weight:600;line-height:1.35}.module-item.selected{background:var(--selection);color:var(--blue)}a.module-item:hover{background:var(--gray-100)}.pending{color:var(--text-quaternary)}.empty{padding:16px 5px;color:var(--muted);font-size:var(--fs-compact)}.mobile-modules{display:none}
 main{min-width:0;min-height:0;display:flex;flex-direction:column}#module-head{padding:19px 22px 15px}.module-title{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.module-title h2{font-size:21px}.module-title h2 span{font:var(--fs-label) 'Red Hat Mono',monospace;color:var(--muted);white-space:nowrap;margin-left:5px}.module-title p{font-size:var(--fs-label);color:var(--muted);margin-top:4px}.output-meta{flex-shrink:0;display:flex;flex-direction:column;gap:4px;font-size:var(--fs-label);text-align:right;color:var(--muted);padding-top:2px}.output-meta strong{font-size:var(--fs-label);color:var(--navy)}#section-nav{display:flex;gap:10px;align-items:center;margin:0 22px;padding:0 0 12px;border-bottom:1px solid var(--rule);font-size:var(--fs-label);color:var(--muted)}
 #section-nav:not(:has(:not(.sr-only))){padding:0;border:0}#section-nav label{font-weight:600}#section-nav select{min-width:0;width:min(360px,80%);height:32px;background:var(--quiet);border:1px solid var(--gray-300);border-radius:var(--radius-control);padding:4px 25px 4px 9px;color:var(--navy);font-size:var(--fs-compact)}#section-nav>span{white-space:nowrap;margin-left:auto}#section-nav button{padding:4px}#content{overflow:auto;min-height:0;padding:18px 22px 32px;scroll-behavior:auto}#content>h2{margin-top:28px;margin-bottom:15px}.analysis-call{background:var(--navy);color:#fff;border-radius:var(--radius-card);padding:17px 19px;margin-bottom:24px}.analysis-call h2{font-size:18px;line-height:1.4;max-width:65ch}.analysis-call p{font-size:var(--fs-compact);line-height:1.65;color:#e0e4f7;margin-top:7px;max-width:72ch}.analysis-call>span{font-size:var(--fs-label);color:#c6cde9;display:block;margin-top:10px}.analysis-call .source-link{color:#fff;font-size:var(--fs-label);margin-top:10px}.analysis-call .source-link img{filter:brightness(0) invert(1)}.call-meta{display:flex;justify-content:space-between;gap:10px;color:#c7d0f5;font-size:var(--fs-label);margin-bottom:9px}.section-heading{display:flex;justify-content:space-between;gap:12px;align-items:baseline;margin:0 0 14px}.section-heading h2{font-size:18px}.section-heading>span{font-size:var(--fs-label);color:var(--muted)}.section-heading.compact{margin-top:25px;margin-bottom:10px}.chart-head{display:flex;justify-content:space-between;align-items:baseline}.chart-head span{font-size:var(--fs-label);color:var(--muted)}.bars{height:196px;display:flex;justify-content:space-around;align-items:flex-end;border-bottom:1px solid var(--gray-300);background:linear-gradient(to top,transparent calc(50% - 1px),var(--rule) calc(50% - 1px),var(--rule) 50%,transparent 50%);padding:15px 15px 0}.bar-column{display:flex;flex-direction:column;justify-content:flex-end;align-items:center;width:25%;height:100%;padding:0}.bar-column:hover .bar{background:var(--navy)}.bar-value{font:var(--fs-body) 'Red Hat Mono',monospace;padding-bottom:7px}.bar-period{font-size:var(--fs-label);background:white;position:relative;top:22px;margin-top:-18px}.bars+.source-footer{margin-top:32px}.source-footer{display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-size:var(--fs-label);color:var(--muted);margin-top:12px}.source-link{display:inline-flex;align-items:center;gap:5px;padding:0;color:var(--blue);font-size:var(--fs-label);text-align:left;line-height:1.5;text-decoration:underline;text-underline-offset:3px}.source-link img{width:12px;height:12px;flex-shrink:0}.chart-reading,.intro{font-size:var(--fs-compact);line-height:1.7;color:var(--muted);margin:15px 0;max-width:75ch}.source-selected{background:var(--selection)!important;border-radius:var(--radius-inline)}.caution{background:var(--amber-bg);color:var(--amber);padding:13px 15px;font-size:var(--fs-label);border-radius:var(--radius-control);box-shadow:inset 0 0 0 1px var(--amber-border);margin:20px 0}.caution p{margin-top:5px}.source-section+.source-section{margin-top:34px}.source-section>h2{font-size:18px;margin-bottom:16px}.prose{font-size:var(--fs-body);line-height:1.8;max-width:75ch;margin:0 0 17px;overflow-wrap:anywhere}.prose code,.hash{font-size:var(--fs-label);overflow-wrap:anywhere}.records{display:grid;gap:0}.record{padding:20px 0;border-bottom:1px solid var(--rule)}.record:first-child{padding-top:0}.record h3{font-size:16px;margin-bottom:13px}.record-field{margin:11px 0;font-size:var(--fs-compact);line-height:1.75}.record-field h4{margin-bottom:4px;color:var(--muted)}.record-field>div{max-width:75ch;overflow-wrap:anywhere}.record .source-footer{margin-top:14px}.timeline{list-style:none;padding:0;margin:23px 0 32px}.timeline li{display:grid;grid-template-columns:126px minmax(0,1fr);position:relative;gap:22px;padding:0 0 25px}.timeline li:before{content:'';position:absolute;left:135px;top:7px;bottom:-7px;width:1px;background:var(--gray-300)}.timeline li:last-child:before{bottom:auto;height:0}.timeline li:after{content:'';position:absolute;left:132px;top:7px;width:7px;height:7px;background:var(--blue);border:2px solid #fff;border-radius:50%;box-sizing:content-box;transform:translateX(-2px)}.event-date{display:flex;flex-direction:column;gap:5px;font-size:var(--fs-label);line-height:1.5}.event-date strong{font-weight:600}.event-date span{font-size:var(--fs-label);color:var(--muted)}.event-body p{font-size:var(--fs-compact);line-height:1.7;font-weight:600}.event-detail{font-size:var(--fs-label);line-height:1.7;color:var(--muted);margin-top:7px}.periods li:after{background:var(--dot-quiet)}.mix-bars{display:grid;gap:15px;margin:20px 0}.mix-bars>div{display:grid;grid-template-columns:185px minmax(0,1fr) 45px;gap:10px;align-items:center;font-size:var(--fs-label)}.mix-bars strong{font:var(--fs-label) 'Red Hat Mono',monospace}.factor-matrix{border-top:1px solid var(--rule)}.factor{display:grid;grid-template-columns:minmax(135px,1fr) 112px minmax(150px,1.35fr);gap:15px;align-items:start;padding:14px 0;border-bottom:1px solid var(--rule)}.factor h3{font-size:var(--fs-compact)}.factor .source-link{font-size:var(--fs-label);margin-top:4px}.factor .source-link img{display:none}.factor p{font-size:var(--fs-label);line-height:1.65;color:var(--muted)}.matrix-note{font-size:var(--fs-label);color:var(--muted);margin:12px 0 24px}.downside{margin:22px 0}.downside ol{list-style:none;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:17px;margin:12px 0}.downside li{background:var(--quiet);padding:10px;font-size:var(--fs-label);line-height:1.6;position:relative}.downside li:not(:last-child):after{content:'';position:absolute;top:50%;right:-11px;width:7px;height:7px;border-right:1px solid var(--dot-quiet);border-top:1px solid var(--dot-quiet);transform:rotate(45deg)}.downside>p{font-size:var(--fs-label);color:var(--muted)}.audit-intro{padding-bottom:20px;margin-bottom:20px;border-bottom:1px solid var(--rule)}.audit-intro p{margin:12px 0}.hash{color:var(--muted)}
 .inspector{min-width:0;overflow:auto;border-left:1px solid var(--rule);background:var(--gray-25)}.inspector-bar{position:sticky;top:0;z-index:1;background:var(--gray-25);border-bottom:1px solid var(--rule);display:flex;justify-content:space-between;align-items:center;gap:6px;padding:16px}.inspector-bar button{display:flex;align-items:center;gap:6px;color:var(--blue);font-size:var(--fs-label);padding:0}.inspector-bar span{font-size:var(--fs-label);color:var(--muted);border:1px solid var(--rule);padding:1px 3px;border-radius:var(--radius-inline)}.inspector-body{padding:18px}.inspector-body>h2{font-size:15px}.evidence-context{font-size:var(--fs-label);color:var(--muted);margin:6px 0 19px}.inspector-body>h3{font-size:18px;line-height:1.4;margin-bottom:8px;overflow-wrap:anywhere}.classification{margin:2px 0 18px}.evidence-fields{border-top:1px solid var(--rule)}.evidence-fields>div{padding:12px 0;border-bottom:1px solid var(--rule)}.evidence-fields h4{font-size:var(--fs-label);margin-bottom:5px}.evidence-fields>div>div{font-size:var(--fs-compact);line-height:1.75;overflow-wrap:anywhere}.source-location{margin-top:23px}.source-location h3{font-size:var(--fs-compact)}.source-location p{font-size:var(--fs-label);color:var(--muted);margin:6px 0 12px;overflow-wrap:anywhere}.source-location a{display:flex;align-items:center;gap:6px;font-size:var(--fs-label)}.source-location .small{font-size:var(--fs-label);margin-top:12px}.inspector-note{border-top:1px solid var(--rule);margin-top:20px;padding-top:15px;font-size:var(--fs-label);color:var(--muted)}.inspector-note p{margin-top:5px;line-height:1.7}
-@media(min-width:1500px){.app{padding-left:25px;padding-right:25px}.workbench{grid-template-columns:214px minmax(0,1fr)}.workbench.has-evidence{grid-template-columns:214px minmax(0,1fr) 300px}#content{padding:24px 30px}#module-head{padding-left:30px;padding-right:30px}#section-nav{margin:0 30px}}
-@media(max-width:1300px){.app{padding-left:12px;padding-right:12px}.workbench,.workbench.has-evidence{grid-template-columns:186px minmax(0,1fr)}.workbench.has-evidence{grid-template-columns:186px minmax(0,1fr) 270px}#module-head{padding:16px}#content{padding:16px}#section-nav{margin:0 16px}.module-title{flex-wrap:wrap;gap:9px}.output-meta{flex-direction:row;gap:9px;text-align:left}.module-title h2{font-size:20px}.timeline li{grid-template-columns:100px minmax(0,1fr);gap:23px}.timeline li:before{left:110px}.timeline li:after{left:107px}.mix-bars>div{grid-template-columns:135px minmax(0,1fr) 42px}}
-@media(max-width:1050px){.workbench.has-evidence{grid-template-columns:186px minmax(0,1fr)}.workbench.has-evidence main{display:none}.workbench.has-evidence .inspector{border:0}.inspector-body{max-width:750px;padding:24px}.evidence-fields>div{display:grid;grid-template-columns:160px 1fr;gap:18px}.inspector-bar{padding:18px 24px}.evidence-context{margin-bottom:14px}.module-title{flex-wrap:nowrap}.output-meta{flex-direction:column}.factor{grid-template-columns:minmax(135px,1fr) 112px minmax(150px,1.35fr)}.factor p{grid-column:auto;margin:0}}
-@media(max-width:720px){body{overflow:auto;height:auto}.rail{width:46px;padding:15px 4px}.rail .symbol{width:24px}.app{margin-left:46px;height:auto;min-height:100dvh;padding:9px}.workbench,.workbench.has-evidence{display:block;overflow:visible;border-radius:0 0 var(--radius-card) var(--radius-card)}.navigator{display:none;max-height:60dvh;border:0;border-bottom:1px solid var(--rule)}.navigator.mobile-open{display:block}.mobile-modules{display:flex;align-items:center;gap:7px;padding:12px 15px;width:100%;border-bottom:1px solid var(--rule);font-weight:600;color:var(--blue);font-size:var(--fs-compact)}.mobile-modules img{width:15px;height:15px}.workbench.tools-workspace .mobile-modules{width:100%;justify-self:stretch;border-bottom:1px solid var(--rule);padding:12px 15px}#module-head{padding:17px 15px}.module-title{display:block}.module-title h2{font-size:20px}.output-meta{flex-direction:row;margin-top:10px;font-size:var(--fs-label)}.output-meta strong{font-size:var(--fs-label)}#section-nav{margin:0 15px;gap:8px}#section-nav label{display:none}#section-nav select{width:100%;font-size:var(--fs-label)}#section-nav>span{font-size:var(--fs-label)}#section-nav button{padding:1px}#content{padding:17px 15px 28px;overflow:visible}.analysis-call{padding:15px;margin-bottom:22px}.analysis-call h2{font-size:18px}.analysis-call p{font-size:var(--fs-compact)}.call-meta{flex-wrap:wrap;gap:5px}.chart-head{display:block}.chart-head span{display:block;margin-top:4px}.bars{height:190px;padding-left:5px;padding-right:5px}.bar-value{font-size:var(--fs-label)}.bar{max-width:50px}.section-heading{gap:7px;flex-wrap:wrap}.section-heading h2{font-size:18px}.factor{grid-template-columns:1fr 108px;gap:12px}.factor p{grid-column:1/-1;font-size:var(--fs-compact);margin-top:-4px}.timeline li{grid-template-columns:1fr;padding-left:18px;gap:8px}.timeline li:before{left:3px}.timeline li:after{left:0}.event-date{flex-direction:row;gap:9px;flex-wrap:wrap}.event-date span{padding-top:2px}.event-body p{font-size:var(--fs-compact)}.event-detail{font-size:var(--fs-label)}.downside ol{grid-template-columns:1fr;gap:15px}.downside li:not(:last-child):after{top:auto;bottom:-9px;left:50%;transform:rotate(135deg)}.mix-bars>div{grid-template-columns:1fr 45px;gap:5px}.mix-bars>div>span{grid-column:1/-1}.record h3{font-size:16px}.record-field{font-size:var(--fs-compact)}.prose{font-size:var(--fs-body)}.inspector-bar{padding:15px;top:0}.inspector-body{padding:18px 15px}.evidence-fields>div{display:block}.inspector-body>h3{font-size:19px}.inspector-bar button{font-size:var(--fs-compact)}.source-section>h2{font-size:17px}.source-footer{gap:6px}}
+@media(min-width:1500px){.app{padding-left:25px;padding-right:25px}.workbench{grid-template-columns:214px minmax(0,1fr)}#content{padding:24px 30px}#module-head{padding-left:30px;padding-right:30px}#section-nav{margin:0 30px}}
+@media(max-width:1300px){.app{padding-left:12px;padding-right:12px}.workbench{grid-template-columns:186px minmax(0,1fr)}#module-head{padding:16px}#content{padding:16px}#section-nav{margin:0 16px}.module-title{flex-wrap:wrap;gap:9px}.output-meta{flex-direction:row;gap:9px;text-align:left}.module-title h2{font-size:20px}.timeline li{grid-template-columns:100px minmax(0,1fr);gap:23px}.timeline li:before{left:110px}.timeline li:after{left:107px}.mix-bars>div{grid-template-columns:135px minmax(0,1fr) 42px}}
+@media(max-width:1050px){.inspector-body{max-width:750px;padding:24px}.evidence-fields>div{display:grid;grid-template-columns:160px 1fr;gap:18px}.inspector-bar{padding:18px 24px}.evidence-context{margin-bottom:14px}.module-title{flex-wrap:nowrap}.output-meta{flex-direction:column}.factor{grid-template-columns:minmax(135px,1fr) 112px minmax(150px,1.35fr)}.factor p{grid-column:auto;margin:0}}
+@media(max-width:720px){body{overflow:auto;height:auto}.rail{width:46px;padding:15px 4px}.rail .symbol{width:24px}.app{margin-left:46px;height:auto;min-height:100dvh;padding:9px}.workbench{display:block;overflow:visible;border-radius:0 0 var(--radius-card) var(--radius-card)}.navigator{display:none;max-height:60dvh;border:0;border-bottom:1px solid var(--rule)}.navigator.mobile-open{display:block}.mobile-modules{display:flex;align-items:center;gap:7px;padding:12px 15px;width:100%;border-bottom:1px solid var(--rule);font-weight:600;color:var(--blue);font-size:var(--fs-compact)}.mobile-modules img{width:15px;height:15px}.workbench.tools-workspace .mobile-modules{width:100%;justify-self:stretch;border-bottom:1px solid var(--rule);padding:12px 15px}#module-head{padding:17px 15px}.module-title{display:block}.module-title h2{font-size:20px}.output-meta{flex-direction:row;margin-top:10px;font-size:var(--fs-label)}.output-meta strong{font-size:var(--fs-label)}#section-nav{margin:0 15px;gap:8px}#section-nav label{display:none}#section-nav select{width:100%;font-size:var(--fs-label)}#section-nav>span{font-size:var(--fs-label)}#section-nav button{padding:1px}#content{padding:17px 15px 28px;overflow:visible}.analysis-call{padding:15px;margin-bottom:22px}.analysis-call h2{font-size:18px}.analysis-call p{font-size:var(--fs-compact)}.call-meta{flex-wrap:wrap;gap:5px}.chart-head{display:block}.chart-head span{display:block;margin-top:4px}.bars{height:190px;padding-left:5px;padding-right:5px}.bar-value{font-size:var(--fs-label)}.bar{max-width:50px}.section-heading{gap:7px;flex-wrap:wrap}.section-heading h2{font-size:18px}.factor{grid-template-columns:1fr 108px;gap:12px}.factor p{grid-column:1/-1;font-size:var(--fs-compact);margin-top:-4px}.timeline li{grid-template-columns:1fr;padding-left:18px;gap:8px}.timeline li:before{left:3px}.timeline li:after{left:0}.event-date{flex-direction:row;gap:9px;flex-wrap:wrap}.event-date span{padding-top:2px}.event-body p{font-size:var(--fs-compact)}.event-detail{font-size:var(--fs-label)}.downside ol{grid-template-columns:1fr;gap:15px}.downside li:not(:last-child):after{top:auto;bottom:-9px;left:50%;transform:rotate(135deg)}.mix-bars>div{grid-template-columns:1fr 45px;gap:5px}.mix-bars>div>span{grid-column:1/-1}.record h3{font-size:16px}.record-field{font-size:var(--fs-compact)}.prose{font-size:var(--fs-body)}.inspector-bar{padding:15px;top:0}.inspector-body{padding:18px 15px}.evidence-fields>div{display:block}.inspector-body>h3{font-size:19px}.inspector-bar button{font-size:var(--fs-compact)}.source-section>h2{font-size:17px}.source-footer{gap:6px}}
 @media(prefers-reduced-motion:reduce){#content{scroll-behavior:auto}.bar{transition:none}}
 /* Screen-design navigation stays available while the catalogue scrolls. */
 .design-switch{position:sticky;top:-15px;background:var(--gray-50);z-index:2;display:grid;grid-template-columns:repeat(3,1fr);gap:5px;padding:8px 0 13px}.design-switch a{font:var(--fs-label) 'Red Hat Mono',monospace;text-decoration:none;border:1px solid var(--gray-300);border-radius:var(--radius-inline);padding:6px 3px;text-align:center;color:var(--navy);background:#fff}.design-switch a[aria-current]{background:var(--selection);color:var(--blue);border-color:var(--blue-100)}.module-item small{font-size:var(--fs-label)}.bar-column.source-selected{background:transparent!important}.evidence-basis{margin:19px 0;font-size:var(--fs-label);color:var(--muted)}.evidence-basis p{margin-top:7px;line-height:1.75}.evidence-basis h3{font-size:var(--fs-compact);color:var(--navy)}
 @media(min-width:1051px) and (max-height:850px){#module-head{padding-top:14px;padding-bottom:12px}.analysis-call{padding:13px 16px;margin-bottom:18px}.analysis-call h2{font-size:17px}.analysis-call p{margin-top:5px}.analysis-call>span{margin-top:7px}.bars{height:170px}.section-heading{margin-bottom:10px}.factor{padding-top:11px;padding-bottom:11px}}
 /* Extended gallery: one reading surface, with chart-specific composition. */
-.row-classification{display:block;font:var(--fs-label)/1.5 'Red Hat Text',sans-serif;color:var(--muted);margin-top:3px}.module-title h2{max-width:36ch}.hash{overflow-wrap:anywhere;font-size:var(--fs-label)}.source-section,.prose,.record,.record-field{overflow-wrap:anywhere}.case-note{font-size:var(--fs-label);background:var(--quiet);padding:10px 12px;margin-bottom:18px;color:var(--muted)}.text-action{display:inline-flex;gap:8px;align-items:center;font-weight:600;text-decoration:none;font-size:var(--fs-compact)}.text-action img{width:14px;height:14px}.metric-control{display:flex;align-items:center;gap:12px;margin:14px 0;color:var(--muted);font-size:var(--fs-label)}.metric-control select{border:1px solid var(--rule);border-radius:var(--radius-control);background:var(--quiet);max-width:80%;padding:6px;color:var(--navy)}.chart-legend,.signal-key{display:flex;gap:18px;flex-wrap:wrap;font-size:var(--fs-label);color:var(--muted);margin:15px 0}.chart-legend span,.signal-key span{display:flex;gap:6px;align-items:center}.chart-legend i,.signal-key i{width:15px;height:5px;display:inline-block}.series-0{background:var(--series-1)}.series-1{background:var(--series-2);box-shadow:inset 0 0 0 1px var(--series-2-ln)}.series-2{background:var(--series-3);box-shadow:inset 0 0 0 1px var(--series-3-ln)}.series-3{background:var(--series-4);box-shadow:inset 0 0 0 1px var(--series-4-ln)}.chart-legend .series-0,.signal-key .series-0{background:var(--series-1-ln)}.chart-legend .series-1,.signal-key .series-1{background:var(--series-2-ln)}.chart-legend .series-2,.signal-key .series-2{background:var(--series-3-ln)}.chart-legend .series-3,.signal-key .series-3{background:var(--series-4-ln)}.horizontal-chart{margin:14px 0 8px}.chart-row{display:grid;grid-template-columns:minmax(96px,1.1fr) minmax(72px,2fr) 56px auto;gap:12px;align-items:center;width:100%;padding:10px 0;border-bottom:1px solid var(--rule);text-align:left}.chart-label{font-size:var(--fs-label);line-height:1.5}.chart-label small{display:block;font-size:var(--fs-label);color:var(--muted)}.chart-row strong{font:var(--fs-compact) 'Red Hat Mono',monospace;text-align:right;overflow-wrap:anywhere}.track.missing{background:none;border-top:1px dashed var(--gray-300);height:1px}.track.missing i{display:none}.zero-rule{position:absolute;left:50%;height:26px;top:-3px;border-left:1px solid var(--dot-quiet)}.vector-chart{max-width:850px;margin:18px auto}.vector-chart svg{width:100%;display:block;overflow:visible}.vector-chart text{font:var(--fs-compact) 'Red Hat Mono',monospace;fill:var(--navy)}.vector-chart .axis-label{font-size:var(--fs-label);fill:var(--muted)}.connector{stroke:var(--dot-quiet);stroke-dasharray:3 3}.total{fill:var(--navy)}.movement{fill:var(--blue)}.outflow{fill:var(--text-quaternary)}.bridge-key{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:6px 0 25px}.bridge-key>span{display:flex;gap:7px;align-items:flex-start}.bridge-key .source-link{font-size:var(--fs-label)}.path-0{stroke:var(--series-1-ln);stroke-width:2}.path-1{stroke:var(--amber);stroke-width:2}.path-2{stroke:var(--series-4-ln);stroke-width:2}.point-0{fill:var(--series-1-ln)}.point-1{fill:var(--amber)}.point-2{fill:var(--series-4-ln)}.path-readout{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px;border-bottom:1px solid var(--rule);padding-bottom:15px}.path-readout>div>span{font-size:var(--fs-label);color:var(--muted)}.path-readout strong{font:17px 'Red Hat Mono',monospace;display:block;margin-top:4px}.hedge-axis{display:flex;justify-content:space-between;margin:20px 190px 8px 94px;font-size:var(--fs-label);color:var(--muted)}.hedge-row{display:grid;grid-template-columns:82px minmax(110px,1fr) 178px;gap:12px;width:100%;padding:11px 0;border-bottom:1px solid var(--rule);align-items:center;text-align:left;font-size:var(--fs-label)}.hedge-row small{display:block;font-size:var(--fs-label);color:var(--muted);margin-top:3px}.hedge-lane{position:relative;background:var(--quiet);height:26px}.base-rule{position:absolute;border-left:1px dashed var(--dot-quiet);height:48px;top:-11px}.hedge-span{position:absolute;top:7px;height:12px;background:var(--blue)}.hedge-span.future{background:var(--selection);border:1px solid var(--blue)}.hedge-dates{font:var(--fs-label) 'Red Hat Mono',monospace}.duration-only{font-size:var(--fs-label);display:block;text-align:center;padding:5px 0;background:#fff}.qual-matrix>section{display:grid;grid-template-columns:minmax(100px,.65fr) minmax(0,2fr);gap:20px;padding:17px 0;border-bottom:1px solid var(--rule)}.qual-matrix>section>div>div{margin-bottom:10px}.qual-matrix p{font-size:var(--fs-compact);line-height:1.7}.qual-matrix h4{margin-bottom:4px}.agency-pair{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin:20px 0}.agency-pair section+section{border-left:1px solid var(--rule);padding-left:26px}.rating{font:700 24px/1.4 'Red Hat Display',sans-serif;margin:12px 0 18px}.debate{padding:18px 0;border-bottom:1px solid var(--rule)}.debate header{display:flex;justify-content:space-between;align-items:start;gap:15px}.arguments{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin:15px 0;font-size:var(--fs-compact)}.arguments>div+div{border-left:1px solid var(--rule);padding-left:24px}.arguments h4{margin-bottom:6px}.resolution{background:var(--quiet);padding:10px 12px;font-size:var(--fs-compact)}.missing-state{max-width:700px;margin:12px 0 25px}.missing-state h2{font-size:23px;line-height:1.4;margin:12px 0}.missing-state p{color:var(--text-quaternary);font-size:var(--fs-compact)}.empty-symbol{background:var(--quiet);width:48px;height:48px;border-radius:10px;display:grid;place-items:center}.empty-symbol img{width:22px;height:22px;opacity:.65}.requirements>div{display:grid;grid-template-columns:1fr auto;gap:7px;padding:15px 0;border-top:1px solid var(--rule)}.requirements p{grid-column:1/-1;color:var(--muted);font-size:var(--fs-label)}.requirements .grade{justify-self:end}.activity-flow{list-style:none;padding:0;margin:15px 0}.activity-flow li{position:relative;border-left:1px solid var(--gray-300);margin-left:6px;padding:0 0 28px 23px}.activity-flow li:before{content:'';width:7px;height:7px;border:2px solid var(--blue);background:#fff;border-radius:50%;position:absolute;left:-6px;top:3px}.activity-flow p{font-size:var(--fs-compact);margin:8px 0 10px;color:var(--muted)}.help-copy{max-width:720px}.help-copy h2{margin:18px 0 10px;font-size:19px}.help-copy p{margin-bottom:25px;line-height:1.8}.report-tools{display:flex;align-items:center;gap:20px;padding:10px 18px;border-bottom:1px solid var(--rule);background:var(--quiet);font-size:var(--fs-label);flex-shrink:0}.report-tools div{margin-right:auto}.report-tools span{display:block;color:var(--muted);font-size:var(--fs-label)}
+.row-classification{display:block;font:var(--fs-label)/1.5 'Red Hat Text',sans-serif;color:var(--muted);margin-top:3px}.module-title h2{max-width:36ch}.hash{overflow-wrap:anywhere;font-size:var(--fs-label)}.source-section,.prose,.record,.record-field{overflow-wrap:anywhere}.case-note{font-size:var(--fs-label);background:var(--quiet);padding:10px 12px;margin-bottom:18px;color:var(--muted)}.text-action{display:inline-flex;gap:8px;align-items:center;font-weight:600;text-decoration:none;font-size:var(--fs-compact)}.text-action img{width:14px;height:14px}.metric-control{display:flex;align-items:center;gap:12px;margin:14px 0;color:var(--muted);font-size:var(--fs-label)}.metric-control select{border:1px solid var(--rule);border-radius:var(--radius-control);background:var(--quiet);max-width:80%;padding:6px;color:var(--navy)}.chart-legend,.signal-key{display:flex;gap:18px;flex-wrap:wrap;font-size:var(--fs-label);color:var(--muted);margin:15px 0}.chart-legend span,.signal-key span{display:flex;gap:6px;align-items:center}.chart-legend i,.signal-key i{width:15px;height:5px;display:inline-block}.series-0{background:var(--series-1)}.series-1{background:var(--series-4);box-shadow:inset 0 0 0 1px var(--series-4-ln)}.series-2{background:var(--series-3);box-shadow:inset 0 0 0 1px var(--series-3-ln)}.series-3{background:var(--gray-300);box-shadow:inset 0 0 0 1px var(--text-quaternary)}.chart-legend .series-0,.signal-key .series-0{background:var(--series-1-ln)}.chart-legend .series-1,.signal-key .series-1{background:var(--series-4-ln)}.chart-legend .series-2,.signal-key .series-2{background:var(--series-3-ln)}.chart-legend .series-3,.signal-key .series-3{background:var(--text-quaternary)}.horizontal-chart{margin:14px 0 8px}.chart-row{display:grid;grid-template-columns:minmax(96px,1.1fr) minmax(72px,2fr) 56px auto;gap:12px;align-items:center;width:100%;padding:10px 0;border-bottom:1px solid var(--rule);text-align:left}.chart-label{font-size:var(--fs-label);line-height:1.5}.chart-label small{display:block;font-size:var(--fs-label);color:var(--muted)}.chart-row strong{font:var(--fs-compact) 'Red Hat Mono',monospace;text-align:right;overflow-wrap:anywhere}.track.missing{background:none;border-top:1px dashed var(--gray-300);height:1px}.track.missing i{display:none}.zero-rule{position:absolute;left:50%;height:26px;top:-3px;border-left:1px solid var(--dot-quiet)}.vector-chart{max-width:850px;margin:18px auto}.vector-chart svg{width:100%;display:block;overflow:visible}.vector-chart text{font:var(--fs-compact) 'Red Hat Mono',monospace;fill:var(--navy)}.vector-chart .axis-label{font-size:var(--fs-label);fill:var(--muted)}.connector{stroke:var(--dot-quiet);stroke-dasharray:3 3}.total{fill:var(--navy)}.movement{fill:var(--blue)}.outflow{fill:var(--text-quaternary)}.bridge-key{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:6px 0 25px}.bridge-key>span{display:flex;gap:7px;align-items:flex-start}.bridge-key .source-link{font-size:var(--fs-label)}.path-0{stroke:var(--series-1-ln);stroke-width:2}.path-1{stroke:var(--amber);stroke-width:2}.path-2{stroke:var(--series-4-ln);stroke-width:2}.point-0{fill:var(--series-1-ln)}.point-1{fill:var(--amber)}.point-2{fill:var(--series-4-ln)}.path-readout{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px;border-bottom:1px solid var(--rule);padding-bottom:15px}.path-readout>div>span{font-size:var(--fs-label);color:var(--muted)}.path-readout strong{font:17px 'Red Hat Mono',monospace;display:block;margin-top:4px}.hedge-axis{display:flex;justify-content:space-between;margin:20px 190px 8px 94px;font-size:var(--fs-label);color:var(--muted)}.hedge-row{display:grid;grid-template-columns:82px minmax(110px,1fr) 178px;gap:12px;width:100%;padding:11px 0;border-bottom:1px solid var(--rule);align-items:center;text-align:left;font-size:var(--fs-label)}.hedge-row small{display:block;font-size:var(--fs-label);color:var(--muted);margin-top:3px}.hedge-lane{position:relative;background:var(--quiet);height:26px}.base-rule{position:absolute;border-left:1px dashed var(--dot-quiet);height:48px;top:-11px}.hedge-span{position:absolute;top:7px;height:12px;background:var(--blue)}.hedge-span.future{background:var(--selection);border:1px solid var(--blue)}.hedge-dates{font:var(--fs-label) 'Red Hat Mono',monospace}.duration-only{font-size:var(--fs-label);display:block;text-align:center;padding:5px 0;background:#fff}.qual-matrix>section{display:grid;grid-template-columns:minmax(100px,.65fr) minmax(0,2fr);gap:20px;padding:17px 0;border-bottom:1px solid var(--rule)}.qual-matrix>section>div>div{margin-bottom:10px}.qual-matrix p{font-size:var(--fs-compact);line-height:1.7}.qual-matrix h4{margin-bottom:4px}.agency-pair{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin:20px 0}.agency-pair section+section{border-left:1px solid var(--rule);padding-left:26px}.rating{font:700 24px/1.4 'Red Hat Display',sans-serif;margin:12px 0 18px}.debate{padding:18px 0;border-bottom:1px solid var(--rule)}.debate header{display:flex;justify-content:space-between;align-items:start;gap:15px}.arguments{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin:15px 0;font-size:var(--fs-compact)}.arguments>div+div{border-left:1px solid var(--rule);padding-left:24px}.arguments h4{margin-bottom:6px}.resolution{background:var(--quiet);padding:10px 12px;font-size:var(--fs-compact)}.missing-state{max-width:700px;margin:12px 0 25px}.missing-state h2{font-size:23px;line-height:1.4;margin:12px 0}.missing-state p{color:var(--text-quaternary);font-size:var(--fs-compact)}.empty-symbol{background:var(--quiet);width:48px;height:48px;border-radius:10px;display:grid;place-items:center}.empty-symbol img{width:22px;height:22px;opacity:.65}.requirements>div{display:grid;grid-template-columns:1fr auto;gap:7px;padding:15px 0;border-top:1px solid var(--rule)}.requirements p{grid-column:1/-1;color:var(--muted);font-size:var(--fs-label)}.requirements .grade{justify-self:end}.activity-flow{list-style:none;padding:0;margin:15px 0}.activity-flow li{position:relative;border-left:1px solid var(--gray-300);margin-left:6px;padding:0 0 28px 23px}.activity-flow li:before{content:'';width:7px;height:7px;border:2px solid var(--blue);background:#fff;border-radius:50%;position:absolute;left:-6px;top:3px}.activity-flow p{font-size:var(--fs-compact);margin:8px 0 10px;color:var(--muted)}.help-copy{max-width:720px}.help-copy h2{margin:18px 0 10px;font-size:19px}.help-copy p{margin-bottom:25px;line-height:1.8}.report-tools{display:flex;align-items:center;gap:20px;padding:10px 18px;border-bottom:1px solid var(--rule);background:var(--quiet);font-size:var(--fs-label);flex-shrink:0}.report-tools div{margin-right:auto}.report-tools span{display:block;color:var(--muted);font-size:var(--fs-label)}
 @media(min-width:1051px) and (max-height:850px){.vector-chart{max-width:640px}}
 @media(max-width:1300px){.hedge-row{grid-template-columns:75px minmax(80px,1fr) 150px}.hedge-axis{margin-left:87px;margin-right:162px}.chart-row{grid-template-columns:minmax(96px,1.1fr) minmax(72px,2fr) 56px auto;gap:9px}.chart-row strong{font-size:var(--fs-label)}.path-readout .source-footer{gap:5px}}
 @media(max-width:1050px){.qual-matrix>section{grid-template-columns:1fr 2fr}.report-tools{flex-wrap:wrap;gap:7px 18px}}
@@ -26,14 +26,13 @@ main{min-width:0;min-height:0;display:flex;flex-direction:column}#module-head{pa
 .bridge-key>span{flex-wrap:wrap}.bridge-key .row-classification{width:100%;margin-top:-5px}
 .hedge-axis{display:block;position:relative;height:18px}.hedge-axis span{position:absolute;white-space:nowrap;transform:translateX(-50%)}.hedge-axis span:first-child{transform:none}.hedge-axis span:last-child{transform:translateX(-100%)}
 /* Pinned workspace and persistent analytical outline. */
-.workbench{grid-template-columns:238px minmax(0,1fr)}.workbench.has-evidence{grid-template-columns:238px minmax(0,1fr) 280px}.navigator{padding:12px 10px}.navigator-head{top:-12px}.module-item{padding:8px}.module-label{font-size:var(--fs-compact)}.section-outline{margin:2px 0 16px 9px;padding-left:9px;border-left:1px solid var(--rule)}.outline-group{padding:7px 0}.outline-group>summary{font-size:var(--fs-label);line-height:1.4;color:var(--muted);padding:3px 4px 6px;cursor:pointer;font-weight:600;list-style:revert;display:list-item;margin-left:12px}.outline-group>summary:after{display:none}.section-item{display:block;color:var(--muted);text-decoration:none;font-size:var(--fs-compact);line-height:1.4;padding:7px 7px;border-radius:var(--radius-inline);margin:1px 0}.section-item:hover{color:var(--blue);background:var(--quiet)}.section-item[aria-current]{color:var(--blue);background:var(--selection);font-weight:600}
+.workbench{grid-template-columns:238px minmax(0,1fr)}.navigator{padding:12px 10px}.navigator-head{top:-12px}.module-item{padding:8px}.module-label{font-size:var(--fs-compact)}.section-outline{margin:2px 0 16px 9px;padding-left:9px;border-left:1px solid var(--rule)}.outline-group{padding:7px 0}.outline-group>summary{font-size:var(--fs-label);line-height:1.4;color:var(--muted);padding:3px 4px 6px;cursor:pointer;font-weight:600;list-style:revert;display:list-item;margin-left:12px}.outline-group>summary:after{display:none}.section-item{display:block;color:var(--muted);text-decoration:none;font-size:var(--fs-compact);line-height:1.4;padding:7px 7px;border-radius:var(--radius-inline);margin:1px 0}.section-item:hover{color:var(--blue);background:var(--quiet)}.section-item[aria-current]{color:var(--blue);background:var(--selection);font-weight:600}
 #module-head{padding:10px 18px 4px}.module-title{flex-wrap:nowrap;align-items:baseline;gap:10px}.module-title h2{font-size:19px;max-width:none}.output-meta{font-size:var(--fs-label);padding:0;display:block}.module-title h2 span{font-size:var(--fs-label)}#section-nav{margin:0 18px;padding:3px 0 7px;gap:8px}#section-title{font:600 var(--fs-compact)/1.4 'Red Hat Text',sans-serif;color:var(--muted);flex:1;min-width:0}#section-nav>span{font-size:var(--fs-label);margin-left:0}#section-nav button{min-width:32px;min-height:32px;padding:7px}#content{padding:12px 18px 28px}.analysis-call{padding:10px 13px;margin-bottom:14px}.analysis-call h2{font-size:15px;line-height:1.45;max-width:80ch}.analysis-call p{margin-top:5px}.analysis-call>span{font-size:var(--fs-label);margin-top:5px}.section-heading{margin-bottom:8px}.section-heading h2{font-size:17px}.section-heading>span,.chart-head span{font-size:var(--fs-label)}.chart-reading{margin:8px 0;line-height:1.55}.chart-legend{font-size:var(--fs-label);margin:10px 0;gap:14px}.vector-chart{max-width:580px;margin:10px auto}.matrix-note{font-size:var(--fs-label)}.path-readout{gap:10px;padding-bottom:12px}.path-readout .source-footer{margin-top:5px;gap:5px}.path-readout strong{font-size:16px}.source-footer,.row-classification{font-size:var(--fs-label)}.finding{max-width:75ch;margin:0 0 23px;padding-bottom:16px;border-bottom:1px solid var(--rule)}.finding .prose{margin:0;line-height:1.75}.finding .source-footer{margin-top:8px}.source-section>h2{font-size:17px}.available-case{padding:18px 0;border-top:1px solid var(--rule);max-width:75ch}.available-case p{margin:8px 0 14px;color:var(--muted)}.switch-case{margin:12px 20px}
 /* Comparisons are categorical; amber is a labelled conditional signal. */
 .outflow{fill:var(--text-quaternary)}.signal-conditional,.path-key-1{background:var(--amber)}.path-key-0{background:var(--series-1-ln)}.path-key-2{background:var(--series-4-ln)}.path-1{stroke:var(--amber)}.point-1{fill:var(--amber)}.point-hit{fill:transparent}.plot-point{cursor:pointer}.plot-point:focus-visible{outline:none}.plot-point:hover .point-hit,.plot-point:focus .point-hit{fill:var(--selection);stroke:var(--blue);stroke-width:2}.plot-point:focus rect,.plot-point:hover rect{stroke:var(--blue);stroke-width:3}.hedge-axis,.hedge-dates,.hedge-row small,.duration-only,.chart-label small{font-size:var(--fs-label)}.hedge-row{grid-template-columns:82px minmax(100px,1fr) 190px}.hedge-axis{margin-right:202px}
 .library-workspace{grid-template-columns:minmax(0,1fr)}.library-workspace .navigator,.library-workspace .mobile-modules,.library-workspace #section-nav{display:none}.library-workspace #module-head{display:none}.library-workspace #content{padding:8px 18px 28px}.report-tools{gap:16px;padding:8px 16px;font-size:var(--fs-compact)}.report-tools label{display:flex;gap:9px;align-items:center}.report-tools select,#report-select{min-height:32px;padding:5px 8px;border:1px solid var(--rule);border-radius:var(--radius-control);background:#fff}.report-tools>span{font-size:var(--fs-label);color:var(--muted);margin-right:auto}
-@media(min-width:1051px){.has-evidence .module-title{display:block}.has-evidence .output-meta{margin-top:3px}.has-evidence .hedge-row{grid-template-columns:70px minmax(80px,1fr)}.has-evidence .hedge-dates{grid-column:2}.has-evidence .hedge-axis{margin-left:82px;margin-right:0}.has-evidence .path-readout{grid-template-columns:1fr}.has-evidence .path-readout>div{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px}.has-evidence .path-readout .source-footer{width:100%}.has-evidence .chart-row{grid-template-columns:minmax(100px,1fr) minmax(70px,1fr) 80px}}
-@media(max-width:1050px){.workbench,.workbench.has-evidence{grid-template-columns:220px minmax(0,1fr)}.library-workspace{grid-template-columns:minmax(0,1fr)}.module-title{display:block}.output-meta{margin-top:3px}.hedge-row{grid-template-columns:70px minmax(80px,1fr)}.hedge-dates{grid-column:2}.hedge-axis{margin-left:82px;margin-right:0}}
-@media(max-width:720px){.workbench,.workbench.has-evidence{display:block}.navigator{max-height:65dvh}.module-title{display:block}.output-meta{margin-top:5px}.report-tools{gap:8px 14px}.report-tools>span{width:100%}.hedge-axis{font-size:var(--fs-label)}.path-readout{grid-template-columns:1fr}.vector-chart{overflow-x:auto}.vector-chart svg{min-width:400px}.bridge-key{grid-template-columns:1fr}.source-footer{gap:6px}}
+@media(max-width:1050px){.workbench{grid-template-columns:220px minmax(0,1fr)}.library-workspace{grid-template-columns:minmax(0,1fr)}.module-title{display:block}.output-meta{margin-top:3px}.hedge-row{grid-template-columns:70px minmax(80px,1fr)}.hedge-dates{grid-column:2}.hedge-axis{margin-left:82px;margin-right:0}}
+@media(max-width:720px){.workbench{display:block}.navigator{max-height:65dvh}.module-title{display:block}.output-meta{margin-top:5px}.report-tools{gap:8px 14px}.report-tools>span{width:100%}.hedge-axis{font-size:var(--fs-label)}.path-readout{grid-template-columns:1fr}.vector-chart{overflow-x:auto}.vector-chart svg{min-width:400px}.bridge-key{grid-template-columns:1fr}.source-footer{gap:6px}}
 /* The active outline leads; the catalogue is one deliberate disclosure. */
 .outline-heading{font-size:var(--fs-compact);font-weight:600;margin:17px 4px 6px}.section-outline{margin-left:4px;padding-left:5px}.outline-group>summary{padding-top:4px;padding-bottom:5px}.vector-chart text{font-size:var(--fs-control)}.vector-chart .axis-label{font-size:var(--fs-control)}.vector-chart{max-width:580px}.analysis-call{padding:8px 13px}
 /* Issuer discovery: persistent controls, exact run counts and local filtering. */
@@ -126,7 +125,7 @@ main{min-width:0;min-height:0;display:flex;flex-direction:column}#module-head{pa
 .library-table tr.selected>td{background:var(--blue-50)}
 .library-table td.missing{color:var(--text-quaternary)}
 .library-run-name{display:block;padding:0;text-align:left;font:600 var(--fs-body)/20px 'Red Hat Text',sans-serif;color:var(--text-primary)}
-.library-table td.run-id{font:400 var(--fs-compact)/20px 'Red Hat Mono',monospace;overflow-wrap:anywhere}
+.library-table td.run-when{overflow-wrap:anywhere}
 .library-table th:nth-child(1){width:18.3%}.library-table th:nth-child(2){width:19.2%}.library-table th:nth-child(3){width:8.3%}.library-table th:nth-child(4){width:9.2%}.library-table th:nth-child(5){width:6.9%}.library-table th:nth-child(6){width:8.6%}.library-table th:nth-child(7){width:7%}.library-table th:nth-child(8){width:5.5%}.library-table th:nth-child(9){width:9.3%}.library-table th:nth-child(10){width:7.7%}
 /* The three ratios are figures: mono, right-aligned under their headings. A date stays on one line. */
 .library-table :is(th,td):nth-child(n+5):nth-child(-n+7){text-align:right}
@@ -147,7 +146,6 @@ main{min-width:0;min-height:0;display:flex;flex-direction:column}#module-head{pa
 .metric-label{display:block;font-size:var(--fs-compact);color:var(--text-quaternary)}.metric-value{display:block;font:700 20px/28px 'Red Hat Display',sans-serif}.metric-value small{margin-left:4px;font:400 var(--fs-compact)/16px 'Red Hat Text',sans-serif}
 .metric-item p{font-size:var(--fs-compact);color:var(--text-tertiary)}
 .artifact-list{margin:0;padding-left:20px}.artifact-list li{overflow-wrap:anywhere}.artifact-list small{display:block;font-size:var(--fs-label);color:var(--text-tertiary)}
-.source-details{margin-top:14px}.source-details summary{cursor:pointer;font-weight:600}.source-details>div{margin-top:10px;padding:8px 10px;border-left:3px solid var(--gray-300);overflow-wrap:anywhere}.source-details blockquote{margin:6px 0;font:var(--fs-compact)/1.5 'Red Hat Mono',monospace;white-space:pre-wrap}
 @media(max-width:720px){.library-filters,.metric-grid,.detail-layout{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:900px){.search-row{flex-wrap:wrap}.library-search{max-width:none;flex-basis:100%}.page-actions{margin-top:12px}}
 /* Run header and underline tabs, after Untitled UI React (MIT): one title line, then tabs. */
@@ -256,23 +254,16 @@ th .source-link:hover{color:var(--blue-700);text-decoration:underline;text-under
 .tools-workspace .navigator{display:none}
 .tools-workspace .navigator.mobile-open{display:block}
 .tools-workspace .mobile-modules{grid-column:1/-1;display:flex;align-items:center;gap:7px;padding:8px 15px;width:auto;justify-self:start;border-bottom:0;font-weight:600;color:var(--blue);font-size:var(--fs-compact)}
-.tools-workspace.has-evidence{grid-template-columns:minmax(0,1fr) 300px}
 .tools-workspace .mobile-modules img{width:15px;height:15px}
 .report-issuer{color:var(--text-tertiary)}
 .recorded-as{display:block;color:var(--text-tertiary);font-size:var(--fs-compact)}
 @media(min-width:1051px){
-.tools-workspace.has-evidence main{grid-column:1}
-.tools-workspace.has-evidence .inspector{grid-column:2}
 .workbench.tools-workspace:has(.navigator.mobile-open){grid-template-columns:238px minmax(0,1fr)}
-.workbench.tools-workspace.has-evidence:has(.navigator.mobile-open){grid-template-columns:238px minmax(0,1fr) 280px}
 .tools-workspace .navigator.mobile-open{grid-column:1}
-.workbench.tools-workspace.has-evidence:has(.navigator.mobile-open) main{grid-column:2}
-.workbench.tools-workspace.has-evidence:has(.navigator.mobile-open) .inspector{grid-column:3}
 }
-@media(max-width:1050px){.tools-workspace.has-evidence:has(.navigator.mobile-open){grid-template-rows:auto auto minmax(0,1fr)}.tools-workspace.has-evidence .inspector{grid-column:1/-1}.tools-workspace.has-evidence:not(:has(.navigator.mobile-open)){grid-template-rows:auto minmax(0,1fr)}}
-@media(min-width:721px) and (max-width:1050px){.workbench.tools-workspace:has(.navigator.mobile-open){grid-template-columns:220px minmax(0,1fr)}.workbench.tools-workspace.has-evidence:has(.navigator.mobile-open){grid-template-columns:220px minmax(0,1fr)}.tools-workspace .navigator.mobile-open{grid-column:1}.workbench.tools-workspace.has-evidence:has(.navigator.mobile-open) .inspector{grid-column:2}.tools-workspace.has-evidence:has(.navigator.mobile-open){grid-template-rows:auto minmax(0,1fr)}}
+@media(min-width:721px) and (max-width:1050px){.workbench.tools-workspace:has(.navigator.mobile-open){grid-template-columns:220px minmax(0,1fr)}.tools-workspace .navigator.mobile-open{grid-column:1}}
 
-@media(forced-colors:active){.badge,.grade,.chip,.run-badge,.primary-action,.secondary-action,.tertiary-action,.text-button{border:1px solid}.rail a[aria-current],.workspace-tabs>a[aria-current]{outline:2px solid;outline-offset:2px}}
+@media(forced-colors:active){.badge,.grade,.chip,.primary-action,.secondary-action,.tertiary-action,.text-button{border:1px solid}.rail a[aria-current],.workspace-tabs>a[aria-current]{outline:2px solid;outline-offset:2px}}
 .forecast section{margin:20px 0}.forecast h2{margin:0 0 8px}.forecast-tools{margin:0 -18px;border-top:1px solid var(--rule)}.forecast-scope,.forecast-input,.forecast-revision,.register-intro{max-width:80ch}
 #model-select{min-height:32px;padding:5px 8px;border:1px solid var(--rule);border-radius:var(--radius-control);background:#fff}
 #model-preview{display:block;width:100%;height:75dvh;min-height:420px;border:0;background:#fff}
@@ -329,7 +320,7 @@ th .source-link:hover{color:var(--blue-700);text-decoration:underline;text-under
 .model-original[open]>summary{margin-bottom:8px}
 .summary-line{display:block}
 /* Inbox automation: live run activity (the Run activity rules are further down). */
-.run-stalled{font-weight:600}.run-files{font-size:var(--fs-compact)}
+.run-files{font-size:var(--fs-compact)}
 /* Module report (the Modules canvas): head, band, panel, findings, limits and audit, after docs/design/mockups/module-report.html. */
 #module-head:empty{display:none}
 .module-head{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap}
@@ -460,12 +451,9 @@ details.audit>summary span{font:400 var(--fs-compact)/1 'Red Hat Text',sans-seri
 .section-outline ol{list-style:none;margin:0;padding:0}
 @media(max-width:900px){.band{grid-template-columns:minmax(0,1fr)}article.finding{grid-template-columns:minmax(0,1fr)}.limits,.audit-list{grid-template-columns:1fr}}
 /* Overview: the handoffs' own passages, selected and ordered; the page adds no sentence. */
-.overview-part{margin-top:28px;max-width:110ch;min-width:0}.overview-part:first-child{margin-top:8px}.overview-part>h2{padding-bottom:6px;border-bottom:1px solid var(--rule)}.overview-part h3{font-size:16px;line-height:1.3;margin:14px 0 6px}.overview-part h3 .text-action{font-size:inherit;margin:0}
 .passage-text,.passage-list{margin:6px 0;line-height:1.5;text-wrap:pretty}.passage-list{padding-left:20px}.passage-list li{margin:6px 0}
-.basis{display:block}.limit-module{display:block;font-size:var(--fs-label)}.lead-source{margin:4px 0;color:var(--muted);font-size:var(--fs-compact)}
-.bottom-entry{padding:8px 0;border-bottom:1px solid var(--rule)}.bottom-entry:last-child{border-bottom:0}.bottom-entry h3{margin-top:6px}
-.overview-charts{margin-top:12px}
-.overview-workspace{grid-template-columns:minmax(0,1fr)}.overview-workspace .navigator,.overview-workspace .mobile-modules{display:none}.overview-workspace.has-evidence{grid-template-columns:minmax(0,1fr) 280px}.overview-workspace.has-evidence main{grid-column:1}.overview-workspace.has-evidence .inspector{grid-column:2}
+.basis{display:block}
+.overview-workspace{grid-template-columns:minmax(0,1fr)}.overview-workspace .navigator,.overview-workspace .mobile-modules{display:none}
 .run-section{margin-top:40px}.run-section>h2{font-size:19px;margin-bottom:10px}
 /* The run report is one scroll: its tables run whole (no box of their own to scroll) and their headers stick to the page. */
 .run-section .table-scroll{max-height:none;overflow:clip}
@@ -483,10 +471,8 @@ details.audit>summary span{font:400 var(--fs-compact)/1 'Red Hat Text',sans-seri
 @media(prefers-reduced-motion:reduce){details.audit>summary img,details.fold>summary img{transition:none}}
 /* Screens pass (2026-11-10): what a reader acts on leads; production detail is quiet, in a title, or behind a disclosure. */
 /* A run id stays on one line, so every row keeps one height: a long one is cut with an ellipsis and the cell's title holds it whole. */
-.library-table td.run-id{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-@media(max-width:1300px){.library-table td.run-id{font-size:var(--fs-label)}}
-.library-table td.run-id a{color:var(--blue-700);text-decoration-color:color-mix(in srgb,currentColor 35%,transparent)}
-.library-table td.run-id a:hover,.library-table td.run-id a:focus-visible{text-decoration-color:currentColor}
+.library-table td.run-when a{color:var(--blue-700);text-decoration-color:color-mix(in srgb,currentColor 35%,transparent)}
+.library-table td.run-when a:hover,.library-table td.run-when a:focus-visible{text-decoration-color:currentColor}
 /* The column the table is sorted by reads as the active one. */
 .library-table th:is([aria-sort=ascending],[aria-sort=descending]) button{color:var(--text-primary)}
 /* The selected run's panel: the report's acceptance sits with the buttons that open it. */
@@ -507,7 +493,7 @@ details.audit>summary span{font:400 var(--fs-compact)/1 'Red Hat Text',sans-seri
 .column-chart .periods{max-width:calc(var(--periods)*320px)}
 @media print{.column-chart .periods{max-width:none}}
 /* Print: the canvas is the document. The app frame goes, nothing clips or scrolls, and a finding or a table row is not split across pages. Closed parts print closed. Fills print as drawn: the navy band and a filled coverage cell carry white text. */
-@media print{html,body{height:auto;min-height:0;overflow:visible;background:#fff}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}.rail,.skip,.sr-only,.navigator,.mobile-modules,.workspace-tabs,.inspector,#section-nav{display:none!important}.app{display:block;height:auto;margin:0;padding:0}.workbench,.workbench.has-evidence{display:block;overflow:visible;box-shadow:none;border-radius:0}main{display:block}#content{overflow:visible;padding:0}.table-scroll,.run-section .table-scroll{max-height:none;overflow:visible;box-shadow:none}.table-scroll thead th,.run-section .table-scroll thead th{position:static}.library-table{min-width:0}article.finding,tr,.chart-row{break-inside:avoid}h2,h3,h4{break-after:avoid}a{text-decoration:none}}
+@media print{html,body{height:auto;min-height:0;overflow:visible;background:#fff}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}.rail,.skip,.sr-only,.navigator,.mobile-modules,.workspace-tabs,.inspector,.inspector[hidden],#section-nav{display:none!important}.app{display:block;height:auto;margin:0;padding:0}.workbench{display:block;overflow:visible;box-shadow:none;border-radius:0}main{display:block}#content{overflow:visible;padding:0}.table-scroll,.run-section .table-scroll{max-height:none;overflow:visible;box-shadow:none}.table-scroll thead th,.run-section .table-scroll thead th{position:static}.library-table{min-width:0}article.finding,tr,.chart-row{break-inside:avoid}h2,h3,h4{break-after:avoid}a{text-decoration:none}}
 .drawing-caption{margin:8px 0}.panel-card>.drawing-caption{margin:8px 16px}.front-matter{margin:0;padding-left:20px}.chart-table .event-table{margin-top:8px}
 .chart-table{margin:4px 0 14px}.chart-table>summary{cursor:pointer;font-size:var(--fs-label);font-weight:600;color:var(--blue)}.panel-card>.chart-table{margin-left:16px;margin-right:16px}
 .stack-bar{display:flex;height:34px;margin:12px 0 8px;background:var(--quiet);border-radius:var(--radius-inline);overflow:hidden}.stack-seg{display:block;min-width:2px;border-right:2px solid #fff;cursor:pointer}.stack-seg:focus-visible{outline:3px solid var(--blue);outline-offset:-3px}.stack-key{list-style:none;margin:0 0 14px;padding:0}
@@ -584,8 +570,6 @@ details.audit>summary span{font:400 var(--fs-compact)/1 'Red Hat Text',sans-seri
 .context-bar[hidden]{display:none}
 .context-run{margin:0;min-width:0;max-width:100%;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;overflow-wrap:anywhere}.context-run>*{min-width:0}.context-revision{margin:0;min-width:0;overflow-wrap:anywhere}.context-run strong{color:var(--text-primary)}
 @media(max-width:720px){.context-bar{padding:4px 15px}}
-.index-table{font-size:var(--fs-label)}.index-table th,.index-table td{vertical-align:top;font-family:'Red Hat Text',sans-serif}.index-table .index-limit{min-width:220px;overflow-wrap:anywhere}
-.chart-index .table-scroll{overflow-x:auto}
 .history-table,.dates-table{width:100%;border-collapse:collapse;font-size:var(--fs-control)}
 .history-table caption,.dates-table caption{text-align:left;padding:8px 0;color:var(--text-secondary);font-size:var(--fs-label)}
 .history-table th,.history-table td,.dates-table th,.dates-table td{text-align:left;vertical-align:top;padding:8px 10px;border-bottom:1px solid var(--border-secondary)}
@@ -593,7 +577,6 @@ details.audit>summary span{font:400 var(--fs-compact)/1 'Red Hat Text',sans-seri
 .history-table tbody th small{display:block;color:var(--text-tertiary);font-weight:400}
 .history-table a,.dates-table a{color:var(--blue-700);font-weight:600}
 .history-table tr.selected-run{background:var(--gray-25)}
-.history-modules{margin:0;padding:0;list-style:none}
 .nav-heading{font-size:var(--fs-label);font-weight:600;color:var(--muted);margin:0;padding:0 4px 7px}
 .module-list{list-style:none;margin:0;padding:0}
 .module-item{flex-direction:row;flex-wrap:wrap;align-items:baseline;column-gap:8px}
@@ -612,13 +595,10 @@ td .basis-link{margin-left:6px}
 .calculation-row{margin:6px 0;display:grid;gap:4px}.calculation-row>div{display:grid;grid-template-columns:minmax(70px,auto) 1fr;gap:8px}.calculation-row dt{color:var(--muted);font-size:var(--fs-label)}.calculation-row dd{margin:0}
 .citations-heading{margin-top:14px}
 .library-not-shown{margin-top:24px}.library-not-shown summary,#evidence-record summary{cursor:pointer;font-weight:600}.library-not-shown h3,#evidence-record h3{margin:16px 0 6px}
-/* Changes tab (changes.js): chart rows reuse the dumbbell rows; everything else is plain text and tables. */
-.changes{max-width:980px}.changes-heading{margin-bottom:12px}.changes-first{font-size:var(--fs-control);color:var(--muted);margin:24px 0}
-.changes h3{margin:22px 0 8px}.changes-basis{display:block;margin-top:4px;color:var(--muted);font-size:var(--fs-label)}
-.changes-row>.chart-open{cursor:default}.changes-row>.chart-open:hover{background:none}.changes-chart:focus-visible{outline:2px solid var(--blue)}
+/* Changes tab (changes.js): the pieces below; the page's cards, tiles and charts are the shared components' (see the Changes blocks at the end). */
+.changes-heading{margin-bottom:12px}
+.changes h3{margin:22px 0 8px}
 .changes td small,.changes th small{display:block;color:var(--muted);font-size:var(--fs-label)}
-.net-debt-change{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:8px 0}.net-debt-change dt{font-size:var(--fs-label);color:var(--muted)}.net-debt-change dd{margin:2px 0 0;font:var(--fs-control) 'Red Hat Mono',monospace}
-.maturity-chart{margin:8px 0 14px}.maturity-pair{display:grid;grid-template-columns:96px minmax(0,1fr);gap:2px 10px;align-items:center;margin-bottom:6px;font-size:var(--fs-label)}.maturity-pair span{grid-row:1/3}.maturity-pair i{display:block;height:6px;min-width:1px}
 .change-modules{border-top:1px solid var(--rule)}.change-module{border-bottom:1px solid var(--rule)}.change-module>summary{display:grid;grid-template-columns:minmax(120px,.9fr) auto minmax(0,1.4fr) minmax(0,1.4fr);gap:6px 14px;align-items:start;padding:10px 0;cursor:pointer;list-style:none}.change-module>summary::-webkit-details-marker{display:none}
 .change-name{font-weight:600}.change-then,.change-now{font-size:var(--fs-compact);color:var(--muted);display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden}.change-then small,.change-now small{display:block;font-size:var(--fs-label)}
 .change-module[open]>summary .change-then,.change-module[open]>summary .change-now{display:none}
@@ -656,19 +636,11 @@ td .basis-link{margin-left:6px}
 .context-bar .context-revision{flex:1 0 100%}
 @media(min-width:1301px){
 .workbench:not(.library-workspace,.overview-workspace,.tools-workspace){grid-template-columns:250px minmax(0,1fr)}
-.workbench.has-evidence:not(.library-workspace,.overview-workspace,.tools-workspace){grid-template-columns:250px minmax(0,1fr) 340px}
 .workbench.tools-workspace:has(.navigator.mobile-open){grid-template-columns:250px minmax(0,1fr)}
-.workbench.tools-workspace.has-evidence{grid-template-columns:minmax(0,1fr) 340px}
-.workbench.tools-workspace.has-evidence:has(.navigator.mobile-open){grid-template-columns:250px minmax(0,1fr) 340px}
-.workbench.overview-workspace.has-evidence{grid-template-columns:minmax(0,1fr) 340px}
 }
 @media(min-width:1051px) and (max-width:1300px){
 .workbench:not(.library-workspace,.overview-workspace,.tools-workspace){grid-template-columns:220px minmax(0,1fr)}
-.workbench.has-evidence:not(.library-workspace,.overview-workspace,.tools-workspace){grid-template-columns:220px minmax(0,1fr) 300px}
 .workbench.tools-workspace:has(.navigator.mobile-open){grid-template-columns:220px minmax(0,1fr)}
-.workbench.tools-workspace.has-evidence{grid-template-columns:minmax(0,1fr) 300px}
-.workbench.tools-workspace.has-evidence:has(.navigator.mobile-open){grid-template-columns:220px minmax(0,1fr) 300px}
-.workbench.overview-workspace.has-evidence{grid-template-columns:minmax(0,1fr) 300px}
 }
 .navigator{padding:16px 12px}
 .navigator-head{top:-16px}
@@ -683,7 +655,7 @@ td .basis-link{margin-left:6px}
 .section-item{padding:3px 8px;border-radius:5px;font:400 12px/18px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
 .section-item[aria-current]{background:var(--blue-50);color:var(--blue-700);font-weight:600}
 @media(min-width:1051px){.workbench.tools-workspace :is(#content,#module-head,.mobile-modules){padding-left:28px;padding-right:28px}}
-/* Redesign pass 1, module page and evidence inspector (task 2). Reading styles are classes (`.kicker`, `.reading-headline`, `.reading-prose`, `.reading-findings`, `.reading-limits`) so the Overview can use the same ones. */
+/* Redesign pass 1, module page and evidence inspector (task 2). */
 @media(min-width:1301px){.workbench:not(.library-workspace,.overview-workspace,.tools-workspace) #content{padding:26px 32px}}
 .kicker,.module-head .head-group,.module-head.has-bottom-line h2{font:600 12px/16px 'Red Hat Text',sans-serif;text-transform:uppercase;letter-spacing:.04em;color:var(--text-quaternary)}
 .module-head{justify-content:space-between;gap:8px 16px}
@@ -697,8 +669,7 @@ td .basis-link{margin-left:6px}
 .module-head .btn,.module-head .btn:hover{height:auto;padding:0;border:0;background:none;border-radius:0;color:var(--blue);font:600 13px/18px 'Red Hat Text',sans-serif}
 .module-head .btn:hover{text-decoration:underline;text-underline-offset:3px}
 .band{margin-top:8px;display:block;background:none;color:var(--text-primary);border-radius:0;padding:0}
-.band>p,.reading-headline .passage-text,.reading-headline .passage-list li{margin:8px 0 0;max-width:44ch;font:700 22px/30px 'Red Hat Display',sans-serif;color:var(--text-primary);text-wrap:pretty}
-.reading-headline .passage-list{list-style:none;margin:0;padding:0}
+.band>p{margin:8px 0 0;max-width:44ch;font:700 22px/30px 'Red Hat Display',sans-serif;color:var(--text-primary);text-wrap:pretty}
 .band dl{margin:14px 0 0;font:400 13px/18px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
 .band dt{display:inline;font-weight:600;color:var(--text-secondary)}
 .band dd{display:inline;margin:0 0 0 6px;color:var(--text-secondary)}
@@ -707,7 +678,7 @@ td .basis-link{margin-left:6px}
 .band-link{color:var(--text-quaternary);font:400 13px/18px 'Red Hat Text',sans-serif;text-decoration:none}
 .band-link:hover,.band-link:focus-visible{color:var(--blue);text-decoration:underline;text-underline-offset:3px}
 section.part{margin-top:0}
-section.part>:is(h3,h4):not(.sr-only),section.part>.analysis-section:only-child>:is(h3,h4):first-child,.overview-part>h2:not(.kicker),#overview-lead .reading-findings>h3{margin:26px 0 10px;font:700 15px/22px 'Red Hat Display',sans-serif;color:var(--text-primary)}
+section.part>:is(h3,h4):not(.sr-only),section.part>.analysis-section:only-child>:is(h3,h4):first-child,.overview-part>h2:not(.kicker){margin:26px 0 10px;font:700 15px/22px 'Red Hat Display',sans-serif;color:var(--text-primary)}
 .analysis-text,.reading-prose .passage-text,#overview-lead>.intro{margin:10px 0 0;max-width:66ch;font:400 15px/24px 'Red Hat Text',sans-serif;color:var(--text-primary)}
 :is(h3,h4,h5,h6)+.analysis-text,.reading-prose>:is(h3,h4)+.passage-text{margin-top:14px}
 .reading-prose .passage-list{max-width:66ch;font:400 15px/24px 'Red Hat Text',sans-serif}
@@ -715,19 +686,15 @@ section.part>:is(h3,h4):not(.sr-only),section.part>.analysis-section:only-child>
 :is(section.part,.overview-part) .figure[aria-pressed=true]{background:var(--blue-50);border-radius:3px;padding:0 2px}
 :is(section.part,.overview-part) .basis-link{font:400 13px/18px 'Red Hat Text',sans-serif;color:var(--text-quaternary);text-decoration:none}
 :is(section.part,.overview-part) .basis-link:is(:hover,:focus-visible){color:var(--blue);text-decoration:underline;text-underline-offset:3px}
-.reading-findings .passage-list{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:12px}
-.reading-findings .passage-list li{position:relative;margin:0;padding-left:18px;max-width:66ch;font:400 15px/24px 'Red Hat Text',sans-serif;color:var(--text-primary)}
-.reading-findings .passage-list li::before,section.part article.finding::before{content:"";position:absolute;left:0;top:9px;width:6px;height:6px;border-radius:50%;background:var(--blue)}
+section.part article.finding::before{content:"";position:absolute;left:0;top:9px;width:6px;height:6px;border-radius:50%;background:var(--blue)}
 section.part article.finding,section.part article.finding:first-of-type{position:relative;display:block;margin:14px 0 0;padding:0 0 0 18px;border:0;max-width:66ch}
 section.part article.finding h4{margin:0;font:600 15px/24px 'Red Hat Text',sans-serif;color:var(--text-primary)}
 section.part article.finding .impact{margin:2px 0 0;font:400 14px/21px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
 section.part article.finding .impact b{margin-right:6px;font:inherit;font-weight:600;text-transform:none;letter-spacing:0;color:inherit}
 section.part article.finding .finding-line{margin:4px 0 0;font:400 13px/18px 'Red Hat Text',sans-serif;color:var(--text-quaternary)}
 section.part article.finding .conf{margin-right:10px;font:inherit;color:inherit}
-.reading-limits .passage-list{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:8px}
-.reading-limits .passage-list li,.reading-limits .passage-text,section.part .limits p{position:relative;margin:0;padding-left:16px;max-width:70ch;font:400 14px/21px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
-.reading-limits .passage-text{margin-top:8px}
-.reading-limits .passage-list li::before,.reading-limits .passage-text::before,section.part .limits p::before{content:"";position:absolute;left:0;top:8px;width:6px;height:6px;border-radius:50%;background:var(--dot-quiet)}
+section.part .limits p{position:relative;margin:0;padding-left:16px;max-width:70ch;font:400 14px/21px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
+section.part .limits p::before{content:"";position:absolute;left:0;top:8px;width:6px;height:6px;border-radius:50%;background:var(--dot-quiet)}
 section.part .limits{display:block}
 section.part .limits>div{padding:0;border:0;background:none;margin-top:12px}
 section.part .limits p+p{margin-top:8px}
@@ -772,77 +739,19 @@ details.fold[open]>:last-child,details.audit[open]>:last-child{margin-bottom:14p
 .source-location .inspector-card p:first-child{font-weight:600;color:var(--text-primary)}
 .source-location .inspector-card a{margin-top:8px;font-size:13px}
 .source-location .inspector-card .small{margin-top:8px;color:var(--text-quaternary)}
-/* Redesign pass 1, Overview (task 3). Two columns from 1301px, one column below; the row grids hold from 721px, so 720px and below keep today's block layout. Reading styles are the module page's classes. */
-.overview-main,.overview-aside{min-width:0}
-.overview-part{margin-top:30px}
-.overview-part:first-child{margin-top:8px}
-.overview-aside>.overview-part:first-child{margin-top:30px}
-.overview-part>h2:not(.kicker){margin:0;padding:0;border:0}
-#overview-lead>:is(h2,.lead-source){display:inline;margin:0;padding:0;border:0}
-#overview-lead>.lead-source::before{content:"·";margin:0 8px}
-#overview-lead .lead-source a{color:inherit;text-decoration:none}
-#overview-lead .lead-source a:hover,#overview-lead .lead-source a:focus-visible{color:var(--blue);text-decoration:underline;text-underline-offset:3px}
-#overview-lead>.intro{margin:8px 0 0}
-#overview-lead .reading-headline .passage-text,#overview-lead .reading-headline .passage-list li{max-width:46ch}
-#overview-lead .reading-findings>h3{margin-bottom:0}
-#overview-bottom-lines .bottom-entry>h3{margin:0}
-#overview-bottom-lines>.bottom-entry:first-of-type{margin-top:10px;border-top:1px solid var(--gray-200)}
-#overview-bottom-lines .bottom-entry{padding:12px 0;border-bottom:1px solid var(--ground)}
-#overview-bottom-lines .bottom-entry>h3{font:600 14px/20px 'Red Hat Text',sans-serif;color:var(--text-primary)}
-#overview-bottom-lines .bottom-entry>h3 a{color:inherit;text-decoration:none}
-#overview-bottom-lines .bottom-entry>h3 a:hover,#overview-bottom-lines .bottom-entry>h3 a:focus-visible{color:var(--blue);text-decoration:underline;text-underline-offset:3px}
-#overview-bottom-lines .bottom-entry :is(.passage-text,.passage-list,.intro){margin:0;font:400 14px/21px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
-#overview-bottom-lines .bottom-entry .passage-text+.passage-text{margin-top:8px}
-@media(min-width:721px){
-#overview-bottom-lines .bottom-entry{display:grid;grid-template-columns:210px minmax(0,1fr);column-gap:20px;align-items:start}
-#overview-bottom-lines .bottom-entry>h3{grid-column:1;grid-row:1}
-#overview-bottom-lines .bottom-entry>:not(h3){grid-column:2}
-}
-#overview-limitations .reading-limits .passage-list{margin:10px 0 0;gap:10px;max-width:70ch}
-#overview-limitations .reading-limits li .limit-module{display:inline;margin-left:6px;font:inherit;color:var(--text-quaternary)}
-#overview-limitations .reading-limits li .limit-module a{color:inherit;font-weight:400}
-#overview-limitations>.intro,#overview-dates>.intro{margin:10px 0 0;font:400 14px/21px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
-#overview-charts{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline}
-#overview-charts>:not(h2,.chart-index-link){grid-column:1/-1;min-width:0}
-.chart-index-link{font:600 13px/18px 'Red Hat Text',sans-serif;color:var(--blue);text-decoration:none}
-.chart-index-link:hover,.chart-index-link:focus-visible{text-decoration:underline;text-underline-offset:3px}
-.overview-charts{margin-top:0}
-.overview-charts :is(.panel-card,.map-card){margin:10px 0 0;padding:14px 16px;border:1px solid var(--gray-200);border-radius:10px;overflow-x:auto;max-width:100%}
-#overview-dates .table-scroll{position:relative;margin-top:10px;border:0;border-top:1px solid var(--gray-200);border-radius:0;box-shadow:none;background:none}
-#overview-dates .dates-table caption{padding:8px 0;font:400 13px/18px 'Red Hat Text',sans-serif;color:var(--text-quaternary)}
-@media(min-width:721px){
-#overview-dates .dates-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
-#overview-dates .dates-table thead th{position:static}
-#overview-dates .dates-table tbody tr{display:grid;grid-template-columns:96px minmax(0,1fr);column-gap:12px;padding:9px 0;border-bottom:1px solid var(--ground)}
-#overview-dates .dates-table tbody tr:hover>*{background:none}
-#overview-dates .dates-table tbody :is(th,td){padding:0;border:0;font:400 13px/19px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
-#overview-dates .dates-table tbody th{grid-column:1;grid-row:1/span 2;font:500 13px/19px 'Red Hat Mono',monospace;color:var(--text-primary)}
-#overview-dates .dates-table tbody td:nth-of-type(1){grid-column:2;grid-row:1}
-#overview-dates .dates-table tbody td:nth-of-type(2){grid-column:2;grid-row:2;color:var(--text-quaternary)}
-#overview-dates .dates-table tbody td:nth-of-type(2) a{color:inherit;font-weight:400}
-}
-@media(min-width:1301px){
-#content:has(>.overview-main){display:grid;grid-template-columns:minmax(0,1fr) 400px;column-gap:40px;align-items:start;padding:26px 28px 24px}
-.overview-aside{display:grid;gap:22px}
-.overview-aside>.overview-part{margin-top:0}
-.overview-aside>.overview-part:first-child{margin-top:8px}
-.workbench.overview-workspace #module-head{padding-left:28px}
-}
-@media screen{.overview-aside .column-chart .periods{grid-template-columns:repeat(var(--periods),minmax(140px,1fr))}}
-/* Debt stack: one series per ranking and security pair (blue, bright green, yellow, violet; no amber or red here); an unstated ranking is neutral with an outline. */
-.stack-seg.series-1,.stack-key .series-1,.stack-legend .series-1{background:var(--series-2)}
+/* Debt stack: one series per ranking and security pair (blue, violet, yellow, navy: no status green, amber or red, and neighbours differ in lightness); an unstated ranking is neutral with an outline. */
+.stack-seg.series-1,.stack-key .series-1,.stack-legend .series-1{background:var(--series-4)}
 .stack-seg.series-2,.stack-key .series-2,.stack-legend .series-2{background:var(--series-3)}
-.stack-seg.series-3,.stack-key .series-3,.stack-legend .series-3{background:var(--series-4)}
+.stack-seg.series-3,.stack-key .series-3,.stack-legend .series-3{background:var(--navy)}
 .stack-seg.stack-neutral,.stack-key .stack-neutral,.stack-legend .stack-neutral{background:var(--rule);box-shadow:inset 0 0 0 1px var(--muted)}
 .stack-legend i{height:12px;width:12px;border-radius:2px}
 .vector-chart.bridge-wide{max-width:none;overflow-x:auto}
 /* Eight styles for the debt stack: from the fifth distinct pair the same fill carries a hatch. */
 .stack-seg.hatch,.stack-key .hatch,.stack-legend .hatch{background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.6) 0 3px,transparent 3px 6px)}
-.stack-seg.series-1.hatch,.stack-key .series-1.hatch,.stack-legend .series-1.hatch{background-image:repeating-linear-gradient(45deg,var(--series-2-ln) 0 2px,transparent 2px 6px)}
+.stack-seg.series-1.hatch,.stack-key .series-1.hatch,.stack-legend .series-1.hatch{background-image:repeating-linear-gradient(45deg,var(--series-4-ln) 0 2px,transparent 2px 6px)}
 .stack-seg.series-2.hatch,.stack-key .series-2.hatch,.stack-legend .series-2.hatch{background-image:repeating-linear-gradient(45deg,var(--series-3-ln) 0 2px,transparent 2px 6px)}
-.stack-seg.series-3.hatch,.stack-key .series-3.hatch,.stack-legend .series-3.hatch{background-image:repeating-linear-gradient(45deg,var(--series-4-ln) 0 2px,transparent 2px 6px)}
+.stack-seg.series-3.hatch,.stack-key .series-3.hatch,.stack-legend .series-3.hatch{background-image:repeating-linear-gradient(45deg,var(--blue-100) 0 2px,transparent 2px 6px)}
 /* Run activity (brand application Task 5): run cards with module progress, a table of waiting runs, counts and a centred empty state. Red Hat faces as before; spend is not shown. */
-.run-vh{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .run-activity-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin:0 0 20px}
 .run-activity-head .run-updated{margin:0}
 .run-tally{display:flex;gap:32px;margin:0}.run-tally>div{display:flex;flex-direction:column}
@@ -857,43 +766,1083 @@ details.fold[open]>:last-child,details.audit[open]>:last-child{margin-bottom:14p
 .run-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:16px 20px 0}
 .run-who{min-width:0}.run-who strong{display:block;font:600 16px/24px 'Red Hat Text',sans-serif;color:var(--text-primary);overflow-wrap:anywhere}
 .run-who p{margin:0;font:400 14px/20px 'Red Hat Text',sans-serif;color:var(--text-quaternary)}
-.run-who .code{font:400 12px/16px 'Red Hat Mono',monospace;color:var(--text-tertiary);white-space:nowrap}
 .run-marks{display:flex;align-items:center;gap:8px;flex-shrink:0}
-.run-tag{display:inline-flex;align-items:center;height:22px;padding:0 7px;font:400 12px/20px 'Red Hat Text',sans-serif;border:1px solid var(--border-primary);border-radius:4px;background:var(--gray-100);color:var(--text-secondary);white-space:nowrap}
-.run-badge{display:inline-flex;align-items:center;gap:6px;height:24px;padding:2px 8px 2px 6px;font:500 14px/20px 'Red Hat Text',sans-serif;border-radius:6px;white-space:nowrap}
-.run-badge::before,.run-mods .chip-running::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
-.run-badge-running{background:var(--blue-50);color:var(--blue-700);box-shadow:inset 0 0 0 1px var(--blue-100)}
-.run-badge-stalled{background:var(--amber-bg);color:var(--amber);box-shadow:inset 0 0 0 1px var(--amber-border)}
-.run-progress{display:flex;align-items:center;gap:12px;padding:16px 20px 0}
-.run-progress progress{flex:1;min-width:0;height:8px;appearance:none;-webkit-appearance:none;border:0;border-radius:6px;background:var(--gray-200);overflow:hidden}
-.run-progress progress::-webkit-progress-bar{background:var(--gray-200);border-radius:6px}
-.run-progress progress::-webkit-progress-value{background:var(--blue);border-radius:6px}
-.run-progress progress::-moz-progress-bar{background:var(--blue);border-radius:6px}
-.run-done{font:600 14px/20px 'Red Hat Text',sans-serif;color:var(--text-primary);text-align:right;white-space:nowrap}
-.run-mods{display:flex;flex-wrap:wrap;gap:6px;padding:10px 20px 0}
-.run-mods .chip{display:inline-flex;align-items:center;gap:4px;height:22px;padding:2px 6px;border:0;border-radius:6px;font:500 12px/18px 'Red Hat Text',sans-serif;box-shadow:none;position:relative}
-.run-mods .chip-done{background:#e8fff4;color:var(--green);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--green) 30%,#fff)}
-.run-mods .chip-done::before{content:"✓"}
-.run-mods .chip-running{background:var(--blue-50);color:var(--blue-700);box-shadow:inset 0 0 0 1px var(--blue-100)}
-.run-mods .chip-waiting{background:var(--gray-100);color:var(--text-tertiary);box-shadow:inset 0 0 0 1px var(--border-secondary)}
 .run-foot{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:8px 16px;margin-top:16px;padding:12px 20px;border-top:1px solid var(--border-secondary);font:400 14px/22px 'Red Hat Text',sans-serif}
-.run-foot .run-files{flex:1 1 auto;min-width:0;font-size:14px}.run-foot .run-files ul{overflow-wrap:anywhere}
+.run-foot .run-files{flex:1 1 auto;min-width:0}
 .run-foot-notes{margin-left:auto;color:var(--text-quaternary);text-align:right}
-.run-held{margin:0 0 12px;padding:8px 12px;border:1px solid var(--amber-border);border-radius:8px;background:var(--amber-bg);font:400 14px/22px 'Red Hat Text',sans-serif;color:var(--amber)}
-.run-table-wrap{background:#fff;border:1px solid var(--border-secondary);border-radius:12px;box-shadow:var(--shadow-xs);overflow:hidden}
-.run-table{width:100%;border-collapse:collapse;table-layout:auto}
-.run-table thead th{height:44px;padding:0 20px;text-align:left;vertical-align:middle;font:600 12px/18px 'Red Hat Text',sans-serif;color:var(--text-quaternary);background:var(--gray-50);border-bottom:1px solid var(--border-secondary)}
-.run-table tbody th,.run-table tbody td{padding:14px 20px;text-align:left;vertical-align:top;border-bottom:1px solid var(--border-secondary);overflow-wrap:break-word}
-.run-table tbody tr:last-child>*{border-bottom:0}
-.run-table tbody th{font-weight:400}.run-table td{font:400 14px/20px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
-.run-name{display:block;font:500 14px/20px 'Red Hat Text',sans-serif;color:var(--text-primary)}
-.run-sub{display:block;font:400 12px/18px 'Red Hat Text',sans-serif;color:var(--text-quaternary)}
-.run-sub .code{font:400 12px/18px 'Red Hat Mono',monospace;color:var(--text-quaternary)}
-.activity-empty{display:flex;flex-direction:column;align-items:center;text-align:center;gap:4px;max-width:none;margin:48px auto}
-.activity-empty .empty-symbol{background:#fff;border-radius:10px;box-shadow:inset 0 0 0 1px var(--border-primary),var(--shadow-xs);margin-bottom:12px}
-.missing-state.activity-empty h2{margin:0}
-.missing-state.activity-empty p{max-width:352px;margin:0;color:var(--text-quaternary)}
-.activity-empty .primary-action{margin-top:20px}
-@media(max-width:720px){.run-activity-head{flex-direction:column;gap:12px}.run-head{flex-direction:column}.run-marks{flex-wrap:wrap}.run-who .code{white-space:normal;overflow-wrap:anywhere}.run-foot-notes{margin-left:0;text-align:left}.run-table thead th,.run-table tbody th,.run-table tbody td{padding-left:12px;padding-right:12px}}
-@media print{.run-card{box-shadow:inset 0 0 0 1px var(--border-secondary)}.run-table-wrap,.activity-empty .primary-action{box-shadow:none}}
-@media(forced-colors:active){.run-mods .chip,.run-card,.run-table-wrap{border:1px solid}.run-progress progress{appearance:auto}}
+.run-name{display:block;font:600 14px/20px 'Red Hat Text',sans-serif;color:var(--text-primary);overflow-wrap:anywhere}
+.run-sub{display:block;font:400 13px/18px 'Red Hat Text',sans-serif;color:var(--text-quaternary);overflow-wrap:anywhere}
+.run-who p{overflow-wrap:anywhere}
+.run-files{display:inline-flex;align-items:center;gap:6px;color:var(--text-tertiary)}
+.run-queue{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.run-queue li{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:6px 12px;min-width:0;padding:10px 14px;background:#fff;border-radius:10px;box-shadow:inset 0 0 0 1px var(--border-secondary),var(--shadow-xs)}
+.rq-who{min-width:0}.rq-mark{min-width:92px}
+.steps-w{padding:16px 20px 0}
+.steps-w:has(.steps-l){container-type:inline-size}
+.steps.steps-l{display:grid;grid-template-columns:minmax(0,1fr);gap:14px 0;align-items:stretch}
+.steps-l .step{position:relative;flex:none;min-width:0;max-width:100%;height:auto;min-height:44px;box-sizing:border-box;display:flex;flex-wrap:wrap;align-items:center;gap:2px 10px;padding:6px 10px;border-radius:8px;background:var(--gray-50);box-shadow:inset 0 0 0 1px var(--border-secondary);font:500 13px/20px 'Red Hat Text',sans-serif;color:var(--text-primary)}
+.steps-l .step.done,.steps-l .step.running{background:var(--gray-50);height:auto}
+.steps-l .step .state{flex:none;max-width:100%;border:0;padding:0;background:none;flex-wrap:wrap}
+.steps-l .step .state-w{white-space:nowrap}
+.steps-l .step .steps-el{white-space:nowrap}
+/* A connector from each step to the next: vertical where the steps stack in one column, horizontal across a row of columns (the last step of a row has none). */
+.steps-l .step:not(:last-child)::after{content:"";position:absolute;left:22px;top:100%;width:2px;height:14px;background:var(--border-secondary)}
+@container (min-width:560px){.steps.steps-l{grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:1fr;gap:14px 28px}.steps-l .step::after{left:100%!important;top:50%!important;width:28px!important;height:2px!important}.steps-l .step:nth-child(2n)::after{display:none}}
+@container (min-width:840px){.steps.steps-l{grid-template-columns:repeat(3,minmax(0,1fr))}.steps-l .step:nth-child(2n)::after{display:block}.steps-l .step:nth-child(3n)::after{display:none}}
+@container (min-width:1120px){.steps.steps-l{grid-template-columns:repeat(4,minmax(0,1fr))}.steps-l .step:nth-child(3n)::after{display:block}.steps-l .step:nth-child(4n)::after{display:none}}
+.steps-l .step:last-child::after{display:none!important}
+.st-n{min-width:0;overflow-wrap:anywhere}
+.steps-l .st-n{flex:1 1 9rem}
+.steps-t,.steps-now{overflow-wrap:anywhere}
+.run-reason,.run-foot-notes{overflow-wrap:anywhere}
+.run-held{display:flex;align-items:flex-start;gap:8px;margin:0 0 20px;padding:10px 14px;border:1px solid var(--amber-border);border-radius:10px;background:var(--amber-bg);font:500 14px/22px 'Red Hat Text',sans-serif;color:var(--amber);overflow-wrap:anywhere}
+.run-held .i{flex:none;margin-top:3px}
+.steps-el{font-variant-numeric:tabular-nums;color:var(--text-tertiary)}
+.activity-empty{max-width:560px;margin:32px auto}
+.activity-empty .empty-state{margin-top:0}
+.activity-empty .primary-action{margin-top:4px}
+.run-card .state,.run-queue .state{white-space:nowrap}
+.toast button{pointer-events:auto;margin-left:6px;padding:0;border:0;background:none;font:inherit;font-weight:700;color:#fff;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.toast button:focus-visible{outline:2px solid #fff;outline-offset:2px;border-radius:2px}
+@media(max-width:720px){.run-activity-head{flex-direction:column;gap:12px}.run-head{flex-direction:column}.run-marks{flex-wrap:wrap}.run-foot-notes{margin-left:0;text-align:left}.run-queue li{grid-template-columns:minmax(0,1fr);justify-items:start}.steps-w{padding:16px 14px 0}.run-head{padding:16px 14px 0}.run-foot{padding:12px 14px}}
+@media print{.run-card{box-shadow:inset 0 0 0 1px var(--border-secondary)}.activity-empty .primary-action{box-shadow:none}}
+@media(forced-colors:active){.run-card,.run-queue li,.run-held,.steps-l .step{border:1px solid}}
+
+/* ---- Library redesign, shell: pill tabs, header chips, trace icon, drawer, toast, tooltip. Colours are the tokens above. ---- */
+.issuer-row h1{font:700 32px/1.1 'Red Hat Display',sans-serif;letter-spacing:-.015em}
+@media(max-width:720px){.issuer-row h1{font-size:26px;line-height:1.15}}
+.hchips{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 0}
+.hchip{display:inline-flex;align-items:center;min-height:24px;padding:2px 10px;border:1px solid var(--rule);border-radius:999px;background:var(--quiet);font:500 12px/16px 'Red Hat Text',sans-serif;color:var(--text-secondary);text-decoration:none}
+.hchip.amber{background:var(--amber-bg);border-color:var(--amber-border);color:var(--amber)}
+a.hchip:hover{text-decoration:underline;text-underline-offset:3px}
+a.hchip:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.workspace-tabs{position:relative;gap:4px;padding:10px 28px 12px;overflow-x:auto;scrollbar-width:none}
+.workspace-tabs::-webkit-scrollbar{display:none}
+.workspace-tabs>a{position:relative;z-index:1;display:inline-flex;align-items:center;height:36px;margin:0;padding:0 16px;border:0;border-radius:999px;font:600 14px/20px 'Red Hat Text',sans-serif;color:var(--text-secondary);white-space:nowrap}
+.workspace-tabs>a:hover{background:var(--ground);color:var(--navy)}
+.workspace-tabs>a[aria-current]{background:var(--navy);color:#fff}
+.workspace-tabs>a:focus-visible{outline:2px solid var(--blue);outline-offset:2px;box-shadow:none;border-radius:999px}
+.workspace-tabs.has-pill>a[aria-current]{background:transparent}
+.workspace-tabs.has-pill::before{content:"";position:absolute;z-index:0;left:0;top:0;width:var(--pill-w);height:var(--pill-h);transform:translate(var(--pill-x),var(--pill-y));border-radius:999px;background:var(--navy);pointer-events:none}
+@media(max-width:720px){.workspace-tabs{padding:8px 15px 10px}}
+.basis-link{display:inline-grid;place-items:center;flex:none;width:24px;height:24px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--text-quaternary);font-size:0;line-height:0;vertical-align:middle;text-decoration:none}
+.basis-link .i{width:16px;height:16px}
+.basis-link:hover,.basis-link[aria-pressed=true]{background:var(--selection);color:var(--blue);text-decoration:none}
+.basis-link:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
+td .basis-link{margin-left:4px}
+.inspector{position:fixed;top:0;right:0;bottom:0;z-index:61;display:flex;flex-direction:column;width:420px;max-width:100%;overflow:hidden;border-left:1px solid var(--rule);background:#fff;box-shadow:var(--depth)}
+@media screen{.inspector[hidden]{display:flex!important;visibility:hidden;transform:translateX(100%)}}  /* the closed drawer slides off screen; in print it is not drawn (the print list hides it) */
+@media(max-width:767.98px){.inspector{width:100%}}
+.inspector-bar{position:static;flex:none;justify-content:flex-start;gap:10px;padding:14px 16px 14px 20px;background:#fff}
+.inspector-bar .drawer-title{flex:1;margin:0;font:700 16px/24px 'Red Hat Display',sans-serif;color:var(--text-primary)}
+.inspector-bar .drawer-close{justify-content:center;width:32px;height:32px;border:1px solid var(--rule);border-radius:var(--radius-control);background:#fff;color:var(--text-primary)}
+.inspector-bar .drawer-close:hover{background:var(--selection)}
+.inspector-bar .drawer-close:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.inspector .inspector-body{flex:1 1 auto;min-height:0;max-width:none;overflow:auto;padding:20px 22px}
+.inspector .evidence-fields>div{display:block}
+@media(max-width:767.98px){.inspector .inspector-body{padding:18px 16px}}
+.drawer-foot{flex:none;padding:14px 22px;border-top:1px solid var(--rule);background:#fff}
+.drawer-foot .text-action{display:inline-flex;align-items:center;gap:6px;font-weight:600}
+.drawer-backdrop{position:fixed;inset:0;z-index:60;background:color-mix(in srgb,var(--navy) 38%,transparent);opacity:0;visibility:hidden}
+@media(max-width:1599.98px){.inspector:not([hidden])+.drawer-backdrop{opacity:1;visibility:visible}}
+@media(min-width:1600px){.app:has(.inspector:not([hidden])){padding-right:445px}}
+.toast-host{position:fixed;right:24px;bottom:24px;z-index:80;display:flex;flex-direction:column;align-items:flex-end;gap:8px;pointer-events:none}
+.toast{margin:0;padding:10px 14px;border-radius:10px;background:var(--navy);color:#fff;font:500 13px/18px 'Red Hat Text',sans-serif;box-shadow:var(--depth)}
+[data-tip]{position:relative}
+[data-tip]::after{content:attr(data-tip);display:none;position:absolute;z-index:70;left:50%;bottom:calc(100% + 8px);transform:translateX(-50%);width:max-content;max-width:240px;padding:6px 9px;border-radius:8px;background:var(--navy);color:#fff;font:500 12px/1.35 'Red Hat Text',sans-serif;text-align:left;white-space:normal;pointer-events:none}
+[data-tip]:is(:hover,:focus-visible)::after{display:block;animation:tip-show 1ms linear .4s both}
+@keyframes tip-show{from{opacity:0;visibility:hidden}to{opacity:1;visibility:visible}}
+@media(prefers-reduced-motion:no-preference){
+.workspace-tabs.has-pill::before{transition:transform .3s cubic-bezier(.4,0,.2,1),width .3s cubic-bezier(.4,0,.2,1)}
+.workspace-tabs>a{transition:color .2s,background-color .2s}
+.inspector{transition:transform .3s cubic-bezier(.4,0,.2,1),visibility 0s}
+.inspector[hidden]{transition:transform .3s cubic-bezier(.4,0,.2,1),visibility 0s linear .3s}
+.drawer-backdrop{transition:opacity .3s,visibility 0s linear .3s}
+.inspector:not([hidden])+.drawer-backdrop{transition:opacity .3s,visibility 0s}
+.toast{animation:toast-in .25s ease-out}
+[data-tip]:is(:hover,:focus-visible)::after{animation-duration:.12s}
+@keyframes toast-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+}
+@media(forced-colors:active){.hchip{border:1px solid}.basis-link{border:1px solid}.inspector{border-left:2px solid}.toast{border:1px solid}}
+@media print{.toast-host,.drawer-backdrop,.basis-link{display:none!important}*{transition:none!important;animation:none!important}}
+/* Evidence page (library redesign, task 3): a governance summary, a filter bar, tabs by kind, the tab's panel and the original handoffs. Everything is under .ev. */
+.ev{display:flex;flex-direction:column;gap:20px;min-width:0}
+.ev [hidden]{display:none!important}
+.ev a{color:var(--blue)}
+.ev .mono{font-family:'Red Hat Mono',ui-monospace,Menlo,monospace;font-size:11.5px;font-weight:500}
+.ev .num{text-align:right;font-variant-numeric:tabular-nums}
+.ev-title{margin:0;font:700 20px/1.25 'Red Hat Display','Red Hat Text',sans-serif;letter-spacing:-.01em}
+.ev-card{background:#fff;border:1px solid var(--rule);border-radius:12px}
+.ev-muted{color:var(--muted)}
+.ev-gov{display:grid;grid-template-columns:minmax(0,4fr) minmax(0,3fr) minmax(0,3fr) minmax(0,6fr) minmax(0,4fr) minmax(0,4fr);background:#fff;border:1px solid var(--rule);border-radius:12px}
+.ev-gov>div{padding:20px;border-left:1px solid var(--rule);display:flex;flex-direction:column;gap:6px;min-width:0}
+.ev-gov>div:first-child{border-left:0}
+.ev-lab{font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--text-tertiary)}
+.ev-big{font:700 40px/1 'Red Hat Display','Red Hat Text',sans-serif;letter-spacing:-.025em;font-variant-numeric:tabular-nums}
+.ev-cap{font-size:12px;color:var(--muted);line-height:1.4}
+.ev-ring{position:relative;width:150px;height:84px;margin:2px 0 0}
+.ev-ring svg{width:150px;height:84px;overflow:visible}
+.ev-ring .rt{fill:none;stroke:var(--rule);stroke-width:12;stroke-linecap:round}
+.ev-ring .rf{fill:none;stroke:var(--blue);stroke-width:12;stroke-linecap:round}
+.ev-rn{position:absolute;left:0;right:0;bottom:0;text-align:center;font:700 28px/1 'Red Hat Display','Red Hat Text',sans-serif}
+.ev-rn small{display:block;font:500 11px 'Red Hat Text',sans-serif;color:var(--muted);margin-top:2px}
+.ev-gbars{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 16px;margin-top:2px}
+.ev-gb{display:grid;grid-template-columns:24px minmax(0,1fr);align-items:center;gap:6px;height:16px;position:relative}
+.ev-gb b{font:600 11px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
+.ev-gb i{display:block;height:7px;border-radius:2px;background:var(--navy);min-width:2px}
+.ev-gb.z i{background:var(--rule)}
+.ev-mc-list{display:flex;flex-direction:column;gap:6px;font-size:12px;line-height:1.4;margin:0;padding:0;list-style:none}
+.ev-mc-list li{display:flex;gap:6px;overflow-wrap:anywhere}
+.ev-mc-list .i{margin-top:2px}
+.ev-rr{display:flex;flex-direction:column;font-size:12px}
+.ev-ln{display:grid;grid-template-columns:12px minmax(0,1fr);gap:8px}
+.ev-pt{width:10px;height:10px;border-radius:50%;border:2px solid var(--navy);margin-top:4px;background:#fff}
+.ev-pt.e{background:var(--navy)}
+.ev-bar{width:2px;height:16px;background:var(--gray-300);margin:2px 0 2px 5px}
+.ev-rr .ev-l{color:var(--muted);font-size:11px}
+.ev-t{font-family:'Red Hat Mono',ui-monospace,Menlo,monospace;font-size:11.5px;font-weight:500;overflow-wrap:anywhere}
+.ev-cap-pill{display:inline-flex;align-self:flex-start;margin-top:8px;padding:2px 10px;border:1px solid var(--navy);border-radius:999px;font-size:12px;font-weight:600}
+.ev-sub-h .ev-cap-pill{margin:0 0 0 10px;vertical-align:middle}
+@media(max-width:1199px){.ev-gov{grid-template-columns:repeat(2,minmax(0,1fr))}.ev-gov>div{border-left:0;border-top:1px solid var(--rule)}.ev-gov>div:nth-child(-n+2){border-top:0}.ev-gov>div:nth-child(even){border-left:1px solid var(--rule)}}
+@media(max-width:767px){.ev-gov{grid-template-columns:1fr}.ev-gov>div,.ev-gov>div:nth-child(even){border-left:0}.ev-gov>div:nth-child(2){border-top:1px solid var(--rule)}}
+.ev-fbar{padding:16px 20px;display:flex;flex-direction:column;gap:12px}
+.ev-search{position:relative;display:flex;align-items:center}
+.ev-search .i{position:absolute;left:12px;color:var(--text-quaternary);width:15px;height:15px}
+.ev-search input{width:100%;height:38px;padding:0 12px 0 36px;border:1px solid var(--gray-300);border-radius:8px;font:400 14px 'Red Hat Text',sans-serif;background:#fff;color:var(--navy)}
+.ev-search input:disabled{background:var(--quiet);color:var(--text-quaternary)}
+.ev-search input:focus-visible{outline:none;border-color:var(--blue);box-shadow:var(--ring)}
+.ev-match{margin:0;font-size:12px;color:var(--muted)}
+.ev-fchips{display:flex;flex-wrap:wrap;gap:6px}
+.ev-fc{display:inline-flex;align-items:center;height:28px;padding:0 12px;border:1px solid var(--rule);border-radius:999px;background:#fff;font-size:12px;font-weight:500;color:var(--text-secondary);text-decoration:none}
+.ev .ev-fc{color:var(--text-secondary)}
+.ev-fc:hover{border-color:var(--gray-300)}
+.ev .ev-fc[aria-current=true]{background:var(--navy);border-color:var(--navy);color:#fff}
+.ev-tabs{display:flex;gap:2px;border-bottom:1px solid var(--rule);overflow-x:auto;scrollbar-width:none}
+.ev-tabs::-webkit-scrollbar{display:none}
+.ev-tab{position:relative;display:inline-flex;align-items:center;gap:8px;padding:12px 14px;margin-bottom:-1px;border-bottom:2px solid transparent;font-size:13px;font-weight:500;color:var(--muted);white-space:nowrap;text-decoration:none}
+.ev .ev-tab{color:var(--muted)}
+.ev .ev-tab[aria-current=page]{border-bottom-color:var(--blue);color:var(--navy);font-weight:600}
+.ev-cnt{min-width:22px;height:18px;padding:0 7px;border-radius:999px;background:var(--ground);color:var(--muted);font-size:11px;font-weight:600;display:inline-grid;place-items:center}
+.ev-tab[aria-current=page] .ev-cnt{background:var(--selection);color:var(--blue)}
+.ev-panel{display:flex;flex-direction:column;gap:16px;min-width:0}
+.ev-empty{display:grid;justify-items:center;gap:10px;padding:28px 20px;border:1px dashed var(--gray-300);border-radius:12px;text-align:center;color:var(--muted);font-size:13px;background:#fff}
+.ev-empty .i{width:22px;height:22px;color:var(--text-quaternary)}
+.ev-empty strong{color:var(--navy);font-size:14px}
+.ev-empty .ev-fchips{justify-content:center}
+.ev-intro{color:var(--muted);font-size:12.5px;line-height:1.5}
+.ev-sub-h{font:700 15px 'Red Hat Display','Red Hat Text',sans-serif;margin:0 0 12px;display:flex;align-items:center;gap:8px}
+.ev-gap-top{margin-top:20px}
+.ev-sub{margin:10px 0 0;font-size:13px;font-weight:600}
+.ev-pill{display:inline-grid;place-items:center;min-width:22px;height:18px;padding:0 7px;border-radius:999px;background:var(--ground);color:var(--muted);font:600 11px 'Red Hat Text',sans-serif}
+.ev-guide{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.ev-guide-card{display:grid;grid-template-columns:36px minmax(0,1fr);gap:4px 12px;padding:16px;text-decoration:none;color:var(--navy)}
+.ev-guide-card:hover{border-color:var(--blue-100)}
+.ev-gi{grid-row:span 2;width:36px;height:36px;border-radius:8px;background:var(--selection);color:var(--blue);display:grid;place-items:center}
+.ev-gt{display:flex;align-items:center;gap:8px;font-weight:600;font-size:13.5px}
+.ev-gb-text{font-size:12.5px;color:var(--muted);line-height:1.5}
+.ev-trow{border:1px solid var(--rule);border-radius:12px;background:#fff;overflow:hidden}
+.ev-trow+.ev-trow{margin-top:8px}
+.ev-trow>button{all:unset;box-sizing:border-box;width:100%;display:grid;grid-template-columns:150px minmax(0,1fr) 18px;gap:14px;padding:12px 16px;cursor:pointer;align-items:start}
+.ev-trow>button:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
+.ev-mm{display:block;font-size:12px;font-weight:600}
+.ev-hh{display:block;font-size:11px;color:var(--text-quaternary);font-weight:500;margin-top:2px;line-height:1.3}
+.ev-st-wrap{min-width:0}
+.ev-st{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:13px;line-height:1.5}
+.ev-trow[data-open=true] .ev-st{display:none}
+.ev-bchips{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.ev-bc{display:inline-flex;align-items:center;gap:5px;max-width:100%;height:22px;padding:0 8px;border-radius:6px;background:var(--ground);font-size:11.5px;color:var(--text-secondary)}
+.ev-bc>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ev-bc .i{width:12px;height:12px;flex:none}
+.ev-bc.calc{background:var(--selection);color:var(--blue-700);font-family:'Red Hat Mono',ui-monospace,Menlo,monospace;font-size:11px;font-weight:500}
+.ev-bc.mod{background:#fff;border:1px solid var(--rule)}
+.ev-chev{color:var(--text-quaternary);margin-top:3px}
+.ev-trow[data-open=true] .ev-chev{transform:rotate(180deg)}
+.ev-trow-b{padding:2px 16px 16px 180px;display:flex;flex-direction:column;gap:10px}
+.ev-full{font-size:13.5px;line-height:1.65}
+.ev-exc{border:1px solid var(--rule);border-radius:10px;overflow:hidden}
+.ev-exc-h{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:7px 12px;background:var(--quiet);font-size:11.5px;color:var(--text-secondary);border-bottom:1px solid var(--rule);overflow-wrap:anywhere}
+.ev-ok,.ev-no{display:inline-flex;align-items:center;gap:4px;font-weight:600}
+.ev-ok{color:var(--green)}.ev-no{color:var(--red)}
+.ev-exc pre{margin:0;padding:10px 12px;font:400 12px/1.55 'Red Hat Text',sans-serif;white-space:pre-wrap;max-height:160px;overflow:auto}
+.ev-btn{display:inline-flex;align-items:center;justify-content:center;height:36px;padding:0 16px;border:1px solid var(--gray-300);border-radius:8px;background:#fff;font-size:13px;font-weight:600;color:var(--navy);cursor:pointer}
+.ev-btn:hover{background:var(--quiet)}
+.ev-more{align-self:center}
+@media(max-width:767px){.ev-trow>button{grid-template-columns:minmax(0,1fr) 18px}.ev-mc{grid-column:1/-1}.ev-trow-b{padding-left:16px}}
+.ev-src-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,310px),1fr));gap:12px}
+.ev-src{padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.ev-src-top{display:flex;gap:12px;align-items:flex-start}
+.ev-src-ic{width:36px;height:36px;border-radius:8px;background:var(--selection);color:var(--blue);display:grid;place-items:center;flex:none}
+.ev-src-n{font-size:12.5px;font-weight:600;line-height:1.4;overflow-wrap:anywhere}
+.ev-src-t{display:inline-block;margin-top:4px;font-size:11px;font-weight:600;padding:1px 8px;border-radius:999px;background:var(--ground);color:var(--text-secondary)}
+.ev-k{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-quaternary);margin-bottom:4px}
+.ev-stack{display:flex;padding-left:8px}
+.ev-av{width:28px;height:28px;margin-left:-8px;border-radius:50%;border:2px solid #fff;background:var(--selection);color:var(--blue-700);display:grid;place-items:center;font:600 11px 'Red Hat Text',sans-serif;box-shadow:0 0 0 1px var(--rule)}
+.ev-hash{display:flex;align-items:center;gap:8px;padding:6px 6px 6px 10px;background:var(--quiet);border:1px solid var(--rule);border-radius:8px;min-width:0}
+.ev-hash code{flex:1;min-width:0;font:500 11.5px 'Red Hat Mono',ui-monospace,Menlo,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ev-cpy{width:28px;height:28px;display:grid;place-items:center;border:1px solid var(--rule);background:#fff;border-radius:6px;color:var(--text-secondary);flex:none;padding:0}
+.ev-cpy:hover{border-color:var(--gray-300);color:var(--blue)}
+.ev-grp{display:flex;flex-direction:column;gap:10px;min-width:0}
+.ev-grp-h{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--navy);color:#fff;border-radius:10px;font:700 14px 'Red Hat Display','Red Hat Text',sans-serif}
+.ev-cd{font:600 11px 'Red Hat Text',sans-serif;padding:1px 8px;border-radius:999px;background:var(--selection);color:var(--blue-700)}
+.ev-grp-h .ev-cd{background:rgba(255,255,255,.16);color:#fff}
+.ev-ct{margin-left:auto;font:500 12px 'Red Hat Text',sans-serif;color:var(--on-navy-quiet)}
+.ev-note{font-size:12.5px;line-height:1.6;color:var(--text-secondary);padding:10px 14px;background:var(--quiet);border:1px solid var(--rule);border-radius:8px;white-space:pre-line;overflow-wrap:anywhere}
+.ev-tbl{overflow-x:auto;border:1px solid var(--rule);border-radius:12px;background:#fff;max-width:100%}
+.ev-tbl:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.ev-tbl table{width:100%;border-collapse:separate;border-spacing:0;font-size:12px}
+.ev-tbl th{text-align:left;padding:7px 12px;background:var(--quiet);border-bottom:1px solid var(--rule);font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text-tertiary);white-space:nowrap}
+.ev-tbl td{min-width:0;padding:7px 12px;border-bottom:1px solid var(--rule);vertical-align:top;font:400 12px/1.45 'Red Hat Text',sans-serif;color:var(--navy);font-variant-numeric:tabular-nums}
+.ev-tbl tr:last-child td{border-bottom:0}
+.ev-tbl tr.is-hit td{background:var(--selection)}
+.ev-card.is-hit,.ev-gap.is-hit{background:var(--selection)}
+.ev-tbl th.num,.ev-tbl td.num{text-align:right}
+.ev-tbl td.wide{min-width:240px}
+.ev-tbl td.num{font-weight:500}
+.ev-tbl th.mono,.ev-tbl td.mono{font-family:'Red Hat Mono',ui-monospace,Menlo,monospace;font-size:11.5px}
+.ev-gap{border:1px solid var(--rule);border-radius:10px;background:#fff;padding:12px 16px;display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,2.7fr);gap:8px 24px}
+.ev-gap+.ev-gap{margin-top:6px}
+.ev-gap-t{font-size:13px;font-weight:600;line-height:1.45;display:flex;gap:8px;align-items:flex-start}
+.ev-gap-t .i{color:var(--amber);margin-top:3px;flex:none}
+.ev-gap-f{display:flex;flex-wrap:wrap;gap:6px 24px}
+.ev-gap-f>div{min-width:140px;flex:1 1 160px}
+.ev-l{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--text-quaternary)}
+.ev-v{font-size:12.5px;line-height:1.5;overflow-wrap:anywhere}
+.ev-meter{display:inline-flex;gap:2px;margin-right:6px;vertical-align:middle}
+.ev-meter i{width:22px;height:6px;border-radius:2px;background:var(--rule)}
+.ev-meter i.f{background:var(--navy)}
+@media(max-width:767px){.ev-gap{grid-template-columns:minmax(0,1fr)}}
+.ev-reg{border:1px solid var(--rule);border-radius:12px;background:#fff;overflow:hidden}
+.ev-reg+.ev-reg{margin-top:8px}
+.ev-reg>summary,.ev-call>summary{list-style:none;display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;font-size:13px;font-weight:600}
+.ev-reg>summary::-webkit-details-marker,.ev-call>summary::-webkit-details-marker{display:none}
+.ev-ch{margin-left:auto;color:var(--text-quaternary)}
+.ev-reg>summary .ev-ch{margin-left:auto}
+.ev-reg[open]>summary .ev-ch,.ev-call[open]>summary .ev-ch{transform:rotate(180deg)}
+.ev-reg>summary .ev-cnt{margin-left:0}
+.ev-reg>*:not(summary){margin:0 16px 16px}
+.ev-reg>summary+*{margin-top:4px}
+.ev-call{border:1px solid var(--rule);border-radius:10px;background:#fff}
+.ev-call+.ev-call{margin-top:6px}
+.ev-call>summary{padding:10px 14px}
+.ev-call>.ev-tbl{margin:0 14px 14px}
+.ev-c{margin-left:auto;font-weight:500;color:var(--muted);font-size:12px}
+.ev-call>summary .ev-c+.ev-ch{margin-left:0}
+.ev-cols2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px}
+@media(max-width:991px){.ev-cols2{grid-template-columns:minmax(0,1fr)}}
+.ev-steps{display:flex;flex-direction:column;margin:0;padding:0;list-style:none}
+.ev-step{position:relative;padding:0 0 18px 34px}
+.ev-step::before{content:"";position:absolute;left:11px;top:24px;bottom:0;width:2px;background:var(--gray-300)}
+.ev-step:last-child{padding-bottom:0}.ev-step:last-child::before{display:none}
+.ev-sd{position:absolute;left:0;top:0;width:24px;height:24px;border-radius:50%;background:var(--navy);color:#fff;display:grid;place-items:center}
+.ev-sd .i{width:13px;height:13px}
+.ev-fr{font-size:13px;font-weight:600}
+.ev-rl{font-size:12.5px;color:var(--text-secondary);margin-top:4px;line-height:1.55}
+.ev-mc-list{margin-bottom:0}
+.ev-hlist{margin:0;padding:0;list-style:none;overflow:hidden}
+.ev-hlist+.ev-sub-h{margin-top:20px}
+.ev-hlist li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;align-items:center;padding:10px 14px;border-top:1px solid var(--rule)}
+.ev-hlist li:first-child{border-top:0}
+.ev-nm{font-size:12px;overflow-wrap:anywhere}
+.ev-hlist code{display:block;font:500 11.5px 'Red Hat Mono',ui-monospace,Menlo,monospace;color:var(--text-secondary);margin-top:2px;overflow-wrap:anywhere}
+.ev-link{display:inline-flex;align-items:center;gap:6px;font-weight:600}
+.ev-foot{margin-top:16px;padding:24px}
+.ev-dl-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,170px),1fr));gap:8px}
+.ev-dl{display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--rule);border-radius:8px;text-decoration:none;color:var(--navy);font-size:12.5px;font-weight:500;background:#fff;min-width:0}
+.ev .ev-dl{color:var(--navy)}
+.ev-dl:hover{border-color:var(--blue-100);background:var(--quiet)}
+.ev-dl .i{color:var(--blue);flex:none}
+.ev-dl>span{overflow-wrap:anywhere}
+.ev-dl.off{color:var(--muted)}
+.ev .ev-sub-h .ev-cnt{margin-left:0}
+@media(prefers-reduced-motion:no-preference){
+  @keyframes ev-ring{from{stroke-dashoffset:100}}
+  @keyframes ev-grow{from{width:0}}
+  @keyframes ev-open{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+  .ev-ring .rf{animation:ev-ring .9s cubic-bezier(.4,0,.2,1)}
+  .ev-gb i{animation:ev-grow .7s cubic-bezier(.4,0,.2,1)}
+  .ev-chev,.ev-ch{transition:transform .2s}
+  .ev-trow-b{animation:ev-open .2s ease-out}
+  .ev-guide-card,.ev-dl,.ev-fc,.ev-tab{transition:border-color .2s,color .2s,background-color .2s}
+}
+@media(forced-colors:active){.ev-fc[aria-current=true],.ev-tab[aria-current=page]{border:2px solid}.ev-meter i{border:1px solid}.ev-ring .rt,.ev-ring .rf{stroke:CanvasText}.ev-gb i{background:CanvasText}}
+@media print{.ev-cpy,.ev-fbar,.ev-more{display:none!important}.ev-trow[hidden]{display:block!important}.ev-grp-h{position:static}.ev-trow-b{animation:none}}
+
+/* ---- Library redesign, module page (task 4): the 24-column grid, verdict panel, findings feed, callout, limitations with the gap signal, record cards and the section rail. Colours are the tokens above. ---- */
+.g24{display:grid;grid-template-columns:repeat(24,minmax(0,1fr));gap:24px min(16px,4%)}
+@media(min-width:992px){.g24{column-gap:min(24px,4%)}}
+.g24>*{grid-column:span 24}
+@media(min-width:768px){.g24>.c5{grid-column:span 5}.g24>.c6{grid-column:span 6}.g24>.c7{grid-column:span 7}.g24>.c8{grid-column:span 8}.g24>.c10{grid-column:span 10}.g24>.c12{grid-column:span 12}.g24>.c14{grid-column:span 14}.g24>.c16{grid-column:span 16}.g24>.c19{grid-column:span 19}.g24>.c24{grid-column:span 24}}
+.eyebrow{margin:0;font:600 11px/16px 'Red Hat Text',sans-serif;letter-spacing:.09em;text-transform:uppercase;color:var(--text-tertiary)}
+.module-grid{align-items:start;margin-top:20px}
+.module-main{display:flex;flex-direction:column;gap:24px;min-width:0}
+.module-main>section.part{margin:0;min-width:0}
+.module-main>section.part>.analysis-section>:is(h3,h4):first-child{margin-top:0}
+.module-rail{position:sticky;top:12px;align-self:start;min-width:0}
+@media(max-width:991px){.module-grid>.module-rail,.module-grid>.module-main{grid-column:span 24}.module-rail{top:0;z-index:3;background:#fff;border-bottom:1px solid var(--rule);margin:0 -16px;padding:0 16px}}
+.key-row>.c14,.key-row>.c10,.key-row>.c24{min-width:0}
+@media(max-width:991px){.key-row>.c14,.key-row>.c10{grid-column:span 24}}
+.rd-card{background:#fff;border:1px solid var(--rule);border-radius:12px;padding:24px;height:100%;min-width:0}
+.rd-h{margin:0 0 14px;font:700 18px/1.2 'Red Hat Display',sans-serif;letter-spacing:-.01em;color:var(--text-primary)}
+/* C2 */
+.verdict{background:var(--navy);color:#fff;border-radius:12px;padding:28px 32px 24px;display:flex;flex-direction:column;gap:16px}
+.verdict .eyebrow{display:flex;align-items:center;gap:8px;color:var(--blue-100)}
+.verdict .eyebrow::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--series-4)}
+.verdict .row-end{display:flex;align-items:flex-start;gap:6px}
+.verdict .row-end>p{flex:1;min-width:0}
+.verdict-lead{font:700 22px/1.32 'Red Hat Display',sans-serif;letter-spacing:-.008em;color:#fff;max-width:none}
+.verdict-body{font:400 14px/1.7 'Red Hat Text',sans-serif;color:var(--blue-100);max-width:none}
+.verdict .figure,.verdict .basis-link{color:inherit}
+.verdict .figure{text-decoration-color:var(--series-4)}
+.verdict .basis-link{color:var(--blue-100)}
+.verdict .basis-link:is(:hover,:focus-visible){background:rgba(255,255,255,.14);color:#fff;text-decoration:none}
+.verdict .figure:hover{color:#fff;text-decoration-style:solid}
+@media(max-width:767px){.verdict{padding:22px 20px 20px}.verdict-lead{font-size:19px}}
+/* C5 */
+.feed{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.feed-item{position:relative;display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:6px 14px;padding-bottom:20px}
+.feed-item:last-child{padding-bottom:0}
+.feed-item::before{content:"";position:absolute;left:14px;top:34px;bottom:4px;width:2px;background:var(--rule)}
+.feed-item:last-child::before{display:none}
+.feed-num{width:30px;height:30px;border-radius:50%;background:var(--selection);color:var(--blue-700);display:grid;place-items:center;font:700 13px 'Red Hat Display',sans-serif}
+.feed-title{font:600 14px/1.4 'Red Hat Text',sans-serif;color:var(--text-primary)}
+.feed-body{margin-top:5px;font:400 13px/1.6 'Red Hat Text',sans-serif;color:var(--text-secondary);max-width:none}
+/* C6 */
+.callout{align-self:start;border-left:4px solid var(--blue);background:var(--selection);border-radius:0 12px 12px 0;padding:22px 24px}
+.callout :is(h2,h3,h4){display:flex;align-items:center;gap:8px;margin:0 0 10px;font:700 16px/1.25 'Red Hat Display',sans-serif;color:var(--text-primary)}
+.callout :is(h2,h3,h4) .i{width:18px;height:18px;color:var(--blue-700)}
+.callout p{font:400 13px/1.7 'Red Hat Text',sans-serif;color:var(--text-primary);max-width:none}
+.callout p+p{margin-top:10px}
+/* Limitations and the gap signal */
+.lim-row{display:flex;gap:24px;align-items:stretch;flex-wrap:wrap}
+.lim-compact{flex:1 1 480px;list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 28px}
+.lim-compact li{display:flex;gap:10px;font:400 13px/1.6 'Red Hat Text',sans-serif;color:var(--text-secondary)}
+.lim-compact li>span{min-width:0}
+.lim-compact .i{flex:none;width:15px;height:15px;margin-top:3px;color:var(--amber)}
+@media(max-width:767px){.lim-compact{grid-template-columns:minmax(0,1fr)}}
+.gapsig{flex:0 0 240px;min-width:240px;border:1px solid var(--rule);background:var(--quiet);border-radius:12px;padding:24px;display:flex;flex-direction:column;justify-content:center;gap:6px}
+.gapsig-n{font:700 56px/1 'Red Hat Display',sans-serif;letter-spacing:-.03em;color:var(--text-primary)}
+.gapsig-w{margin-bottom:10px;font-size:13px;color:var(--muted)}
+.gapsig-link{display:inline-flex;align-items:center;gap:6px;font-weight:600;color:var(--blue-700);text-decoration:none}
+.gapsig-link:hover{text-decoration:underline;text-underline-offset:3px}
+@media(max-width:767px){.gapsig{flex:1 1 100%;min-width:0}}
+/* Record cards: the fallback for a table no other component draws */
+.rec-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:12px;margin-top:12px}
+.rec-card{background:#fff;border:1px solid var(--rule);border-radius:12px;padding:16px 18px;min-width:0}
+.rec-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.rec-title{font:700 14px/1.4 'Red Hat Display',sans-serif;color:var(--text-primary);min-width:0}
+.rec-fields{margin:10px 0 0;display:grid;gap:8px}
+.rec-fields>div{display:grid;gap:1px}
+.rec-fields dt{font:600 11px/16px 'Red Hat Text',sans-serif;letter-spacing:.04em;text-transform:uppercase;color:var(--text-tertiary)}
+.rec-fields dd{margin:0;font:400 13px/1.5 'Red Hat Text',sans-serif;color:var(--text-secondary);overflow-wrap:anywhere}
+/* C33: the section rail. A vertical rail with a rule on its left from 992px, a strip that scrolls sideways below. */
+.sec-rail{display:flex;flex-direction:column;padding:4px 0}
+.sec-rail .eyebrow{margin:0 0 10px 14px}
+.rail-item{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 12px 8px 14px;border-left:2px solid var(--gray-200);font-size:13px;color:var(--text-tertiary);text-decoration:none}
+.rail-item:hover{color:var(--navy);border-left-color:var(--gray-300)}
+.rail-item.on{padding-left:13px;border-left:3px solid var(--blue);color:var(--navy);font-weight:600;background:linear-gradient(90deg,var(--selection),transparent)}
+.rail-count{min-width:20px;height:18px;padding:0 6px;border-radius:999px;background:var(--ground);color:var(--text-tertiary);display:inline-grid;place-items:center;font-size:11px;font-weight:600}
+.rail-item.on .rail-count{background:var(--blue-700);color:#fff}
+@media(max-width:991px){.sec-rail{flex-direction:row;overflow-x:auto;padding:8px 0;scrollbar-width:none}.sec-rail .eyebrow{display:none}.rail-item{flex:none;white-space:nowrap;border-left:0;border-bottom:2px solid transparent;padding:6px 10px}.rail-item.on{border-left:0;border-bottom:3px solid var(--blue);padding-left:10px;background:none}}
+@media(prefers-reduced-motion:no-preference){.rail-item{transition:color .2s,border-color .2s}}
+@media(forced-colors:active){.rail-item.on{border-color:Highlight}.callout{border-left-color:Highlight}.gapsig,.rec-card,.rd-card{border:1px solid CanvasText}}
+@media print{.module-rail{display:none!important}.module-grid>.module-main{grid-column:span 24}.verdict{break-inside:avoid}.rec-card,.feed-item{break-inside:avoid}}
+/* Numeric shape components: cases (C8, C3, C10), case rows (C9, C29), ranked (C11), statement, metric and measure tiles, change (C19) */
+.shape-block{margin-top:12px;min-width:0;background:#fff;border:1px solid var(--rule);border-radius:12px;padding:20px 24px}
+.shape-bar{display:flex;align-items:center;justify-content:space-between;gap:10px 14px;flex-wrap:wrap;margin-bottom:16px}
+.shape-bar-l,.shape-bar-r{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0}
+.shape-bar-r{margin-left:auto}
+.seg{position:relative;display:inline-flex;padding:3px;background:var(--ground);border:1px solid var(--rule);border-radius:999px}
+.seg-thumb{position:absolute;top:3px;bottom:3px;left:3px;width:calc(50% - 3px);border-radius:999px;background:#fff;box-shadow:var(--shadow-sm)}
+.seg[data-i="1"] .seg-thumb{transform:translateX(100%)}
+.seg button{position:relative;z-index:1;min-width:76px;height:28px;padding:0 14px;border:0;border-radius:999px;background:none;font:500 12px 'Red Hat Text',sans-serif;color:var(--muted);cursor:pointer}
+.seg button[aria-pressed=true]{color:var(--navy);font-weight:600}
+.seg button:focus-visible,.case-opt:focus-visible,.mk:focus-visible,.lm:focus-visible,.info:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.case-seg{display:flex;flex-wrap:wrap;gap:8px;min-width:0}
+.case-opt{display:inline-flex;align-items:center;gap:8px;min-height:36px;padding:4px 14px;border:1px solid var(--rule);border-radius:999px;background:#fff;font:600 13px/1.3 'Red Hat Text',sans-serif;color:var(--text-secondary);text-align:left;cursor:pointer}
+.case-opt::before{content:"";flex:none;width:14px;height:14px;border-radius:50%;border:2px solid var(--gray-300)}
+.case-opt:hover{border-color:var(--gray-300)}
+.case-opt[aria-pressed=true]{border-color:var(--blue);box-shadow:0 0 0 1px var(--blue);color:var(--navy)}
+.case-opt[aria-pressed=true]::before{border-color:var(--blue);background:var(--blue);box-shadow:inset 0 0 0 2px #fff}
+.tile-set-name{display:none}
+.tiles{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(min(100%,190px),1fr))}
+.tiles-dense{grid-template-columns:repeat(auto-fill,minmax(min(100%,170px),1fr))}
+.tiles-4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.tile{background:var(--quiet);border:1px solid var(--rule);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:3px;min-width:0}
+.tile.wide{grid-column:span 2}
+.tile-h{display:flex;align-items:flex-start;justify-content:space-between;gap:6px;min-height:32px}
+.tile-k{margin:0;font:500 12px/1.35 'Red Hat Text',sans-serif;color:var(--muted);min-width:0;overflow-wrap:anywhere}
+.tile-v{margin:4px 0 0;font:700 21px/1.15 'Red Hat Display',sans-serif;letter-spacing:-.02em;font-variant-numeric:tabular-nums;color:var(--text-primary);overflow-wrap:anywhere}
+.tile.wide .tile-v{font:600 14px/1.5 'Red Hat Text',sans-serif;letter-spacing:0}
+.tile-b,.tile-n{margin:0;font-size:12px;line-height:1.4;color:var(--muted);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.tile-c{margin:6px 0 0;padding-top:6px;border-top:1px solid var(--rule);font-size:11.5px;line-height:1.4;color:var(--text-secondary);overflow-wrap:anywhere}
+.tag{display:inline-flex;flex-wrap:wrap;gap:2px 6px;align-items:baseline;align-self:flex-start;margin-top:4px;padding:2px 8px;border-radius:6px;background:var(--selection);color:var(--blue-700);font-size:11.5px;line-height:1.4;overflow-wrap:anywhere}
+.tag-k{font-weight:600;font-size:11px;letter-spacing:.04em;text-transform:uppercase}
+.info{flex:none;display:inline-grid;place-items:center;width:24px;height:24px;margin:-4px -6px 0 0;padding:0;border:0;border-radius:6px;background:none;color:var(--text-quaternary);cursor:help}
+.info .i{width:14px;height:14px}
+.info:hover{color:var(--blue);background:var(--selection)}
+.tip-print{display:none}
+.in-ev{font:600 11px/1.4 'Red Hat Text',sans-serif;color:var(--blue-700);text-decoration:underline;text-underline-offset:3px}
+.na{color:var(--muted);font-weight:400}
+.tracks{margin-top:24px;padding-top:18px;border-top:1px solid var(--rule);display:flex;flex-direction:column;gap:4px}
+.tracks>.eyebrow{margin-bottom:6px}
+.rtrack-row{display:grid;grid-template-columns:minmax(0,190px) minmax(0,1fr);gap:4px 24px;align-items:center;padding:4px 0}
+.rtrack-name{font:600 13px/1.35 'Red Hat Text',sans-serif;color:var(--text-primary);overflow-wrap:anywhere}
+.rtrack{position:relative;height:112px;margin:0 28px}
+.rtrack-line{position:absolute;left:0;right:0;top:56px;height:6px;margin-top:-3px;border-radius:3px;background:var(--rule)}
+.rtrack-range{position:absolute;top:56px;height:10px;margin-top:-5px;border-radius:5px;background:var(--blue-100)}
+.mk{all:unset;box-sizing:border-box;position:absolute;top:56px;width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;border:2px solid var(--navy);background:#fff;cursor:pointer;z-index:2}
+.mk.on{background:var(--navy)}
+.mk:focus-visible{outline:2px solid var(--blue);outline-offset:3px}
+.mk-l{position:absolute;left:50%;transform:translateX(-50%);width:max-content;max-width:108px;text-align:center;pointer-events:none;line-height:1.25}
+.mk-l.lo{left:-9px;transform:none;text-align:left}
+.mk-l.hi{left:auto;right:-9px;transform:none;text-align:right}
+.mk-l span{display:block;font-size:11px;color:var(--muted)}
+.mk-l b{display:block;font:600 12px/1.25 'Red Hat Text',sans-serif;font-variant-numeric:tabular-nums;color:var(--text-primary)}
+.mk.up .mk-l{bottom:calc(100% + 8px)}
+.mk.dn .mk-l{top:calc(100% + 8px)}
+.rtrack-ends{grid-column:2;display:flex;justify-content:space-between;margin:0 28px;font-size:11px;color:var(--text-quaternary);font-variant-numeric:tabular-nums}
+.dtbl-wrap{overflow-x:auto;border:1px solid var(--rule);border-radius:12px;background:#fff}
+.dtbl-wrap:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.dtbl{width:100%;border-collapse:separate;border-spacing:0;font-size:12px}
+.dtbl th{white-space:normal;text-align:left;padding:9px 12px;background:var(--quiet);border-bottom:1px solid var(--rule);font:600 11px/1.4 'Red Hat Text',sans-serif;letter-spacing:.04em;text-transform:uppercase;color:var(--text-tertiary);vertical-align:bottom}
+.dtbl td,.dtbl tbody th{padding:9px 12px;border-bottom:1px solid var(--rule);vertical-align:top;background:#fff;color:var(--text-secondary);font:400 12px/1.45 'Red Hat Text',sans-serif;letter-spacing:0;text-transform:none}
+.dtbl tbody th{font-weight:600;font-size:13px;color:var(--text-primary);min-width:140px}
+.dtbl tbody tr:last-child>*{border-bottom:0}
+.dtbl th.num,.dtbl td.num{text-align:right;font-variant-numeric:tabular-nums}
+.cr-cards,.chg-cards{display:grid;gap:12px;margin-top:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr))}
+.chg-cards{grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))}
+.cr-card,.chg-card{background:#fff;border:1px solid var(--rule);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.cr-head,.chg-head{display:flex;align-items:center;gap:8px;min-width:0}
+.cr-head .basis-link,.chg-head .basis-link{margin-left:auto}
+.cr-title{margin:0;font:700 17px/1.25 'Red Hat Display',sans-serif;color:var(--text-primary);min-width:0}
+.cr-badge{flex:none;width:28px;height:28px;border-radius:50%;background:var(--selection);color:var(--blue-700);display:inline-grid;place-items:center;font:700 13px 'Red Hat Display',sans-serif}
+.pill{display:inline-flex;align-items:center;min-height:22px;padding:0 9px;border-radius:999px;background:var(--ground);font:600 11px/1.3 'Red Hat Text',sans-serif;color:var(--text-secondary)}
+.cr-pill{margin-top:-4px}
+.cr-figs{display:flex;gap:6px 22px;flex-wrap:wrap}
+.cr-fig-wrap{display:block;min-width:0}
+.cr-fig{display:block;font:700 26px/1.1 'Red Hat Display',sans-serif;letter-spacing:-.02em;font-variant-numeric:tabular-nums;color:var(--text-primary)}
+.cr-fig-l{display:block;margin-top:3px;font-size:11px;line-height:1.35;color:var(--muted)}
+.cr-card .rec-fields{margin:0}
+.cr-chips{display:flex;flex-wrap:wrap;gap:5px;list-style:none;margin:2px 0 0;padding:0}
+.cr-chip{padding:2px 8px;border:1px dashed var(--gray-300);border-radius:6px;font-size:11.5px;line-height:1.4;color:var(--text-secondary)}
+.cr-foot{margin-top:auto;padding-top:10px;border-top:1px solid var(--rule)}
+.cr-conf{display:flex;align-items:center;gap:10px}
+.cr-conf .k{font:600 11px/16px 'Red Hat Text',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--text-quaternary)}
+.meter{display:inline-flex;gap:2px}
+.meter i{width:22px;height:6px;border-radius:2px;background:var(--rule)}
+.meter i.f{background:var(--navy)}
+.meter-w{font:600 12px 'Red Hat Text',sans-serif;color:var(--text-primary)}
+.cr-panel th,.cr-panel td{padding:8px}
+.cr-panel tbody th{min-width:112px}
+.cr-panel td{overflow-wrap:anywhere}
+@media(min-width:768px){.cr-panel{table-layout:fixed}.cr-panel thead th:first-child{width:132px}.cr-panel thead th{overflow-wrap:anywhere}}
+.cr-panel tbody th .cr-badge{margin-right:8px;vertical-align:middle}
+.cr-panel tbody th .basis-link{margin-left:6px}
+/* C11 ladder */
+.ladder{position:relative;margin:4px 14px 0;height:var(--h)}
+.ladder.t1{--h:270px;--ax:120px}
+.ladder.t2{--h:460px;--ax:215px}
+.lax{position:absolute;left:0;right:0;top:var(--ax);height:2px;background:var(--navy);z-index:1}
+.ltick{position:absolute;top:var(--ax);width:1px;height:7px;background:var(--navy);z-index:1}
+.ltick-l{position:absolute;top:calc(var(--ax) + 10px);transform:translateX(-50%);font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;z-index:1}
+.lax-t{position:absolute;right:0;top:calc(var(--ax) + 28px);margin:0;padding-left:8px;background:#fff;font:600 12px 'Red Hat Text',sans-serif;color:var(--text-secondary);z-index:1;text-align:right}
+.lm{position:absolute;top:var(--ax);width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;background:var(--navy);color:#fff;display:grid;place-items:center;border:2px solid #fff;box-shadow:0 0 0 1px var(--navy);z-index:4}
+.lm-n{font:700 13px 'Red Hat Display',sans-serif}
+.ll{position:absolute;width:176px;z-index:3;background:#fff;border:1px solid var(--rule);border-radius:10px;padding:7px 10px;font-size:12px;line-height:1.35;box-shadow:var(--shadow-xs);transform:translateX(-50%);overflow-wrap:anywhere}
+.ll.lo{transform:translateX(-14px)}
+.ll.hi{transform:translateX(calc(-100% + 14px))}
+.ll b{display:block;margin-top:2px;font:700 16px 'Red Hat Display',sans-serif;font-variant-numeric:tabular-nums}
+.ll-up.t0{bottom:calc(var(--h) - var(--ax) + 38px)}
+.ll-up.t1{bottom:calc(var(--h) - var(--ax) + 128px)}
+.ll-dn.t0{top:calc(var(--ax) + 56px)}
+.ll-dn.t1{top:calc(var(--ax) + 152px)}
+.ll-line{position:absolute;width:0;border-left:1px solid var(--navy);z-index:2}
+.ll-line.ll-up{bottom:calc(var(--h) - var(--ax))}
+.ll-line.ll-dn{top:var(--ax)}
+.ll-line.ll-up.t0{height:38px}.ll-line.ll-up.t1{height:128px}.ll-line.ll-dn.t0{height:56px}.ll-line.ll-dn.t1{height:152px}
+.lead-leg{margin-top:14px;border:1px solid var(--rule);border-radius:12px;overflow:hidden}
+.leg-row{display:grid;grid-template-columns:30px minmax(0,1fr) 76px repeat(var(--c),minmax(110px,150px));gap:12px;align-items:center;padding:9px 14px;border-top:1px solid var(--rule);font-size:12px}
+.leg-row:first-child{border-top:0}
+.leg-row.hd{background:var(--quiet);font:600 11px/1.4 'Red Hat Text',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:var(--text-tertiary)}
+.leg-row .n,.lp-item .n{width:22px;height:22px;border-radius:50%;background:var(--navy);color:#fff;font:700 12px 'Red Hat Display',sans-serif;display:grid;place-items:center}
+.leg-row .p{font-weight:600;font-variant-numeric:tabular-nums;text-align:right}
+.st{display:inline-flex;align-items:center;gap:7px}
+.st i{flex:none;width:12px;height:12px;border-radius:50%;border:2px solid var(--navy);background:#fff}
+.st.on i{border-color:var(--red);background:var(--red)}
+.st.on{font-weight:600;color:var(--red)}
+.lad-phone{display:none}
+.lp-item{display:grid;grid-template-columns:28px minmax(0,1fr);gap:4px 12px;padding:12px 0;border-top:1px solid var(--rule)}
+.lp-item:first-child{border-top:0}
+.lp-l{margin:0;font:600 13px/1.4 'Red Hat Text',sans-serif}
+.lp-track{position:relative;height:8px;border-radius:4px;background:var(--rule);margin:12px 0 8px}
+.lp-track i{position:absolute;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:var(--navy);border:2px solid #fff;box-shadow:0 0 0 1px var(--navy)}
+.lp-ends{display:flex;justify-content:space-between;font-size:11px;color:var(--text-quaternary)}
+.lp-ends b{color:var(--navy);font-size:12px}
+.lp-marks{display:flex;gap:6px 16px;flex-wrap:wrap;margin-top:6px;font-size:12px}
+.lp-case{color:var(--muted)}
+/* statement */
+.st-keys{display:flex;gap:6px 18px;flex-wrap:wrap;font-size:12px;color:var(--text-secondary)}
+.st-key{display:inline-flex;align-items:center}
+.sw{display:inline-block;flex:none;width:10px;height:10px;margin-right:6px;border-radius:3px}
+.sw.p0,.st-bar.p0{background:var(--series-1)}
+.sw.p1,.st-bar.p1{background:var(--series-4)}
+.sw.p2,.st-bar.p2{background:var(--gray-300)}
+.st-row{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1.3fr) minmax(0,.9fr);gap:8px 20px;align-items:center;padding:10px 0;border-top:1px solid var(--rule)}
+.st-row:first-child{border-top:0}
+.st-name{margin:0;font:600 13px/1.4 'Red Hat Text',sans-serif;color:var(--text-primary);overflow-wrap:anywhere}
+.st-cap{margin:1px 0 0;font-size:11.5px;line-height:1.4;color:var(--muted)}
+.st-bars{position:relative;min-width:0}
+.st-bar{position:absolute;height:9px;border-radius:2px}
+.st-bar.p0{top:0}.st-bar.p1{top:12px}.st-bar.p2{top:24px}
+.st-zero{position:absolute;top:-3px;bottom:-3px;width:1px;background:var(--navy)}
+.st-v{display:grid;gap:1px;font-size:13px;font-variant-numeric:tabular-nums}
+.st-pv{display:flex;align-items:center;justify-content:flex-end;gap:6px;min-width:0;overflow-wrap:anywhere;text-align:right}
+.st-ph{white-space:nowrap;flex:none;margin-right:auto;font-size:11px;color:var(--muted)}
+.st-pv .sw{margin-right:0;width:8px;height:8px}
+/* change */
+.chg-title{margin:0;font:700 14px/1.4 'Red Hat Display',sans-serif;color:var(--text-primary);min-width:0}
+.chg-pair{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:10px;align-items:center}
+.chg-k{margin:0;font:600 11px/16px 'Red Hat Text',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--text-quaternary)}
+.chg-v{margin:2px 0 0;font:700 17px/1.25 'Red Hat Display',sans-serif;color:var(--text-primary);overflow-wrap:anywhere}
+.chg-arrow{display:inline-grid;place-items:center;color:var(--text-quaternary)}
+.chg-arrow .i{width:18px;height:18px}
+.dumb{position:relative;height:16px;margin:0 8px}
+.dumb-line{position:absolute;left:0;right:0;top:7px;height:2px;background:var(--rule)}
+.dm{position:absolute;top:2px;width:12px;height:12px;margin-left:-6px;border-radius:50%;border:2px solid var(--navy);background:#fff}
+.dm.c{background:var(--navy)}
+.chg-card .rec-fields{margin:0}
+@media(max-width:991px){.tiles-4{grid-template-columns:repeat(2,minmax(0,1fr))}.shape-block{padding:16px}}
+@media(max-width:767px){
+  .ladder,.lead-leg{display:none}
+  .lad-phone{display:block}
+  .rtrack-row{grid-template-columns:minmax(0,1fr)}
+  .rtrack-ends{grid-column:1}
+  .rtrack,.rtrack-ends{margin-left:18px;margin-right:18px}
+  .mk-l{max-width:96px}
+  .mk:not(.on) .mk-l span{display:none}
+  .st-row{grid-template-columns:minmax(0,1fr)}
+  .st-pv{justify-content:flex-start}
+  .st-ph{margin-right:0}
+  .cr-panel thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  .cr-panel,.cr-panel tbody,.cr-panel tr,.cr-panel th,.cr-panel td{display:block}
+  .cr-panel tr{padding:10px 12px;border-bottom:1px solid var(--rule)}
+  .cr-panel tr:last-child{border-bottom:0}
+  .cr-panel tbody th,.cr-panel td{border:0;padding:3px 0;min-width:0}
+  .cr-panel td{display:flex;justify-content:space-between;gap:12px;text-align:right}
+  .cr-panel td::before{content:attr(data-label);flex:none;max-width:55%;text-align:left;font:600 11px/1.4 'Red Hat Text',sans-serif;letter-spacing:.04em;text-transform:uppercase;color:var(--text-tertiary)}
+  .chg-pair{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)}
+}
+@media(max-width:520px){.tiles-dense{grid-template-columns:repeat(2,minmax(0,1fr))}.tile-set .tiles,.tiles-4{grid-template-columns:minmax(0,1fr)}.tile.wide{grid-column:1/-1}.shape-bar-r{margin-left:0}}
+@media(prefers-reduced-motion:no-preference){
+.seg-thumb{transition:transform .2s cubic-bezier(.4,0,.2,1)}
+.mk{transition:background-color .2s}
+}
+@media(forced-colors:active){.shape-block,.tile,.cr-card,.chg-card,.dtbl-wrap,.ll,.lead-leg{border:1px solid CanvasText}.mk,.lm,.dm,.st i{border-color:CanvasText;forced-color-adjust:none}.mk.on,.dm.c{background:Highlight}.case-opt[aria-pressed=true]{border-color:Highlight}.st-bar{background:CanvasText;forced-color-adjust:none}}
+@media print{.tile-set[hidden]{display:block!important}.tile-set-name{display:block;margin:10px 0 6px;font:700 13px 'Red Hat Display',sans-serif}.tip-print{display:inline;font-size:11px;color:var(--muted)}.info,.seg,.case-seg{display:none!important}.shape-block,.cr-card,.chg-card,.tile,.st-row,.lp-item{break-inside:avoid}.ladder,.lead-leg{display:none}.lad-phone{display:block}}
+/* Non-numeric shape components: status checklist (C12, C29), sided board (C7), module state tiles (C20), Q and A accordion (C18), fact list (C17), risk matrix (C16), watch list */
+.state{display:inline-flex;align-items:center;gap:6px;min-width:0;max-width:100%;padding:3px 10px;border:1px solid var(--rule);border-radius:10px;background:var(--quiet);font:600 12px/1.4 'Red Hat Text',sans-serif;color:var(--text-secondary);overflow-wrap:anywhere}
+.state .i{flex:none;width:16px;height:16px}
+.state.ok{color:var(--green)}.state.warn{color:var(--amber)}.state.bad{color:var(--red)}.state.new{color:var(--blue-700)}.state.same,.state.info{color:var(--muted)}
+.ck-list,.qa-list,.wl-list,.ms-tiles,.fl-groups{margin:12px 0 0;padding:0;min-width:0}
+.ck-list{list-style:none;border:1px solid var(--rule);border-radius:12px;background:Canvas;padding:0 20px}
+.ck-row{padding:14px 0;border-top:1px solid var(--rule);min-width:0}
+.ck-row:first-child{border-top:0}
+.ck-head{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px 12px;align-items:start}
+.ck-label{margin:0;font:600 14px/1.45 'Red Hat Text',sans-serif;color:var(--text-primary);overflow-wrap:anywhere}
+.ck-row .rec-fields{grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:8px 20px}
+@media(max-width:560px){.ck-head{grid-template-columns:minmax(0,1fr) auto}.ck-head .state{grid-column:1/-1;grid-row:2}.ck-list{padding:0 14px}}
+.sd-board{margin-top:12px;min-width:0;border:1px solid var(--rule);border-radius:12px;background:Canvas;padding:20px 24px}
+.sd-cols{display:grid;grid-template-columns:minmax(0,1fr) 24px minmax(0,1fr)}
+.sd-hs{display:flex;align-items:center;gap:8px;margin:0;font:700 15px 'Red Hat Display',sans-serif;color:var(--text-primary)}
+.sd-dot{flex:none;width:10px;height:10px;border-radius:50%;background:var(--series-1)}
+.sd-s1 .sd-dot{background:var(--navy)}
+.sd-n{min-width:24px;height:22px;padding:0 8px;border-radius:999px;display:inline-grid;place-items:center;background:var(--selection);color:var(--blue-700);font:600 12px 'Red Hat Text',sans-serif}
+.sd-col{display:flex;flex-direction:column;gap:10px;min-width:0;align-self:start}
+.sd-col>.sd-hs{margin-bottom:2px;min-height:22px}
+.sd-col.sd-s0{grid-column:1}.sd-col.sd-s1{grid-column:3}
+.sd-line.sd-s2{margin-top:10px}
+.sd-entry{min-width:0;padding:14px 16px;border:1px solid var(--rule);border-radius:12px;background:var(--quiet)}
+.sd-top{display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;min-height:24px}
+.sd-head{display:flex;align-items:flex-start;gap:8px}
+.sd-head>.sd-fig,.sd-head>.sd-name{flex:1;min-width:0;margin-top:0}
+.sd-head .basis-link{margin-left:auto;flex:none}
+.sd-top+.sd-head{margin-top:6px}
+.sd-side{display:inline-flex;align-items:center;gap:6px;font:600 12px/1.4 'Red Hat Text',sans-serif;color:var(--text-secondary)}
+.q-tag{margin-top:0}
+.sd-fig{margin:6px 0 0;font:700 24px/1.15 'Red Hat Display',sans-serif;letter-spacing:-.015em;font-variant-numeric:tabular-nums;color:var(--text-primary);overflow-wrap:anywhere}
+.sd-cap{margin:0 0 10px;font:600 11px/16px 'Red Hat Text',sans-serif;letter-spacing:.04em;text-transform:uppercase;color:var(--text-tertiary)}
+.sd-read{margin:6px 0 0;font:400 13px/1.5 'Red Hat Text',sans-serif;color:var(--text-secondary);overflow-wrap:anywhere}
+.sd-name{margin:5px 0 0;font:600 13px/1.4 'Red Hat Text',sans-serif;color:var(--text-primary);overflow-wrap:anywhere}
+@media(max-width:767px){.sd-board{padding:16px}.sd-col>.sd-hs{display:none}.sd-cols{display:flex;flex-direction:column;gap:10px}}
+.ms-tiles{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));align-items:start}
+.ms-tile{display:flex;flex-direction:column;align-items:flex-start;gap:8px;min-width:0;padding:14px 16px;border:1px solid var(--rule);border-radius:12px;background:Canvas}
+.ms-tile>*{max-width:100%}
+.ms-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;width:100%}
+.ms-title,.ms-name{margin:0;font:700 14px/1.4 'Red Hat Display',sans-serif;color:var(--text-primary);overflow-wrap:anywhere}
+.ms-list{width:100%}
+.ms-list summary,.qa-d summary,.wl-d summary{cursor:pointer;list-style:none}
+.ms-list summary::-webkit-details-marker,.qa-d summary::-webkit-details-marker,.wl-d summary::-webkit-details-marker{display:none}
+.ms-list summary{display:flex;align-items:center;gap:6px;font:600 13px/1.4 'Red Hat Text',sans-serif;color:var(--text-secondary)}
+.ms-n{font:700 22px/1 'Red Hat Display',sans-serif;color:var(--text-primary)}
+.ms-ch,.qa-ch,.wl-ch{display:inline-grid;place-items:center;color:var(--text-quaternary)}
+.ms-ch{margin-left:auto}
+details[open]>summary .ms-ch,details[open]>summary .qa-ch,details[open]>summary .wl-ch{transform:rotate(180deg)}
+.ms-list ul{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:12px}
+.ms-list li{padding-top:10px;border-top:1px solid var(--rule);min-width:0}
+.qa-list,.wl-list{border:1px solid var(--rule);border-radius:12px;background:Canvas}
+.qa-item,.wl-item{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;border-top:1px solid var(--rule);padding-right:8px;min-width:0}
+.qa-item:first-child,.wl-item:first-child{border-top:0}
+.qa-item>.basis-link,.wl-item>.basis-link{margin-top:12px}
+.qa-d,.qa-plain,.wl-d,.wl-plain{min-width:0}
+.qa-d summary,.qa-plain{display:grid;grid-template-columns:minmax(0,1fr) auto 16px;gap:4px 12px;align-items:center;padding:14px 4px 14px 18px}
+.qa-plain{grid-template-columns:minmax(0,1fr) auto}
+.qa-q,.wl-t{font:600 14px/1.45 'Red Hat Text',sans-serif;color:var(--text-primary);overflow-wrap:anywhere;min-width:0}
+.qa-body,.wl-body{padding:0 18px 14px}
+.qa-d summary:focus-visible,.wl-d summary:focus-visible,.ms-list summary:focus-visible{outline:2px solid var(--blue);outline-offset:-2px;border-radius:8px}
+@media(max-width:560px){.qa-d summary{grid-template-columns:minmax(0,1fr) 16px}.qa-d summary .state{grid-column:1;grid-row:2}.qa-d summary .qa-ch{grid-column:2;grid-row:1}.qa-plain{grid-template-columns:minmax(0,1fr)}.qa-d summary,.qa-plain,.wl-d summary,.wl-plain{padding-left:14px}}
+.fl-groups{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));align-items:start}
+.fl-group{min-width:0;padding:16px 18px;border:1px solid var(--rule);border-radius:12px;background:Canvas}
+.fl-head{display:flex;align-items:center;gap:8px;margin:0 0 4px;font:600 11px/16px 'Red Hat Text',sans-serif;letter-spacing:.04em;text-transform:uppercase;color:var(--text-tertiary)}
+.fl-n{min-width:20px;height:18px;padding:0 6px;border-radius:999px;display:inline-grid;place-items:center;background:var(--ground);color:var(--text-tertiary);font-size:11px}
+.fl{margin:0}
+.fl-row{display:grid;grid-template-columns:minmax(0,9rem) minmax(0,1fr);gap:4px 14px;padding:10px 0;border-top:1px solid var(--rule)}
+.fl-row:first-child{border-top:0}
+.fl-row dt{font:600 12px/1.45 'Red Hat Text',sans-serif;color:var(--text-secondary);overflow-wrap:anywhere}
+.fl-row dd{margin:0;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline;font:400 13px/1.5 'Red Hat Text',sans-serif;color:var(--text-primary);min-width:0}
+.fl-v{flex:1 1 12rem;min-width:0;overflow-wrap:anywhere}
+.fl-x{flex:1 1 100%;font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+.fl-row .basis-link{margin-left:auto}
+@media(max-width:560px){.fl-row{grid-template-columns:minmax(0,1fr)}}
+.rm-wrap{min-width:0;overflow-x:auto}
+.rm-tbl{width:100%;min-width:calc(64px + var(--cols,3)*72px);table-layout:fixed;border-collapse:separate;border-spacing:6px}
+.rm-tbl th{padding:2px 4px;font:600 12px/1.35 'Red Hat Text',sans-serif;color:var(--text-secondary);text-align:center;overflow-wrap:anywhere}
+.rm-tbl tbody th{text-align:right;width:64px}
+.rm-tbl .rm-corner{width:64px;text-align:left;vertical-align:bottom}
+.rm-cx,.rm-cy{display:flex;align-items:center;gap:3px;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text-tertiary)}
+.rm-cx .i,.rm-cy .i{width:12px;height:12px}
+.rm-cy .i{transform:rotate(90deg)}
+.rm-tbl td{vertical-align:top;height:84px;padding:6px;border:1px solid var(--rule);border-radius:10px;background:var(--quiet)}
+.rm-cell{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px}
+.rm-chip{min-width:0;padding:5px 8px;border:1px solid var(--rule);border-left:5px solid var(--muted);border-radius:6px;background:Canvas;box-shadow:var(--shadow-xs)}
+.rm-c-critical{border-left-color:var(--red)}.rm-c-high{border-left-color:var(--amber)}.rm-c-medium{border-left-color:var(--blue)}.rm-c-low{border-left-color:var(--muted)}
+.rm-top{display:flex;align-items:flex-start;justify-content:space-between;gap:4px}
+.rm-t{margin:0;font:600 12px/1.3 'Red Hat Text',sans-serif;color:var(--text-primary);overflow-wrap:anywhere;min-width:0}
+.rm-k,.rm-x{display:block;margin:1px 0 0;font-size:11px;line-height:1.4;color:var(--muted);overflow-wrap:anywhere}
+.rm-lg{display:flex;flex-wrap:wrap;gap:6px 16px;margin:12px 0 0;font-size:12px;color:var(--text-secondary)}
+.rm-lg-k{font-weight:600;color:var(--text-tertiary)}
+.rm-lg-i{display:inline-flex;align-items:center;gap:6px}
+.rm-lg-i i{width:5px;height:14px;border-radius:2px;background:var(--muted)}
+.rm-lg-i.rm-c-critical i{background:var(--red)}.rm-lg-i.rm-c-high i{background:var(--amber)}.rm-lg-i.rm-c-medium i{background:var(--blue)}
+.rm-loose{margin-top:14px}
+.rm-loose .eyebrow{margin:0 0 6px}
+.wl-d summary,.wl-plain{display:grid;grid-template-columns:minmax(0,1fr) auto 16px;gap:4px 12px;align-items:start;padding:14px 4px 14px 18px}
+.wl-plain{grid-template-columns:minmax(0,1fr) auto}
+.wl-t{grid-column:1}
+.wl-lead{grid-column:2;grid-row:1;display:inline-flex;align-items:center;gap:5px;font:600 12px/1.4 'Red Hat Text',sans-serif;color:var(--text-secondary)}
+.wl-lead .i{width:14px;height:14px;color:var(--blue-700)}
+.wl-ch{grid-column:3;grid-row:1}
+.wl-th{grid-column:1;grid-row:2;font:400 12px/1.45 'Red Hat Text',sans-serif;color:var(--muted);overflow-wrap:anywhere}
+.wl-lim{margin:0;font:400 12px/1.55 'Red Hat Text',sans-serif;color:var(--text-secondary);overflow-wrap:anywhere}
+.wl-lim b{font-weight:600;color:var(--text-primary)}
+@media(max-width:560px){.wl-d summary{grid-template-columns:minmax(0,1fr) 16px}.wl-plain{grid-template-columns:minmax(0,1fr)}.wl-lead{grid-column:1;grid-row:2}.wl-th{grid-row:3}.wl-d .wl-ch{grid-column:2;grid-row:1}}
+@media(max-width:560px){.rm-tbl{min-width:calc(64px + var(--cols,3)*170px)}}
+.rec-x{margin:8px 0 0;font:400 13px/1.5 'Red Hat Text',sans-serif;color:var(--text-secondary);overflow-wrap:anywhere}
+.ms-nl{font:600 13px/1.4 'Red Hat Text',sans-serif;color:var(--text-secondary);overflow-wrap:anywhere}
+.sec-moved{margin:8px 0 0;font-size:13px;color:var(--muted)}
+@media(prefers-reduced-motion:no-preference){
+.ms-ch,.qa-ch,.wl-ch{transition:transform .2s}
+}
+@media(forced-colors:active){.state,.ck-list,.sd-board,.sd-entry,.ms-tile,.qa-list,.wl-list,.fl-group,.rm-tbl td,.rm-chip{border:1px solid CanvasText}.sd-dot{forced-color-adjust:none;background:CanvasText}}
+@media print{.ck-row,.sd-entry,.ms-tile,.qa-item,.wl-item,.fl-group,.rm-chip{break-inside:avoid}.qa-d::details-content,.wl-d::details-content,.ms-list::details-content{content-visibility:visible}.rm-wrap{overflow:visible}}
+/* cells beyond a table's headers: drawn after the row's other fields, unlabelled */
+.cr-extra,.chg-x,.lp-x{margin:0;font:400 12px/1.45 'Red Hat Text',sans-serif;color:var(--text-secondary);overflow-wrap:anywhere}
+.ll-x{display:block;margin-top:2px;font-size:11px;color:var(--muted)}
+/* Task 7: the empty state (C32), the dated timeline (C15) and the pathway (C14). Tokens only; the grid and the shape blocks are the earlier ones. */
+.empty-state{display:grid;justify-items:center;gap:12px;margin-top:12px;padding:26px 20px;border:1px dashed var(--gray-300);border-radius:12px;background:Canvas;text-align:center;min-width:0}
+.ghost{display:flex;align-items:flex-end;gap:6px;height:44px}
+.ghost i{width:14px;border-radius:3px 3px 0 0;background:var(--rule)}
+.ghost i:nth-child(1){height:40%}.ghost i:nth-child(2){height:70%}.ghost i:nth-child(3){height:55%}.ghost i:nth-child(4){height:90%}
+.es-body{display:grid;justify-items:center;gap:6px;min-width:0;max-width:68ch}
+.es-t{margin:0;font:700 14px/1.4 'Red Hat Display',sans-serif;color:var(--navy)}
+.es-r{margin:0;padding:0;list-style:none;display:grid;gap:4px;font:400 13px/1.55 'Red Hat Text',sans-serif;color:var(--text-secondary);overflow-wrap:anywhere}
+.es-trace:empty{display:none}
+.tl-card{margin:14px 0;min-width:0}.tl-card h4{margin:0 0 4px}
+.tl-name{font:700 14px/1.3 'Red Hat Display',sans-serif;letter-spacing:-.01em;color:var(--navy)}
+.tl{display:flex;flex-direction:column;margin:0;padding:0;list-style:none;min-width:0}
+.tl-i{position:relative;display:grid;grid-template-columns:32px minmax(0,1fr);column-gap:14px;padding-bottom:18px;min-width:0}
+.tl-i:last-child{padding-bottom:0}
+.tl-i::before{content:"";position:absolute;left:15px;top:34px;bottom:0;width:2px;background:var(--gray-300)}
+.tl-i:last-child::before,.tl-i:has(+ .tl-yr)::before{display:none}
+.tl-yr{margin:6px 0 14px;padding:0 0 6px;border-bottom:1px solid var(--rule);font:700 13px/1.2 'Red Hat Display',sans-serif;color:var(--navy);font-variant-numeric:tabular-nums}
+.tl-yr:first-child{margin-top:0}
+.tl-d{grid-column:2;grid-row:1;font:600 12px/1.4 'Red Hat Text',sans-serif;font-variant-numeric:tabular-nums;color:var(--blue-700);overflow-wrap:anywhere;min-width:0}
+.tl-row{grid-column:1;grid-row:1/span 2}
+.tl-dot{display:grid;place-items:center;width:32px;height:32px;border-radius:50%;background:var(--selection);border:2px solid var(--blue-100);color:var(--blue-700)}
+.tl-dot .i{width:16px;height:16px}
+.tl-b{grid-column:2;grid-row:2;display:grid;justify-items:start;gap:6px;min-width:0}
+.tl-t{margin:0;font:600 13px/1.4 'Red Hat Text',sans-serif;color:var(--text-primary);overflow-wrap:anywhere;min-width:0}
+.shape-cap{font:600 11px/16px 'Red Hat Text',sans-serif;letter-spacing:.04em;text-transform:uppercase;color:var(--text-tertiary)}
+.tile-a{margin:8px 0 0;font:400 12px/1.45 'Red Hat Text',sans-serif;color:var(--muted);overflow-wrap:anywhere}
+.tiles-absent{margin:8px 0 0;font:400 12px/1.45 'Red Hat Text',sans-serif;color:var(--muted);overflow-wrap:anywhere}
+.tl-cat{display:inline-flex;align-items:center;gap:5px;max-width:100%;padding:2px 9px 2px 6px;border:1px solid var(--rule);border-radius:999px;background:var(--quiet);font:600 11px/1.4 'Red Hat Text',sans-serif;color:var(--text-secondary)}
+.tl-cat .i{width:13px;height:13px;color:var(--blue-700);flex:none}
+.tl-more{min-width:0;max-width:100%;width:100%}.tl-more .rec-fields{margin:0;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:6px 20px}
+@media screen and (min-width:992px){
+.tl-h{flex-direction:row;padding-top:2px}
+.tl-h .tl-i{flex:1 1 0;display:flex;flex-direction:column;align-items:center;text-align:center;padding:0 6px}
+.tl-h .tl-i::before{display:none}
+.tl-h .tl-d{min-height:32px;display:flex;align-items:flex-end;justify-content:center}
+.tl-h .tl-row{position:relative;display:flex;justify-content:center;align-items:center;width:100%;height:40px}
+.tl-h .tl-row::before{content:"";position:absolute;left:0;right:0;top:50%;height:2px;margin-top:-1px;background:var(--gray-300)}
+.tl-h .tl-i:first-child .tl-row::before{left:50%}.tl-h .tl-i:last-child .tl-row::before{right:50%}
+.tl-h .tl-dot{position:relative;z-index:1}
+.tl-h .tl-b{justify-items:center;margin-top:4px}
+.tl-h .tl-more{position:absolute;z-index:3;top:100%;left:50%;transform:translateX(-50%);width:min(240px,100%);min-width:200px;margin-top:4px;padding:10px 12px;border-radius:10px;background:var(--navy);color:Canvas;text-align:left;opacity:0;pointer-events:none}
+.tl-h .tl-more .rec-fields dt,.tl-h .tl-more .rec-fields dd{color:inherit}
+.tl-h .tl-i:first-child .tl-more{left:0;transform:none}.tl-h .tl-i:last-child .tl-more{left:auto;right:0;transform:none}
+.tl-h .tl-i:hover .tl-more,.tl-h .tl-i:focus-within .tl-more{opacity:1;pointer-events:auto}
+}
+@media screen and (min-width:992px) and (hover:none){.tl-h .tl-more{position:static;transform:none!important;width:auto;min-width:0;padding:0;background:none;color:var(--text-secondary);opacity:1;pointer-events:auto}.tl-h .tl-more .rec-fields dt{color:var(--text-tertiary)}}
+.map-wide{min-width:0}
+.map-hit{fill:none;stroke:transparent;stroke-width:16}
+.map-eg,.map-node[role=button]{cursor:pointer}
+.map-eg:focus-visible,.map-node:focus-visible{outline:none}
+.map-eg:focus-visible .map-hit{stroke:var(--selection);stroke-width:12}
+.map-eg:focus-visible .map-edge,.map-eg.hl .map-edge,.map-eg[aria-pressed=true] .map-edge{stroke:var(--blue);stroke-width:3}
+.map-node[role=button]:focus-visible rect{stroke:var(--blue);stroke-width:4;stroke-dasharray:6 3}
+.map-node.hl rect{stroke:var(--blue);stroke-width:2.4}
+.map-node[aria-pressed=true] rect{fill:var(--blue-100);stroke:var(--blue);stroke-width:2.4}
+.map-legend{display:flex;flex-wrap:wrap;gap:8px 24px;margin-top:12px;font:400 12px/1.4 'Red Hat Text',sans-serif;color:var(--text-secondary)}
+.map-legend span{display:inline-flex;align-items:center;gap:8px}.map-lg{color:var(--navy);flex:none}
+.map-panel{display:grid;gap:10px;margin-top:14px;padding:16px 18px;border:1px solid var(--rule);border-radius:12px;background:var(--quiet);min-width:0}
+.map-hint{margin:0;font:400 13px/1.5 'Red Hat Text',sans-serif;color:var(--muted)}
+.rel+.rel{padding-top:10px;border-top:1px solid var(--rule)}
+.rel-ft{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0;font:600 13px/1.4 'Red Hat Text',sans-serif;color:var(--navy)}
+.rel-ft span{overflow-wrap:anywhere;min-width:0}.rel-ft .i{width:14px;height:14px;flex:none;color:var(--blue-700)}.rel-ft .basis-link{margin-left:auto}
+.rel-t{margin:6px 0 0;font:400 13.5px/1.6 'Red Hat Text',sans-serif;color:var(--text-primary);overflow-wrap:anywhere}
+.rel .rec-fields{margin-top:8px}
+.pw-et{padding:2px 9px;border:1px solid var(--navy);border-radius:999px;font:600 11px/1.4 'Red Hat Text',sans-serif;color:var(--navy)}
+.map-steps{display:none;margin:0;padding:0;list-style:none}
+.pw-step{position:relative;min-width:0;padding:0 0 18px 36px}
+.pw-step::before{content:"";position:absolute;left:11px;top:26px;bottom:0;width:2px;background:var(--gray-300)}
+.pw-step:last-child{padding-bottom:0}.pw-step:last-child::before{display:none}
+.pw-n{position:absolute;left:0;top:0;display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--navy);color:Canvas;font:700 12px/1 'Red Hat Display',sans-serif}
+.pw-fr{font:600 13px/1.4 'Red Hat Text',sans-serif;color:var(--navy);overflow-wrap:anywhere}
+.pw-ar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:4px 0;color:var(--blue-700)}
+.pw-rl{margin:4px 0 0;font:400 12.5px/1.55 'Red Hat Text',sans-serif;color:var(--text-secondary);overflow-wrap:anywhere}
+.pw-step .rec-fields{margin-top:6px}
+.map-ev{margin:8px 0 0}
+.section-heading .trace-row{margin-left:auto;align-self:center}
+@media(max-width:767px){.map-wide{display:none}.map-steps{display:block}}
+@media(max-width:560px){.empty-state{padding:20px 14px}}
+@media(prefers-reduced-motion:no-preference){
+.rel:not([hidden]){animation:rel-in .15s ease-out both}
+@keyframes rel-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.map-edge,.map-node rect{transition:stroke .15s}
+.tl-h .tl-more{transition:opacity .15s}
+}
+@media(forced-colors:active){.empty-state,.map-panel,.tl-cat,.tl-dot,.pw-et{border:1px solid CanvasText}.pw-n{forced-color-adjust:none;background:CanvasText}.ghost i{forced-color-adjust:none;background:GrayText}}
+@media print{.map-wide{display:none}.map-steps{display:block}.tl-i,.pw-step,.empty-state{break-inside:avoid}.tl-more{position:static}}
+
+/* ---- Library redesign, Overview (task 8): the view, what decides it, why, what would change it, what to watch, the modules, what limits the reading. Tokens only; the 24-column grid is the module page's. ---- */
+.overview-page{display:flex;flex-direction:column;gap:28px;min-width:0}
+.overview-part{min-width:0}
+.ov-head{display:flex;align-items:baseline;justify-content:space-between;gap:6px 16px;flex-wrap:wrap;margin-bottom:14px}
+.ov-head h2{margin:0;font:700 18px/1.2 'Red Hat Display',sans-serif;letter-spacing:-.01em;color:var(--text-primary)}
+.ov-sub{margin:0;font-size:12px;color:var(--muted)}
+.from{margin:0;font:600 13px/1.4 'Red Hat Text',sans-serif}
+.from a{display:inline-flex;align-items:center;gap:6px;color:var(--blue-700);text-decoration:none}
+.from a:is(:hover,:focus-visible){text-decoration:underline;text-underline-offset:3px}
+.from .i{width:14px;height:14px}
+/* C4 */
+.strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr));gap:1px;background:var(--rule);border:1px solid var(--rule);border-radius:12px;overflow:hidden;align-self:start}
+.strip-i{background:#fff;padding:16px 20px;display:flex;flex-direction:column;justify-content:center;gap:4px;min-width:0}
+.strip-t{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.strip-k{min-width:0;font:600 12px/1.35 'Red Hat Text',sans-serif;color:var(--text-secondary);text-decoration:none;overflow-wrap:anywhere}
+.strip-k:is(:hover,:focus-visible){color:var(--blue-700);text-decoration:underline;text-underline-offset:3px}
+.strip-v{margin:0;font:700 24px/1.15 'Red Hat Display',sans-serif;letter-spacing:-.02em;color:var(--text-primary);overflow-wrap:anywhere}
+.strip-v.wide{font:600 14px/1.45 'Red Hat Text',sans-serif;letter-spacing:0}
+.strip-b{margin:0;font-size:12px;color:var(--muted)}
+@media(min-width:992px){.strip{grid-template-columns:minmax(0,1fr)}}
+/* the why row: findings, then the callout and the dates stacked beside them */
+.ov-side{display:flex;flex-direction:column;gap:20px;min-width:0}
+.ov-side .callout{height:auto}
+#overview-watch{background:#fff;border:1px solid var(--rule);border-radius:12px;padding:20px 24px}
+#overview-watch .tl-card{margin:0}#overview-watch .tl-card+.tl-card{margin-top:14px}
+#overview-watch .ov-head{margin-bottom:12px}
+#overview-watch .ov-head h2{font-size:15px}
+#overview-decides .sd-board{margin-top:0}
+/* C20 */
+.mt-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:12px;align-items:start}
+.mt{background:#fff;border:1px solid var(--rule);border-radius:12px;min-width:0}
+.mt:hover{border-color:var(--blue-100)}
+.mt-head{display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:16px;cursor:pointer;border-radius:12px;list-style:none}
+.mt-head::-webkit-details-marker{display:none}
+.mt-head:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
+.mt-group{display:block}
+.mt-top{display:flex;align-items:flex-start;gap:10px;margin:0;width:100%}
+.mt-name{flex:1 1 auto;min-width:0;font:700 14px/1.25 'Red Hat Display',sans-serif;color:var(--text-primary);overflow-wrap:anywhere}
+.mt-ch{flex:none;display:inline-flex;color:var(--text-quaternary)}
+.mt-ch .i{width:16px;height:16px}
+.mt-state{display:flex;flex-wrap:wrap;gap:6px}
+.mt-state :is(.state,.badge){white-space:nowrap}
+.mt-lead{margin:0;font:400 12.5px/1.55 'Red Hat Text',sans-serif;color:var(--text-secondary);display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:4;line-clamp:4;overflow:hidden}
+.mt[open]{grid-column:1/-1;border-color:var(--blue-100);box-shadow:var(--depth)}
+.mt[open] .mt-lead{display:none}
+.mt[open] .mt-ch{transform:rotate(180deg)}
+.mt-body{margin:0 16px;padding:16px 4px 16px;border-top:1px solid var(--rule);columns:2;column-gap:40px}
+.mt-p{margin:0 0 12px;break-inside:avoid;font:400 13.5px/1.65 'Red Hat Text',sans-serif;color:var(--text-primary);max-width:none}
+.mt-open{column-span:all;display:flex;align-items:center;gap:6px;width:max-content;font:600 13px/1.4 'Red Hat Text',sans-serif;color:var(--blue-700);text-decoration:none}
+.mt-open:is(:hover,:focus-visible){text-decoration:underline;text-underline-offset:3px}
+.mt-open .i{width:14px;height:14px}
+.mt-plain{padding:16px;display:flex;flex-direction:column;gap:8px}
+.mt-plain .mt-lead{display:block;-webkit-line-clamp:unset;line-clamp:unset;overflow:visible}
+@media(max-width:991px){.mt-body{columns:1}}
+@media(prefers-reduced-motion:no-preference){
+.mt-ch{transition:transform .2s}
+.mt[open] .mt-body{animation:mt-in .2s ease-out}
+@keyframes mt-in{from{opacity:0;transform:translateY(-4px)}}
+}
+@media(forced-colors:active){.strip,.mt,#overview-watch{border:1px solid CanvasText}.strip-i{forced-color-adjust:auto}}
+@media print{.mt-ch{display:none}.mt{break-inside:avoid}.mt-lead{display:block;-webkit-line-clamp:unset;line-clamp:unset;overflow:visible}.mt[open] .mt-body{animation:none}.mt[open] .mt-lead{display:none}}
+@media(forced-colors:active){.map-node rect{fill:Canvas;stroke:CanvasText}.map-edge{stroke:CanvasText}.map-arrow{fill:CanvasText}.map-node.hl rect,.map-eg.hl .map-edge{stroke:Highlight;stroke-width:3}.map-node[aria-pressed=true] rect{fill:Canvas;stroke:Highlight;stroke-width:4}.map-eg[aria-pressed=true] .map-edge{stroke:Highlight;stroke-width:4}.map-node[role=button]:focus-visible rect{stroke:Highlight;stroke-width:4;stroke-dasharray:6 3}.map-eg:focus-visible .map-edge{stroke:Highlight;stroke-width:4;stroke-dasharray:6 3}.map-eg:focus-visible .map-hit{stroke:Highlight;stroke-opacity:.3}}
+
+/* Changes (library redesign, task 9): CP-8's passages and tables drawn by the shared components, the pack's own figures beneath. Tokens only; the grid is .g24. */
+.changes{display:flex;flex-direction:column;gap:28px;min-width:0}
+.changes>.run-section{margin-top:0;min-width:0}
+.changes .run-section>h2{margin:0 0 14px;font:700 18px/1.2 'Red Hat Display',sans-serif;letter-spacing:-.01em;color:var(--text-primary)}
+.changes .run-section>h2.sr-only{margin:0}
+.changes .chg-sec-h{margin:22px 0 10px;font:700 15px/1.3 'Red Hat Display',sans-serif;color:var(--text-primary)}
+.changes .rd-h{margin:0 0 14px}
+.changes .verdict .eyebrow,.changes .callout h3{margin-top:0}
+.chg-top{display:flex;align-items:center;gap:14px;padding:16px 20px;background:#fff;border:1px solid var(--rule);border-radius:12px;min-width:0}
+.chg-top-i{flex:none;display:grid;place-items:center;width:40px;height:40px;border-radius:10px;background:var(--blue-50);color:var(--blue-700)}
+.chg-top-i .i{width:20px;height:20px}
+.chg-top>div{min-width:0}
+.changes .changes-heading{margin:0;font:700 18px/1.25 'Red Hat Display',sans-serif;letter-spacing:-.01em;color:var(--text-primary);overflow-wrap:anywhere}
+.chg-now{margin:2px 0 0;font:400 12px/1.4 'Red Hat Text',sans-serif;color:var(--muted)}
+.chg-lead{display:flex;flex-direction:column;gap:20px}
+.chg-why{align-items:start}
+.chg-why>.c14,.chg-why>.c10,.chg-why>.c24{min-width:0}
+.chg-why :is(.rd-card,.callout){height:auto}
+@media(max-width:991px){.chg-why>.c14,.chg-why>.c10{grid-column:span 24}}
+/* a lead sentence of more than 140 characters is read as a paragraph (components.js verdictPanel) */
+.verdict-lead.is-long{font:600 16px/1.55 'Red Hat Text',sans-serif;letter-spacing:0}
+@media(max-width:767px){.verdict-lead.is-long{font-size:15px}}
+#changes-analysis .ms-tiles{margin-top:0}
+.chg-fold{margin-top:14px;background:#fff;border:1px solid var(--rule);border-radius:12px;min-width:0}
+.chg-fold>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;cursor:pointer;list-style:none;font:600 13px/1.4 'Red Hat Text',sans-serif;color:var(--text-primary);border-radius:12px}
+.chg-fold>summary::-webkit-details-marker{display:none}
+.chg-fold>summary:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
+.chg-fold-ch{flex:none;display:inline-flex;color:var(--text-quaternary)}
+.chg-fold-ch .i{width:16px;height:16px}
+.chg-fold[open] .chg-fold-ch{transform:rotate(180deg)}
+.chg-fold>:not(summary){margin:0 16px 16px}
+.chg-ledger{margin-top:20px;padding-top:16px;border-top:1px solid var(--rule)}
+.chg-ledger .ledger-bar{margin-top:0}
+.chg-ledger-link,.chg-figures-link{margin:12px 0 0}
+.chg-ledger-link a,.chg-figures-link a{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
+.chg-n{display:inline-block;min-width:22px;padding:0 8px;border-radius:999px;background:var(--blue-50);color:var(--blue-700);font:600 12px/20px 'Red Hat Text',sans-serif;text-align:center;white-space:nowrap}
+.chg-empty .empty-state{margin-top:0}
+.chg-empty-go{margin:0}
+.chg-empty-go a{display:inline-flex;align-items:center;gap:6px}
+.change-status{flex:none;white-space:nowrap}
+@media(prefers-reduced-motion:no-preference){
+.chg-fold-ch{transition:transform .2s}
+}
+@media(forced-colors:active){.chg-top,.chg-fold{border:1px solid CanvasText}.chg-n{border:1px solid CanvasText}}
+@media print{.chg-fold::details-content,.change-module::details-content{content-visibility:visible}.chg-fold-ch{display:none}.chg-top,.chg-fold,.change-module{break-inside:avoid}}
+/* Forecast: the run's charts as small multiples (cards in the 24-column grid), each with a Chart or Table toggle. */
+.fc-count{margin:0 0 14px;color:var(--muted);font-size:var(--fs-compact)}
+.fc-grid{align-items:start}
+.fc-grid>div{display:flex;min-width:0}
+.fc-grid>div>.fc-card{flex:1 1 auto}
+@media(min-width:768px) and (max-width:1199px){.g24.fc-grid>div{grid-column:span 12}.g24.fc-grid>.fc-wide{grid-column:span 24}}
+.fc-card{display:flex;min-width:0;flex-direction:column;gap:12px;min-width:0;padding:16px;border:1px solid var(--rule);border-radius:var(--radius-card);background:#fff}
+.fc-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px 12px;min-width:0}
+.fc-title{min-width:0;display:grid;gap:2px}
+.fc-title h3{margin:0;font:700 var(--fs-control)/1.3 'Red Hat Display',sans-serif;letter-spacing:-.02em;color:var(--navy);overflow-wrap:anywhere}
+.fc-unit{color:var(--text-quaternary);font-size:var(--fs-label)}
+.fc-tools{display:flex;align-items:center;gap:6px;flex:none}
+.fc-fig{min-width:0;overflow-x:auto;border-radius:var(--radius-inline)}
+.fc-fig:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+/* The focusable region is the one that scrolls: a column chart inside a card does not clip itself (its own overflow-x:auto would leave the focusable .fc-fig with nothing to scroll). */
+.fc-fig .column-chart{overflow-x:visible}
+.fc-fig .section-heading{display:none}
+.fc-card .column-chart{margin:0}
+.fc-card .chart-reading{margin:0 0 8px}
+.fc-card .vector-chart{max-width:none}
+.fc-card .dtbl-wrap{margin:0}
+.fc-card .stack-key{margin:0;padding:0;list-style:none}
+.fc-pair{display:grid;gap:6px;padding:8px 4px}
+.fc-measure{margin:0;color:var(--text-secondary);font-size:var(--fs-compact)}
+.fc-period{display:flex;align-items:baseline;gap:10px;margin:0;padding:6px 0;border-top:1px solid var(--rule);min-width:0;overflow-wrap:anywhere}
+.fc-k{flex:none;color:var(--text-quaternary);font-size:var(--fs-label)}
+.fc-period strong{font:700 24px/1.15 'Red Hat Display',sans-serif;letter-spacing:-.02em;color:var(--navy)}
+.fc-note{margin:0;padding-top:10px;border-top:1px solid var(--rule);color:var(--text-tertiary);font-size:var(--fs-label);line-height:1.5}
+.fc-note-k{margin:0 0 4px;font-weight:600;color:var(--text-secondary)}
+.fc-note ul{margin:0;padding-left:16px;display:grid;gap:3px}
+.fc-foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 14px;margin-top:auto}
+.fc-foot .text-action{margin-left:auto}
+.fc-card .empty-state{margin-top:0}
+.fc-card .empty-state .es-trace{display:flex;justify-content:center}
+.forecast-register{margin:10px 0}
+.forecast-register>summary{cursor:pointer;font-weight:600;color:var(--blue-700)}
+.forecast-register>summary:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.forecast-register .dtbl-wrap{margin-top:10px}
+.fc-built{margin:0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:8px 18px}
+.fc-built li{display:inline-flex;align-items:center;gap:8px}
+.frame-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;padding:10px 14px;border:1px solid var(--rule);border-bottom:0;border-radius:var(--radius-card) var(--radius-card) 0 0;background:var(--quiet)}
+.frame-head h2{margin:0;font:700 var(--fs-control)/1.3 'Red Hat Display',sans-serif;color:var(--navy)}
+.frame-head span{color:var(--muted);font-size:var(--fs-compact)}
+@media(prefers-reduced-motion:no-preference){.fc-card{transition:box-shadow .2s}.fc-card:hover{box-shadow:var(--shadow-sm)}}
+@media(forced-colors:active){.fc-card,.frame-head{border:1px solid CanvasText}}
+@media print{.fc-card{break-inside:avoid}.fc-card .seg{display:none}.fc-card [data-pane][hidden]{display:block!important}.fc-note{display:none}.fc-fig{overflow:visible}}
+.fc-card .col.missing{flex:1 1 90px;max-width:none;align-self:flex-end;height:auto}
+.fc-card .col.missing strong{position:static;transform:none;display:block;white-space:normal;padding:0;font:400 var(--fs-label)/1.35 'Red Hat Text',sans-serif;text-align:center;color:var(--text-tertiary);overflow-wrap:anywhere}
+@media(max-width:560px){.fc-tools{flex-wrap:wrap;justify-content:flex-end}}
+.fc-card .seg button{min-width:56px;padding:0 10px}
+/* Changes, fix round 1: the maturity card (shared fc-card and Chart/Table toggle), two non-status series colours, the held bottom line, the shared run name */
+.chg-mat{margin-top:14px}
+.chg-mat-fig{display:flex;flex-direction:column;gap:12px;min-width:0}
+.chg-mat-legend{display:flex;flex-wrap:wrap;gap:6px 16px;font:400 12px/1.4 'Red Hat Text',sans-serif;color:var(--text-secondary)}
+.chg-mat-legend span{display:inline-flex;align-items:center;gap:6px}
+.chg-bar{display:block;height:10px;border-radius:3px;min-width:2px;forced-color-adjust:none}
+.chg-mat-legend .chg-bar{width:14px}
+.chg-bar.e{background:var(--series-4-ln)}
+.chg-bar.c{background:var(--series-1)}
+.chg-mat-row{display:grid;grid-template-columns:minmax(64px,96px) minmax(0,1fr);gap:4px 12px;align-items:center;min-width:0}
+.chg-mat-k{font:600 12px/1.3 'Red Hat Text',sans-serif;color:var(--text-primary);overflow-wrap:anywhere}
+.chg-bar-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;margin:2px 0}
+.chg-bv{font:400 12px/1.3 'Red Hat Text',sans-serif;font-variant-numeric:tabular-nums;color:var(--text-secondary);white-space:nowrap}
+.chg-to{display:inline-flex;vertical-align:middle;margin:0 8px;color:var(--text-quaternary)}
+.chg-to .i{width:18px;height:18px}
+div.chart-open{cursor:default}
+.fc-card .stack-tbl{container-type:inline-size;min-width:0}
+.fc-card .stack-head{display:none}
+@container (min-width:560px){
+.fc-card .stack-head{display:grid;grid-template-columns:22px minmax(0,2fr) repeat(4,minmax(0,1fr));gap:0 14px;padding:0 0 4px;border-bottom:1px solid var(--rule);font:600 var(--fs-label)/1.3 'Red Hat Text',sans-serif;letter-spacing:.04em;text-transform:uppercase;color:var(--text-tertiary)}
+.fc-card .stack-head span:first-child{grid-column:3}
+.fc-card .stack-key li{display:grid;grid-template-columns:22px minmax(0,2fr) repeat(4,minmax(0,1fr));gap:0 14px;align-items:baseline}
+.fc-card .stack-key li>span:not(.stack-name){display:contents}
+.fc-card .stack-key .stack-facts{display:contents}
+.fc-card .stack-key .stack-facts div{align-self:baseline}
+.fc-card .stack-key .stack-facts dt{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+}
+.fc-card .stack-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:4px 14px;margin:4px 0 0}
+.fc-card .stack-facts div{min-width:0}
+.fc-card .stack-facts dt{color:var(--text-quaternary);font:500 var(--fs-label)/1.3 'Red Hat Text',sans-serif}
+.fc-card .stack-facts dd{margin:0;font:600 var(--fs-body)/1.35 'Red Hat Display',sans-serif;color:var(--text-primary);overflow-wrap:anywhere}
+.fc-card .bridge-numbered{display:grid;gap:4px 18px;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));margin:8px 0 0;padding:0;list-style:none;font-size:var(--fs-compact);color:var(--text-secondary)}
+.fc-card .bridge-numbered li{display:flex;gap:8px;align-items:baseline;min-width:0;overflow-wrap:anywhere}
+.fc-card .bridge-n{flex:none;min-width:18px;height:18px;border-radius:999px;background:var(--selection);color:var(--blue-700);font:600 11px/18px 'Red Hat Text',sans-serif;text-align:center}
+.fc-card .absent-mark,.fc-absent .absent-mark{color:var(--text-quaternary);font:600 13px/1 'Red Hat Text',sans-serif}
+.fc-card .col.missing .absent-mark{position:absolute;left:50%;transform:translateX(-50%)}
+.fc-absent{margin:8px 0 0;padding:0;list-style:none;display:grid;gap:3px;color:var(--text-tertiary);font-size:var(--fs-label);line-height:1.45}
+.fc-absent li{display:block}
+.fc-absent .absent-mark{margin-right:6px}
+.fc-absent b{font-weight:600;color:var(--text-secondary)}
+.ev-limits{margin:0;padding:0;list-style:none}
+.ev-limits li{padding:10px 14px;border-top:1px solid var(--rule);font-size:var(--fs-body);line-height:1.5}
+/* Library home and report history (library redesign, task 11): a counted filter bar (C26), issuer cards with a module dot strip (C21), a live run row (C31, C13) and the run timeline (C15).
+   Tokens only; the cards are one continuous grid; the only motion is the running step and the running mark, and only while a run is live and motion is not reduced. */
+.lf{display:grid;gap:14px;margin-top:14px;outline:none}
+.lf-row{display:flex;flex-wrap:wrap;gap:14px 28px;align-items:flex-start}
+.lf-group{display:flex;flex-direction:column;gap:6px;min-width:0;max-width:100%}
+.lf-lab{font:600 11px/16px 'Red Hat Text',sans-serif;letter-spacing:.09em;text-transform:uppercase;color:var(--text-tertiary)}
+.lf-chips{display:flex;flex-wrap:wrap;gap:6px;min-width:0}
+.lf-chip{display:inline-flex;align-items:center;gap:8px;max-width:100%;min-height:32px;padding:4px 6px 4px 12px;border:1px solid var(--border-primary);border-radius:999px;background:Canvas;font:500 var(--fs-body)/1.25 'Red Hat Text',sans-serif;color:var(--text-secondary);text-align:left}
+.lf-chip:hover{border-color:var(--blue-100);background:var(--gray-25)}
+.lf-chip[aria-pressed=true]{background:var(--blue-50);border-color:var(--blue-100);color:var(--blue-700);font-weight:600}
+.lf-t{min-width:0;overflow-wrap:anywhere}
+.lf-n{flex:none;min-width:22px;height:20px;padding:0 6px;border-radius:999px;background:var(--gray-100);color:var(--muted);font:600 11px/20px 'Red Hat Text',sans-serif;text-align:center;font-variant-numeric:tabular-nums}
+.lf-chip[aria-pressed=true] .lf-n{background:Canvas;color:var(--blue-700)}
+.lf-chip.is-zero{color:var(--text-quaternary)}
+.lf-select select{height:34px;width:260px;max-width:100%;padding:0 10px;border:1px solid var(--border-primary);border-radius:var(--radius-control);background:Canvas;color:var(--text-primary);font-size:var(--fs-body)}
+.lf-active{display:flex;flex-wrap:wrap;gap:6px;padding-top:12px;border-top:1px solid var(--rule)}
+.lf-on{display:inline-flex;align-items:center;gap:6px;max-width:100%;min-height:28px;padding:2px 8px 2px 10px;border:1px solid var(--blue-100);border-radius:999px;background:var(--blue-50);color:var(--blue-700);font:600 var(--fs-compact)/1.3 'Red Hat Text',sans-serif;text-align:left;overflow-wrap:anywhere}
+.lf-on .i{flex:none;width:14px;height:14px}
+.lib-resultbar{margin-bottom:14px}
+.lib-sort{display:inline-flex;align-items:center;gap:8px;font:600 var(--fs-compact)/1.2 'Red Hat Text',sans-serif;color:var(--text-tertiary)}
+.lib-sort select{height:32px;padding:0 8px;border:1px solid var(--border-primary);border-radius:var(--radius-control);background:Canvas;color:var(--text-primary);font:400 var(--fs-body) 'Red Hat Text',sans-serif;max-width:100%}
+.library-main:has([data-block][data-view="cards"]) #run-detail:not([data-chosen]){display:none}
+.lib-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:16px;align-items:stretch}
+.lib-card{display:flex;flex-direction:column;gap:12px;min-width:0;padding:18px 20px;border:1px solid var(--rule);border-radius:var(--radius-card);background:Canvas;box-shadow:var(--shadow-xs)}
+.lc-head{min-width:0}
+.lc-name{margin:0;font:700 16px/1.3 'Red Hat Display',sans-serif;letter-spacing:-.01em;color:var(--navy);overflow-wrap:anywhere}
+.lc-meta{margin:2px 0 0;font:var(--fs-compact)/1.4 'Red Hat Text',sans-serif;color:var(--text-tertiary);overflow-wrap:anywhere}
+.lc-run{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;min-width:0}
+.lc-when{margin:0;font:600 var(--fs-compact)/1.4 'Red Hat Text',sans-serif;color:var(--blue-700);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.lc-lead{margin:0;font:400 var(--fs-body)/1.55 'Red Hat Text',sans-serif;color:var(--text-secondary);overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:4;line-clamp:4;overflow:hidden}
+.lc-dots{min-width:0}
+.lc-none{margin:0;font:var(--fs-compact)/1.45 'Red Hat Text',sans-serif;color:var(--text-quaternary)}
+.lc-foot{display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px;margin-top:auto;padding-top:12px;border-top:1px solid var(--rule)}
+.lc-open,.lc-hist{display:inline-flex;align-items:center;gap:6px;min-height:24px;font:600 var(--fs-compact)/1.3 'Red Hat Text',sans-serif;text-decoration:none}
+.lc-open .i{width:14px;height:14px}
+.lc-hist{margin-left:auto;font-weight:500;color:var(--text-tertiary)}
+.mdots{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0;padding:0;list-style:none}
+.mdot{display:block;line-height:0}
+.mdot>[role=img]{display:grid;place-items:center;box-sizing:border-box;width:20px;height:20px;flex:none;border:1.5px solid currentColor;border-radius:50%;background:Canvas;color:var(--muted)}
+.mdot .i{width:12px;height:12px}
+.mdot>[role=img]:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.mdot.ok>[role=img]{color:var(--green)}.mdot.warn>[role=img]{color:var(--amber)}.mdot.bad>[role=img]{color:var(--red)}.mdot.new>[role=img]{color:var(--blue-700)}
+.mdot.done>[role=img]{color:var(--text-quaternary);border-color:var(--gray-300)}
+.mdot.neutral>[role=img]{color:var(--muted);border-color:var(--gray-300);background:var(--gray-50)}
+.mdot.none>[role=img]{border-style:dashed;color:var(--text-quaternary)}
+.lib-strip{margin:0 0 20px}
+.lib-strip .strip{grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr))}
+.detail-evidence{margin:14px 0 0}
+.lib-live{padding:16px 20px;border:1px solid var(--rule);border-radius:var(--radius-card);background:Canvas;box-shadow:var(--shadow-xs)}
+.lib-eyebrow{margin:0 0 4px}
+.live-rows{margin:0;padding:0;list-style:none}
+.live-row{padding:14px 0;border-top:1px solid var(--rule)}
+.live-row:first-child{border-top:0;padding-top:8px}
+.lv-head{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin-bottom:10px;min-width:0}
+.lv-name{font:700 15px/1.3 'Red Hat Display',sans-serif;color:var(--navy);overflow-wrap:anywhere}
+.lv-pathway{font:var(--fs-compact)/1.4 'Red Hat Text',sans-serif;color:var(--text-tertiary)}
+.rmark .lat{flex:none}
+.lat{display:inline-grid;grid-template-columns:repeat(3,4px);gap:1.5px}
+.lat i{display:block;width:4px;height:4px;border-radius:1px;background:currentColor;opacity:.4}
+.lat i:nth-child(1){opacity:1}.lat i:nth-child(5){opacity:.15}
+.steps{display:flex;align-items:center;gap:3px;margin:0;padding:0;list-style:none}
+.step{flex:1 1 0;min-width:6px;height:8px;border-radius:4px;background:var(--gray-200)}
+.step.done{background:var(--green)}
+.step.running{height:12px;background:var(--blue)}
+.steps-t{display:flex;flex-wrap:wrap;gap:4px 18px;margin:10px 0 0;font:var(--fs-body)/1.4 'Red Hat Text',sans-serif;color:var(--text-secondary)}
+.steps-k{font-weight:600;color:var(--blue-700)}
+.steps-n{margin-left:auto;color:var(--text-tertiary);font-variant-numeric:tabular-nums}
+@media (prefers-reduced-motion:no-preference){
+  .step.running{animation:step-pulse 1.4s ease-in-out infinite}
+  .rmark.running .lat i{animation:lat-orbit 1.08s linear infinite}
+  .rmark.running .lat i:nth-child(1){animation-delay:0s}.rmark.running .lat i:nth-child(2){animation-delay:.135s}.rmark.running .lat i:nth-child(3){animation-delay:.27s}.rmark.running .lat i:nth-child(6){animation-delay:.405s}
+  .rmark.running .lat i:nth-child(9){animation-delay:.54s}.rmark.running .lat i:nth-child(8){animation-delay:.675s}.rmark.running .lat i:nth-child(7){animation-delay:.81s}.rmark.running .lat i:nth-child(4){animation-delay:.945s}
+  .rmark.running .lat i:nth-child(5){animation:none}
+  .steps-l .step.running{animation:none}
+  .run-card.stalled .step.running{animation:none}
+  @keyframes step-pulse{50%{opacity:.45}}
+  @keyframes lat-orbit{0%{opacity:1}60%,100%{opacity:.2}}
+}
+.history{max-width:880px}
+.history .tl-b{gap:10px}
+.history .tl-d{font:700 15px/1.3 'Red Hat Display',sans-serif;color:var(--navy)}
+.history .tl-t{font-weight:400;color:var(--text-secondary)}
+.history .tl-i{padding-bottom:26px}.history .tl-i:last-child{padding-bottom:0}
+.history .tl-i[aria-current=true] .tl-dot{background:var(--blue);border-color:var(--blue);color:Canvas}
+.hist-marks{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+.hist-status{font:600 var(--fs-compact)/1.3 'Red Hat Text',sans-serif;color:var(--text-tertiary)}
+.hist-dots{min-width:0}
+.hist-links{display:flex;flex-wrap:wrap;gap:4px 22px}
+@media print{
+  .lf,.search-row,.lib-sort,.lib-block .seg,.lib-live .lat{display:none}
+  .lib-block [data-pane=list]{display:none!important}.lib-block [data-pane=cards][hidden]{display:block!important}
+  .lib-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.lib-card,.live-row,.history .tl-i{break-inside:avoid}
+  .step.running,.lat i{animation:none}
+}
+@media(forced-colors:active){
+  .lf-chip,.lf-on,.lib-card,.lib-live,.mdot>[role=img]{border:1px solid CanvasText}
+  .lf-chip[aria-pressed=true]{outline:2px solid Highlight}
+  .step{border:1px solid CanvasText}.step.done{background:CanvasText}.step.running{background:Highlight}
+}
+
+.lib-block+.hint{margin-top:16px}
+.lc-path{flex:none}.lc-details{min-height:28px;padding:2px 12px}
