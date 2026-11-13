@@ -50,9 +50,9 @@ const evidence = new Map();
 const lastSection = new Map(), lastFile = new Map();
 const readingPositions = new Map();
 // Screening state, kept while the reader is on another screen. Filter names are LibraryLogic's.
-const LIBRARY_DEFAULTS = {search:'',sector:'',workflow:'',completion:'',availability:'',basis:'',period:'',leverageMin:'',leverageMax:'',coverageMin:'',coverageMax:'',issuer:'',runs:'latest',classification:'',currency:'',ratingBelow:'',ratingAbove:'',ratingScope:'issuer',netLeverageMin:'',netLeverageMax:'',cashMin:'',cashMax:'',undrawnMin:'',undrawnMax:'',talkMin:'',talkMax:'',marginMin:'',marginMax:'',couponMin:'',couponMax:'',priceMin:'',priceMax:'',yieldMin:'',yieldMax:'',limitation:''};
+const LIBRARY_DEFAULTS = {search:'',sector:'',workflow:'',completion:'',availability:'',period:'',leverageMin:'',leverageMax:'',coverageMin:'',coverageMax:'',issuer:'',runs:'latest',classification:'',currency:'',ratingBelow:'',ratingAbove:'',ratingScope:'issuer',netLeverageMin:'',netLeverageMax:'',cashMin:'',cashMax:'',undrawnMin:'',undrawnMax:'',talkMin:'',talkMax:'',marginMin:'',marginMax:'',couponMin:'',couponMax:'',priceMin:'',priceMax:'',yieldMin:'',yieldMax:'',limitation:''};
 const libraryFilters = {...LIBRARY_DEFAULTS};
-const libraryState = {selected:'',sortKey:'',direction:'asc',hidden:''};
+const libraryState = {selected:'',sortKey:'',direction:'asc',hidden:'',view:'cards',opened:false}; // view: Cards or List; opened: the details panel was asked for
 let current = null, returnTrigger = null, returnScroll = 0, returnContentScroll = 0;
 installDestinations();
 const appDestinations=new Set(['W-Library','CP-OS']); // These need no selected run.
@@ -89,11 +89,13 @@ function nameCodes(root,output=current?.output,marks=true) {
 
 for (const [id, output] of Object.entries(data)) {
   const located={module:output.module,output:id,run:output.run};
-  for (const section of output.sections) for (const block of section.blocks) {
+  if (window.Shapes.isUnstructured(output.sections)) continue; // a handoff the build could not read is drawn as no text, and so is not a search hit or a drawer item
+  // Rule 7, here as on the Evidence page (Evidence.classify, Shapes.columnKind): a section written for another module or the orchestrator is not indexed, and an inter-module column is not a field.
+  for (const {section,role} of window.Evidence.classify(output.sections,output.placement)) for (const block of role==='hidden'?[]:section.blocks) {
     if (block.type === 'table') for (const row of block.rows) {
       const priorText=section.blocks.slice(0,section.blocks.indexOf(block)).filter(b=>b.type==='text').at(-1)?.text;
       const basis=priorText||output.basis?.text;
-      evidence.set(`${id}:${row.line}`, {...located,line:row.line,title:plain(row.cells[0]), fields:block.headers.map((label,i)=>[label,row.cells[i]]),section:section.heading,basis});
+      evidence.set(`${id}:${row.line}`, {...located,line:row.line,title:plain(row.cells[0]), fields:block.headers.map((label,i)=>[label,row.cells[i]]).filter(([label])=>window.Shapes.columnKind(label)!=='intermodule'),section:section.heading,basis});
     }
     else evidence.set(`${id}:${block.line}`, {...located,line:block.line,title:section.heading,fields:[['Retained finding',block.text]],section:section.heading,text:block.text});
   }
@@ -148,9 +150,11 @@ function classification(item) {
   return [...new Set(classes)].join(' · ') || 'Not classified';
 }
 // Lists show a class only when the handoff declared one; the inspector still says Not classified.
-const classTag=(item,cls)=>{const c=classification(item);return c==='Not classified'?'':`<span class="${cls}">${esc(c)}</span>`;};
+const classTag=(item,cls)=>{if(!item)return '';const c=classification(item);return c==='Not classified'?'':`<span class="${cls}">${esc(c)}</span>`;};
+// A block the trace drawer does not hold (a section written for another module, rule 7) is drawn without its drawer link.
 function sourceFooter(key) {
   const item=evidence.get(key);
+  if(!item)return '';
   return `<div class="source-footer">${sourceLink(key)}${classTag(item,'badge badge-gray')}</div>`;
 }
 function tableMarkup(module, block) {
@@ -159,7 +163,7 @@ function tableMarkup(module, block) {
     const key=`${module}:${row.line}`;
     return `<section class="record"><h3>${rich(row.cells[0])}</h3>${block.headers.slice(1).map((h,i)=>`<div class="record-field"><h4>${esc(h)}</h4><div>${rich(row.cells[i+1])}</div></div>`).join('')}${sourceFooter(key)}</section>`;
   }).join('')}</div>`;
-  return `<div class="table-scroll" tabindex="0" role="region" aria-label="Exact source values"><table><thead><tr>${block.headers.map(h=>`<th scope="col">${esc(h)}</th>`).join('')}</tr></thead><tbody>${block.rows.map(row=>`<tr><th scope="row">${sourceLink(`${module}:${row.line}`,plain(row.cells[0]))}${classTag(evidence.get(`${module}:${row.line}`),'row-classification')}</th>${row.cells.slice(1).map(c=>`<td>${rich(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  return `<div class="table-scroll" tabindex="0" role="region" aria-label="Exact source values"><table><thead><tr>${block.headers.map(h=>`<th scope="col">${esc(h)}</th>`).join('')}</tr></thead><tbody>${block.rows.map(row=>`<tr><th scope="row">${evidence.has(`${module}:${row.line}`)?sourceLink(`${module}:${row.line}`,plain(row.cells[0])):esc(plain(row.cells[0]))}${classTag(evidence.get(`${module}:${row.line}`),'row-classification')}</th>${row.cells.slice(1).map(c=>`<td>${rich(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 }
 function sectionsMarkup(module, sections, omitPresentedTable=false) {
   return sections.map(section=>{
@@ -235,7 +239,8 @@ function sectionView(id,section) {
   let visual=band+(id===pins['CP-1A']&&section==='business'?businessVisual():id===pins['CP-1']&&section==='cash'?trendChart(id,'Net cash provided by operating activities'):id===pins['CP-2']&&section==='outlook'?downside():'');
   visual+=galleryVisual(id,section)+readerCharts(id,section);
   if(section==='audit')visual+=`<div class="audit-intro"><h2>Original output & technical audit</h2><p>The retained output is available alongside its designed presentation. Analytical acceptance has not been verified by this library.</p><a href="${esc(data[id].href)}" download>Download original handoff</a><p class="hash">SHA-256 ${data[id].sha256}</p></div>`;
-  return visual+sectionsMarkup(id,sectionData(id,section),true);
+  const hidden=hiddenSections(id); // rule 7: a section written for another module is drawn nowhere, an Evidence & audit item included
+  return visual+sectionsMarkup(id,sectionData(id,section).filter(held=>!hidden.has(held)),true);
 }
 function renderSearch(query) {
   if(!query){$('search-results').replaceChildren();return;}
@@ -246,6 +251,8 @@ function renderSearch(query) {
   const code=id=>data[id].label===data[id].module?moduleNames[data[id].module]:`${moduleNames[data[id].module]} · ${data[id].label}`;
   const sectionOf=(id,heading)=>modules[id].sections.find(s=>s[2].some(p=>matchesHeading(heading,p)))?.[0];
   const href=(id,section,key=null)=>routeHref(data[id].module,section,key,context,data[id].source);
+  // A section the module page does not hold (Sources, Calculations ...) is reached on its Evidence tab, at the hit's row; else it opens where the module page holds it.
+  const hitHref=(id,heading,line=null,key=null)=>{const section=sectionOf(id,heading);return section===undefined&&evidenceHit(id,heading,line)||href(id,section,key);};
   const hit=(kind,owner,label,target)=>`<a class="search-hit" href="${esc(target)}" aria-label="${esc(`${kind}: ${owner} ${label}`)}"><span class="code">${esc(owner)}</span><span>${esc(label)}</span></a>`;
   const group=(title,total,hits)=>total?`<div class="search-group"><p>${title}${hits.length<total?` · ${hits.length} of ${total}`:''}</p>${hits.join('')}</div>`:'';
   // A row's title can be a bare row number; name the cell that matched unless it is a whole paragraph.
@@ -254,17 +261,30 @@ function renderSearch(query) {
     return has(title)||!cell||cell.length>80?title:`${title} · ${cell}`;
   };
   const figures=outputs.flatMap(id=>{
-    const tables=data[id].sections.filter(s=>s.blocks.some(b=>b.type==='table')),visual=data[id].visual;
+    const hidden=hiddenSections(id),tables=data[id].sections.filter(s=>!hidden.has(s)&&s.blocks.some(b=>b.type==='table')),visual=data[id].visual; // a section written for another module is not a figure (rule 7)
     const plotted=visual&&tables.find(s=>s.blocks.some(b=>b.line===visual.table));
     return [...(plotted?[[id,visual.title,plotted.heading]]:[]),...tables.map(s=>[id,plain(s.heading.replace(METHOD_CODE,'')),s.heading])];
   }).filter(([id,label])=>has(label,data[id].module));
+  // A hit inside an audit section (Sources, Calculations, Registers, Gaps) is named by its module and Evidence tab only, with the number of rows that match when more than one, and opens that tab (at the row); the query still matches the audit text (review M5).
+  const auditHit=(module,tab,rows,line)=>hit('Reference',moduleNames[module]||module,rows>1?`${evidenceTabName(tab)} · ${rows} matching rows`:evidenceTabName(tab),window.Evidence.href(tab,module,context,line));
+  const inputs=new Map();
+  for(const input of Object.values(store.inputs))if(input.run===context&&has(input.source))inputs.set(input.module,(inputs.get(input.module)||0)+1);
   const files=[
     ...outputs.filter(id=>has(data[id].source,data[id].label)).map(id=>hit('Source',code(id),handoffLabel(data[id].source),href(id,modules[id].first))),
-    ...Object.values(store.inputs).filter(input=>input.run===context&&has(input.source)).map(input=>hit('Source',moduleNames[input.module]||input.module,input.source,routeHref('W-Evidence','sources',null,context))),
+    ...[...inputs].map(([module,rows])=>auditHit(module,'sources',rows)),
   ];
   const items=[...evidence.entries()].filter(([,item])=>item.run===context&&has(item.title,...item.fields.map(field=>field[1]))).sort((a,b)=>outputs.indexOf(a[1].output)-outputs.indexOf(b[1].output));
-  $('search-results').innerHTML=group('Figures',figures.length,figures.slice(0,6).map(([id,label,heading])=>hit('Figure',code(id),label,href(id,sectionOf(id,heading)))))
-    +group('Sources',files.length+items.length,[...files.slice(0,4),...items.slice(0,4).map(([key,item])=>hit('Reference',code(item.output),itemLabel(item),href(item.output,sectionOf(item.output,item.section),key)))]);
+  const audit=new Map(),plainItems=[];
+  for(const entry of items) {
+    const item=entry[1],tab=auditTab(item.output,item.section);
+    if(tab===null){plainItems.push(entry);continue;}
+    const at=`${data[item.output].module}|${tab}`;
+    if(!audit.has(at))audit.set(at,{module:data[item.output].module,tab,rows:0,line:item.line});
+    audit.get(at).rows+=1;
+  }
+  const references=[...[...audit.values()].map(found=>auditHit(found.module,found.tab,found.rows,found.line)),...plainItems.map(([key,item])=>hit('Reference',code(item.output),itemLabel(item),hitHref(item.output,item.section,item.line,key)))];
+  $('search-results').innerHTML=group('Figures',figures.length,figures.slice(0,6).map(([id,label,heading])=>hit('Figure',code(id),label,hitHref(id,heading))))
+    +group('Sources',files.length+references.length,[...files.slice(0,4),...references.slice(0,4)]);
   nameCodes($('search-results'),null,false); // hits come from several outputs, so no step title is borrowed from the open one (a step id reads "a method step"); register references stay as they are
 }
 function renderNavigator(module) {
@@ -297,20 +317,24 @@ function parseRoute() {
   const sections=navigationSections(module,context,output),first=output&&isAnalytical(module)?REPORT_PARTS[0][0]:modules[module]?.first;
   // A report page also routes to one drawn section, as s-<line>; any other name opens the head.
   const anchored=Boolean(output&&isAnalytical(module))&&drawnAnchors(output).has(requestedSection);
-  // The Forecast page draws its chart index after the models: that one name scrolls to it. It draws the model the Forecast tab
+  // The Forecast page draws its charts after the models: that one name scrolls to them. It draws the model the Forecast tab
   // would open (the remembered section while it is a section of this run, else the first) and leaves what is remembered alone.
   const part=module==='W-Forecast'&&requestedSection==='run-charts'?requestedSection:null;
   const remembered=part&&lastSection.get(context+':W-Forecast');
   const selected=anchored?[requestedSection,plain(data[output].sections.find(s=>`s-${s.line}`===requestedSection).heading.replace(METHOD_CODE,'')),[]]:sections.find(s=>s[0]===requestedSection)||sections.find(s=>s[0]===remembered)||sections.find(s=>s[0]===first)||sections[0];
   const e=params.get('e'),key=e&&(e.includes(':')?e:`${output}:${e}`),item=evidence.get(key);
-  const permitted=item&&item.run===context&&(item.output===output||module==='W-Overview');
+  const permitted=item&&item.run===context; // a trace key opens on any route of the run its item belongs to (Overview, a module page, Changes, Forecast)
   const file=output&&output!==defaultOutput(module,context)?data[output].source:null;
   // A chip index names one of the key's chips, and `gaps` its unresolved citations; one that is not there opens the row alone.
   const keyChips=window.CREDIT_OS_DATA?.chips?.[key]||[],requestedChip=params.get('chip')??'';
   // `p` opens a paragraph's or row's Basis; `f<n>` its n-th figure (reader.js paragraphView).
   const chip=/^\d+$/.test(requestedChip)&&Number(requestedChip)<keyChips.length?Number(requestedChip):requestedChip==='gaps'&&keyChips.some(unresolvedGap)?'gaps':/^(p|f\d+)$/.test(requestedChip)?requestedChip:null;
-  return {module,output,file,section:selected[0],label:selected[1],context,evidence:permitted?key:null,chip:permitted?chip:null,part};
+  // The Evidence page's tab is its route section and its module filter the `m` parameter, read the way `c` is; evidence.js owns both.
+  const evidencePage=module==='W-Evidence'?window.Evidence.parseHash(location.hash,Object.keys(contexts[context]?.modules||{})):null;
+  return {module,output,file,section:selected[0],label:selected[1],context,evidence:permitted?key:null,chip:permitted?chip:null,part,tab:evidencePage?.tab??null,row:evidencePage?.row??null,evidenceModule:evidencePage?.module??null};
 }
+// The section name the route was opened with: the Forecast charts keep their own name, which parseRoute resolves to a model.
+const here=()=>current.part??current.section;
 function go(module,section,key=null,file,chip=null) {location.hash=file===undefined?routeHref(module,section,key,current?.context,undefined,chip):routeHref(module,section,key,current?.context,file,chip);}
 // The source-page part of the inspector for the chip that opened it. The excerpt, flags and reasons are the build's; nothing is judged here.
 function chipSection(chip,output) {
@@ -361,6 +385,12 @@ function paragraphBasisHtml(key,item,output,mode,chips) {
   const rest=chips.filter(c=>!used.has(c));
   return `${items}${rest.length?`<h3 class="citations-heading">${items?'Other citations':'Citations'}</h3>${rest.map(c=>chipSection(c,output)).join('')}`:''}`;
 }
+// The trace drawer is a modal dialog (review L6): while it is open everything else on the page is inert (not tabbable, not read); the drawer and its backdrop are not.
+const BEHIND_DRAWER='.skip,.rail,.app>:not(.workbench),.workbench>:not(#inspector):not(#drawer-backdrop)';
+function setDrawer(open) {
+  $('inspector').hidden=!open;
+  for(const element of document.querySelectorAll(BEHIND_DRAWER))element.inert=open;
+}
 function showInspector(key,chipIndex=null) {
   const item=evidence.get(key), output=data[item.output], keyChips=window.CREDIT_OS_DATA?.chips?.[key]||[];
   const paragraph=typeof chipIndex==='string'&&chipIndex!=='gaps';
@@ -368,11 +398,11 @@ function showInspector(key,chipIndex=null) {
   // A paragraph shows its wording without its Basis line or citations; they are listed below it.
   const figure=paragraph?inspectorFigure(item,output,chipIndex):'';
   const fields=paragraph&&item.text!==undefined?[['Paragraph',paragraphBody(item.text,!isNewFormat(output.sections)).body]]:item.fields;
-  $('inspector').hidden=false; $('workbench').classList.add('has-evidence');
-  $('inspector').innerHTML=`<div class="inspector-bar"><button id="back-analysis">${icon('arrow-left')}Back to analysis</button><span>Esc</span></div><div class="inspector-body"><h2${figure?' class="sr-only"':' class="kicker"'}>Evidence inspector</h2>${figure}<h3>${esc(item.title)}</h3><div class="evidence-context">${esc(moduleTitle(item.module))}${output.label===item.module?'':` · ${esc(output.label)}`} · Line ${item.line}</div><span class="badge badge-gray classification">${esc(classification(item))}</span><div class="evidence-fields">${fields.map(([label,value])=>`<div><h4>${esc(label)}</h4><div>${rich(value)}</div></div>`).join('')}</div>${item.basis?`<div class="evidence-basis"><h3>Basis & context</h3><p class="inspector-card">${rich(item.basis)}</p></div>`:''}${chipHtml}<div class="source-location"><h3>Source location</h3><div class="inspector-card"><p>${esc(item.section)}</p><a href="${esc(output.href)}" download>${icon('file-text')}Download retained handoff</a><p class="small">${esc(handoffLabel(output.file))}<br>${esc(output.case)} · saved output</p></div></div><div class="inspector-note"><strong>Reading boundary</strong><p>Retained fields from this historical run, with module codes and method step ids shown as names. Source and PDF locators remain attributed to the original handoff. The library does not authenticate the underlying PDFs.</p></div></div>`;
+  setDrawer(true);
+  $('inspector').innerHTML=`<div class="inspector-bar"><p class="drawer-title">Trace</p><span>Esc</span><button type="button" id="back-analysis" class="drawer-close" aria-label="Close the trace and go back to the analysis">${window.Components.icon('x')}</button></div><div class="inspector-body"><h2${figure?' class="sr-only"':' class="kicker"'}>Evidence inspector</h2>${figure}<h3>${esc(item.title)}</h3><div class="evidence-context">${esc(moduleTitle(item.module))}${output.label===item.module?'':` · ${esc(output.label)}`} · Line ${item.line}</div><span class="badge badge-gray classification">${esc(classification(item))}</span><div class="evidence-fields">${fields.map(([label,value])=>`<div><h4>${esc(label)}</h4><div>${rich(value)}</div></div>`).join('')}</div>${item.basis?`<div class="evidence-basis"><h3>Basis & context</h3><p class="inspector-card">${rich(item.basis)}</p></div>`:''}${chipHtml}<div class="source-location"><h3>Source location</h3><div class="inspector-card"><p>${esc(item.section)}</p><a href="${esc(output.href)}" download>${icon('file-text')}Download retained handoff</a><p class="small">${esc(handoffLabel(output.file))}<br>${esc(output.case)} · saved output</p></div></div><div class="inspector-note"><strong>Reading boundary</strong><p>Retained fields from this historical run, with module codes and method step ids shown as names. Source and PDF locators remain attributed to the original handoff. The library does not authenticate the underlying PDFs.</p></div></div>${drawerFoot(item.module)}`;
   nameCodes($('inspector'),item.output,false); // the inspector keeps register references as they are
   document.querySelectorAll('[data-evidence]').forEach(el=>el.classList.toggle('source-selected',el.dataset.evidence===key));
-  document.querySelectorAll('.chip').forEach(el=>{
+  document.querySelectorAll('.chip,.trace-row').forEach(el=>{
     const pressed=el.dataset.chip===key?Number(el.dataset.index)===chipIndex:el.dataset.evidence===key&&chipIndex===null;
     if(pressed)el.setAttribute('aria-pressed','true');else el.removeAttribute('aria-pressed');
   });
@@ -381,7 +411,6 @@ function showInspector(key,chipIndex=null) {
     if(el.dataset.paragraph===key&&mode===chipIndex)el.setAttribute('aria-pressed','true');else el.removeAttribute('aria-pressed');
   });
   if(returnTrigger) {
-    if(window.innerWidth<=1050) $('inspector').scrollIntoView({block:'start'});
     $('back-analysis').focus({preventScroll:true});
   }
 }
@@ -393,9 +422,10 @@ function moduleBody({module,context,output}) {
   } catch(error) {
     // Documented fail-open: logged, and the reader keeps the new header and the original file.
     console.error(error);
-    return `<div class="missing-state"><div class="empty-symbol">${icon('file-text')}</div><h2>Couldn’t present this output</h2><p>The screen could not render this view. The saved file is unchanged.</p>${output?`<a class="text-action" href="${esc(data[output].href)}" download>Download the original handoff</a>`:''}</div>`;
+    return couldNotPresent('output',output);
   }
 }
+const couldNotPresent=(what,output)=>`<div class="missing-state"><div class="empty-symbol">${icon('file-text')}</div><h2>Couldn’t present this ${what}</h2><p>The screen could not render this view. The saved file is unchanged.</p>${output?`<a class="text-action" href="${esc(data[output].href)}" download>Download the original handoff</a>`:''}</div>`;
 let cancelModelFrame=null;
 // A number box with text it cannot read is 'invalid', which excludes every run rather than being ignored.
 function readLibraryFilters() {
@@ -431,15 +461,26 @@ function writeLibraryHash() {
 }
 function resetLibrary() {
   Object.assign(libraryFilters,LIBRARY_DEFAULTS);
-  Object.assign(libraryState,{selected:'',sortKey:'',direction:'asc',hidden:''});
+  Object.assign(libraryState,{selected:'',sortKey:'',direction:'asc',hidden:'',opened:false}); // the card view shows the details panel only once an issuer's Details was used; the chosen view stays
   updateLibrary(true);
 }
 // Clicks inside the Library screen; true when one was handled.
 function libraryClick(target) {
-  const choose=target.closest('[data-library-select]'),sort=target.closest('[data-library-sort]'),source=target.closest('[data-library-source]'),hide=target.closest('[data-library-hidden]'),back=target.closest('[data-library-back]');
-  if(choose) {
-    libraryState.selected=choose.dataset.librarySelect;updateLibrary();
-    $('run-detail').focus({preventScroll:true});$('run-detail').scrollIntoView({block:'start'});
+  const choose=target.closest('[data-library-select]'),sort=target.closest('[data-library-sort]'),hide=target.closest('[data-library-hidden]'),back=target.closest('[data-library-back]');
+  const chip=target.closest('[data-library-chip]'),unset=target.closest('[data-library-unset]');
+  if(chip) {
+    const value=libraryChipValue(chip.dataset.libraryChip,chip.dataset.value);
+    if(value!==null){libraryFilters[chip.dataset.libraryChip]=value;updateLibrary();}
+  } else if(unset) {
+    if(unset.dataset.libraryUnset==='sort')Object.assign(libraryState,{sortKey:'',direction:'asc'});
+    else if(Object.hasOwn(LIBRARY_DEFAULTS,unset.dataset.libraryUnset))libraryFilters[unset.dataset.libraryUnset]=LIBRARY_DEFAULTS[unset.dataset.libraryUnset];
+    updateLibrary(true);$('library-facets').focus({preventScroll:true});
+  } else if(choose) {
+    const run=libraryRows().rows[Number(choose.dataset.librarySelect)]; // a row or card is chosen by its place in the list: no run code is written into the page
+    const close=!!run&&libraryState.opened&&libraryState.selected===run.id&&target.closest('.lib-card'); // Details on the open issuer's card closes the panel
+    if(run)libraryState.selected=run.id;
+    libraryState.opened=!close;updateLibrary();
+    if(!close){$('run-detail').focus({preventScroll:true});$('run-detail').scrollIntoView({block:'start'});}
   } else if(sort) {
     const key=sort.dataset.librarySort;
     libraryState.direction=libraryState.sortKey===key&&libraryState.direction==='asc'?'desc':'asc';libraryState.sortKey=key;
@@ -449,9 +490,6 @@ function libraryClick(target) {
   } else if(back) {
     const group=libraryState.hidden;libraryState.hidden='';updateLibrary();
     $('library-coverage').querySelector(`[data-library-hidden="${group}"]`)?.focus();
-  } else if(source) {
-    $('metric-sources').open=true;
-    const block=$(`source-${source.dataset.librarySource}`);block.focus({preventScroll:true});block.scrollIntoView({block:'center'});
   } else if(target.closest('#library-clear,#library-empty-reset')) {
     resetLibrary();$('library-query').focus();
   } else return false;
@@ -481,10 +519,11 @@ function focusSearch() {
   showNavigator(true);
   $('module-search').focus();
 }
-// Run label and module or destination name: the same run label the workspace header shows, never a code.
+// The module or destination name (with the run code on the Evidence page only).
 function contextPrefix({module,context}) {
   const ctx=contexts[context];
-  return ctx&&!appDestinations.has(module)?`<span class="section-context">${esc(ctx.run)} · ${esc(moduleNames[module])}</span>`:'';
+  // The run code is the Evidence page's to show.
+  return ctx&&!appDestinations.has(module)?`<span class="section-context">${module==='W-Evidence'?`${esc(ctx.run)} · `:''}${esc(moduleNames[module])}</span>`:'';
 }
 // No page shows a module code (owner ruling 2026-11-12). The Evidence page lists issuer source file names and hashes, which identify files:
 // it is drawn with its module names already (views.js) and is never rewritten; every other page is named here.
@@ -499,14 +538,69 @@ function scrollToPart(part) {
   if(target)openFolds(target);
   content.scrollTop=target?Math.max(0,content.scrollTop+target.getBoundingClientRect().top-content.getBoundingClientRect().top-10):0;
 }
+// A search hit's row on an Evidence tab: the one row or card of the panel that carries the hit's module and handoff line together (each handoff counts its own lines) is marked and brought into view; no match marks nothing.
+function showEvidenceRow(line,module) {
+  const pair=`${module}:${line}`,row=[...($('ev-panel')?.querySelectorAll('[data-lines]')||[])].find(element=>element.dataset.lines.split(' ').includes(pair));
+  $('ev-panel')?.querySelectorAll('.is-hit').forEach(other=>other.classList.remove('is-hit'));
+  if(!row)return;
+  row.classList.add('is-hit');
+  const content=$('content');
+  content.scrollTop=Math.max(0,content.scrollTop+row.getBoundingClientRect().top-content.getBoundingClientRect().top-80);
+}
 function openFolds(target) {
   for(let fold=target.closest('details');fold;fold=fold.parentElement?.closest('details'))fold.open=true;
 }
+// The section rail (a new-format module page): the item of the part at the top of the canvas is the current one. A part is current while it crosses the top
+// 30% of the canvas, the first one in page order when several do; the last part is current once it is wholly in view, since a short last part never reaches the top.
+function markRail(rail,part) {
+  for(const link of rail.querySelectorAll('a.rail-item')) {
+    const on=link.dataset.part===part;
+    link.classList.toggle('on',on);
+    if(on)link.setAttribute('aria-current','location');else link.removeAttribute('aria-current');
+  }
+}
+let railObservers=[];
+function watchRail() {
+  for(const observer of railObservers)observer.disconnect();
+  railObservers=[];
+  const content=$('content'),rail=content.querySelector('.sec-rail');
+  // Without IntersectionObserver the rail stays a list of working links; nothing is marked.
+  if(!rail||typeof IntersectionObserver==='undefined')return;
+  const parts=[...rail.querySelectorAll('a.rail-item')].map(link=>document.getElementById(link.dataset.part)).filter(Boolean);
+  if(!parts.length)return;
+  const crossing=new Set();
+  let atEnd=false;
+  const show=()=>{const shown=atEnd?parts.at(-1):parts.find(part=>crossing.has(part));if(shown)markRail(rail,shown.id);};
+  railObservers.push(new IntersectionObserver(entries=>{for(const entry of entries)(entry.isIntersecting?crossing.add(entry.target):crossing.delete(entry.target));show();},{root:content,rootMargin:'0px 0px -70% 0px'}));
+  railObservers.push(new IntersectionObserver(entries=>{atEnd=entries.at(-1).intersectionRatio>=0.99;show();},{root:content,threshold:[0,0.99,1]}));
+  for(const part of parts)railObservers[0].observe(part);
+  railObservers[1].observe(parts.at(-1));
+}
+// Documented fail-open (review M4): a route that cannot be drawn is logged and says so on the page, under the issuer header; it never leaves the page empty.
+// A block a component cannot draw is caught earlier, in Components.render, and costs only that block.
 function renderRoute() {
+  try {drawRoute();}
+  catch(error) {
+    console.error('The route could not be drawn',error);
+    const raw=location.hash.slice(1).split('?')[0].split('/')[0],requested=new URLSearchParams(location.hash.split('?')[1]).get('c');
+    const module=Object.hasOwn(moduleNames,raw)?raw:'W-Library',context=Object.hasOwn(contexts,requested)?requested:current?.context||Object.keys(contexts)[0]||null;
+    current={module,output:null,file:null,section:'',label:moduleNames[module],context,evidence:null,chip:null,part:null,tab:null,row:null,evidenceModule:null};
+    // The statement is written first, from static text and a link to the library only; the header and tabs are then tried on their own (logged).
+    setDrawer(false);
+    $('content').innerHTML=`${couldNotPresent('page')}<p><a class="text-action" href="#W-Library/cases">Issuer library</a></p>`;
+    try {
+      $('module-head').innerHTML=moduleHead(current);
+      updateWorkspaceChrome(module);
+    } catch(chromeError) {
+      console.error('The header and tabs could not be drawn',chromeError);
+    }
+  }
+}
+function drawRoute() {
   const next=parseRoute(), previous=current;
   // Moving between the parts of one report scrolls; it draws nothing again.
   const sameReport=reportPage(next)&&reportPage(previous)&&next.module===previous.module&&next.output===previous.output&&next.context===previous.context;
-  const changed=!current||next.module!==current.module||next.output!==current.output||(next.section!==current.section&&!sameReport)||next.context!==current.context;
+  const changed=!current||next.module!==current.module||next.output!==current.output||(next.section!==current.section&&!sameReport)||next.context!==current.context||next.tab!==current.tab||next.evidenceModule!==current.evidenceModule;
   const partMove=sameReport&&next.section!==previous.section;
   const focused=document.activeElement,focusId=focused?.id,focusHref=focused?.getAttribute('href'),hashed=next.module==='W-Library'&&readLibraryHash();
   if(changed&&previous)readingPositions.set(positionKey(previous),$('content').scrollTop);
@@ -530,6 +624,7 @@ function renderRoute() {
     updateWorkspaceChrome(next.module);
     nameCodes($('context-bar'));
     $('content').innerHTML=moduleBody(next);
+    watchRail();
     // watchFrame returns the callback that stops its timer; the previous model's timer must not fire against a detached element.
     if(cancelModelFrame)cancelModelFrame();
     cancelModelFrame=null;
@@ -548,6 +643,7 @@ function renderRoute() {
     $('content').scrollTop=readingPositions.get(positionKey(next))||0;
     if(reportPage(next)&&next.section!=='head')scrollToPart(next.section);
     if(next.part)scrollToPart(next.part);
+    if(next.row)showEvidenceRow(next.row,next.evidenceModule);
     showNavigator(false);
     // Search hits drive moves between analytical modules, so the query is kept there and dropped elsewhere.
     if(previous&&previous.module!==next.module&&!isAnalytical(next.module))$('module-search').value='';
@@ -561,7 +657,10 @@ function renderRoute() {
       (restored&&!restored.disabled?restored:link||destination).focus({preventScroll:true});
       if(previous.module!==next.module||previous.context!==next.context)$('navigator').scrollTop=0;
     }
-  } else if(next.part)scrollToPart(next.part);
+  } else {
+    if(next.part&&next.part!==previous?.part)scrollToPart(next.part); // opening or closing a trace on the Forecast charts leaves the page where it is
+    if(next.row)showEvidenceRow(next.row,next.evidenceModule);
+  }
   if(partMove) {
     scrollToPart(next.section);
     renderNavigator(next.module);
@@ -570,8 +669,8 @@ function renderRoute() {
   }
   if(next.evidence) {
     // A route to a row inside a folded part (a link, a reload) opens the part holding its trigger; Esc then returns to that trigger.
-    const opener=`.chip[data-evidence="${CSS.escape(next.evidence)}"],[data-paragraph="${CSS.escape(next.evidence)}"]`;
-    const trigger=reportPage(next)||next.module==='W-Overview'?($(next.section)||$('content')).querySelector(opener)||$('content').querySelector(opener):null;
+    const opener=`.chip[data-evidence="${CSS.escape(next.evidence)}"],.trace-row[data-evidence="${CSS.escape(next.evidence)}"],[data-paragraph="${CSS.escape(next.evidence)}"]`;
+    const trigger=($(next.section)||$('content')).querySelector(opener)||$('content').querySelector(opener);
     if(trigger) {
       openFolds(trigger);
       if(!returnTrigger?.isConnected){returnTrigger=trigger;returnContentScroll=$('content').scrollTop;}
@@ -579,9 +678,9 @@ function renderRoute() {
     showInspector(next.evidence,next.chip);
   }
   else {
-    $('inspector').hidden=true; $('workbench').classList.remove('has-evidence');
+    setDrawer(false);
     document.querySelectorAll('.source-selected').forEach(el=>el.classList.remove('source-selected'));
-    document.querySelectorAll('.chip[aria-pressed],[data-paragraph][aria-pressed]').forEach(el=>el.removeAttribute('aria-pressed'));
+    document.querySelectorAll('.chip[aria-pressed],.trace-row[aria-pressed],[data-paragraph][aria-pressed]').forEach(el=>el.removeAttribute('aria-pressed'));
     if(previous?.evidence&&!changed) {
       $('content').scrollTop=returnContentScroll;
       if(window.innerWidth<=1050) window.scrollTo(0,returnScroll);
@@ -590,11 +689,17 @@ function renderRoute() {
   }
   if(hashed&&!changed)updateLibrary(true);
   if(next.module==='W-Library')writeLibraryHash();
-  const named=contexts[next.context]&&!appDestinations.has(next.module)?`${contexts[next.context].title}, ${contexts[next.context].run}, `:'';
+  const named=contexts[next.context]&&!appDestinations.has(next.module)?`${contexts[next.context].title}, ${runName(contexts[next.context])}, `:'';
   $('announcement').textContent=`${named}${moduleNames[next.module]}, ${namedText(next.label)}${next.evidence?', evidence open':''}`;
 }
 document.addEventListener('change',event=>{
   if(event.target.matches('[data-library-filter]'))readLibraryFilters();
+  if(event.target.matches('[data-library-sort-select]')) {
+    const [key,direction]=event.target.value.split(':');
+    if(!key)Object.assign(libraryState,{sortKey:'',direction:'asc'});
+    else if(LIBRARY_COLUMNS.some(([column])=>column===key)&&(direction==='asc'||direction==='desc'))Object.assign(libraryState,{sortKey:key,direction});
+    updateLibrary();$('library-sort').focus();
+  }
   if(event.target.id==='model-select')go(current.module,event.target.value);
   if(event.target.id==='output-select')go(current.module,current.section,null,event.target.value);
   if(event.target.id==='chart-metric') {
@@ -605,29 +710,31 @@ document.addEventListener('change',event=>{
 });
 document.addEventListener('click',event=>{
   if(event.target.closest('#rail-search')){focusSearch();return;}
+  if(window.Evidence.handleClick(event.target))return;
+  if(window.Components.handleClick(event.target)){const block=event.target.closest?.('.lib-block');if(block)libraryState.view=block.dataset.view;return;}
   const searchHit=event.target.closest('.search-hit');
   if(searchHit){returnTrigger=$('module-search');showNavigator(false);if(searchHit.hash===location.hash)$('canvas').focus();}
   if(libraryClick(event.target))return;
-  if(event.target.closest('.skip')){event.preventDefault();if(current.evidence){returnTrigger=$('canvas');go(current.module,current.section);}else $('canvas').focus();return;}
+  if(event.target.closest('.skip')){event.preventDefault();if(current.evidence){returnTrigger=$('canvas');go(current.module,here());}else $('canvas').focus();return;}
   const chip=event.target.closest('[data-chip]');
-  if(chip){event.preventDefault();returnTrigger=chip;returnScroll=window.scrollY;returnContentScroll=$('content').scrollTop;go(current.module,current.section,chip.dataset.chip,undefined,Number(chip.dataset.index));return;}
+  if(chip){event.preventDefault();returnTrigger=chip;returnScroll=window.scrollY;returnContentScroll=$('content').scrollTop;go(current.module,here(),chip.dataset.chip,undefined,Number(chip.dataset.index));return;}
   const paragraph=event.target.closest('[data-paragraph]');
-  if(paragraph){event.preventDefault();returnTrigger=paragraph;returnScroll=window.scrollY;returnContentScroll=$('content').scrollTop;go(current.module,current.section,paragraph.dataset.paragraph,undefined,paragraph.dataset.figure===undefined?'p':`f${paragraph.dataset.figure}`);return;}
+  if(paragraph){event.preventDefault();returnTrigger=paragraph;returnScroll=window.scrollY;returnContentScroll=$('content').scrollTop;go(current.module,here(),paragraph.dataset.paragraph,undefined,paragraph.dataset.figure===undefined?'p':`f${paragraph.dataset.figure}`);return;}
   const gaps=event.target.closest('[data-gaps]');
-  if(gaps){event.preventDefault();returnTrigger=gaps;returnScroll=window.scrollY;returnContentScroll=$('content').scrollTop;go(current.module,current.section,gaps.dataset.gaps,undefined,'gaps');return;}
+  if(gaps){event.preventDefault();returnTrigger=gaps;returnScroll=window.scrollY;returnContentScroll=$('content').scrollTop;go(current.module,here(),gaps.dataset.gaps,undefined,'gaps');return;}
   const audit=event.target.closest('.audit-open');
   if(audit){openAuditSection(audit);return;}
-  const part=event.target.closest('a.section-item');
+  const part=event.target.closest('a.section-item,a.rail-item');
   if(part&&reportPage(current)&&part.hash===location.hash){event.preventDefault();scrollToPart(current.section);return;}
   const source=event.target.closest('[data-evidence]');
-  if(source){event.preventDefault();returnTrigger=source;returnScroll=window.scrollY;returnContentScroll=$('content').scrollTop;go(current.module,current.section,source.dataset.evidence);return;}
-  if(event.target.closest('#back-analysis'))go(current.module,current.section);
+  if(source){event.preventDefault();returnTrigger=source;returnScroll=window.scrollY;returnContentScroll=$('content').scrollTop;go(current.module,here(),source.dataset.evidence);return;}
+  if(event.target.closest('#back-analysis,#drawer-backdrop'))go(current.module,here());
   const moduleLink=event.target.closest('.module-item');
   if(moduleLink){$('module-search').value='';if(moduleLink.hash===location.hash)renderNavigator(current.module);}
   const step=event.target.closest('#next-section')?1:event.target.closest('#previous-section')?-1:0;
   if(step){const sections=navigationSections(current.module,current.context),index=sections.findIndex(s=>s[0]===current.section);if(sections[index+step])go(current.module,sections[index+step][0]);}
 });
-document.addEventListener('input',event=>{if(event.target.matches('input[data-library-filter]'))readLibraryFilters();});
+document.addEventListener('input',event=>{if(event.target.matches('input[data-library-filter]'))readLibraryFilters();if(event.target.id==='ev-q')window.Evidence.handleSearch(event.target);});
 document.addEventListener('submit',event=>{if(event.target.id==='library-filters')event.preventDefault();});
 $('module-search').addEventListener('input',()=>renderNavigator(current.module));
 $('module-search-clear').addEventListener('click',()=>{$('module-search').value='';renderNavigator(current.module);$('module-search').focus();});
@@ -635,6 +742,8 @@ $('module-toggle').addEventListener('click',()=>showNavigator(!$('navigator').cl
 document.addEventListener('keydown',event=>{
   const target=event.target,unmodified=!event.metaKey&&!event.ctrlKey&&!event.altKey;
   if(event.key==='/'&&unmodified&&!/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)){event.preventDefault();focusSearch();return;}
+  // A node or an edge of a pathway is a role=button group: Enter and Space choose it, as a click does.
+  if((event.key==='Enter'||event.key===' ')&&unmodified&&target.matches?.('[data-map-pick]')){event.preventDefault();window.Components.handleClick(target);return;}
   const step={ArrowRight:1,ArrowDown:1,ArrowLeft:-1,ArrowUp:-1}[event.key];
   if(step&&unmodified) {
     const mark=target.closest?.('[data-evidence]:not(.chip)'),chart=mark?.closest('.bars,.mix-bars,.horizontal-chart,.hedge-chart,.vector-chart');
@@ -646,10 +755,12 @@ document.addEventListener('keydown',event=>{
   if(event.key!=='Escape')return;
   // One layer at a time: the search text, then the inspector, then the narrow-screen navigator.
   if(target.matches?.('#module-search,#library-query')&&target.value){event.preventDefault();target.value='';target.dispatchEvent(new Event('input',{bubbles:true}));return;}
-  if(current.evidence){event.preventDefault();go(current.module,current.section);return;}
+  if(current.evidence){event.preventDefault();go(current.module,here());return;}
   if($('navigator').classList.contains('mobile-open')){showNavigator(false);$('module-toggle').focus();}
 });
 window.addEventListener('hashchange',renderRoute);
+window.addEventListener('resize',placeTabsPill);
+document.fonts?.ready.then(placeTabsPill);
 // The rail opens 100 ms after the pointer comes within 16 px of its right edge and closes 300 ms after it leaves; touch has no proximity.
 (()=>{
   const rail=document.querySelector('.rail');let openTimer=null,closeTimer=null;
@@ -676,50 +787,42 @@ window.addEventListener('hashchange',renderRoute);
 })();
 // Live run activity: re-load activity.js every 30 s while Run activity is the view showing, and once at once when the view is entered. The script
 // calls onRunActivity, which re-renders that view through the same moduleBody path as a route change, only when it is still the one showing
-// and only when the runs or the held note changed. A re-render keeps the lists the reader opened and the control that had focus.
+// and only when the runs changed; every load announces a run that has ended (C23) and moves the elapsed clock.
 let activityTimer=null;
 let activityShowing=false;
-function syncActivityTimer() {
+// `fresh`: the file was loaded with the page a moment ago, so entering needs no re-load at once.
+function syncActivityTimer(fresh=false) {
   const wait=nextActivityReload(current);
   if(wait===null){clearTimeout(activityTimer);activityTimer=null;activityShowing=false;return;}
-  if(!activityShowing){activityShowing=true;swapActivityScript(document,Date.now());}
+  if(!activityShowing){activityShowing=true;if(fresh!==true)swapActivityScript(document,Date.now());}
   if(activityTimer!==null)return;
   activityTimer=setTimeout(()=>{activityTimer=null;if(nextActivityReload(current)===null)return;swapActivityScript(document,Date.now());syncActivityTimer();},wait);
 }
 let lastActivity=null;
-// Which runs have an opened file list, and which run's control (link, list or its summary) has focus. A run is named by its data-run attribute.
-function recordActivityView(root,active) {
-  const runs=root.querySelectorAll?.('[data-run]')??[];
-  const open=[...runs].filter(el=>el.tagName==='DETAILS'&&el.open).map(el=>el.getAttribute('data-run'));
-  const owner=active&&(active.getAttribute?.('data-run')!==null&&active.getAttribute?.('data-run')!==undefined?active:active.parentElement);
-  const run=owner?.getAttribute?.('data-run');
-  const focus=active&&root.contains?.(active)&&run!==null&&run!==undefined?{run,tag:active.tagName}:null;
-  return {open,focus};
-}
-function restoreActivityView(root,kept) {
-  const runs=[...(root.querySelectorAll?.('[data-run]')??[])];
-  for(const el of runs)if(el.tagName==='DETAILS'&&kept.open.includes(el.getAttribute('data-run')))el.open=true;
-  if(!kept.focus)return;
-  const {run,tag}=kept.focus;
-  const target=tag==='SUMMARY'?runs.find(el=>el.tagName==='DETAILS'&&el.getAttribute('data-run')===run)?.querySelector('summary'):runs.find(el=>el.tagName===tag&&el.getAttribute('data-run')===run);
-  target?.focus?.();
-}
+// The running set of the previous load, in memory only: a run in it that has ended on this load is announced once (C23).
+let previousRunning=null;
 window.onRunActivity=()=>{
+  // The library home follows the file only for its Running now section: refresh it in place, then let the one timer lapse when no run is left to follow.
+  if(current.module==='W-Library'){refreshLibraryLive();syncActivityTimer();return;}
   if(nextActivityReload(current)===null)return;
   const content=$('content'),live=window.RUN_ACTIVITY,top=content.scrollTop;
-  const seen=JSON.stringify([live?.runs,live?.held,live?.cap]);
+  const ended=activityEnded(previousRunning,live);
+  previousRunning=ended.running;
+  for(const note of ended.toasts)window.Components.toast(note.text,note.action&&{label:note.action.label,onClick:()=>{location.hash=note.action.href;location.reload();}});
+  const seen=JSON.stringify([live?.runs,live?.held]);
   if(seen===lastActivity){ // same runs: leave the page as the reader has it; only the snapshot's own time moves
     const stamp=content.querySelector?.('.run-updated-at');
-    if(stamp&&typeof live?.updated==='string')stamp.textContent=live.updated;
+    if(stamp&&typeof live?.updated==='string')stamp.textContent=liveStampText(live.updated);
+    refreshElapsed(content,Date.now());
     return;
   }
   lastActivity=seen;
-  const kept=recordActivityView(content,document.activeElement);
   content.innerHTML=moduleBody(current);
   if(!keepsCodes(current))nameCodes(content);
-  restoreActivityView(content,kept);
   content.scrollTop=top;
 };
 window.addEventListener('hashchange',syncActivityTimer);
 renderRoute();
-syncActivityTimer();
+// The file loaded with the page is the first load, and its running set is seeded only when the opening route draws live runs (Run activity, the library home): a run the reader never saw running is not announced later.
+if(current.module==='CP-OS'||current.module==='W-Library')previousRunning=activityEnded(null,window.RUN_ACTIVITY).running;
+syncActivityTimer(true);

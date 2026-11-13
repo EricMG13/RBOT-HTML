@@ -13,13 +13,13 @@
     const box = target.getBoundingClientRect();
     seen.target.topInside = box.top >= view.top - 1 && box.top < view.bottom;
   }
-  seen.rowPressed = document.querySelectorAll('.chip[data-evidence][aria-pressed="true"]').length;
+  seen.rowPressed = document.querySelectorAll('.trace-row[data-evidence][aria-pressed="true"]').length;
   seen.inspectorHidden = document.getElementById('inspector').hidden;
   if (!seen.inspectorHidden) {
     document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     await sleep(300);
     const focused = document.activeElement;
-    seen.escaped = { hidden: document.getElementById('inspector').hidden, onChip: Boolean(focused && focused.classList.contains('chip') && reference.contains(focused)), key: focused && focused.dataset.evidence };
+    seen.escaped = { hidden: document.getElementById('inspector').hidden, onChip: Boolean(focused && focused.classList.contains('trace-row') && reference.contains(focused)), key: focused && focused.dataset.evidence };
   }
   // With every fold open, the page still fits the canvas.
   for (const fold of document.querySelectorAll('details.fold, details.audit')) fold.open = true;

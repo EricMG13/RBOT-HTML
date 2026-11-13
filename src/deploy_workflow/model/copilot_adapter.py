@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import dataclasses
+import logging
 import os
 import re
 import shutil
@@ -135,6 +136,7 @@ _ENV_ALLOWED = frozenset(
         "NO_PROXY",
     }
 )
+log = logging.getLogger(__name__)
 _INVOKED = object()  # queue marker: a tool handler was called
 
 
@@ -632,6 +634,11 @@ class CopilotAdapter:
             return future.result(timeout=_OUTER_SLACK_S)
         except concurrent.futures.TimeoutError:
             future.cancel()
+            log.warning(
+                "the compaction drain for an exchange did not answer within %.0f s; what it "
+                "held is not read (a start without an end is disclosed as uncharged)",
+                _OUTER_SLACK_S,
+            )
             return ()
 
     async def _drain(self, digest: str) -> tuple[Compaction, ...]:

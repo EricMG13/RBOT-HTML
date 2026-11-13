@@ -81,6 +81,7 @@ from deploy_workflow.workflow import _put
 if TYPE_CHECKING:
     from deploy_workflow.model.adapter import LiveAdapter
     from deploy_workflow.model.copilot_adapter import CopilotAdapter
+    from deploy_workflow.model.handoff import HandoffExecutor
     from deploy_workflow.model_testing.configs import ModelConfig
 
 
@@ -771,12 +772,20 @@ def with_notes(error: BaseException) -> str:
     return f"{text}; {notes}" if notes else text
 
 
-def _release(adapter: "LiveAdapter | CopilotAdapter") -> None:
-    """Close the Copilot adapter (it holds a runtime process); HTTP adapters hold nothing."""
+def _release(
+    adapter: "LiveAdapter | CopilotAdapter", executor: "HandoffExecutor | None" = None
+) -> None:
+    """Close the Copilot adapter (it holds a runtime process); HTTP adapters hold nothing. Before
+    it closes, the executor drains each module's session once more for a context summary still
+    running when its module ended (the launcher totals the run's events after the close)."""
     from deploy_workflow.model.copilot_adapter import CopilotAdapter
 
     if isinstance(adapter, CopilotAdapter):
-        adapter.close()
+        try:
+            if executor is not None:
+                executor.drain_late()
+        finally:
+            adapter.close()
 
 
 # The token a ruling's ``configs:`` line carries to let the research module search the web (owner,
@@ -859,6 +868,7 @@ def run_live_handoffs(  # noqa: PLR0913 -- the explicit paid entry point takes e
         recorded_web_lookup(directory / "live" / "loop.json"),
     )
     adapter = live_adapter_for(CONFIGS[config], ruling, environment, rulings_root)
+    executor: HandoffExecutor | None = None
     try:
         executor = HandoffExecutor(
             directory / "live",
@@ -892,7 +902,7 @@ def run_live_handoffs(  # noqa: PLR0913 -- the explicit paid entry point takes e
             # A refused second invocation never held the folder; the running run owns its log.
             append_event(directory, "stopped", reason=stop_reason(stop))
         try:
-            _release(adapter)
+            _release(adapter, executor)
         except Exception as failure:  # noqa: BLE001 -- noted on the propagating stop
             note = f"adapter release also failed: {failure}"
             stop.add_note(note)
@@ -904,7 +914,7 @@ def run_live_handoffs(  # noqa: PLR0913 -- the explicit paid entry point takes e
                 stop.args = (f"{stop.args[0]}; {note}",)  # callers that print str(stop) show it
         raise
     try:
-        _release(adapter)
+        _release(adapter, executor)
     except Exception as failure:  # noqa: BLE001 -- the finished run's result outranks the release
         warnings.warn(f"adapter release failed: {failure}", RuntimeWarning, stacklevel=2)
     return result
