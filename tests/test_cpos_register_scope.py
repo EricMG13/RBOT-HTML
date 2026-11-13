@@ -85,7 +85,7 @@ SELF_CHECK_WORDS = (
     "completeness check",
     "Analytical appendix",
     "do not restore it",
-    "do not block",
+    "block for want of it",
 )
 NEXT_MODULE = "The orchestrator selects the next module."
 
@@ -132,12 +132,18 @@ def every_module(tmp_path_factory):
 def test_routing_rules_are_the_owners_text_plus_the_self_check_sentence():
     text = cpos_launch.ROUTING_RULES
     assert text.startswith(VERBATIM)
-    first, second = text[len(VERBATIM) :].strip().split(". ", 1)
-    assert second.count(".") == 1, "R4 and the presence rule: two added sentences"
+    added = text[len(VERBATIM) :].strip()
+    assert added.count(". ") == 0 and added.count(".") == 1, "R4: one added sentence"
     for words in SELF_CHECK_WORDS:
-        assert words in first, words
-    for words in ("Every register the method requires", "table-id", "Not supplied: <reason>"):
-        assert words in second, words
+        assert words in added, words
+    assert added.startswith("Nothing excluded here or in a `Register scope` section")
+    presence = cpos_launch.PRESENCE_RULE
+    for words in (
+        "Write every other register the method requires",
+        "table-id",
+        "Not supplied: <reason>",
+    ):
+        assert words in presence, words
 
 
 def test_routing_rules_name_no_register_the_peer_pack_or_the_checks_need():
@@ -507,7 +513,7 @@ def test_a_heading_that_only_cites_an_id_does_not_count():
 
 def test_the_routing_rule_and_the_refusal_both_say_how_a_module_stops_at_its_gate():
     stop = "`module_status: Blocked` in the front matter and writes the gate register only"
-    assert stop in cpos_launch.ROUTING_RULES
+    assert stop in cpos_launch.PRESENCE_RULE
     assert "`module_status: Blocked` in the front matter" in refusal("CP-6", "x")[0]
 
 
@@ -598,5 +604,34 @@ def test_a_heading_must_start_with_the_id_bold_or_backticks_and_a_number_allowed
 
 
 def test_the_refusal_and_the_routing_rule_say_the_heading_starts_with_the_id():
-    assert "starts with its id" in cpos_launch.ROUTING_RULES
+    assert "starts with its id" in cpos_launch.PRESENCE_RULE
     assert "starts with its id" in refusal("CP-6", "x")[0]
+
+
+@pytest.mark.parametrize("module", ["CP-0", "CP-1A", "CP-DR", "CP-2", "CP-2A", "CP-2E", "CP-2G"])
+def test_a_module_with_a_scope_section_gets_the_presence_rule_once_right_after_routing(
+    every_module, module
+):
+    text = every_module[module]
+    assert module in cpos_launch.REGISTER_SCOPE_MODULES
+    assert text.count(cpos_launch.PRESENCE_RULE) == 1
+    end = text.index(cpos_launch.ROUTING_RULES) + len(cpos_launch.ROUTING_RULES)
+    assert text[end:].startswith(cpos_launch.PRESENCE_RULE)
+
+
+@pytest.mark.parametrize("module", ["CP-1", "CP-1B", "CP-1D", "CP-L10"])
+def test_a_module_without_a_scope_section_gets_no_presence_rule(tmp_path, module):
+    for pathway in sorted(set(PATHWAY_MODULES) - set(DEACTIVATED_PATHWAYS)):
+        (tmp_path / pathway).mkdir()
+        text = instructions_of(tmp_path / pathway, pathway=pathway).get(module)
+        if text is None:
+            continue
+        assert module not in cpos_launch.REGISTER_SCOPE_MODULES
+        head = text.partition("A handoff is rejected unless")[0]
+        assert "Not supplied: <reason>" not in head, (pathway, module)
+        assert cpos_launch.PRESENCE_RULE not in text, (pathway, module)
+
+
+def test_the_routing_and_presence_rules_stay_short():
+    assert len(cpos_launch.ROUTING_RULES) <= 1250
+    assert len(cpos_launch.PRESENCE_RULE) <= 340

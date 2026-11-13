@@ -1845,16 +1845,17 @@ ROUTING_RULES = (
     "`## Next module` write only: `The orchestrator selects the next module.` A restriction on "
     "how your results may be used is a limitation: state it in `### Limitations` or `## Gaps`, "
     "in plain words. Every figure in a reader passage must still appear in a table you write or "
-    "in `## Calculations`. A register or text excluded here or in a `Register scope` section of "
-    "the method block is not required by the method's `required_register_ids`, "
-    "`appendix_contract`, lossless profile or completeness check, or by the canon's Analytical "
-    "appendix rule, in this transport: when you run those checks or apply that rule yourself, "
-    "do not restore it and do not block for want of it. Every register the method requires "
-    "that is not excluded here or in a `Register scope` section must be present under a heading "
-    "that starts with its id or a `<!-- table-id: -->` tag that carries it; one with nothing to "
-    "report is written with one row `Not supplied: <reason>`, never left out; a module that stops "
-    "at its gate states `module_status: Blocked` in the front matter and writes the gate "
-    "register only.\n\n"
+    "in `## Calculations`. Nothing excluded here or in a `Register scope` section is required by "
+    "the method's `required_register_ids`, `appendix_contract`, lossless profile or completeness "
+    "check, or the canon's Analytical appendix rule: do not restore it or block for want of it.\n\n"
+)
+# Only the modules in REGISTER_SCOPE_MODULES, directly after ROUTING_RULES: what the presence check
+# (`register_issues`) asks of every register the scope section does not exclude.
+PRESENCE_RULE = (
+    "Write every other register the method requires under a heading that starts with its id or a "
+    "`<!-- table-id: -->` tag that carries it; one with nothing to report has one row "
+    "`Not supplied: <reason>`, never left out; a module that stops at its gate states "
+    "`module_status: Blocked` in the front matter and writes the gate register only.\n\n"
 )
 # CP-5 only: it audits the other modules' handoffs. The first line is the marker the tests look for;
 # `{lines}` is one `- <module>: <registers>` line per upstream module that has a scope section.
@@ -2441,6 +2442,7 @@ def _instructions(
         "source locators and limitations. Absent evidence stays an explicit gap.\n\n"
         + TRANSPORT_RULES
         + ROUTING_RULES
+        + (PRESENCE_RULE if module in REGISTER_SCOPE_MODULES else "")
         + "A handoff is rejected unless it does all of this:\n"
         f"- name {run.issuer_name} in `## Request`, and state the as-of date {run.as_of} there;\n"
         "- list each issuer source it relied on in `## Sources`, naming the exact file and its "
