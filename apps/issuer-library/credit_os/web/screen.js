@@ -89,11 +89,12 @@ function nameCodes(root,output=current?.output,marks=true) {
 
 for (const [id, output] of Object.entries(data)) {
   const located={module:output.module,output:id,run:output.run};
-  for (const section of output.sections) for (const block of section.blocks) {
+  // Rule 7, here as on the Evidence page (Evidence.classify, Shapes.columnKind): a section written for another module or the orchestrator is not indexed, and an inter-module column is not a field.
+  for (const {section,role} of window.Evidence.classify(output.sections,output.placement)) for (const block of role==='hidden'?[]:section.blocks) {
     if (block.type === 'table') for (const row of block.rows) {
       const priorText=section.blocks.slice(0,section.blocks.indexOf(block)).filter(b=>b.type==='text').at(-1)?.text;
       const basis=priorText||output.basis?.text;
-      evidence.set(`${id}:${row.line}`, {...located,line:row.line,title:plain(row.cells[0]), fields:block.headers.map((label,i)=>[label,row.cells[i]]),section:section.heading,basis});
+      evidence.set(`${id}:${row.line}`, {...located,line:row.line,title:plain(row.cells[0]), fields:block.headers.map((label,i)=>[label,row.cells[i]]).filter(([label])=>window.Shapes.columnKind(label)!=='intermodule'),section:section.heading,basis});
     }
     else evidence.set(`${id}:${block.line}`, {...located,line:block.line,title:section.heading,fields:[['Retained finding',block.text]],section:section.heading,text:block.text});
   }
@@ -148,9 +149,11 @@ function classification(item) {
   return [...new Set(classes)].join(' · ') || 'Not classified';
 }
 // Lists show a class only when the handoff declared one; the inspector still says Not classified.
-const classTag=(item,cls)=>{const c=classification(item);return c==='Not classified'?'':`<span class="${cls}">${esc(c)}</span>`;};
+const classTag=(item,cls)=>{if(!item)return '';const c=classification(item);return c==='Not classified'?'':`<span class="${cls}">${esc(c)}</span>`;};
+// A block the trace drawer does not hold (a section written for another module, rule 7) is drawn without its drawer link.
 function sourceFooter(key) {
   const item=evidence.get(key);
+  if(!item)return '';
   return `<div class="source-footer">${sourceLink(key)}${classTag(item,'badge badge-gray')}</div>`;
 }
 function tableMarkup(module, block) {
@@ -159,7 +162,7 @@ function tableMarkup(module, block) {
     const key=`${module}:${row.line}`;
     return `<section class="record"><h3>${rich(row.cells[0])}</h3>${block.headers.slice(1).map((h,i)=>`<div class="record-field"><h4>${esc(h)}</h4><div>${rich(row.cells[i+1])}</div></div>`).join('')}${sourceFooter(key)}</section>`;
   }).join('')}</div>`;
-  return `<div class="table-scroll" tabindex="0" role="region" aria-label="Exact source values"><table><thead><tr>${block.headers.map(h=>`<th scope="col">${esc(h)}</th>`).join('')}</tr></thead><tbody>${block.rows.map(row=>`<tr><th scope="row">${sourceLink(`${module}:${row.line}`,plain(row.cells[0]))}${classTag(evidence.get(`${module}:${row.line}`),'row-classification')}</th>${row.cells.slice(1).map(c=>`<td>${rich(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  return `<div class="table-scroll" tabindex="0" role="region" aria-label="Exact source values"><table><thead><tr>${block.headers.map(h=>`<th scope="col">${esc(h)}</th>`).join('')}</tr></thead><tbody>${block.rows.map(row=>`<tr><th scope="row">${evidence.has(`${module}:${row.line}`)?sourceLink(`${module}:${row.line}`,plain(row.cells[0])):esc(plain(row.cells[0]))}${classTag(evidence.get(`${module}:${row.line}`),'row-classification')}</th>${row.cells.slice(1).map(c=>`<td>${rich(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 }
 function sectionsMarkup(module, sections, omitPresentedTable=false) {
   return sections.map(section=>{
@@ -305,7 +308,7 @@ function parseRoute() {
   const remembered=part&&lastSection.get(context+':W-Forecast');
   const selected=anchored?[requestedSection,plain(data[output].sections.find(s=>`s-${s.line}`===requestedSection).heading.replace(METHOD_CODE,'')),[]]:sections.find(s=>s[0]===requestedSection)||sections.find(s=>s[0]===remembered)||sections.find(s=>s[0]===first)||sections[0];
   const e=params.get('e'),key=e&&(e.includes(':')?e:`${output}:${e}`),item=evidence.get(key);
-  const permitted=item&&item.run===context&&(item.output===output||module==='W-Overview');
+  const permitted=item&&item.run===context; // a trace key opens on any route of the run its item belongs to (Overview, a module page, Changes, Forecast)
   const file=output&&output!==defaultOutput(module,context)?data[output].source:null;
   // A chip index names one of the key's chips, and `gaps` its unresolved citations; one that is not there opens the row alone.
   const keyChips=window.CREDIT_OS_DATA?.chips?.[key]||[],requestedChip=params.get('chip')??'';
@@ -315,6 +318,8 @@ function parseRoute() {
   const evidencePage=module==='W-Evidence'?window.Evidence.parseHash(location.hash,Object.keys(contexts[context]?.modules||{})):null;
   return {module,output,file,section:selected[0],label:selected[1],context,evidence:permitted?key:null,chip:permitted?chip:null,part,tab:evidencePage?.tab??null,row:evidencePage?.row??null,evidenceModule:evidencePage?.module??null};
 }
+// The section name the route was opened with: the Forecast chart index keeps its own name, which parseRoute resolves to a model.
+const here=()=>current.part??current.section;
 function go(module,section,key=null,file,chip=null) {location.hash=file===undefined?routeHref(module,section,key,current?.context,undefined,chip):routeHref(module,section,key,current?.context,file,chip);}
 // The source-page part of the inspector for the chip that opened it. The excerpt, flags and reasons are the build's; nothing is judged here.
 function chipSection(chip,output) {
@@ -611,7 +616,7 @@ function renderRoute() {
       if(previous.module!==next.module||previous.context!==next.context)$('navigator').scrollTop=0;
     }
   } else {
-    if(next.part)scrollToPart(next.part);
+    if(next.part&&next.part!==previous?.part)scrollToPart(next.part); // opening or closing a trace on the chart index leaves the page where it is
     if(next.row)showEvidenceRow(next.row);
   }
   if(partMove) {
@@ -623,7 +628,7 @@ function renderRoute() {
   if(next.evidence) {
     // A route to a row inside a folded part (a link, a reload) opens the part holding its trigger; Esc then returns to that trigger.
     const opener=`.chip[data-evidence="${CSS.escape(next.evidence)}"],.trace-row[data-evidence="${CSS.escape(next.evidence)}"],[data-paragraph="${CSS.escape(next.evidence)}"]`;
-    const trigger=reportPage(next)||next.module==='W-Overview'?($(next.section)||$('content')).querySelector(opener)||$('content').querySelector(opener):null;
+    const trigger=($(next.section)||$('content')).querySelector(opener)||$('content').querySelector(opener);
     if(trigger) {
       openFolds(trigger);
       if(!returnTrigger?.isConnected){returnTrigger=trigger;returnContentScroll=$('content').scrollTop;}
@@ -668,20 +673,20 @@ document.addEventListener('click',event=>{
   const searchHit=event.target.closest('.search-hit');
   if(searchHit){returnTrigger=$('module-search');showNavigator(false);if(searchHit.hash===location.hash)$('canvas').focus();}
   if(libraryClick(event.target))return;
-  if(event.target.closest('.skip')){event.preventDefault();if(current.evidence){returnTrigger=$('canvas');go(current.module,current.section);}else $('canvas').focus();return;}
+  if(event.target.closest('.skip')){event.preventDefault();if(current.evidence){returnTrigger=$('canvas');go(current.module,here());}else $('canvas').focus();return;}
   const chip=event.target.closest('[data-chip]');
-  if(chip){event.preventDefault();returnTrigger=chip;returnScroll=window.scrollY;returnContentScroll=$('content').scrollTop;go(current.module,current.section,chip.dataset.chip,undefined,Number(chip.dataset.index));return;}
+  if(chip){event.preventDefault();returnTrigger=chip;returnScroll=window.scrollY;returnContentScroll=$('content').scrollTop;go(current.module,here(),chip.dataset.chip,undefined,Number(chip.dataset.index));return;}
   const paragraph=event.target.closest('[data-paragraph]');
-  if(paragraph){event.preventDefault();returnTrigger=paragraph;returnScroll=window.scrollY;returnContentScroll=$('content').scrollTop;go(current.module,current.section,paragraph.dataset.paragraph,undefined,paragraph.dataset.figure===undefined?'p':`f${paragraph.dataset.figure}`);return;}
+  if(paragraph){event.preventDefault();returnTrigger=paragraph;returnScroll=window.scrollY;returnContentScroll=$('content').scrollTop;go(current.module,here(),paragraph.dataset.paragraph,undefined,paragraph.dataset.figure===undefined?'p':`f${paragraph.dataset.figure}`);return;}
   const gaps=event.target.closest('[data-gaps]');
-  if(gaps){event.preventDefault();returnTrigger=gaps;returnScroll=window.scrollY;returnContentScroll=$('content').scrollTop;go(current.module,current.section,gaps.dataset.gaps,undefined,'gaps');return;}
+  if(gaps){event.preventDefault();returnTrigger=gaps;returnScroll=window.scrollY;returnContentScroll=$('content').scrollTop;go(current.module,here(),gaps.dataset.gaps,undefined,'gaps');return;}
   const audit=event.target.closest('.audit-open');
   if(audit){openAuditSection(audit);return;}
   const part=event.target.closest('a.section-item,a.rail-item');
   if(part&&reportPage(current)&&part.hash===location.hash){event.preventDefault();scrollToPart(current.section);return;}
   const source=event.target.closest('[data-evidence]');
-  if(source){event.preventDefault();returnTrigger=source;returnScroll=window.scrollY;returnContentScroll=$('content').scrollTop;go(current.module,current.section,source.dataset.evidence);return;}
-  if(event.target.closest('#back-analysis,#drawer-backdrop'))go(current.module,current.section);
+  if(source){event.preventDefault();returnTrigger=source;returnScroll=window.scrollY;returnContentScroll=$('content').scrollTop;go(current.module,here(),source.dataset.evidence);return;}
+  if(event.target.closest('#back-analysis,#drawer-backdrop'))go(current.module,here());
   const moduleLink=event.target.closest('.module-item');
   if(moduleLink){$('module-search').value='';if(moduleLink.hash===location.hash)renderNavigator(current.module);}
   const step=event.target.closest('#next-section')?1:event.target.closest('#previous-section')?-1:0;
@@ -708,7 +713,7 @@ document.addEventListener('keydown',event=>{
   if(event.key!=='Escape')return;
   // One layer at a time: the search text, then the inspector, then the narrow-screen navigator.
   if(target.matches?.('#module-search,#library-query')&&target.value){event.preventDefault();target.value='';target.dispatchEvent(new Event('input',{bubbles:true}));return;}
-  if(current.evidence){event.preventDefault();go(current.module,current.section);return;}
+  if(current.evidence){event.preventDefault();go(current.module,here());return;}
   if($('navigator').classList.contains('mobile-open')){showNavigator(false);$('module-toggle').focus();}
 });
 window.addEventListener('hashchange',renderRoute);

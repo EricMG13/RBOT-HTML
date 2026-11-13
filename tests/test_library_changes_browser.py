@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from library_fixtures import CITED, make_run, method, with_changes, without_report  # noqa: F401
 from test_credit_os_catalogue import CHARTS
-from test_library_page_browser import visit
+from test_library_page_browser import read_probe, visit
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "apps/issuer-library"))
@@ -274,3 +274,85 @@ def test_no_module_code_reaches_a_reader_from_the_changes_tab(tmp_path):
     assert 'id="changes-issuer"' in dom and 'id="changes-analysis"' in dom
     seen = read_codes_probe(page, "later", "#CP-2/head?c=later")
     assert seen["hits"] == []
+
+
+def with_one_model(page: Path) -> None:
+    """List one forecast model for the later run, so its Forecast page and chart index are drawn."""
+    data_js = page.parent / "data.js"
+    prefix = "window.CREDIT_OS_DATA="
+    data = json.loads(data_js.read_text(encoding="utf-8").removeprefix(prefix).rstrip().rstrip(";"))
+    run = data["workspace"]["runs"]["later"]
+    data["workspace"]["models"] = [
+        {
+            "id": "model-a",
+            "issuerKey": run["issuerKey"],
+            "mode": "accepted",
+            "qualification": "unrun",
+            "runId": None,
+            "runFolder": "later",
+            "scope": None,
+            "inputContract": None,
+            "revisionNote": None,
+            "previous": None,
+            "href": "../models/model-a.html?embedded=1",
+            "download": "../models/model-a.html?download=1",
+            "files": [],
+            "sources": [],
+            "register": None,
+            "cashflow": None,
+        }
+    ]
+    data_js.write_text(prefix + update_library.embedded_json(data) + ";\n", encoding="utf-8")
+
+
+TRACE_PROBE = """
+(async () => {
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const seen = {};
+  for (const [name, route, selector] of PROBE.routes) {
+    location.hash = route;
+    await sleep(900);
+    const control = document.querySelector(selector);
+    const entry = {found: Boolean(control)};
+    if (control) {
+      control.click();
+      await sleep(600);
+      const drawer = document.getElementById('inspector');
+      entry.open = !drawer.hidden;
+      entry.title = drawer.querySelector('.inspector-body h3')?.textContent ?? '';
+      entry.text = drawer.innerText.length;
+      entry.hash = location.hash;
+    }
+    seen[name] = entry;
+    location.hash = route;
+    await sleep(300);
+  }
+  const out = document.createElement('pre');
+  out.id = 'probe';
+  out.textContent = JSON.stringify(seen);
+  document.body.appendChild(out);
+})();
+"""
+
+
+def test_a_trace_control_opens_the_drawer_on_every_findings_route(tmp_path):
+    """Review H1: a trace key opens on any route of its run, not only on a route with an output.
+    The Forecast chart index keeps its own route when its control is used."""
+    two_runs(tmp_path)
+    page = build(tmp_path)
+    with_one_model(page)
+    routes = [
+        ["overview", "#W-Overview/overview?c=later", "#content .basis-link"],
+        ["module", "#CP-0/head?c=later", "#content .basis-link"],
+        ["changes", "#W-Changes/changes?c=later", "#content .trace-row"],
+        ["forecast", "#W-Forecast/run-charts?c=later", "#content .trace-row"],
+    ]
+    seen = read_probe(page, "#W-Overview/overview?c=later", 1280, TRACE_PROBE, {"routes": routes})
+    for name, entry in seen.items():
+        assert entry["found"] and entry["open"] and entry["text"] > 0 and entry["title"], (
+            name,
+            entry,
+        )
+    assert "Total debt / EBITDA" in seen["changes"]["title"], seen["changes"]
+    assert seen["forecast"]["hash"].startswith("#W-Forecast/run-charts?"), seen["forecast"]
+    assert "e=" in seen["forecast"]["hash"], seen["forecast"]

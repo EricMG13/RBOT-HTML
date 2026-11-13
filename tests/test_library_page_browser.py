@@ -2530,3 +2530,70 @@ def test_the_library_home_does_not_scroll_sideways_at_375px(tmp_path):
     assert console == []
     seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
     assert seen["inner"] == 375 and seen["scrollWidth"] <= 375, seen
+
+
+INTER_MODULE_TABLE = """
+### Exposure by maturity
+
+| Exposure | Effect | Consequence for CP-1 |
+| --- | --- | --- |
+| Revolver step-down | Cushion narrows over time. | Passed to the cash model as a stated constraint. |
+"""
+
+
+def with_inter_module_table(text: str) -> str:
+    """The synthetic CP-2 handoff with a findings table that holds a column written for another module."""
+    marker = "\n## Calculations"
+    assert marker in text
+    return text.replace(marker, INTER_MODULE_TABLE + marker, 1)
+
+
+HIDDEN_REACH_PROBE = """
+(async () => {
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const search = document.getElementById('module-search');
+  const ask = async query => {
+    search.value = query;
+    search.dispatchEvent(new Event('input', {bubbles: true}));
+    await sleep(200);
+    return document.getElementById('search-results').innerText;
+  };
+  const seen = {};
+  seen.hidden = await ask(PROBE.hidden);
+  seen.shown = await ask(PROBE.shown);
+  search.value = '';
+  search.dispatchEvent(new Event('input', {bubbles: true}));
+  const row = [...evidence.entries()].find(([, item]) => item.title === 'Revolver step-down');
+  seen.rowIndexed = Boolean(row);
+  seen.rowLabels = row ? row[1].fields.map(field => field[0]) : [];
+  if (row) {
+    location.hash = '#CP-2/head?c=' + PROBE.run + '&e=' + encodeURIComponent(row[0]);
+    await sleep(600);
+    const drawer = document.getElementById('inspector');
+    seen.drawerOpen = !drawer.hidden;
+    seen.drawer = drawer.innerText;
+  }
+  const out = document.createElement('pre');
+  out.id = 'probe';
+  out.textContent = JSON.stringify(seen);
+  document.body.appendChild(out);
+})();
+"""
+
+
+def test_search_and_the_drawer_do_not_reach_text_written_for_another_module(tmp_path):
+    """Review H2 (rule 7): a Next module sentence is not a search hit, and the drawer of a row
+    does not show its inter-module column; the visible columns of the row still open."""
+    page = synthetic_workspace(tmp_path, with_inter_module_table)
+    config = {
+        "run": NEW_FORMAT_RUN,
+        "hidden": "builds the canonical data from",
+        "shown": "Cushion narrows",
+    }
+    seen = read_probe(page, f"#CP-2/head?c={NEW_FORMAT_RUN}", 1280, HIDDEN_REACH_PROBE, config)
+    assert "canonical data" not in seen["hidden"], seen["hidden"]
+    # The search still finds a shown row.
+    assert "Revolver step-down" in seen["shown"], seen["shown"]
+    assert seen["rowIndexed"] and seen["rowLabels"] == ["Exposure", "Effect"], seen
+    assert seen["drawerOpen"] and "Cushion narrows over time." in seen["drawer"], seen
+    assert "Consequence for" not in seen["drawer"] and "stated constraint" not in seen["drawer"]

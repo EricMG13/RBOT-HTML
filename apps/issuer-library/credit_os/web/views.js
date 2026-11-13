@@ -1076,7 +1076,15 @@ function navigatorGroups(context) {
   return runModels(context).length?[...named,['Delivered model',[MODEL_ENTRY]]]:named;
 }
 // The section titles a navigator entry is searched by: the model's, or those of the module's default output.
-const entrySections=(id,context)=>{const output=defaultOutput(id,context);return id===MODEL_ENTRY[0]?navigationSections(id,context):output?modules[output].sections:[];};
+// A section of the module page whose every heading is hidden (rule 7) is not a title the navigator search can match.
+const hiddenSections=output=>new Set(window.Evidence.classify(data[output].sections,data[output].placement).filter(entry=>entry.role==='hidden').map(entry=>entry.section));
+const entrySections=(id,context)=>{
+  const output=defaultOutput(id,context);
+  if(id===MODEL_ENTRY[0])return navigationSections(id,context);
+  if(!output)return [];
+  const hidden=hiddenSections(output);
+  return modules[output].sections.filter(([sectionId])=>{const held=sectionData(output,sectionId);return !held.length||!held.every(section=>hidden.has(section));});
+};
 function navigatorEntry(id,name,module,context,query) {
   const output=defaultOutput(id,context),sections=entrySections(id,context);
   const hit=query&&sections.find(s=>s[1].toLowerCase().includes(query));

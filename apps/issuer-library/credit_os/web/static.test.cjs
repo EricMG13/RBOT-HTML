@@ -4014,7 +4014,7 @@ test('the drawer is the inspector, restyled: close button, Escape and focus retu
   const screen = read('screen.js'), html = read('index.html');
   assert.ok(html.includes('<aside class="inspector" id="inspector" aria-label="Evidence inspector" hidden></aside><div class="drawer-backdrop" id="drawer-backdrop"'));
   assert.ok(screen.includes("event.target.closest('#back-analysis,#drawer-backdrop')"), 'the close button and the backdrop leave the trace');
-  assert.ok(screen.includes("if(current.evidence){event.preventDefault();go(current.module,current.section);return;}"), 'Escape closes the open trace');
+  assert.ok(screen.includes("if(current.evidence){event.preventDefault();go(current.module,here());return;}"), 'Escape closes the open trace, on the route it was opened on');
   assert.ok(screen.includes("returnTrigger.focus({preventScroll:true})"), 'focus returns to the control that opened it');
   const css = read('screen.css');
   assert.match(css, /\.inspector\{position:fixed;[^}]*width:420px;max-width:100%/);
