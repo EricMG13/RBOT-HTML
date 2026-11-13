@@ -50,6 +50,36 @@ BASIS_CALCULATION = re.compile(r"calculation \S+")
 # Neither names a page or a handoff of this run, so there is nothing to open.
 BASIS_COMPARISON = "Run comparison"
 BASIS_EARLIER_RUN = re.compile(r"[A-Za-z][A-Za-z ,'&/-]* \((?P<code>CP-[0-9A-Z]+)\), earlier run")
+# Display names of the modules, the same pairs as `groups` in apps/issuer-library/credit_os/web/
+# screen.js (a test compares them). Decision 11 of 2026-11-12: a module is named in prose by this
+# name, never by its code, and the launcher sends the list so the model does not invent names.
+MODULE_NAMES = {
+    "CP-0": "Source readiness",
+    "CP-1A": "Business & governance",
+    "CP-DR": "Research questions",
+    "CP-1": "Financial foundation",
+    "CP-1B": "Earnings changes",
+    "CP-L10": "Short credit snapshot",
+    "CP-1D": "Earnings quality",
+    "CP-1C": "Peer benchmark",
+    "CP-2D": "Liquidity",
+    "CP-3C": "Refinancing & LME",
+    "CP-2": "Fundamental credit",
+    "CP-2A": "Downside",
+    "CP-2G": "Forward credit model",
+    "CP-2E": "Rates, FX & hedging",
+    "CP-2H": "Ratings & triggers",
+    "CP-4": "Legal & covenants",
+    "CP-4A": "Covenant capacity",
+    "CP-4B": "Structural priority",
+    "CP-4D": "Intercreditor control",
+    "CP-4C": "Recovery & fulcrum",
+    "CP-3": "Security selection",
+    "CP-3D": "Market-implied risk",
+    "CP-6": "Committee decision",
+    "CP-5": "Evidence validation",
+    "CP-8": "Changes since the last run",
+}
 
 
 class Locator(TypedDict):

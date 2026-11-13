@@ -17,8 +17,8 @@ it refuses, naming the line, a CP-8 handoff in which:
   `Remaining`; only `E`: `Closed` or `No longer stated`; only `C`: `New`), has no limitation in
   words, or closes a limitation without naming a module of the current run as evidence; or a ref
   is written anywhere but the two ref columns (K4);
-- a row of a pack measure does not print that measure's earlier and current value, with its sign
-  and unit, in the right columns (K5);
+- a row of a pack measure does not hold, in its Earlier and Current cells, exactly the pack's value,
+  unit and period (`6.01x (FY2024)`, `6261 US$m (2024-09-30)`; `Not stated` for a null value) (K5);
 - a measure the pack marks `judge` is said neither or both of `Same definition` and
   `Not comparable`, or one the pack marks `no` is not said `Not comparable` (K6);
 - a measure the two runs state for one period with different values is given the cause
@@ -27,14 +27,13 @@ it refuses, naming the line, a CP-8 handoff in which:
 - a measure the pack gives a difference of zero, and that the row does not say `Not comparable`,
   has a Cause other than `None`: nothing changed, so `Unresolved` is refused for it (K2);
 - a `New` or `Not run this time` module, when the pack says both runs' modules were the pathway's
-  preset (`current.selection` is `preset` and `prior.selection` is `preset` or null: a prior run
-  with no recorded selection was accepted as a base only because it ran the pathway's lead
-  module, so it is a whole-pathway run), has a Cause other than `Method change` or a Why that
-  says the pack does not say (K12); with either run `explicit`, or a pack of the earlier shape
-  (no `selection` key), nothing is required;
-- a `Basis: ` line names `changes.json` or a `prior/` file, gives a page for an earlier-run
-  handoff, or writes the two forms CP-8 may add in another way: `Run comparison` for the comparison
-  pack and `<plain module name> (<code>), earlier run` for an earlier run's handoff (K13);
+  preset (`current.selection` and `prior.selection` both `preset`), has a Cause other than
+  `Method change`; when the earlier run records no selection (null) the Cause is `Method change`
+  or `Unresolved` (K12); with either run `explicit`, or a pack of the earlier shape (no
+  `selection` key), nothing is required;
+- a `Basis: ` item is not `Run comparison`, `<plain module name> (<code>)` or `<plain module
+  name> (<code>), earlier run`, or names a handoff of a module that did not run in the run it
+  names (K13);
 - a difference printed anywhere (a figure after `by`, or after a direction word) is not a pack
   difference, or its direction word contradicts the pack's sign, or it carries a sign after a
   direction word (K8);
@@ -51,7 +50,10 @@ it refuses, naming the line, a CP-8 handoff in which:
 - a fact row (a row naming no pack measure) prints a figure equal to a pack measure's earlier or
   current value, or one held in no evidence (K11);
 - a pack measure has no row of its own in the issuer register: every pack measure needs exactly
-  one, its first cell the pack's label (K14).
+  one, its first cell the pack's label (K14);
+- while a difference is withheld, a number word directly followed by a listed unit word
+  (`thirty million`, `two hundred bps`) is written in a checked passage (W). Only that form is
+  refused; a size in words with any other wording is not read (see the limit at `_WORDED`).
 
 A "figure" is a number that is not a date, a period label, a year or (in a passage) a whole number
 below 100 without a unit (a count); in a measure's Earlier and Current cells every number counts.
@@ -61,12 +63,16 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from collections import Counter
 from collections.abc import Mapping, Sequence
 from decimal import Decimal
 from typing import Any
 
-from deploy_workflow.changes import PACK_NAME, PRIOR_PREFIX, decimal, number
+from deploy_workflow.changes import decimal, number
+from deploy_workflow.credit_os_chips import (
+    BASIS_COMPARISON,
+    BASIS_EARLIER_RUN,
+    MODULE_NAMES,
+)
 
 ISSUER = "What changed: the issuer"
 ANALYSIS = "What changed: the analysis"
@@ -86,12 +92,6 @@ SAME_PERIOD_CAUSES = ("Correction", "Method change")
 COUNT_BELOW = 100  # a whole number below this, without a unit, is a count
 SAME = "same definition"
 NOT_COMPARABLE = "not comparable"
-COMPARISON = "Run comparison"  # CP-8's Basis item for the comparison pack; an earlier handoff is
-# `<plain module name> (<code>), earlier run`
-_HANDOFF_PAGE = re.compile(
-    r"\(CP-[A-Z0-9]+\).*(?:\bpages?\b|\bpp?\.\s*\d)", re.IGNORECASE
-)  # any page locator on a handoff item
-_DOES_NOT_SAY = re.compile(r"\bthe\s+pack\s+does\s+not\s+say\b", re.IGNORECASE)
 _MODULE = re.compile(r"\bCP-[A-Z0-9]+\b")
 _MODULE_CELL = re.compile(r"\((CP-[A-Z0-9]+)\)$")  # the code ends the cell, in brackets
 _REF = re.compile(r"\b[EC]\d+\b")
@@ -408,42 +408,32 @@ def _direction_issues(text: str, differences: set[Decimal], where: str) -> list[
     return issues
 
 
-def _unit_differs(cell: str, figure: Figure, unit: str | None) -> bool:
-    """True when the text directly after the figure states a unit or scale other than the measure's
-    (`300 US$bn` for US$m), unless the unit is split around the figure (`US$300m`)."""
-    if unit is None:
-        return False
-    tail = re.split(r"[(,;]|\.\s|\.$", cell[figure.end :], maxsplit=1)[0]
-    tail = re.sub(r"\s+", "", tail).lower()
-    want = re.sub(r"\s+", "", unit).lower()
-    if not tail or tail.startswith(want):
-        return False
-    head = re.sub(r"\s+", "", cell[max(0, figure.start - len(want)) : figure.start]).lower()
-    return not (want.endswith(tail) and head.endswith(want[: -len(tail)]))
+def _value_cell(held: Mapping[str, Any] | None) -> str:
+    """The cell a measure's Earlier or Current column holds, built from the pack alone: the value,
+    the unit (attached for `x` and `%`, after a space otherwise), then the period in brackets; a
+    part the pack gives as null is left out, and a null value is `Not stated`."""
+    record = held or {}
+    if record.get("value") is None:
+        return "Not stated"
+    unit, period = record.get("unit"), record.get("period")
+    joined = "" if unit is None else (unit if unit in ("x", "%") else f" {unit}")
+    value = str(record["value"]).replace(",", "")  # cp8.md: "no grouping comma"
+    return f"{value}{joined}" + ("" if period is None else f" ({period})")
 
 
 def _value_cell_issues(
     where: str, side: str, cell: str, held: Mapping[str, Any] | None
 ) -> list[str]:
-    """An Earlier or Current cell of a measure's row: it prints that run's value with its sign and
-    unit, and no other figure."""
-    stated = _signed((held or {}).get("value"))
-    printed = _figures(cell)
-    issues = []
-    for figure in printed:
-        if figure.signed != stated:
-            issues.append(
-                f"{where}: {side} figure {figure.signed} is not the pack's {side} value "
-                f"({'not stated' if stated is None else stated})."
-            )
-        elif _unit_differs(cell, figure, (held or {}).get("unit")):
-            issues.append(
-                f"{where}: the unit written after the {side} figure {figure.signed} is not the "
-                f"pack's ({(held or {}).get('unit')}); the scale is part of the value."
-            )
-    if stated is not None and not any(f.signed == stated for f in printed):
-        issues.append(f"{where}: the {side} cell must print the pack's {side} value ({stated}).")
-    return issues
+    """An Earlier or Current cell of a measure's row is exactly the pack's value cell."""
+    expected = _plain(_value_cell(held))  # the cell is read plain, so the text to write is too
+    if _plain(cell) == expected:
+        return []
+    return [
+        (
+            f"{where}, {side.capitalize()} cell: write exactly `{expected}` (the pack's value, "
+            f"unit and period); it is `{cell}`."
+        )
+    ]
 
 
 def _definition_issues(where: str, row: Sequence[str], measure: Mapping[str, Any]) -> list[str]:
@@ -639,24 +629,31 @@ def _issuer_issues(
     return issues
 
 
-def _preset_issues(code: str, cause: str, why: str) -> list[str]:
+def _preset_issues(code: str, cause: str) -> list[str]:
     """A module that ran in one run only, between two runs of the pathway's own module set: the
-    pathway's module set changed, so the cause is known (`Method change`) and the pack is not
-    said to lack it."""
-    issues = []
-    if cause != "Method change":
-        issues.append(
+    pathway's module set changed, so the cause is known (`Method change`)."""
+    if cause == "Method change":
+        return []
+    return [
+        (
             f"Analysis register, {code}: both runs used the pathway's own modules, so the "
-            f"pathway's module set changed between them: the Cause is `Method change`, "
+            f"pathway's module set changed between them: write the Cause `Method change`, "
             f"not {cause!r}."
         )
-    if _DOES_NOT_SAY.search(why):
-        issues.append(
-            f"Analysis register, {code}: both runs used the pathway's own modules, so the words "
-            "`the pack does not say` are refused: say that the pathway's module set changed "
-            "between the runs."
+    ]
+
+
+def _unrecorded_issues(code: str, cause: str) -> list[str]:
+    """A module that ran in one run only, when the earlier run records no selection: the pack
+    cannot say which modules that run was asked for."""
+    if cause in ("Method change", "Unresolved"):
+        return []
+    return [
+        (
+            f"Analysis register, {code}: the earlier run records no selection, so write the Cause "
+            f"`Method change` or `Unresolved`, not {cause!r}."
         )
-    return issues
+    ]
 
 
 def _analysis_issues(rows: list[list[str]], pack: Mapping[str, Any]) -> list[str]:
@@ -665,12 +662,11 @@ def _analysis_issues(rows: list[list[str]], pack: Mapping[str, Any]) -> list[str
     seen = {code: len(found) for code, found in _rows_by_module(rows).items() if code in ran}
     prior, current = pack.get("prior") or {}, pack.get("current") or {}
     # An absent `selection` key is a pack of the earlier shape; a null is a run that predates it.
-    both_preset = (
-        "selection" in prior
-        and current.get("selection") == "preset"
-        and prior["selection"] in ("preset", None)
+    both_preset = prior.get("selection") == "preset" == current.get("selection")
+    unrecorded = (
+        "selection" in prior and prior["selection"] is None and current.get("selection") == "preset"
     )
-    for module, status, cause, why in rows:
+    for module, status, cause, _why in rows:
         code = _module_code(module)
         if code is None or code not in ran:
             issues.append(
@@ -695,8 +691,11 @@ def _analysis_issues(rows: list[list[str]], pack: Mapping[str, Any]) -> list[str
                 f"Analysis register, {code}: the module did not run in both runs, so its Status "
                 "is `New` or `Not run this time`."
             )
-        if both_preset and status in ("New", "Not run this time"):
-            issues += _preset_issues(code, cause, why)
+        if status in ("New", "Not run this time"):
+            if both_preset:
+                issues += _preset_issues(code, cause)
+            elif unrecorded:
+                issues += _unrecorded_issues(code, cause)
         if cause not in (*CAUSES, "None"):
             issues.append(f"Analysis register, {code}: Cause {cause!r} is not one of {CAUSES}.")
         elif cause == "Presentation" and status != "Unchanged":
@@ -897,10 +896,6 @@ def _may_print(
     return frozenset()
 
 
-_LIST_ITEM = re.compile(r"\s*(?:[-*+]|\d+[.)])\s")
-_BULLET_ITEM = re.compile(r"\s*[-*+]\s")
-_LIST_NUMBER = re.compile(r"^\s*\d+[.)](?=\s)")
-_FIRST_NUMBER = re.compile(r"\s*1[.)]\s")
 _DAY = r"\d{1,2}(?:st|nd|rd|th)?\b"
 _YEAR = r"(?:19|20)\d{2}\b(?![.,]\d)"
 # A date is complete only with its four-digit year: `30 September 2024`, `September 30, 2024`. A day
@@ -909,153 +904,14 @@ _DATE = re.compile(
     rf"(?<![\w.,])(?:{_DAY}\s+{_MONTH},?\s+{_YEAR}|\b{_MONTH}\s+{_DAY},?\s+{_YEAR})",
     re.IGNORECASE,
 )
-_UNITS = {
-    word: n
-    for n, word in enumerate(
-        (
-            "one",
-            "two",
-            "three",
-            "four",
-            "five",
-            "six",
-            "seven",
-            "eight",
-            "nine",
-            "ten",
-            "eleven",
-            "twelve",
-            "thirteen",
-            "fourteen",
-            "fifteen",
-            "sixteen",
-            "seventeen",
-            "eighteen",
-            "nineteen",
-        ),
-        1,
-    )
-}
-_TENS = {
-    word: 10 * n
-    for n, word in enumerate(
-        ("twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"), 2
-    )
-}
-_HYPHENS = "-\u2010-\u2015"
-_WORD_RUN = re.compile(rf"[A-Za-z]+(?:[{_HYPHENS}\s]+[A-Za-z]+)*")
-_ORDINALS = frozenset(
-    ("first", "second", "third", "fifth", "eighth", "ninth", "twelfth", "half", "halve", "quarter")
-)
-
-
-def _ordinal(word: str) -> bool:
-    """Whether `word` is an ordinal or fraction word: `first`, `fourth`, `thirtieth`, `thirds`."""
-    word = word.removesuffix("s")
-    if word in _ORDINALS:
-        return True
-    if word.endswith("ieth"):
-        return word[:-4] + "y" in _TENS
-    return word.endswith("th") and word[:-2] in {*_UNITS, *_TENS, "hundred", "thousand"}
-
-
-def _number_word(word: str) -> bool:
-    return word in _UNITS or word in _TENS or word in ("zero", "hundred", "thousand")
-
-
-def _decimal(words: Sequence[str], i: int, j: int) -> bool:
-    """Whether the number in `words[i:j]` sits in `number-word point number-word` on either side."""
-    after = words[j : j + 2]
-    before = words[max(i - 2, 0) : i]
-    return (len(after) == 2 and after[0] == "point" and _number_word(after[1])) or (
-        len(before) == 2 and before[1] == "point" and _number_word(before[0])
-    )
-
-
-def _part_of_fraction(words: Sequence[str], joined: Sequence[bool], i: int, j: int) -> bool:
-    """Whether the number in `words[i:j]` is part of a decimal, ordinal or fraction. `joined[k]`
-    says `words[k]` is hyphen-joined to the next word. Not read: a decimal (`zero point five`,
-    both sides); an ordinal word ending it (`thirty-first`) unless it is joined on to a further
-    word (`second-lien`); `and` plus an ordinal only after `hundred` or `thousand` (`one hundred
-    and first`); `and a half` / `and a quarter` not followed by `of`."""
-
-    def ends(k: int) -> bool:
-        return k < len(words) and _ordinal(words[k]) and not joined[k]
-
-    big = "hundred" in words[i:j] or "thousand" in words[i:j]
-    return (
-        _decimal(words, i, j)
-        or ends(j)
-        or (big and words[j : j + 1] == ["and"] and ends(j + 1))
-        or (
-            words[j : j + 3] in (["and", "a", "half"], ["and", "a", "quarter"])
-            and words[j + 3 : j + 4] != ["of"]
-        )
-    )
-
-
-def _starts_list_item(lines: Sequence[str], i: int) -> bool:
-    """Whether line `i` can begin a list item: the first line of the passage, or one after a blank
-    line, a heading or a list item. A line that continues a paragraph cannot, and after a bulleted
-    item only `1.` can (CommonMark: a list not starting at 1 cannot interrupt a paragraph)."""
-    if i == 0:
-        return True
-    before = lines[i - 1]
-    if _BULLET_ITEM.match(before):
-        return bool(_FIRST_NUMBER.match(lines[i]))
-    return not before.strip() or bool(_HEADING.match(before) or _LIST_ITEM.match(before))
-
-
-def _group(words: Sequence[str], i: int) -> tuple[int, int]:
-    """(value, next index) of the words from `i` that spell a number below 1,000: `[N hundred]
-    [and] [tens [unit] | 1-19]`. Value 0 and the same index when none."""
-    start, value = i, 0
-    if i + 1 < len(words) and words[i] in _UNITS and words[i + 1] == "hundred":
-        value, i = _UNITS[words[i]] * 100, i + 2
-        if (
-            i + 1 < len(words)
-            and words[i] == "and"
-            and (words[i + 1] in _UNITS or words[i + 1] in _TENS)
-        ):
-            i += 1
-    if i < len(words) and words[i] in _TENS:
-        value, i = value + _TENS[words[i]], i + 1
-        if i < len(words) and words[i] in _UNITS and _UNITS[words[i]] < 10:
-            value, i = value + _UNITS[words[i]], i + 1
-    elif i < len(words) and words[i] in _UNITS:
-        value, i = value + _UNITS[words[i]], i + 1
-    return (value, i) if i > start else (0, start)
-
-
-def _spelled_number(words: Sequence[str], i: int) -> tuple[int, int]:
-    """(value, next index) of the whole number in English words that starts at `i`, up to 999,999
-    (`two thousand five`); value 0 and the same index when none starts there."""
-    value, j = _group(words, i)
-    if j < len(words) and words[j] == "thousand" and value:
-        value, j = value * 1000, j + 1
-        if j + 1 < len(words) and words[j] == "and" and _group(words, j + 1)[0]:
-            j += 1
-        rest, j = _group(words, j)
-        value += rest
-    return (value, j) if j > i else (0, i)
-
-
 _COUNT_NOUN = (
     r"(?:facilit(?:y|ies)|subsidiar(?:y|ies)|(?:module|run|measure|source|period|row|item|document"
     r"|filing|page|section|table|finding|limitation|assumption|conclusion"
     r"|handoff|issuer|lender|tranche|covenant|quarter|month|year|week|day)s?)"
 )
 _REFERENCES = frozenset(("page", "note", "section", "table", "row", "item", "step", "appendix"))
-_COUNT_AFTER = re.compile(rf"\s+{_COUNT_NOUN}(?![{_HYPHENS}\w])", re.IGNORECASE)
+_COUNT_AFTER = re.compile(rf"\s+{_COUNT_NOUN}(?![\u2010-\u2015\w-])", re.IGNORECASE)
 _REFERENCE_BEFORE = re.compile(rf"\b(?:{'|'.join(_REFERENCES)})\s+$", re.IGNORECASE)
-
-
-def _counted_words(words: Sequence[str], joined: Sequence[bool], i: int, j: int) -> bool:
-    """Whether the number in `words[i:j]` is a count: directly followed by a count noun (not joined
-    to it, or the noun to a further word by a hyphen), or directly after a reference word."""
-    noun = j < len(words) and not joined[j - 1] and not joined[j]
-    after = noun and re.fullmatch(_COUNT_NOUN, words[j]) is not None
-    return after or (i > 0 and not joined[i - 1] and words[i - 1] in _REFERENCES)
 
 
 def _counted(text: str, figure: Figure) -> bool:
@@ -1066,91 +922,37 @@ def _counted(text: str, figure: Figure) -> bool:
     )
 
 
-def _spelled(line: str) -> list[Decimal]:
-    """The whole numbers from two up that the line writes in English words, any case, hyphenated or
-    spaced (any Unicode hyphen). Not read: `one` alone, `a hundred`, `a dozen`, and a part of a
-    decimal, fraction or ordinal."""
-    found: list[Decimal] = []
-    for run in _WORD_RUN.finditer(line):
-        words = re.findall(r"[a-z]+", run[0].lower())
-        joined = [
-            bool(re.search(rf"[{_HYPHENS}]", g)) for g in re.findall(r"[^a-z]+", run[0].lower())
-        ]
-        joined.append(False)
-        i = 0
-        while i < len(words):
-            value, j = _spelled_number(words, i)
-            if j == i:
-                i += 1
-                continue
-            if (
-                value >= 2
-                and not _part_of_fraction(words, joined, i, j)
-                and not _counted_words(words, joined, i, j)
-            ):
-                found.append(Decimal(value))
-            i = j
-    return found
-
-
-def _bare(line: str, *, listed: bool) -> str:
-    """The line as the bare-number reading of the withheld-difference rule (K9) takes it: module
-    codes blanked and a leading list number blanked when `listed` (the line begins a list item,
-    never a table cell). Complete dates are blanked by the caller, for both readings."""
-    if listed:
-        line = _LIST_NUMBER.sub(_blanks, line)
-    return _MODULE.sub(_blanks, line)
-
-
 def _blanks(match: re.Match[str]) -> str:
     return " " * len(match[0])
 
 
-_TAIL_RUN = re.compile(rf"[A-Za-z]+(?:[{_HYPHENS}\s]+[A-Za-z]+)*\s*$")
-_HEAD_RUN = re.compile(rf"\s*[A-Za-z]+(?:[{_HYPHENS}\s]+[A-Za-z]+)*")
+# Check W: when a difference is withheld, an amount, ratio or difference is written in digits with
+# its unit (`two` to `nineteen`, the tens, `hundred` and `thousand` are number words). A number word
+# (a run of adjacent ones) directly followed by a listed unit word is refused.
+# ponytail: a withheld size written in words is refused only when a listed unit word directly
+# follows it (`thirty million`). Any other wording passes: `the gap is thirty`, `fell by thirty`,
+# `net debt is eighty lower`, `fell by one hundred and ten`, a hyphenated or marked-up form. The
+# method text tells the model to write every amount in digits; this check does not enforce it.
+_NUMBER_WORD = (
+    r"(?:two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen"
+    r"|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety"
+    r"|hundred|thousand)"
+)
+_WRITTEN_UNIT = (
+    r"(?:%|US\$|(?:million|billion|thousand|percent|per cent|basis points?|bps?|x|USD|EUR"
+    r"|GBP|dollars|euros|pounds)\b)"
+)
+_WORDED = re.compile(rf"\b(?:{_NUMBER_WORD}\s+)*{_NUMBER_WORD}\s*{_WRITTEN_UNIT}", re.IGNORECASE)
 
 
-def _words_of(run: str) -> list[str]:
-    return re.findall(r"[a-z]+", run.lower())
-
-
-def _number_edge(words: Sequence[str], *, end: bool) -> bool:
-    """Whether `words` end (or begin) inside a spelled number: a number word, or `and` by one."""
-    if not words:
-        return False
-    word, near = (words[-1], words[-2:-1]) if end else (words[0], words[1:2])
-    return _number_word(word) or (word == "and" and bool(near) and _number_word(near[0]))
-
-
-def _paragraph_continues(lines: Sequence[str], i: int) -> bool:
-    """Whether line `i + 1` continues the paragraph line `i` is in: neither is blank, a heading or a
-    table row, and the next does not start a list item."""
-    here, after = lines[i].strip(), lines[i + 1].strip()
-    if not here or not after or after.startswith("|") or here.startswith("|"):
-        return False
-    if _HEADING.match(lines[i]) or _HEADING.match(lines[i + 1]):
-        return False
-    item = _BULLET_ITEM.match(lines[i + 1]) or (
-        _LIST_ITEM.match(lines[i + 1]) and _starts_list_item(lines, i + 1)
-    )
-    return not item
-
-
-def _across_lines(lines: Sequence[str], i: int) -> list[Decimal]:
-    """The numbers in words that line `i` shares with line `i + 1` of the same paragraph (`one
-    hundred` / `and ten`): read from the two runs of words joined, those not already read in either
-    line alone."""
-    if i + 1 >= len(lines) or not _paragraph_continues(lines, i):
-        return []
-    tail, head = _TAIL_RUN.search(lines[i]), _HEAD_RUN.match(lines[i + 1])
-    if not tail or not head:
-        return []
-    if not (
-        _number_edge(_words_of(tail[0]), end=True) and _number_edge(_words_of(head[0]), end=False)
-    ):
-        return []
-    whole = Counter(_spelled(f"{tail[0].rstrip()} {head[0].strip()}"))
-    return list((whole - Counter(_spelled(tail[0])) - Counter(_spelled(head[0]))).elements())
+def _worded_issues(line: str) -> list[str]:
+    return [
+        f"`{' '.join(m[0].split())}`: a difference is withheld in this handoff, so write every "
+        "amount, ratio and difference in digits with its unit; a number word is only for a count "
+        "of things (`three modules`). If the figure is a difference the pack withholds, leave it "
+        "out."
+        for m in _WORDED.finditer(line)
+    ]
 
 
 def _header_rows(lines: Sequence[str]) -> frozenset[int]:
@@ -1166,22 +968,6 @@ def _header_rows(lines: Sequence[str]) -> frozenset[int]:
         for i in range(len(lines) - 1)
         if lines[i].strip().startswith("|") and separator(lines[i + 1])
     )
-
-
-def _next_noun(lines: Sequence[str], i: int) -> str:
-    """The count noun that starts line `i + 1` of the paragraph line `i` is in, else nothing."""
-    if i + 1 >= len(lines) or not _paragraph_continues(lines, i):
-        return ""
-    noun = _COUNT_AFTER.match(f" {lines[i + 1].lstrip()}")
-    return noun[0].strip() if noun else ""
-
-
-def _bare_sizes(lines: Sequence[str], i: int, bare_line: str, *, header: bool) -> list[Decimal]:
-    """The sizes the bare-number reading takes from line `i`: its digits and its numbers in words
-    (also those continued on the next line), but a count (`_counted`, `_counted_words`)."""
-    counted = f"{bare_line} {_next_noun(lines, i)}"
-    digits = [f.size for f in _figures(bare_line, header=header) if not _counted(counted, f)]
-    return [*digits, *_spelled(counted), *_across_lines(lines, i)]
 
 
 def _passage_issues(
@@ -1233,9 +1019,13 @@ def _passage_issues(
             continue
         line = _DATE.sub(_blanks, line)
         figures = [f.size for f in _figures(line, counts=False, header=i in headers)]
-        listed = not row and _starts_list_item(lines, i)
         read = line if whole is None else _DATE.sub(_blanks, whole)
-        bare = _bare_sizes(lines, i, _bare(read, listed=listed), header=i in headers)
+        bare_line = _MODULE.sub(_blanks, read)
+        bare = [
+            f.size for f in _figures(bare_line, header=i in headers) if not _counted(bare_line, f)
+        ]
+        if kept:
+            issues += _worded_issues(read)
         for size in dict.fromkeys([*figures, *bare]):
             if size in sizes:
                 issues.append(
@@ -1249,32 +1039,71 @@ def _passage_issues(
     return issues
 
 
-def _basis_issues(lines: Sequence[str]) -> list[str]:
-    """CP-8's Basis items: the comparison pack is `Run comparison`, an earlier run's handoff is
-    `<plain module name> (<code>), earlier run`; no pipeline file name and no page of a handoff."""
-    issues = []
-    for line in lines:
-        text = line.strip()
-        if not text.startswith("Basis: "):
-            continue
-        for item in (i.strip() for i in text.removeprefix("Basis: ").removesuffix(".").split("; ")):
-            if PACK_NAME in item or PRIOR_PREFIX in item:
-                issues.append(
-                    f"Basis item {item!r} names a pipeline file; write the comparison pack as "
-                    f"`{COMPARISON}` and an earlier run's handoff as `<plain module name> "
-                    "(<code>), earlier run`."
-                )
-            elif item.startswith(COMPARISON) and item != COMPARISON:
-                issues.append(
-                    f"Basis item {item!r}: the comparison pack is exactly `{COMPARISON}`."
-                )
-            elif _HANDOFF_PAGE.search(item):
-                issues.append(
-                    f"Basis item {item!r} gives a page for a handoff; a handoff is "
-                    "`<plain module name> (<code>)`, or `<plain module name> (<code>), earlier "
-                    "run` for the earlier run, with no page."
-                )
-    return issues
+# ponytail: the name `MODULE_NAMES` lists for the code (the list the launcher sends the model) is
+# accepted outright. Any other wording is the model's own (handoffs written before the list was
+# sent), so only what cannot be a name is refused (a path, a comma list, a run or page word).
+# Another module's name for the code (`Deep research (CP-2A)`) is accepted: a known limit.
+_NOT_A_NAME = re.compile(r"[/,]|\b(?:earlier run|run comparison|page)\b", re.IGNORECASE)
+
+
+def _three_forms(item: str) -> str:
+    return (
+        f"Basis item `{item}` is not one of the three forms this module uses: "
+        f"`{BASIS_COMPARISON}` for the comparison pack, `<plain module name> (<code>)` for a "
+        "handoff of this run, `<plain module name> (<code>), earlier run` for a handoff of "
+        "the earlier run. Separate items with `; `, give no page and name no file."
+    )
+
+
+def _name_issue(item: str, code: str, name: str, earlier: bool) -> str | None:
+    """Why the name before `(<code>)` is refused, or None: the listed name for the code is accepted
+    outright; any other wording only when it cannot be something else (see `_NOT_A_NAME`). A refusal
+    names the item to write when the code has a listed name."""
+    listed = MODULE_NAMES.get(code)
+    if _plain(name) == listed or not _NOT_A_NAME.search(name):
+        return None
+    issue = _three_forms(item)
+    if listed is None:
+        return issue
+    return f"{issue} For `{code}` write `{listed} ({code}){', earlier run' if earlier else ''}`."
+
+
+def _basis_item_issue(item: str, ran: Mapping[str, tuple[bool, bool]]) -> str | None:
+    """Why a Basis item is refused, or None: `Run comparison`, `<plain module name> (<code>)` for a
+    handoff of this run, or the same with `, earlier run` for a handoff of the earlier run."""
+    if item == BASIS_COMPARISON:
+        return None
+    earlier = BASIS_EARLIER_RUN.fullmatch(item)
+    found = earlier or BASIS_EARLIER_RUN.fullmatch(f"{item}, earlier run")
+    if found is None:
+        return _three_forms(item)
+    code = found["code"]
+    name = found.string.removesuffix(", earlier run").removesuffix(f" ({code})")
+    if issue := _name_issue(item, code, name, earlier is not None):
+        return issue
+    both = ran.get(code, (False, False))
+    if both[0 if earlier else 1]:
+        return None
+    if not any(both):
+        return f"Basis item `{item}`: `{code}` ran in neither run: remove the item."
+    where, write = (
+        ("the earlier run", f"{name} ({code})")
+        if earlier
+        else ("this run", f"{name} ({code}), earlier run")
+    )
+    return f"Basis item `{item}`: `{code}` did not run in {where}: write `{write}` instead."
+
+
+def _basis_issues(lines: Sequence[str], pack: Mapping[str, Any]) -> list[str]:
+    """CP-8's Basis items, each in one of the three forms and naming a handoff that exists."""
+    ran = {m["module"]: (m["ran_prior"], m["ran_current"]) for m in pack["modules"]}
+    items = (
+        item.strip()
+        for line in lines
+        if line.strip().startswith("Basis: ")
+        for item in line.strip().removeprefix("Basis: ").removesuffix(".").split("; ")
+    )
+    return [issue for item in items if (issue := _basis_item_issue(item, ran))]
 
 
 def _held_sizes(texts: Sequence[str]) -> frozenset[Decimal]:
@@ -1317,7 +1146,7 @@ def cp8_issues(text: str, pack: Mapping[str, Any], held: Sequence[str] = ()) -> 
         for key, found in _rows_by_measure(issuer, pack).items()
         if any(_says(row, NOT_COMPARABLE) for row in found)
     )
-    issues += _basis_issues(lines)
+    issues += _basis_issues(lines, pack)
     issues += _outside_ref_issues(lines, pack)
     issues += _passage_issues(lines, pack, said_nc, sizes)
     return tuple(dict.fromkeys(issues))

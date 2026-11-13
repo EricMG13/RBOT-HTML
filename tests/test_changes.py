@@ -1236,7 +1236,7 @@ def test_a_complete_cp8_handoff_is_accepted():
         (
             "| Total debt / EBITDA | 4.20x (FY2023) | 3.60x (FY2024) |",
             "| Total debt / EBITDA | 3.60x (FY2023) | 4.20x (FY2024) |",
-            "earlier figure 3.60",
+            "Earlier cell: write exactly `4.20x (FY2023)`",
         ),  # the pack's values in the wrong columns
         (
             "| Total debt / EBITDA | 4.20x (FY2023) | 3.60x (FY2024) |",
@@ -1244,7 +1244,11 @@ def test_a_complete_cp8_handoff_is_accepted():
             "name a pack measure",
         ),  # a row with figures that names no pack measure, whatever its values
         ("| Cash |", "| Cash balance |", "name a pack measure"),
-        ("| 4.20x (FY2023) |", "| -4.20x (FY2023) |", "earlier figure -4.20"),  # the sign counts
+        (
+            "| 4.20x (FY2023) |",
+            "| -4.20x (FY2023) |",
+            "Earlier cell: write exactly `4.20x (FY2023)`",
+        ),  # the sign counts
         ("by 0.60x", "by -0.60x", "-0.60"),  # a difference printed with the wrong sign
         ("Leverage fell by 0.60x.", "Leverage rose by 0.60x.", "direction"),
         ("300 US$m (FY2023)", "300 US$bn (FY2023)", "unit"),  # the scale is part of the value
@@ -1316,7 +1320,7 @@ def test_a_fact_row_without_figures_is_free_text_and_one_with_a_figure_names_a_m
 
 def test_a_measure_the_pack_cannot_compare_is_stated_as_not_stated_or_not_comparable():
     row = (
-        "| EBITDA / cash interest | not stated | 3.60x (FY2024) | New source "
+        "| EBITDA / cash interest | Not stated | 3.60x (FY2024) | New source "
         "| The earlier run does not state it, so it is not comparable. |"
     )
     text = REGISTERS.replace(COVER_ROW, row, 1)  # the pack measure's own row, worded differently
@@ -1324,9 +1328,9 @@ def test_a_measure_the_pack_cannot_compare_is_stated_as_not_stated_or_not_compar
     bare = row.replace("The earlier run does not state it, so it is not comparable.", "Cover rose.")
     again = REGISTERS.replace(COVER_ROW, bare, 1)
     assert any("not comparable" in i.lower() for i in cp8_issues(again, PACK))
-    wrong = row.replace("not stated |", "2.90x (FY2023) |")
+    wrong = row.replace("Not stated |", "2.90x (FY2023) |")
     third = REGISTERS.replace(COVER_ROW, wrong, 1)
-    assert any("earlier figure 2.90" in i for i in cp8_issues(third, PACK))
+    assert any("Earlier cell: write exactly `Not stated`" in i for i in cp8_issues(third, PACK))
 
 
 def test_a_judged_row_that_says_not_comparable_may_give_both_values_and_no_difference():
@@ -1866,7 +1870,7 @@ def test_a_cp8_that_is_not_accepted_loses_only_itself_and_the_run_says_why(tmp_p
     # The loop sent the answer back, naming the figure, before it gave up.
     sent_back = " ".join(p.read_text() for p in (out / "live/modules").glob("*/*.tools.json"))
     assert "REJECTED" in sent_back
-    assert "current figure 3.70 is not the pack's current value (3.60)" in sent_back
+    assert "Current cell: write exactly `3.60x (FY2024)`" in sent_back
     (receipt,) = (out / "deliveries").glob("*/delivery.json")
     assert not (receipt.parent / "CP-8.md").exists()
     assert not (receipt.parent / "changes.json").exists()
@@ -2123,10 +2127,10 @@ REAL_REGISTERS = """## Findings
 
 | Measure or fact | Earlier | Current | Cause | Effect on the credit view |
 | --- | --- | --- | --- | --- |
-| Total debt / EBITDA | 6.57x | 6.01x | Unresolved | Not comparable. |
-| EBITDA / cash interest | 3.29x | 3.60x | Unresolved | Not comparable. |
-| Cash | 6,261 US$m | 6,261 US$m | None | Same definition. |
-| Undrawn committed facilities | 843 US$m | 843 US$m | None | Same definition. |
+| Total debt / EBITDA | 6.57x (FY2024) | 6.01x (FY2024) | Unresolved | Not comparable. |
+| EBITDA / cash interest | 3.29x (FY2024) | 3.60x (FY2024) | Unresolved | Not comparable. |
+| Cash | 6261 US$m (FY2024) | 6261 US$m (FY2024) | None | Same definition. |
+| Undrawn committed facilities | 843 US$m (FY2024) | 843 US$m (FY2024) | None | Same definition. |
 @@FACT@@
 
 ### What changed: the analysis
@@ -2361,7 +2365,7 @@ def _with_basis(basis: str) -> str:
 
 
 def test_cp8s_basis_line_accepts_the_comparison_and_an_earlier_run_handoff_by_name():
-    assert cp8_issues(_with_basis(EARLIER_BASIS), PACK) == ()
+    assert basis_issues(EARLIER_BASIS) == []
     assert cp8_issues(_with_basis("Basis: Run comparison."), PACK) == ()  # the optional full stop
 
 
@@ -2463,11 +2467,6 @@ def test_modules_that_appear_or_go_between_two_preset_runs_are_a_method_change()
         assert any("CP-DR" in i and "`Method change`" in i for i in found), (cause, found)
 
 
-def test_the_phrase_the_pack_does_not_say_is_refused_between_two_preset_runs():
-    found = module_issues(PRESET_PACK, "Method change", CHANGED_SET, "Method change", REAL_WHY)
-    assert any("CP-2E" in i and "does not say" in i for i in found), found
-
-
 @pytest.mark.parametrize(
     "pack",
     [
@@ -2478,16 +2477,6 @@ def test_the_phrase_the_pack_does_not_say_is_refused_between_two_preset_runs():
 )
 def test_where_a_run_was_not_a_preset_the_cause_stays_unresolved(pack):
     assert module_issues(pack, "Unresolved", REAL_WHY, "Unresolved", REAL_WHY) == ()
-
-
-def test_a_prior_with_no_recorded_selection_counts_as_a_preset_run():
-    """tdg-reader-format-001's manifest has no `selection` key; it was a base because it ran the
-    pathway's lead module. The pack states null as recorded; the rule still fires."""
-    pack = {**PACK, "prior": {"selection": None}, "current": {"selection": "preset"}}
-    found = module_issues(pack, "Unresolved", REAL_WHY, "Unresolved", REAL_WHY)
-    assert any("CP-DR" in i and "`Method change`" in i for i in found), found
-    assert any("CP-2E" in i and "does not say" in i for i in found), found
-    assert module_issues(pack, "Method change", CHANGED_SET, "Method change", CHANGED_SET) == ()
 
 
 def test_a_prior_without_a_recorded_selection_is_stated_null_in_the_pack(tmp_path):
@@ -2939,7 +2928,7 @@ def test_the_post_balance_sheet_table_leaves_the_changes_pack_unchanged(table, w
 # difference rule only, a bare number equal in magnitude to a withheld size is refused (same
 # lines, same exemptions as with a unit). Expectations hand-written. Recorded limits: a bare count
 # equal to a withheld size ("30 limitations" while a difference of 30 is withheld) is refused, and
-# a size written in words ("thirty") is not read.
+# a size written in words is read only by check W (2026-11-13), not by value.
 
 NC_CASH = (
     "| Cash | 300 US$m (FY2023) | 250 US$m (FY2024) | Unresolved "
@@ -3057,7 +3046,7 @@ def test_a_bare_count_is_still_no_figure_of_a_held_line():
     assert cp8_issues(with_row(LEVERAGE_ROW, said), PACK) == ()
 
 
-# --- fix round 1: a line-start number is a list marker only on a real list item ---------------
+# --- fix round 1: a line-start number after a wrapped line is read as a figure ------------------
 
 
 @pytest.mark.parametrize(
@@ -3078,18 +3067,6 @@ def test_a_number_starting_a_fact_rows_effect_cell_is_a_figure():
     row = "| Refinancing | — | — | New source | 80. Net debt is lower. |"
     found = cp8_issues(nd_row(LEVERAGE_ROW + "\n" + row), _ndpack())
     assert any("80" in i and "difference" in i for i in found), found
-
-
-@pytest.mark.parametrize(
-    "passage",
-    [
-        "80. Net debt is the largest item.\n\n",
-        "Findings follow.\n\n80. Net debt is the largest item.\n\n",
-        "1. First point.\n80. Net debt is the largest item.\n\n",
-    ],
-)
-def test_a_real_list_item_number_equal_to_a_withheld_size_is_accepted(passage):
-    assert cp8_issues(nd_row(LEVERAGE_ROW, passage), _ndpack()) == ()
 
 
 @pytest.mark.parametrize(
@@ -3120,7 +3097,7 @@ def test_the_verdict_words_doubled_in_another_cell_and_the_effect_cell_are_refus
     assert any("Earlier cell" in i and "not comparable" in i for i in found), found
 
 
-# --- the withheld-size limits: wrapped bullets, dates need a year, numbers in words ---------------
+# --- the withheld-size limits: wrapped bullets, dates need a year ---------------------------------
 
 
 def _says(passage, pack=None):
@@ -3144,12 +3121,13 @@ def test_a_number_wrapped_onto_a_line_after_a_bullet_is_a_figure(passage):
     "passage",
     [
         "- item\n1. first sub-item",
-        "Findings.\n\n30. A numbered item.",
-        "1. First.\n30. A numbered item.",
     ],
 )
-def test_a_list_marker_after_a_bullet_one_or_elsewhere_is_no_figure(passage):
+def test_a_list_number_is_read_as_a_figure_so_it_is_no_issue_only_when_it_equals_no_withheld_size(
+    passage,
+):
     assert _says(passage) == ()
+    assert any("figure 1 " in i for i in _says(passage, _cash_pack("-1", "905")))
 
 
 @pytest.mark.parametrize(
@@ -3189,49 +3167,12 @@ def test_a_full_date_on_a_line_hides_no_other_figure():
     assert any("figure 30" in i for i in found), found
 
 
-def _cash_163_pack():
-    pack = _ndpack()
-    pack["net_debt_change"] |= {"change_in_cash": "-163", "current_cash": "747"}
-    return pack
-
-
-@pytest.mark.parametrize(
-    ("sentence", "pack"),
-    [
-        ("Cash fell by thirty.", None),
-        ("Cash fell by THIRTY.", None),
-        ("Net debt is eighty lower.", None),
-        ("Gross debt changed by one hundred and ten.", None),
-        ("Gross debt changed by One Hundred Ten.", None),
-        ("Cash fell by one hundred and sixty-three.", _cash_163_pack()),
-        ("Cash fell by one hundred sixty three.", _cash_163_pack()),
-        ("Cash fell by one hundred sixty-three.", _cash_163_pack()),
-    ],
-)
-def test_a_withheld_size_written_in_words_is_refused(sentence, pack):
-    found = _says(sentence, pack)
-    assert any("difference" in i and "reword" in i for i in found), found
-
-
-def test_a_large_withheld_size_in_words_is_refused():
-    pack = _ndpack()
-    pack["net_debt_change"] |= {"change_in_cash": "-2005", "current_cash": "-1095"}
-    for sentence in ("Cash fell by two thousand five.", "Cash fell by two thousand and five."):
-        assert any("figure 2005" in i for i in _says(sentence, pack)), sentence
-    pack["net_debt_change"] |= {"change_in_cash": "-250000", "current_cash": "-249090"}
-    assert any("figure 250000" in i for i in _says("It fell by two hundred fifty thousand.", pack))
-
-
 @pytest.mark.parametrize(
     "sentence",
     [
-        "Cash fell by forty.",
-        "Cash fell by thirty-one.",
         "The one covenant is tested.",
         "The thirtieth covenant is tested.",
         "A hundred covenants and a dozen facilities.",
-        "Cash fell by thirty point five.",
-        "Cash fell by twenty and forty.",
     ],
 )
 def test_a_number_in_words_that_is_no_withheld_size_is_accepted(sentence):
@@ -3242,17 +3183,6 @@ def test_the_word_one_is_never_read_as_a_size():
     pack = _ndpack()
     pack["net_debt_change"] |= {"change_in_cash": "-1", "current_cash": "909"}
     assert _says("One facility matured, and no one asked.", pack) == ()
-
-
-def test_a_size_in_words_is_accepted_in_its_own_issuer_row():
-    net = (
-        "| Net debt | 6190 US$m (FY2024) | 6110 US$m (FY2024) | Correction "
-        "| Same definition; net debt is eighty lower after the correction. |"
-    )
-    assert cp8_issues(nd_row(LEVERAGE_ROW + "\n" + net), _ndpack()) == ()
-    elsewhere = net.replace("Net debt |", "Refinancing |")
-    found = cp8_issues(nd_row(LEVERAGE_ROW + "\n" + elsewhere), _ndpack())
-    assert any("80" in i and "difference" in i for i in found), found
 
 
 def _cash_pack(change: str, cash: str):
@@ -3294,29 +3224,6 @@ def test_a_decimal_fraction_or_ordinal_in_words_is_not_read_in_part(sentence, pa
 
 
 @pytest.mark.parametrize(
-    ("sentence", "pack", "size"),
-    [
-        ("Cash fell by thirty and second-lien debt was repaid.", None, "30"),
-        ("Cash fell by thirty and first-lien leverage rose.", None, "30"),
-        ("Cash fell by thirty and half the facility was drawn.", None, "30"),
-        (
-            "Gross debt fell by one hundred and ten and a quarter of the notes were repaid.",
-            None,
-            "110",
-        ),
-        ("Cash fell by thirty quarter-on-quarter.", None, "30"),
-        ("Cash fell by thirty second-lien loans.", None, "30"),
-        ("At that point thirty was drawn from cash.", None, "30"),
-        ("Cash showed a thirty-point swing.", None, "30"),
-        ("Cash is point five of the facility.", _cash_pack("-5", "905"), "5"),
-    ],
-)
-def test_a_spelled_size_beside_an_ordinal_looking_word_is_still_read(sentence, pack, size):
-    found = _says(sentence, pack)
-    assert any(f"figure {size} is the difference" in i for i in found), found
-
-
-@pytest.mark.parametrize(
     ("sentence", "pack"),
     [
         ("The thirty-first covenant test.", None),
@@ -3330,13 +3237,7 @@ def test_a_spelled_ordinal_fraction_or_decimal_is_still_not_read(sentence, pack)
     assert _says(sentence, pack) == ()
 
 
-@pytest.mark.parametrize("hyphen", ["‐", "‑", "‒", "–", "—", "―"])
-def test_a_unicode_hyphen_does_not_split_a_spelled_size(hyphen):
-    found = _says(f"Cash fell by thirty{hyphen}five.", _cash_pack("-35", "875"))
-    assert any("figure 35" in i for i in found), found
-
-
-# --- the year problem, the counts and a spelled size across lines (owner, 2026-11-12: "fix 1 and
+# --- the year problem, the counts and a number word across lines (owner, 2026-11-12: "fix 1 and
 # 2"; controller rulings R1 to R3). Expectations hand-written from the rulings.
 
 
@@ -3430,7 +3331,6 @@ def test_a_count_beside_a_count_noun_or_a_reference_word_is_no_withheld_size(sen
     "sentence",
     [
         "Cash fell by 30.",
-        "Cash fell by thirty.",
         "A change of 30 in cash.",
         "30 new modules ran.",
         "Cash fell by 30 quarter-on-quarter.",
@@ -3444,21 +3344,9 @@ def test_a_bare_number_beside_no_count_noun_is_still_a_withheld_size(sentence):
 
 
 @pytest.mark.parametrize(
-    "sentence",
-    [
-        "Gross debt changed by one hundred\nand ten.",
-        "Gross debt changed by one hundred and\nten.",
-        "Gross debt changed by one\nhundred ten.",
-    ],
-)
-def test_a_spelled_size_broken_across_lines_is_read_and_reported_once(sentence):
-    found = [i for i in _hold(sentence) if "figure 110" in i]
-    assert len(found) == 1, found
-
-
-@pytest.mark.parametrize(
     "text",
     [
+        # No unit word follows a number word, so none is read (the recorded limit of W).
         "Debt is one hundred\n\nten.",
         "Debt is one hundred\n| Cash | ten |",
         "Debt is one hundred\n- ten",
@@ -3466,12 +3354,13 @@ def test_a_spelled_size_broken_across_lines_is_read_and_reported_once(sentence):
         "Debt is one hundred\nand then nothing.",
     ],
 )
-def test_a_spelled_number_is_not_joined_over_a_blank_line_row_heading_or_item(text):
+def test_a_number_word_with_no_unit_after_it_is_no_issue_across_a_line_break(text):
     assert _hold(text) == ()
 
 
 # --- fix round 1 of the counts branch: a year before a comma, ISO dates whole, two nouns dropped,
-# a count noun on the next line, a table delimiter without outer pipes, a code after a year.
+# a digit count whose noun is on the next line, a table delimiter without outer pipes, a code
+# after a year.
 # Expectations hand-written from the controller's rulings.
 
 
@@ -3533,9 +3422,7 @@ def test_an_iso_date_is_exempt_as_a_whole_after_a_period_marker_or_month(sentenc
     "sentence",
     [
         "Cash shows a 30 difference between the runs.",
-        "Cash shows a thirty difference.",
         "Cash records a 30 change.",
-        "Cash records a thirty change.",
         "Cash shows 30 differences.",
     ],
 )
@@ -3545,23 +3432,14 @@ def test_change_and_difference_are_not_count_nouns(sentence):
 
 
 @pytest.mark.parametrize(
-    "sentence", ["Both runs used thirty\nmodules.", "Both runs used 30\nmodules."]
-)
-def test_a_count_noun_on_the_next_line_of_the_paragraph_makes_a_count(sentence):
-    assert _hold(sentence) == ()
-
-
-@pytest.mark.parametrize(
     "text",
     [
         "Cash fell by 30\n\nmodules.",
         "Cash fell by 30\n- modules",
         "Cash fell by 30\n### modules",
-        "Cash fell by thirty\n| modules |",
-        "Cash fell by thirty\n\nmodules.",
     ],
 )
-def test_a_count_noun_over_a_blank_line_heading_row_or_item_makes_no_count(text):
+def test_a_digit_count_with_a_noun_on_another_line_stays_a_withheld_size(text):
     found = _hold(text)
     assert any("figure 30 is the difference" in i for i in found), found
 
@@ -4095,3 +3973,380 @@ def test_an_empty_issuer_register_is_told_one_row_per_measure_then_no_material_c
     )
     found = cp8_issues(empty, PACK)
     assert any(wording in i for i in found), found
+
+
+# --- C2: the accepted form of a Basis item, a value cell and a null earlier selection -------------
+
+BASIS_MODULES = [
+    {"module": "CP-1", "ran_prior": True, "ran_current": True},
+    {"module": "CP-2", "ran_prior": True, "ran_current": True},
+    {"module": "CP-DR", "ran_prior": True, "ran_current": False},
+    {"module": "CP-2A", "ran_prior": False, "ran_current": True},
+]
+BASIS_PACK = {**PACK, "modules": BASIS_MODULES}
+THREE_FORMS = "is not one of the three forms this module uses"
+
+
+def basis_issues(basis: str) -> list[str]:
+    found = cp8_issues(_with_basis(basis), BASIS_PACK)
+    return [i for i in found if i.startswith("Basis item")]
+
+
+def test_a_basis_line_of_the_three_forms_naming_modules_that_ran_is_accepted():
+    line = "Basis: Run comparison; Financial data (CP-1), earlier run; Downside pathway (CP-2A)."
+    assert basis_issues(line) == []
+    assert basis_issues("Basis: Financial data (CP-1); Credit view (CP-2), earlier run") == []
+
+
+@pytest.mark.parametrize(
+    "item",
+    [
+        "changes.json",
+        "prior/CP-1.md, page 4",
+        "Earlier run: Financial data (CP-1)",
+        "Financial data (CP-1), page 4",
+        "Run comparison pack",
+    ],
+)
+def test_a_basis_item_in_any_other_form_is_refused_with_the_three_forms(item):
+    found = basis_issues(f"Basis: {item}")
+    assert len(found) == 1, found
+    assert item in found[0] and THREE_FORMS in found[0]
+    assert "`<plain module name> (<code>), earlier run`" in found[0]
+
+
+@pytest.mark.parametrize(
+    ("item", "message"),
+    [
+        (
+            "Downside pathway (CP-2A), earlier run",
+            (
+                "Basis item `Downside pathway (CP-2A), earlier run`: `CP-2A` did not run in the "
+                "earlier run: write `Downside pathway (CP-2A)` instead."
+            ),
+        ),
+        (
+            "Recovery (CP-9)",
+            "Basis item `Recovery (CP-9)`: `CP-9` ran in neither run: remove the item.",
+        ),
+        (
+            "Research (CP-DR)",
+            (
+                "Basis item `Research (CP-DR)`: `CP-DR` did not run in this run: write "
+                "`Research (CP-DR), earlier run` instead."
+            ),
+        ),
+        (
+            "Recovery (CP-9), earlier run",
+            (
+                "Basis item `Recovery (CP-9), earlier run`: `CP-9` ran in neither run: "
+                "remove the item."
+            ),
+        ),
+    ],
+)
+def test_a_basis_item_of_the_right_form_naming_a_module_that_did_not_run_is_refused(item, message):
+    assert basis_issues(f"Basis: {item}") == [message]
+
+
+@pytest.mark.parametrize(
+    "item",
+    [
+        "prior/Downside pathway (CP-2A)",
+        "Downside pathway, earlier run (CP-2A)",
+        "Run comparison (CP-1)",
+        "Annual report, page iv (CP-1)",
+        "Deep page (CP-1)",
+        "Run comparison, Financial foundation (CP-1)",
+    ],
+)
+def test_a_basis_item_whose_name_is_a_path_a_list_or_a_run_or_page_word_is_refused(item):
+    found = basis_issues(f"Basis: {item}")
+    assert len(found) == 1, found
+    assert item in found[0] and THREE_FORMS in found[0]
+
+
+def test_a_basis_item_with_another_modules_plain_name_is_accepted_a_recorded_limit():
+    assert basis_issues("Basis: Deep research (CP-2A)") == []
+
+
+RATES_PACK = {
+    **PACK,
+    "modules": [
+        {"module": "CP-2E", "ran_prior": False, "ran_current": True},
+        {"module": "CP-1", "ran_prior": True, "ran_current": True},
+        {"module": "CP-2A", "ran_prior": True, "ran_current": True},
+    ],
+}
+
+
+def rates_issues(basis: str, pack: dict = RATES_PACK) -> list[str]:
+    return [i for i in cp8_issues(_with_basis(basis), pack) if i.startswith("Basis item")]
+
+
+def test_the_listed_name_with_a_comma_is_accepted_for_the_run_that_held_the_module():
+    assert rates_issues("Basis: Rates, FX & hedging (CP-2E)") == []
+    ran_before = {
+        **RATES_PACK,
+        "modules": [{"module": "CP-2E", "ran_prior": True, "ran_current": False}],
+    }
+    assert rates_issues("Basis: Rates, FX & hedging (CP-2E), earlier run", ran_before) == []
+
+
+def test_a_listed_name_is_read_after_the_checks_white_space_normalisation():
+    assert rates_issues("Basis: Rates,  FX & hedging (CP-2E)") == []
+
+
+def test_a_name_that_is_not_the_listed_one_and_has_a_comma_is_refused_naming_the_item_to_write():
+    (this,) = rates_issues("Basis: Rates, FX and hedging (CP-2E)")
+    assert THREE_FORMS in this and "write `Rates, FX & hedging (CP-2E)`" in this
+    (earlier,) = rates_issues("Basis: Rates, FX and hedging (CP-2E), earlier run")
+    assert "write `Rates, FX & hedging (CP-2E), earlier run`" in earlier
+
+
+def test_the_models_own_names_for_a_code_stay_accepted():
+    assert rates_issues("Basis: Financial data foundation (CP-1)") == []
+    assert rates_issues("Basis: Deep research (CP-2A)") == []
+
+
+def cell_issues(prior: str, current: str, pack: dict | None = None) -> list[str]:
+    row = f"| Total debt / EBITDA | {prior} | {current} | New period | Leverage fell by 0.60x. |"
+    found = cp8_issues(REGISTERS.replace(LEVERAGE_ROW, row), pack or PACK)
+    return [i for i in found if "cell" in i]
+
+
+def value_pack(value, unit, period):
+    held = {"label": "Total debt / EBITDA", "unit": unit, "value": value, "period": period}
+    measure = {**PACK["measures"][0], "prior": {**held, "definition": None}}
+    return {**PACK, "measures": [{**measure, "unit": unit}, *PACK["measures"][1:]]}
+
+
+def test_a_value_cell_is_exactly_the_pack_value_unit_and_period():
+    pack = value_pack("6.01", "x", "FY2024")
+    assert cell_issues("6.01x (FY2024)", "3.60x (FY2024)", pack) == []
+    for wrong in ("6.01 x (FY2024)", "6.0x (FY2024)", "6.01x", "6.01x FY2024"):
+        (issue,) = cell_issues(wrong, "3.60x (FY2024)", pack)
+        assert (
+            issue == "Issuer register, 'Total debt / EBITDA', Earlier cell: write exactly "
+            f"`6.01x (FY2024)` (the pack's value, unit and period); it is `{wrong}`."
+        )
+
+
+def test_a_value_cell_with_a_unit_after_a_space():
+    pack = value_pack("6261", "US$m", "2024-09-30")
+    assert cell_issues("6261 US$m (2024-09-30)", "3.60x (FY2024)", pack) == []
+    for wrong in (
+        "6,261 US$m (2024-09-30)",
+        "USD 6261 million (2024-09-30)",
+        "6261 US$m (30 September 2024)",
+        "6261US$m (2024-09-30)",
+    ):
+        (issue,) = cell_issues(wrong, "3.60x (FY2024)", pack)
+        assert "write exactly `6261 US$m (2024-09-30)`" in issue and wrong in issue
+
+
+def test_a_value_cell_where_the_pack_value_is_null_is_exactly_not_stated():
+    pack = value_pack(None, "x", "FY2023")
+    assert cell_issues("Not stated", "3.60x (FY2024)", pack) == []
+    for wrong in ("—", "n/a", "0", "not stated"):
+        (issue,) = cell_issues(wrong, "3.60x (FY2024)", pack)
+        assert "write exactly `Not stated`" in issue
+    assert cell_issues("4.20x (FY2023)", "Not stated", PACK)[0].startswith(
+        "Issuer register, 'Total debt / EBITDA', Current cell: write exactly `3.60x (FY2024)`"
+    )
+
+
+def test_a_value_cell_leaves_out_a_part_the_pack_gives_as_null():
+    assert cell_issues("6.01x", "3.60x (FY2024)", value_pack("6.01", "x", None)) == []
+    assert cell_issues("6.01", "3.60x (FY2024)", value_pack("6.01", None, None)) == []
+    assert (
+        cell_issues("45.05% (FY2024)", "3.60x (FY2024)", value_pack("45.05", "%", "FY2024")) == []
+    )
+
+
+def test_a_bold_value_cell_is_the_same_cell():
+    assert cell_issues("**4.20x (FY2023)**", "3.60x (FY2024)") == []
+
+
+def test_the_value_cells_of_the_real_first_cp8_are_accepted():
+    """Hand-copied from lines 71-75 of tdg-proof-snapshot-opus-002's CP-8, with the pack values."""
+    real = [
+        ("x", "6.01", "FY2024", "6.01", "FY2024", "6.01x (FY2024)", "6.01x (FY2024)"),
+        ("x", "4.51", "FY2024", "4.51", "FY2024", "4.51x (FY2024)", "4.51x (FY2024)"),
+        ("x", "3.60", "FY2024", "3.60", "FY2024", "3.60x (FY2024)", "3.60x (FY2024)"),
+        (
+            "US$m",
+            "6261",
+            "2024-09-30",
+            "6261",
+            "FY2024",
+            "6261 US$m (2024-09-30)",
+            "6261 US$m (FY2024)",
+        ),
+        (
+            "US$m",
+            "843",
+            "2024-09-30",
+            "1006",
+            "FY2024",
+            "843 US$m (2024-09-30)",
+            "1006 US$m (FY2024)",
+        ),
+    ]
+    for unit, pv, pp, cv, cp, earlier, current in real:
+        pack_measure = {
+            **PACK["measures"][0],
+            "unit": unit,
+            "prior": {"label": "m", "unit": unit, "value": pv, "period": pp, "definition": None},
+            "current": {"label": "m", "unit": unit, "value": cv, "period": cp, "definition": None},
+        }
+        pack = {**PACK, "measures": [pack_measure, *PACK["measures"][1:]]}
+        assert cell_issues(earlier, current, pack) == [], (earlier, current)
+
+
+NULL_PRIOR_PACK = {**PACK, "prior": {"selection": None}, "current": {"selection": "preset"}}
+WHY = "The pack shows no selection for the earlier run, so why it did not run is not shown."
+
+
+def test_with_no_recorded_earlier_selection_the_cause_is_method_change_or_unresolved():
+    for cause in ("Unresolved", "Method change"):
+        assert module_issues(NULL_PRIOR_PACK, cause, WHY, cause, WHY) == ()
+    found = module_issues(NULL_PRIOR_PACK, "New source", WHY, "Method change", WHY)
+    assert list(found) == [
+        (
+            "Analysis register, CP-DR: the earlier run records no selection, so write the Cause "
+            "`Method change` or `Unresolved`, not 'New source'."
+        )
+    ]
+    found = module_issues(NULL_PRIOR_PACK, "Method change", WHY, "New period", WHY)
+    assert any("CP-2E" in i and "`Method change` or `Unresolved`" in i for i in found), found
+
+
+def test_between_two_preset_runs_unresolved_is_refused_and_the_phrase_is_not():
+    found = module_issues(PRESET_PACK, "Unresolved", CHANGED_SET, "Method change", CHANGED_SET)
+    assert list(found) == [
+        (
+            "Analysis register, CP-DR: both runs used the pathway's own modules, so the pathway's "
+            "module set changed between them: write the Cause `Method change`, not 'Unresolved'."
+        )
+    ]
+    assert module_issues(PRESET_PACK, "Method change", REAL_WHY, "Method change", REAL_WHY) == ()
+
+
+def test_with_an_explicit_run_no_cause_is_required_beyond_the_fixed_list():
+    pack = {**PACK, "prior": {"selection": "preset"}, "current": {"selection": "explicit"}}
+    assert module_issues(pack, "Unresolved", REAL_WHY, "Unresolved", REAL_WHY) == ()
+
+
+def test_a_value_cell_is_written_without_the_grouping_comma_the_pack_keeps():
+    pack = value_pack("1,880", "US$m", "FY2024")
+    assert cell_issues("1880 US$m (FY2024)", "3.60x (FY2024)", pack) == []
+    (issue,) = cell_issues("1,880 US$m (FY2024)", "3.60x (FY2024)", pack)
+    assert (
+        issue == "Issuer register, 'Total debt / EBITDA', Earlier cell: write exactly "
+        "`1880 US$m (FY2024)` (the pack's value, unit and period); it is `1,880 US$m (FY2024)`."
+    )
+
+
+def test_a_value_cell_the_refusal_states_can_be_written_when_the_pack_holds_a_double_space():
+    pack = value_pack("6261", "US$m", "FY2024  reported")
+    assert cell_issues("6261 US$m (FY2024  reported)", "3.60x (FY2024)", pack) == []
+    assert cell_issues("6261 US$m (FY2024 reported)", "3.60x (FY2024)", pack) == []
+    (issue,) = cell_issues("6261 US$m (FY2024)", "3.60x (FY2024)", pack)
+    assert "write exactly `6261 US$m (FY2024 reported)`" in issue
+
+
+# --- C3: a number word is read by one form check (W), not by a spelled-number grammar -----------
+# `_ndpack` withholds the net debt change's cash difference, 30, and the net debt difference, 80.
+
+
+def _w_issues(passage):
+    return cp8_issues(nd_row(LEVERAGE_ROW, passage + "\n\n"), _ndpack())
+
+
+W_REFUSAL = (
+    "a difference is withheld in this handoff, so write every amount, ratio and difference in "
+    "digits with its unit; a number word is only for a count of things (`three modules`). If the "
+    "figure is a difference the pack withholds, leave it out."
+)
+
+
+@pytest.mark.parametrize(
+    ("sentence", "phrase"),
+    [
+        ("Cash fell by thirty million.", "thirty million"),
+        ("Cash fell thirty percent.", "thirty percent"),
+        ("Cash was about thirty basis points lower.", "thirty basis points"),
+        ("Leverage fell by twenty per cent.", "twenty per cent"),
+        ("Leverage rose by roughly four x.", "four x"),
+        ("Cash is twelve US$ lower.", "twelve US$"),
+        ("Cash was nearly ninety USD.", "ninety USD"),
+        ("Leverage is two hundred bps wider.", "two hundred bps"),
+        ("Cash is Seventy Five Million.", "Seventy Five Million"),
+    ],
+)
+def test_a_number_word_directly_before_a_unit_word_is_refused_with_the_form_once(sentence, phrase):
+    found = _w_issues(sentence)
+    assert [i for i in found if W_REFUSAL in i] == [f"`{phrase}`: {W_REFUSAL}"], found
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "Three modules ran.",
+        "Three UK remains the tenant.",
+        "Six Flags is the comparator.",
+        "The lender added three covenants.",
+        "Leverage was six times covered.",
+        "The two runs differ.",
+        "This run added four new modules, so their conclusions are new.",
+        "The issuer added two term loans.",
+        "Each moved the outlook up two steps.",
+    ],
+)
+def test_a_number_word_that_is_a_name_or_a_count_is_accepted(sentence):
+    assert _w_issues(sentence) == ()
+
+
+def test_a_number_word_is_not_refused_when_no_difference_is_withheld():
+    found = cp8_issues(with_row(LEVERAGE_ROW, "Revenue rose by thirty percent.\n\n"), PACK)
+    assert found == ()
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "The gap is thirty.",
+        "Gross debt fell by one hundred and ten.",
+        "Net debt is eighty lower.",
+        "Cash fell by thirty.",
+    ],
+)
+def test_a_size_in_words_with_no_unit_word_after_it_passes_the_recorded_limit(sentence):
+    # The recorded limit of W (`ponytail:` at `_WORDED`): only a listed unit word directly after a
+    # number word is refused; a size in words after a direction word is not read.
+    assert _w_issues(sentence) == ()
+
+
+def test_a_digit_count_beside_a_count_noun_is_accepted_and_a_new_noun_is_refused():
+    assert _w_issues("There are 30 modules.") == ()
+    found = _w_issues("There are 30 new modules.")
+    assert any("figure 30" in i and "difference of Cash" in i for i in found), found
+
+
+def test_a_numbered_list_item_number_equal_to_a_withheld_size_is_refused_with_a_repair():
+    found = _w_issues("30. Liquidity is unchanged.")
+    assert any("figure 30" in i and "difference of Cash" in i and "reword" in i for i in found), (
+        found
+    )
+    assert _w_issues("- Liquidity is unchanged.") == ()
+
+
+def test_a_count_and_its_noun_on_two_lines_is_no_count():
+    found = _w_issues("Liquidity changed across 30\nmodules in all.")
+    assert any("figure 30" in i and "difference of Cash" in i for i in found), found
+
+
+@pytest.mark.parametrize("sentence", ["It ran at 30 September 2024.", "It ran on 2024-09-30."])
+def test_a_written_date_beside_a_withheld_size_is_no_size(sentence):
+    assert _w_issues(sentence) == ()

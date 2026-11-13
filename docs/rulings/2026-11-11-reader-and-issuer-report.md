@@ -336,3 +336,14 @@ Where the decisions left a detail open, the simplest option was taken:
 Amendment 2026-11-11: a run whose methods have since changed is listed and marked "Earlier methods"; replayed, synthetic and unverified runs stay unlisted.
 
 Amendment 2026-11-12 (owner): no module code is shown on screen, in the issuer library (the Modules navigator, Report history, Evidence, module pages, Overview, the inspector and its Basis items) and on the run start page. A reader sees a module's plain name, never its code. This replaces "the code second" in decision 5 and the reading of decision 7 under which new-format text kept its codes on screen. The Basis line form in the stored handoff (H3) and check 2 are unchanged: the handoff still names an upstream module as `Name (code)`, and the page shows the written name. It is display only: stored handoffs, routes, `href`s, download names and saved answer keys do not change, and stored source file names and file paths are shown exactly as stored on every page, even when they hold a `CP-` token. In the standalone HTML file rendered from `src/deploy_vii/assets` the navigator, headings, coverage table, limitation titles and inspector field name modules too; files already delivered are not rewritten, and codes inside that file's body content are as the data holds them.
+
+Amendment 2026-11-13 (owner: "all three. remove all the code no longer required if resolved by the prompt."; controller
+ruling E7). Check 6 of H6 becomes: an ID is a cell value containing at least one letter and one digit in a table
+column whose header is `ID` or ends in ` ID` (case-insensitive); the clause "or an ID in `## Calculations`" is
+withdrawn. This supersedes the 2026-11-11 reading of check 6 that took the first cell of any `## Calculations` row as an
+ID (the controller's plan calls it L1); it matches the instruction the model is sent, which puts IDs in a column
+headed `ID`. Reason: the first-column heuristic banned period labels such as `FY2024 gross debt` from prose (155 of
+181 retained Calculations tables already have an `ID` column; the other 26 hold labels). Consequence, recorded: an ID
+under a column headed `Calculation` or any other name is no longer banned from prose. The readers of earlier runs
+(`reader_passages`, `bottom_line_text`, `limitation_texts`, `is_earlier_format`) are not touched. Text only; the
+change is built in a later package.

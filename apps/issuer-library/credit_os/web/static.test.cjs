@@ -1464,7 +1464,7 @@ const liveFns = () => {
 };
 const { liveActivityView, nextActivityReload, swapActivityScript, activityView: activityViewLive } = liveFns();
 
-test('live run activity shows spend, chips and escapes names', () => {
+test('live run activity draws cards with progress and module badges, escapes names, and shows no spend', () => {
   const html = liveActivityView({cap:'20', held:'', runs:[
     {id:'a', status:'running', pathway:'earnings_update', folder:'<img src=x onerror=1>', issuer_name:'Acme',
      started_at:'2026-11-09T13:41:00Z', spent:'3.10', files:['a.pdf'], modules:[['CP-0','done'],['CP-1','running'],['Report','waiting']]},
@@ -1472,9 +1472,123 @@ test('live run activity shows spend, chips and escapes names', () => {
      report:'issuers/Initech (ini)/2026-11-09 credit_snapshot.html'},
     {id:'c', status:'running', pathway:'credit_snapshot', folder:'y', issuer_name:'Z', spent:null, modules:[]}]});
   assert.ok(!html.includes('<img'));
-  assert.ok(html.includes('USD 3.10 of 20') && html.includes('spend could not be read'));
   assert.ok(html.includes('chip-done') && html.includes('chip-running') && html.includes('chip-waiting'));
   assert.ok(!html.includes('Initech') && !html.includes('<a '), 'a finished run is not drawn, and no run links to a report');
+});
+test('a running run with 6 modules, 3 done, draws a progress element and "3 of 6 done"; with no modules, none', () => {
+  const six = ['done', 'done', 'done', 'running', 'waiting', 'waiting'].map((s, i) => [`M${i}`, s]);
+  const html = liveActivityView({ runs: [{ id: 'a', status: 'running', folder: 'f', modules: six }] });
+  assert.ok(html.includes('<progress') && html.includes('max="6"') && html.includes('value="3"'), html);
+  assert.ok(html.includes('aria-label="Modules done"') && html.includes('3 of 6 done'));
+  assert.ok(!liveActivityView({ runs: [{ id: 'a', status: 'running', folder: 'f', modules: [] }] }).includes('<progress'));
+  assert.ok(!liveActivityView({ runs: [{ id: 'a', status: 'running', folder: 'f' }] }).includes('<progress'));
+});
+test('the status badge says Running, or Running · stalled', () => {
+  const badge = run => liveActivityView({ runs: [{ id: 'a', status: 'running', folder: 'f', ...run }] }).match(/<span class="run-badge[^"]*">(.*?)<\/span>(?:<\/span>)?/);
+  assert.ok(badge({ stalled: true })[0].includes('Running · stalled'));
+  assert.ok(badge({})[0].includes('>Running') && !badge({})[0].includes('stalled'));
+  assert.ok(liveActivityView({ runs: [{ status: 'running', folder: 'f', stalled: true }] }).includes('run-badge-stalled'));
+});
+test('the page shows no spend or cap for a run whose spent is a string, null or absent', () => {
+  for (const spent of ['3.10', null, undefined, 3.1, '<b>']) {
+    for (const status of ['running', 'queued']) {
+      const html = liveActivityView({ cap: '20', held: '', runs: [{ id: 'a', status, folder: 'f', issuer_name: 'N', pathway: 'p', spent, modules: [['M', 'done']] }] });
+      for (const word of ['USD', 'spend', 'run-spend', '3.10', ' of 20']) assert.ok(!html.includes(word), `${status} ${spent}: ${word}`);
+    }
+  }
+  assert.ok(!read('views.js').includes('liveRunSpend') && !read('screen.css').includes('run-spend'));
+});
+test('waiting runs are one table with a caption, two column headers and a row each; the held notice is above it', () => {
+  const html = liveActivityView({ held: 'daily limit reached', runs: [
+    { id: 'q1', status: 'queued', pathway: 'credit_snapshot', folder: 'f1', issuer_name: 'Qone', submitted_by: 'Dana', reason: 'waiting for a slot' },
+    { id: 'q2', status: 'queued', pathway: 'earnings_update', folder: 'f2', issuer_name: 'Qtwo' },
+    { id: 'r', status: 'running', folder: 'g', issuer_name: 'Runner' }] });
+  assert.strictEqual(countOf(html, /<table/g), 1);
+  assert.ok(html.includes('<caption class="run-vh">Waiting runs</caption>'));
+  assert.ok(html.includes('<th scope="col">Issuer</th>') && html.includes('<th scope="col">Pathway</th>'));
+  assert.strictEqual(countOf(html, /<th scope="row">/g), 2);
+  assert.strictEqual(countOf(html, /<tr class="live-run live-queued">/g), 2);
+  assert.ok(html.includes('<span class="run-by">submitted by Dana</span>') && html.includes('waiting for a slot') && html.includes('credit_snapshot'));
+  assert.ok(html.indexOf('role="note"') > 0 && html.indexOf('daily limit reached') < html.indexOf('<table'));
+  assert.ok(html.indexOf('Runner') < html.indexOf('<table'), 'Running comes first');
+});
+test('the counts show running and waiting as numbers under their labels; empty runs give 0 and 0 and the empty state with one link', () => {
+  const run = (status, n) => Array.from({ length: n }, (_, i) => ({ id: `${status}${i}`, status, folder: 'f', issuer_name: `N${i}` }));
+  const html = liveActivityView({ runs: [...run('running', 2), ...run('queued', 3), ...run('finished', 4)] });
+  assert.ok(html.includes('<dl class="run-tally"><div><dt>Running</dt><dd>2</dd></div><div><dt>Waiting</dt><dd>3</dd></div></dl>'), html);
+  const empty = activityViewLive({ runs: [] });
+  assert.ok(empty.includes('<dt>Running</dt><dd>0</dd>') && empty.includes('<dt>Waiting</dt><dd>0</dd>'));
+  assert.ok(empty.includes('No run in progress') && empty.includes('No run is running or waiting. Finished runs are in the Issuer library.'));
+  assert.strictEqual(countOf(empty, /<a /g), 1);
+  assert.ok(empty.includes('<a class="primary-action" href="#W-Library/cases">Issuer library</a>'));
+  const unread = activityViewLive(null);
+  assert.ok(unread.includes('Run activity could not be read') && !unread.includes('<a ') && !unread.includes('<dl'));
+});
+test('a column holding no run is not drawn, and a single column takes the full width', () => {
+  const only = status => liveActivityView({ runs: [{ id: 'a', status, folder: 'f' }] });
+  assert.ok(only('running').includes('class="activity-cols one"') && !only('running').includes('<h2>Waiting</h2>'));
+  assert.ok(only('queued').includes('class="activity-cols one"') && !only('queued').includes('<h2>Running</h2>'));
+  const both = liveActivityView({ runs: [{ status: 'running', folder: 'f' }, { status: 'queued', folder: 'g' }] });
+  assert.ok(both.includes('class="activity-cols"'));
+});
+test('malformed runs and script strings in every text field never reach the page as markup', () => {
+  const x = '<script>alert(1)</script>';
+  const html = liveActivityView({ updated: x, cap: x, held: x, runs: [null, 3, 'r', [], { status: 'running', id: x, issuer_name: x, pathway: x, folder: x, submitted_by: x,
+    started_at: x, reason: x, name_differs: true, files: [x, { a: 1 }, null], modules: [[x, 'done'], [x, x], 'bad', [x], null, [{ a: 1 }, 'running']] },
+  { status: 'queued', id: x, issuer_name: x, pathway: x, folder: x, submitted_by: x, reason: x }] });
+  assert.ok(!html.includes('<script') && html.includes('&lt;script&gt;'));
+  for (const bad of [null, 5, 'x', [], {}, { runs: 'no' }, { runs: {} }]) assert.doesNotThrow(() => activityViewLive(bad));
+});
+test('Run activity styles take the component reference values (card, badge, tag, progress, table, notice, button)', () => {
+  const css = read('screen.css');
+  const rule = sel => { const m = css.match(new RegExp(`(?:^|\\n)${sel.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}\\{([^}]*)\\}`)); assert.ok(m, sel); return m[1]; };
+  assert.ok(/border-radius:12px/.test(rule('.run-card')) && rule('.run-card').includes('var(--shadow-xs)') && rule('.run-card').includes('var(--border-secondary)'));
+  assert.ok(/height:24px/.test(rule('.run-badge')) && /padding:2px 8px 2px 6px/.test(rule('.run-badge')) && /500 14px\/20px/.test(rule('.run-badge')));
+  assert.ok(/height:22px/.test(rule('.run-tag')) && /padding:0 7px/.test(rule('.run-tag')) && /border-radius:4px/.test(rule('.run-tag')));
+  assert.ok(/height:8px/.test(rule('.run-progress progress')) && /border-radius:6px/.test(rule('.run-progress progress')));
+  assert.ok(/height:44px/.test(rule('.run-table thead th')) && /600 12px\/18px/.test(rule('.run-table thead th')));
+  assert.ok(/padding:8px 12px/.test(rule('.run-held')) && /border-radius:8px/.test(rule('.run-held')) && rule('.run-held').includes('var(--amber-bg)'));
+  assert.ok(/margin-top:20px/.test(rule('.activity-empty .primary-action')) && !css.includes('.run-primary'), 'the empty-state link is the shared primary action, spaced 20px');
+  assert.ok(css.includes('grid-template-columns:minmax(0,1fr) 440px'));
+  assert.ok(/\.run-mods \.chip-done\{[^}]*background:#e8fff4/.test(css), 'done badge ground is the literal #e8fff4');
+  assert.ok(!/:root\{[^}]*--green-bg/.test(css), 'the library :root declares no --green-bg (the run start page owns it)');
+  assert.ok(!/run-(badge|tag|tally|done|primary)[^{]*\{[^}]*Red Hat Display/.test(css), 'Red Hat Text only');
+});
+test('each module badge carries its state as text, not colour alone', () => {
+  const html = liveActivityView({ runs: [{ id: 'a', status: 'running', folder: 'f', modules: [['One', 'done'], ['Two', 'running'], ['Three', 'waiting'], ['Four', 'odd']] }] });
+  const badges = [...html.matchAll(/<span class="chip chip-[^"]*">.*?<\/span><\/span>/g)].map(m => m[0]);
+  assert.strictEqual(badges.length, 4);
+  assert.ok(badges[0].includes('One') && badges[0].includes(', done'));
+  assert.ok(badges[1].includes('Two') && badges[1].includes(', running'));
+  assert.ok(badges[2].includes('Three') && badges[2].includes(', waiting'));
+  assert.ok(badges[3].includes('Four') && badges[3].includes(', waiting') && badges[3].includes('chip-waiting'));
+});
+test('a running card shows its reason, the name warning and its start time', () => {
+  const html = liveActivityView({ runs: [{ id: 'r', status: 'running', folder: 'f', issuer_name: 'Runner', started_at: 'T', reason: 'reading the filing', name_differs: true }] });
+  assert.ok(html.includes('<span class="run-reason">reading the filing</span>'));
+  assert.ok(html.includes('<span class="run-note">issuer name differs from earlier runs</span>'));
+  assert.ok(html.includes('<span class="run-time">started T</span>'));
+});
+test('a waiting row lists its files in the Issuer cell, with data-run, when it has any', () => {
+  const html = liveActivityView({ runs: [
+    { id: 'q1', status: 'queued', pathway: 'p', folder: 'f1', issuer_name: 'Qone', files: ['a.pdf', 'b <i>.pdf'] },
+    { id: 'q2', status: 'queued', pathway: 'p', folder: 'f2', issuer_name: 'Qtwo' },
+    { id: 'q3', status: 'queued', pathway: 'p', folder: 'f3', issuer_name: 'Qthree', files: [] }] });
+  const rows = html.split('<tr class="live-run live-queued">').slice(1);
+  assert.strictEqual(rows.length, 3);
+  assert.ok(rows[0].includes('<details class="run-files" data-run="q1"><summary>2 files read</summary>') && rows[0].includes('<li>a.pdf</li>') && rows[0].includes('b &lt;i&gt;.pdf'));
+  assert.ok(rows[0].indexOf('<details') < rows[0].indexOf('</th>'), 'the list is in the Issuer cell');
+  assert.ok(!rows[1].includes('<details') && !rows[2].includes('<details'));
+  assert.ok(liveActivityView({ runs: [{ id: 'q', status: 'queued', folder: 'f', files: ['one.pdf'] }] }).includes('1 file read'));
+});
+test('the empty-state heading and sentence set no font property', () => {
+  const rules = cssRules(read('screen.css')).filter((r) => r.selector.split(',').some((s) => /\.missing-state\.activity-empty\s+(h2|p)\b/.test(s)));
+  assert.ok(rules.length >= 2);
+  for (const r of rules) assert.ok(!/(?:^|;)\s*(font|font-size|line-height|font-weight|font-family)\s*:/.test(r.body), `${r.selector} sets a font property`);
+});
+test('a running card joins its reason and the name warning with a middle dot, as a waiting row does', () => {
+  const html = liveActivityView({ runs: [{ id: 'r', status: 'running', folder: 'f', reason: 'reading the filing', name_differs: true }] });
+  assert.ok(html.includes('<span class="run-reason">reading the filing</span> · <span class="run-note">issuer name differs from earlier runs</span>'), html);
 });
 test('live run activity names who submitted a run, as text', () => {
   const html = liveActivityView({cap:'20', held:'', runs:[
@@ -1549,9 +1663,9 @@ test('the live section says how old the snapshot is, and the view re-loads at on
 });
 
 test('a status adds no class names to the row; only running and queued runs have one', () => {
-  const rows = status => [...liveActivityView({ runs: [{ status, folder: 'f' }] }).matchAll(/<li class="([^"]*)"/g)].map(m => m[1]);
-  assert.deepEqual(rows('running'), ['report-row live-run live-running']);
-  assert.deepEqual(rows('queued'), ['report-row live-run live-queued']);
+  const rows = status => [...liveActivityView({ runs: [{ status, folder: 'f' }] }).matchAll(/<(?:li|tr) class="([^"]*)"/g)].map(m => m[1]);
+  assert.deepEqual(rows('running'), ['run-card live-run live-running']);
+  assert.deepEqual(rows('queued'), ['live-run live-queued']);
   for (const other of ['x sr-only skip', '__proto__', 'finished', 'failed', 'capped', 'rejected', 'interrupted']) assert.deepEqual(rows(other), [], other);
 });
 
@@ -3357,4 +3471,121 @@ test('model picker: ids that share their first eight characters read with the wh
 test('model picker: a delivery for a run the library does not list is named by its own run folder, not the page run', () => {
   const models = [pickModel(HASH_1, { runId: 'run-not-listed', runFolder: 'run-not-listed', sources: [{ run: RUN }] })];
   assert.deepEqual(pickPage(models).modelOptionLabels(models), ['run-not-listed']);
+});
+
+test('brand colours: screen.css declares each brand token with the plan value (Rulings 1 and 5)', () => {
+  const css = read('screen.css');
+  const expected = {
+    '--navy': '#000533', '--blue': '#001aff', '--ground': '#f4f4f5', '--rule': '#e8e9eb', '--muted': '#474a4f',
+    '--quiet': '#fafafb', '--selection': '#e5e8ff', '--blue-50': '#e5e8ff', '--blue-100': '#c2c9ff', '--blue-700': '#0012b2',
+    '--amber': '#806300', '--amber-bg': '#fff4cc', '--amber-border': '#f2dc8c', '--red': '#8e413e', '--green': '#0f8048',
+    '--text-primary': '#000533', '--text-secondary': '#383b3f', '--text-tertiary': '#474a4f', '--text-quaternary': '#63676e',
+    '--gray-25': '#fcfcfd', '--gray-50': '#fafafb', '--gray-100': '#f4f4f5', '--gray-200': '#e8e9eb', '--gray-300': '#d1d4d8',
+    '--ring': '0 0 0 4px rgba(0,26,255,.16)', '--dot-quiet': '#8d939d',
+    '--series-1': '#001aff', '--series-2': '#1eff8f', '--series-3': '#eaff00', '--series-4': '#a29aff',
+    '--series-1-ln': '#001aff', '--series-2-ln': '#0f8048', '--series-3-ln': '#758000', '--series-4-ln': '#514d80',
+  };
+  const declared = {};
+  for (const block of css.matchAll(/:root\{([^}]*)\}/g)) for (const m of block[1].matchAll(/(--[\w-]+):([^;]+)/g)) declared[m[1]] = m[2].trim();
+  for (const [token, value] of Object.entries(expected)) assert.equal(declared[token], value, token);
+});
+
+test('brand colours: no rule sets text or a thin line in a bright series fill', () => {
+  const css = read('screen.css');
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
+  for (const [, selector, body] of rules) {
+    for (const m of body.matchAll(/(?:^|;)\s*(color|stroke)\s*:\s*var\(--series-([234])\)/g)) {
+      assert.fail(`${selector.trim()} sets ${m[1]} to the bright fill --series-${m[2]}; use --series-${m[2]}-ln`);
+    }
+  }
+});
+
+test('brand colours: the replaced colour values no longer appear in screen.css', () => {
+  const css = read('screen.css');
+  for (const old of ['#0017e5', '#0e7a46', '#8a5300', '#b3261e', '#4a5068', '#3a4056', '#0b1030']) assert.ok(!css.includes(old), `${old} is still in screen.css`);
+});
+
+function cssRules(css) {
+  return [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ selector: m[1].trim(), body: m[2] }));
+}
+
+test('brand colours: a hatched stack segment on a bright fill draws its stripe in that series line value, not white', () => {
+  const rules = cssRules(read('screen.css'));
+  for (const [n, fill] of [[1, 2], [2, 3], [3, 4]]) {
+    for (const prefix of ['.stack-seg', '.stack-key', '.stack-legend']) {
+      const sel = prefix === '.stack-seg' ? `.stack-seg.series-${n}.hatch` : `${prefix} .series-${n}.hatch`;
+      const found = rules.filter((r) => r.selector.split(',').map((s) => s.trim()).includes(sel));
+      assert.ok(found.length, `no hatch rule for ${sel}`);
+      // The same selector text has the same specificity, so the last rule that sets the stripe is the one that draws it.
+      const winner = found.filter((r) => /(?:^|;)\s*background(?:-image)?\s*:/.test(r.body)).at(-1);
+      assert.ok(winner, `${sel} sets no stripe`);
+      assert.ok(winner.body.includes(`var(--series-${fill}-ln)`), `${sel} stripe is not --series-${fill}-ln`);
+      assert.ok(!/rgba?\(\s*255\s*,\s*255\s*,\s*255|#fff/i.test(winner.body), `${sel} draws a white stripe`);
+    }
+  }
+});
+
+test('brand colours: no legend or key swatch is filled with a bright series token, and the ledger states keep their tokens', () => {
+  const rules = cssRules(read('screen.css'));
+  for (const r of rules) {
+    if (!/\.(chart-legend|signal-key)\b/.test(r.selector) || !/\.series-\d/.test(r.selector)) continue;
+    assert.ok(!/(?:^|;)\s*background(?:-color)?\s*:\s*var\(--series-[234]\)/.test(r.body), `${r.selector} fills a swatch with a bright series token`);
+    assert.ok(!/(?:^|;)\s*background(?:-color)?\s*:[^;]*#(?:1eff8f|eaff00|a29aff)\b/i.test(r.body), `${r.selector} fills a swatch with a bright literal`);
+  }
+  const ledger = { 'ledger-closed': 'var(--green)', 'ledger-remaining': 'var(--navy)', 'ledger-new': 'var(--blue)', 'ledger-no-longer-stated': 'var(--amber)' };
+  for (const [cls, value] of Object.entries(ledger)) {
+    const rule = rules.find((r) => r.selector.split(',').map((s) => s.trim()).includes(`.${cls}`));
+    assert.ok(rule, `no rule for .${cls}`);
+    assert.match(rule.body, new RegExp(`(?:^|;)\\s*background\\s*:\\s*${value.replace(/[()]/g, '\\$&')}\\s*(?:;|$)`), `.${cls}`);
+  }
+});
+
+test('brand colours: the upside path, its points and its key use --series-4-ln; axis and gridline use the brand axis and grid', () => {
+  const rules = cssRules(read('screen.css'));
+  const last = (sel, prop) => {
+    let v = null;
+    for (const r of rules) if (r.selector.split(',').map((s) => s.trim()).includes(sel)) for (const m of r.body.matchAll(new RegExp(`(?:^|;)\\s*${prop}\\s*:\\s*([^;]+)`, 'g'))) v = m[1].trim();
+    return v;
+  };
+  assert.equal(last('.path-2', 'stroke'), 'var(--series-4-ln)');
+  assert.equal(last('.point-2', 'fill'), 'var(--series-4-ln)');
+  assert.equal(last('.path-key-2', 'background'), 'var(--series-4-ln)');
+  assert.equal(last('.axis', 'stroke'), 'var(--navy)');
+  assert.equal(last('.gridline', 'stroke'), 'var(--gray-200)');
+});
+
+test('component look: buttons, text inputs, state badges and the current tab take the component reference box values', () => {
+  const css = read('screen.css');
+  const rules = cssRules(css);
+  const body = (sel) => {
+    const r = rules.find((x) => x.selector.split(',').map((s) => s.trim()).join(',') === sel);
+    assert.ok(r, `no rule for ${sel}`);
+    return r.body;
+  };
+  assert.match(css, /--radius-control:8px/);
+  // Primary and secondary buttons: 8px radius (the control token), weight 600, 40px high.
+  const buttons = body('.primary-action,.secondary-action,.tertiary-action');
+  assert.match(buttons, /border-radius:var\(--radius-control\)/);
+  assert.match(buttons, /font:600 /);
+  assert.match(buttons, /height:40px/);
+  // Text inputs: 40px high, 8px radius.
+  for (const sel of ['.library-search input,.library-filters select,.library-filters input', '.run-field input,.run-field select']) {
+    const b = body(sel);
+    assert.match(b, /height:40px/, sel);
+    assert.match(b, /border-radius:var\(--radius-control\)/, sel);
+  }
+  // State badges and grades: 6px radius.
+  for (const sel of ['.badge', '.grade']) assert.match(body(sel), /border-radius:6px/, sel);
+  // The current tab: 2px underline in --blue, text in --text-primary.
+  assert.match(body('.workspace-tabs>a'), /border-bottom:2px solid transparent/);
+  const curRules = rules.filter((x) => x.selector.split(',').map((t) => t.trim()).includes('.workspace-tabs>a[aria-current]') && !/^\s*outline/.test(x.body));
+  assert.ok(curRules.length >= 1);
+  for (const r of curRules) {
+    assert.match(r.body, /border-color:var\(--blue\)/, r.selector);
+    assert.match(r.body, /(?:^|;)color:var\(--text-primary\)/, r.selector);
+  }
+  for (const r of rules) {
+    if (!r.selector.split(',').some((t) => t.trim().startsWith('.workspace-tabs>a'))) continue;
+    for (const m of r.body.matchAll(/border-bottom-width\s*:\s*([^;]+)/g)) assert.equal(m[1].trim(), '2px', r.selector);
+  }
 });

@@ -1,0 +1,904 @@
+diff --git a/src/deploy_workflow/changes_check.py b/src/deploy_workflow/changes_check.py
+index 8a798b4..cd03df9 100644
+--- a/src/deploy_workflow/changes_check.py
++++ b/src/deploy_workflow/changes_check.py
+@@ -50,7 +50,10 @@ it refuses, naming the line, a CP-8 handoff in which:
+ - a fact row (a row naming no pack measure) prints a figure equal to a pack measure's earlier or
+   current value, or one held in no evidence (K11);
+ - a pack measure has no row of its own in the issuer register: every pack measure needs exactly
+-  one, its first cell the pack's label (K14).
++  one, its first cell the pack's label (K14);
++- while a difference is withheld, a number word directly followed by a listed unit word
++  (`thirty million`, `two hundred bps`) is written in a checked passage (W). Only that form is
++  refused; a size in words with any other wording is not read (see the limit at `_WORDED`).
+ 
+ A "figure" is a number that is not a date, a period label, a year or (in a passage) a whole number
+ below 100 without a unit (a count); in a measure's Earlier and Current cells every number counts.
+@@ -60,13 +63,16 @@ from __future__ import annotations
+ 
+ import re
+ import unicodedata
+-from collections import Counter
+ from collections.abc import Mapping, Sequence
+ from decimal import Decimal
+ from typing import Any
+ 
+ from deploy_workflow.changes import decimal, number
+-from deploy_workflow.credit_os_chips import BASIS_COMPARISON, BASIS_EARLIER_RUN
++from deploy_workflow.credit_os_chips import (
++    BASIS_COMPARISON,
++    BASIS_EARLIER_RUN,
++    MODULE_NAMES,
++)
+ 
+ ISSUER = "What changed: the issuer"
+ ANALYSIS = "What changed: the analysis"
+@@ -890,10 +896,6 @@ def _may_print(
+     return frozenset()
+ 
+ 
+-_LIST_ITEM = re.compile(r"\s*(?:[-*+]|\d+[.)])\s")
+-_BULLET_ITEM = re.compile(r"\s*[-*+]\s")
+-_LIST_NUMBER = re.compile(r"^\s*\d+[.)](?=\s)")
+-_FIRST_NUMBER = re.compile(r"\s*1[.)]\s")
+ _DAY = r"\d{1,2}(?:st|nd|rd|th)?\b"
+ _YEAR = r"(?:19|20)\d{2}\b(?![.,]\d)"
+ # A date is complete only with its four-digit year: `30 September 2024`, `September 30, 2024`. A day
+@@ -902,155 +904,16 @@ _DATE = re.compile(
+     rf"(?<![\w.,])(?:{_DAY}\s+{_MONTH},?\s+{_YEAR}|\b{_MONTH}\s+{_DAY},?\s+{_YEAR})",
+     re.IGNORECASE,
+ )
+-_UNITS = {
+-    word: n
+-    for n, word in enumerate(
+-        (
+-            "one",
+-            "two",
+-            "three",
+-            "four",
+-            "five",
+-            "six",
+-            "seven",
+-            "eight",
+-            "nine",
+-            "ten",
+-            "eleven",
+-            "twelve",
+-            "thirteen",
+-            "fourteen",
+-            "fifteen",
+-            "sixteen",
+-            "seventeen",
+-            "eighteen",
+-            "nineteen",
+-        ),
+-        1,
+-    )
+-}
+-_TENS = {
+-    word: 10 * n
+-    for n, word in enumerate(
+-        ("twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"), 2
+-    )
+-}
+-_HYPHENS = "-\u2010-\u2015"
+-_WORD_RUN = re.compile(rf"[A-Za-z]+(?:[{_HYPHENS}\s]+[A-Za-z]+)*")
+-_ORDINALS = frozenset(
+-    ("first", "second", "third", "fifth", "eighth", "ninth", "twelfth", "half", "halve", "quarter")
+-)
+-
+-
+-def _ordinal(word: str) -> bool:
+-    """Whether `word` is an ordinal or fraction word: `first`, `fourth`, `thirtieth`, `thirds`."""
+-    word = word.removesuffix("s")
+-    if word in _ORDINALS:
+-        return True
+-    if word.endswith("ieth"):
+-        return word[:-4] + "y" in _TENS
+-    return word.endswith("th") and word[:-2] in {*_UNITS, *_TENS, "hundred", "thousand"}
+-
+-
+-def _number_word(word: str) -> bool:
+-    return word in _UNITS or word in _TENS or word in ("zero", "hundred", "thousand")
+-
+-
+-def _decimal(words: Sequence[str], i: int, j: int) -> bool:
+-    """Whether the number in `words[i:j]` sits in `number-word point number-word` on either side."""
+-    after = words[j : j + 2]
+-    before = words[max(i - 2, 0) : i]
+-    return (len(after) == 2 and after[0] == "point" and _number_word(after[1])) or (
+-        len(before) == 2 and before[1] == "point" and _number_word(before[0])
+-    )
+-
+-
+-def _part_of_fraction(words: Sequence[str], joined: Sequence[bool], i: int, j: int) -> bool:
+-    """Whether the number in `words[i:j]` is part of a decimal, ordinal or fraction. `joined[k]`
+-    says `words[k]` is hyphen-joined to the next word. Not read: a decimal (`zero point five`,
+-    both sides); an ordinal word ending it (`thirty-first`) unless it is joined on to a further
+-    word (`second-lien`); `and` plus an ordinal only after `hundred` or `thousand` (`one hundred
+-    and first`); `and a half` / `and a quarter` not followed by `of`."""
+-
+-    def ends(k: int) -> bool:
+-        return k < len(words) and _ordinal(words[k]) and not joined[k]
+-
+-    big = "hundred" in words[i:j] or "thousand" in words[i:j]
+-    return (
+-        _decimal(words, i, j)
+-        or ends(j)
+-        or (big and words[j : j + 1] == ["and"] and ends(j + 1))
+-        or (
+-            words[j : j + 3] in (["and", "a", "half"], ["and", "a", "quarter"])
+-            and words[j + 3 : j + 4] != ["of"]
+-        )
+-    )
+-
+-
+-def _starts_list_item(lines: Sequence[str], i: int) -> bool:
+-    """Whether line `i` can begin a list item: the first line of the passage, or one after a blank
+-    line, a heading or a list item. A line that continues a paragraph cannot, and after a bulleted
+-    item only `1.` can (CommonMark: a list not starting at 1 cannot interrupt a paragraph)."""
+-    if i == 0:
+-        return True
+-    before = lines[i - 1]
+-    if _BULLET_ITEM.match(before):
+-        return bool(_FIRST_NUMBER.match(lines[i]))
+-    return not before.strip() or bool(_HEADING.match(before) or _LIST_ITEM.match(before))
+-
+-
+-def _group(words: Sequence[str], i: int) -> tuple[int, int]:
+-    """(value, next index) of the words from `i` that spell a number below 1,000: `[N hundred]
+-    [and] [tens [unit] | 1-19]`. Value 0 and the same index when none."""
+-    start, value = i, 0
+-    if i + 1 < len(words) and words[i] in _UNITS and words[i + 1] == "hundred":
+-        value, i = _UNITS[words[i]] * 100, i + 2
+-        if (
+-            i + 1 < len(words)
+-            and words[i] == "and"
+-            and (words[i + 1] in _UNITS or words[i + 1] in _TENS)
+-        ):
+-            i += 1
+-    if i < len(words) and words[i] in _TENS:
+-        value, i = value + _TENS[words[i]], i + 1
+-        if i < len(words) and words[i] in _UNITS and _UNITS[words[i]] < 10:
+-            value, i = value + _UNITS[words[i]], i + 1
+-    elif i < len(words) and words[i] in _UNITS:
+-        value, i = value + _UNITS[words[i]], i + 1
+-    return (value, i) if i > start else (0, start)
+-
+-
+-def _spelled_number(words: Sequence[str], i: int) -> tuple[int, int]:
+-    """(value, next index) of the whole number in English words that starts at `i`, up to 999,999
+-    (`two thousand five`); value 0 and the same index when none starts there."""
+-    value, j = _group(words, i)
+-    if j < len(words) and words[j] == "thousand" and value:
+-        value, j = value * 1000, j + 1
+-        if j + 1 < len(words) and words[j] == "and" and _group(words, j + 1)[0]:
+-            j += 1
+-        rest, j = _group(words, j)
+-        value += rest
+-    return (value, j) if j > i else (0, i)
+-
+-
+ _COUNT_NOUN = (
+     r"(?:facilit(?:y|ies)|subsidiar(?:y|ies)|(?:module|run|measure|source|period|row|item|document"
+     r"|filing|page|section|table|finding|limitation|assumption|conclusion"
+     r"|handoff|issuer|lender|tranche|covenant|quarter|month|year|week|day)s?)"
+ )
+ _REFERENCES = frozenset(("page", "note", "section", "table", "row", "item", "step", "appendix"))
+-_COUNT_AFTER = re.compile(rf"\s+{_COUNT_NOUN}(?![{_HYPHENS}\w])", re.IGNORECASE)
++_COUNT_AFTER = re.compile(rf"\s+{_COUNT_NOUN}(?![\u2010-\u2015\w-])", re.IGNORECASE)
+ _REFERENCE_BEFORE = re.compile(rf"\b(?:{'|'.join(_REFERENCES)})\s+$", re.IGNORECASE)
+ 
+ 
+-def _counted_words(words: Sequence[str], joined: Sequence[bool], i: int, j: int) -> bool:
+-    """Whether the number in `words[i:j]` is a count: directly followed by a count noun (not joined
+-    to it, or the noun to a further word by a hyphen), or directly after a reference word."""
+-    noun = j < len(words) and not joined[j - 1] and not joined[j]
+-    after = noun and re.fullmatch(_COUNT_NOUN, words[j]) is not None
+-    return after or (i > 0 and not joined[i - 1] and words[i - 1] in _REFERENCES)
+-
+-
+ def _counted(text: str, figure: Figure) -> bool:
+     """Whether the digits of `figure` in `text` are a count: directly followed by a count noun, or
+     directly after a reference word (`page 30`)."""
+@@ -1059,91 +922,37 @@ def _counted(text: str, figure: Figure) -> bool:
+     )
+ 
+ 
+-def _spelled(line: str) -> list[Decimal]:
+-    """The whole numbers from two up that the line writes in English words, any case, hyphenated or
+-    spaced (any Unicode hyphen). Not read: `one` alone, `a hundred`, `a dozen`, and a part of a
+-    decimal, fraction or ordinal."""
+-    found: list[Decimal] = []
+-    for run in _WORD_RUN.finditer(line):
+-        words = re.findall(r"[a-z]+", run[0].lower())
+-        joined = [
+-            bool(re.search(rf"[{_HYPHENS}]", g)) for g in re.findall(r"[^a-z]+", run[0].lower())
+-        ]
+-        joined.append(False)
+-        i = 0
+-        while i < len(words):
+-            value, j = _spelled_number(words, i)
+-            if j == i:
+-                i += 1
+-                continue
+-            if (
+-                value >= 2
+-                and not _part_of_fraction(words, joined, i, j)
+-                and not _counted_words(words, joined, i, j)
+-            ):
+-                found.append(Decimal(value))
+-            i = j
+-    return found
+-
+-
+-def _bare(line: str, *, listed: bool) -> str:
+-    """The line as the bare-number reading of the withheld-difference rule (K9) takes it: module
+-    codes blanked and a leading list number blanked when `listed` (the line begins a list item,
+-    never a table cell). Complete dates are blanked by the caller, for both readings."""
+-    if listed:
+-        line = _LIST_NUMBER.sub(_blanks, line)
+-    return _MODULE.sub(_blanks, line)
+-
+-
+ def _blanks(match: re.Match[str]) -> str:
+     return " " * len(match[0])
+ 
+ 
+-_TAIL_RUN = re.compile(rf"[A-Za-z]+(?:[{_HYPHENS}\s]+[A-Za-z]+)*\s*$")
+-_HEAD_RUN = re.compile(rf"\s*[A-Za-z]+(?:[{_HYPHENS}\s]+[A-Za-z]+)*")
+-
+-
+-def _words_of(run: str) -> list[str]:
+-    return re.findall(r"[a-z]+", run.lower())
+-
+-
+-def _number_edge(words: Sequence[str], *, end: bool) -> bool:
+-    """Whether `words` end (or begin) inside a spelled number: a number word, or `and` by one."""
+-    if not words:
+-        return False
+-    word, near = (words[-1], words[-2:-1]) if end else (words[0], words[1:2])
+-    return _number_word(word) or (word == "and" and bool(near) and _number_word(near[0]))
+-
+-
+-def _paragraph_continues(lines: Sequence[str], i: int) -> bool:
+-    """Whether line `i + 1` continues the paragraph line `i` is in: neither is blank, a heading or a
+-    table row, and the next does not start a list item."""
+-    here, after = lines[i].strip(), lines[i + 1].strip()
+-    if not here or not after or after.startswith("|") or here.startswith("|"):
+-        return False
+-    if _HEADING.match(lines[i]) or _HEADING.match(lines[i + 1]):
+-        return False
+-    item = _BULLET_ITEM.match(lines[i + 1]) or (
+-        _LIST_ITEM.match(lines[i + 1]) and _starts_list_item(lines, i + 1)
+-    )
+-    return not item
++# Check W: when a difference is withheld, an amount, ratio or difference is written in digits with
++# its unit (`two` to `nineteen`, the tens, `hundred` and `thousand` are number words). A number word
++# (a run of adjacent ones) directly followed by a listed unit word is refused.
++# ponytail: a withheld size written in words is refused only when a listed unit word directly
++# follows it (`thirty million`). Any other wording passes: `the gap is thirty`, `fell by thirty`,
++# `net debt is eighty lower`, `fell by one hundred and ten`, a hyphenated or marked-up form. The
++# method text tells the model to write every amount in digits; this check does not enforce it.
++_NUMBER_WORD = (
++    r"(?:two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen"
++    r"|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety"
++    r"|hundred|thousand)"
++)
++_WRITTEN_UNIT = (
++    r"(?:%|US\$|(?:million|billion|thousand|percent|per cent|basis points?|bps?|x|USD|EUR"
++    r"|GBP|dollars|euros|pounds)\b)"
++)
++_WORDED = re.compile(rf"\b(?:{_NUMBER_WORD}\s+)*{_NUMBER_WORD}\s*{_WRITTEN_UNIT}", re.IGNORECASE)
+ 
+ 
+-def _across_lines(lines: Sequence[str], i: int) -> list[Decimal]:
+-    """The numbers in words that line `i` shares with line `i + 1` of the same paragraph (`one
+-    hundred` / `and ten`): read from the two runs of words joined, those not already read in either
+-    line alone."""
+-    if i + 1 >= len(lines) or not _paragraph_continues(lines, i):
+-        return []
+-    tail, head = _TAIL_RUN.search(lines[i]), _HEAD_RUN.match(lines[i + 1])
+-    if not tail or not head:
+-        return []
+-    if not (
+-        _number_edge(_words_of(tail[0]), end=True) and _number_edge(_words_of(head[0]), end=False)
+-    ):
+-        return []
+-    whole = Counter(_spelled(f"{tail[0].rstrip()} {head[0].strip()}"))
+-    return list((whole - Counter(_spelled(tail[0])) - Counter(_spelled(head[0]))).elements())
++def _worded_issues(line: str) -> list[str]:
++    return [
++        f"`{' '.join(m[0].split())}`: a difference is withheld in this handoff, so write every "
++        "amount, ratio and difference in digits with its unit; a number word is only for a count "
++        "of things (`three modules`). If the figure is a difference the pack withholds, leave it "
++        "out."
++        for m in _WORDED.finditer(line)
++    ]
+ 
+ 
+ def _header_rows(lines: Sequence[str]) -> frozenset[int]:
+@@ -1161,22 +970,6 @@ def _header_rows(lines: Sequence[str]) -> frozenset[int]:
+     )
+ 
+ 
+-def _next_noun(lines: Sequence[str], i: int) -> str:
+-    """The count noun that starts line `i + 1` of the paragraph line `i` is in, else nothing."""
+-    if i + 1 >= len(lines) or not _paragraph_continues(lines, i):
+-        return ""
+-    noun = _COUNT_AFTER.match(f" {lines[i + 1].lstrip()}")
+-    return noun[0].strip() if noun else ""
+-
+-
+-def _bare_sizes(lines: Sequence[str], i: int, bare_line: str, *, header: bool) -> list[Decimal]:
+-    """The sizes the bare-number reading takes from line `i`: its digits and its numbers in words
+-    (also those continued on the next line), but a count (`_counted`, `_counted_words`)."""
+-    counted = f"{bare_line} {_next_noun(lines, i)}"
+-    digits = [f.size for f in _figures(bare_line, header=header) if not _counted(counted, f)]
+-    return [*digits, *_spelled(counted), *_across_lines(lines, i)]
+-
+-
+ def _passage_issues(
+     lines: list[str],
+     pack: Mapping[str, Any],
+@@ -1226,9 +1019,13 @@ def _passage_issues(
+             continue
+         line = _DATE.sub(_blanks, line)
+         figures = [f.size for f in _figures(line, counts=False, header=i in headers)]
+-        listed = not row and _starts_list_item(lines, i)
+         read = line if whole is None else _DATE.sub(_blanks, whole)
+-        bare = _bare_sizes(lines, i, _bare(read, listed=listed), header=i in headers)
++        bare_line = _MODULE.sub(_blanks, read)
++        bare = [
++            f.size for f in _figures(bare_line, header=i in headers) if not _counted(bare_line, f)
++        ]
++        if kept:
++            issues += _worded_issues(read)
+         for size in dict.fromkeys([*figures, *bare]):
+             if size in sizes:
+                 issues.append(
+@@ -1242,9 +1039,10 @@ def _passage_issues(
+     return issues
+ 
+ 
+-# ponytail: the name before the code is the model's own wording and no name source exists, so only
+-# what cannot be a name is refused (a path, a comma list, a run or page word). Another module's name
+-# for the code (`Deep research (CP-2A)`) is accepted: a known limit.
++# ponytail: the name `MODULE_NAMES` lists for the code (the list the launcher sends the model) is
++# accepted outright. Any other wording is the model's own (handoffs written before the list was
++# sent), so only what cannot be a name is refused (a path, a comma list, a run or page word).
++# Another module's name for the code (`Deep research (CP-2A)`) is accepted: a known limit.
+ _NOT_A_NAME = re.compile(r"[/,]|\b(?:earlier run|run comparison|page)\b", re.IGNORECASE)
+ 
+ 
+@@ -1257,6 +1055,19 @@ def _three_forms(item: str) -> str:
+     )
+ 
+ 
++def _name_issue(item: str, code: str, name: str, earlier: bool) -> str | None:
++    """Why the name before `(<code>)` is refused, or None: the listed name for the code is accepted
++    outright; any other wording only when it cannot be something else (see `_NOT_A_NAME`). A refusal
++    names the item to write when the code has a listed name."""
++    listed = MODULE_NAMES.get(code)
++    if _plain(name) == listed or not _NOT_A_NAME.search(name):
++        return None
++    issue = _three_forms(item)
++    if listed is None:
++        return issue
++    return f"{issue} For `{code}` write `{listed} ({code}){', earlier run' if earlier else ''}`."
++
++
+ def _basis_item_issue(item: str, ran: Mapping[str, tuple[bool, bool]]) -> str | None:
+     """Why a Basis item is refused, or None: `Run comparison`, `<plain module name> (<code>)` for a
+     handoff of this run, or the same with `, earlier run` for a handoff of the earlier run."""
+@@ -1268,8 +1079,8 @@ def _basis_item_issue(item: str, ran: Mapping[str, tuple[bool, bool]]) -> str |
+         return _three_forms(item)
+     code = found["code"]
+     name = found.string.removesuffix(", earlier run").removesuffix(f" ({code})")
+-    if _NOT_A_NAME.search(name):
+-        return _three_forms(item)
++    if issue := _name_issue(item, code, name, earlier is not None):
++        return issue
+     both = ran.get(code, (False, False))
+     if both[0 if earlier else 1]:
+         return None
+diff --git a/src/deploy_workflow/credit_os_chips.py b/src/deploy_workflow/credit_os_chips.py
+index 3147628..9874c77 100644
+--- a/src/deploy_workflow/credit_os_chips.py
++++ b/src/deploy_workflow/credit_os_chips.py
+@@ -50,6 +50,36 @@ BASIS_CALCULATION = re.compile(r"calculation \S+")
+ # Neither names a page or a handoff of this run, so there is nothing to open.
+ BASIS_COMPARISON = "Run comparison"
+ BASIS_EARLIER_RUN = re.compile(r"[A-Za-z][A-Za-z ,'&/-]* \((?P<code>CP-[0-9A-Z]+)\), earlier run")
++# Display names of the modules, the same pairs as `groups` in apps/issuer-library/credit_os/web/
++# screen.js (a test compares them). Decision 11 of 2026-11-12: a module is named in prose by this
++# name, never by its code, and the launcher sends the list so the model does not invent names.
++MODULE_NAMES = {
++    "CP-0": "Source readiness",
++    "CP-1A": "Business & governance",
++    "CP-DR": "Research questions",
++    "CP-1": "Financial foundation",
++    "CP-1B": "Earnings changes",
++    "CP-L10": "Short credit snapshot",
++    "CP-1D": "Earnings quality",
++    "CP-1C": "Peer benchmark",
++    "CP-2D": "Liquidity",
++    "CP-3C": "Refinancing & LME",
++    "CP-2": "Fundamental credit",
++    "CP-2A": "Downside",
++    "CP-2G": "Forward credit model",
++    "CP-2E": "Rates, FX & hedging",
++    "CP-2H": "Ratings & triggers",
++    "CP-4": "Legal & covenants",
++    "CP-4A": "Covenant capacity",
++    "CP-4B": "Structural priority",
++    "CP-4D": "Intercreditor control",
++    "CP-4C": "Recovery & fulcrum",
++    "CP-3": "Security selection",
++    "CP-3D": "Market-implied risk",
++    "CP-6": "Committee decision",
++    "CP-5": "Evidence validation",
++    "CP-8": "Changes since the last run",
++}
+ 
+ 
+ class Locator(TypedDict):
+diff --git a/src/deploy_workflow/owners/cpos_launch.py b/src/deploy_workflow/owners/cpos_launch.py
+index e17b356..ff82e22 100644
+--- a/src/deploy_workflow/owners/cpos_launch.py
++++ b/src/deploy_workflow/owners/cpos_launch.py
+@@ -47,6 +47,7 @@ from deploy_workflow.changes import (
+ )
+ from deploy_workflow.changes_check import cp8_issues
+ from deploy_workflow.context import CONTEXT_SOURCE_ID, RunContext, load_context
++from deploy_workflow.credit_os_chips import MODULE_NAMES
+ from deploy_workflow.docx_text import docx_text
+ from deploy_workflow.handoff_delivery import (
+     DeliveryRequest,
+@@ -331,36 +332,6 @@ DATA_PASSAGE = (
+     'is not blocked must not use the words "not assessable" in its Bottom line. Your tables '
+     "follow as the main content, unchanged and exact.\n\n"
+ )
+-# Display names of the modules, the same pairs as `groups` in apps/issuer-library/credit_os/web/
+-# screen.js (a test compares them). Decision 11 of 2026-11-12: a module is named in prose by this
+-# name, never by its code, and the launcher sends the list so the model does not invent names.
+-MODULE_NAMES = {
+-    "CP-0": "Source readiness",
+-    "CP-1A": "Business & governance",
+-    "CP-DR": "Research questions",
+-    "CP-1": "Financial foundation",
+-    "CP-1B": "Earnings changes",
+-    "CP-L10": "Short credit snapshot",
+-    "CP-1D": "Earnings quality",
+-    "CP-1C": "Peer benchmark",
+-    "CP-2D": "Liquidity",
+-    "CP-3C": "Refinancing & LME",
+-    "CP-2": "Fundamental credit",
+-    "CP-2A": "Downside",
+-    "CP-2G": "Forward credit model",
+-    "CP-2E": "Rates, FX & hedging",
+-    "CP-2H": "Ratings & triggers",
+-    "CP-4": "Legal & covenants",
+-    "CP-4A": "Covenant capacity",
+-    "CP-4B": "Structural priority",
+-    "CP-4D": "Intercreditor control",
+-    "CP-4C": "Recovery & fulcrum",
+-    "CP-3": "Security selection",
+-    "CP-3D": "Market-implied risk",
+-    "CP-6": "Committee decision",
+-    "CP-5": "Evidence validation",
+-    "CP-8": "Changes since the last run",
+-}
+ VOICE_RULES = (
+     "- Write evidence, risk mechanism and credit implication as ordinary sentences, never as "
+     "labels (no `Evidence:`, `Mechanic:` or `Implication:` lead-ins). This overrides method "
+diff --git a/tests/test_changes.py b/tests/test_changes.py
+index 6b75353..5f77110 100644
+--- a/tests/test_changes.py
++++ b/tests/test_changes.py
+@@ -2928,7 +2928,7 @@ def test_the_post_balance_sheet_table_leaves_the_changes_pack_unchanged(table, w
+ # difference rule only, a bare number equal in magnitude to a withheld size is refused (same
+ # lines, same exemptions as with a unit). Expectations hand-written. Recorded limits: a bare count
+ # equal to a withheld size ("30 limitations" while a difference of 30 is withheld) is refused, and
+-# a size written in words ("thirty") is not read.
++# a size written in words is read only by check W (2026-11-13), not by value.
+ 
+ NC_CASH = (
+     "| Cash | 300 US$m (FY2023) | 250 US$m (FY2024) | Unresolved "
+@@ -3046,7 +3046,7 @@ def test_a_bare_count_is_still_no_figure_of_a_held_line():
+     assert cp8_issues(with_row(LEVERAGE_ROW, said), PACK) == ()
+ 
+ 
+-# --- fix round 1: a line-start number is a list marker only on a real list item ---------------
++# --- fix round 1: a line-start number after a wrapped line is read as a figure ------------------
+ 
+ 
+ @pytest.mark.parametrize(
+@@ -3069,18 +3069,6 @@ def test_a_number_starting_a_fact_rows_effect_cell_is_a_figure():
+     assert any("80" in i and "difference" in i for i in found), found
+ 
+ 
+-@pytest.mark.parametrize(
+-    "passage",
+-    [
+-        "80. Net debt is the largest item.\n\n",
+-        "Findings follow.\n\n80. Net debt is the largest item.\n\n",
+-        "1. First point.\n80. Net debt is the largest item.\n\n",
+-    ],
+-)
+-def test_a_real_list_item_number_equal_to_a_withheld_size_is_accepted(passage):
+-    assert cp8_issues(nd_row(LEVERAGE_ROW, passage), _ndpack()) == ()
+-
+-
+ @pytest.mark.parametrize(
+     "sentence",
+     [
+@@ -3109,7 +3097,7 @@ def test_the_verdict_words_doubled_in_another_cell_and_the_effect_cell_are_refus
+     assert any("Earlier cell" in i and "not comparable" in i for i in found), found
+ 
+ 
+-# --- the withheld-size limits: wrapped bullets, dates need a year, numbers in words ---------------
++# --- the withheld-size limits: wrapped bullets, dates need a year ---------------------------------
+ 
+ 
+ def _says(passage, pack=None):
+@@ -3133,12 +3121,13 @@ def test_a_number_wrapped_onto_a_line_after_a_bullet_is_a_figure(passage):
+     "passage",
+     [
+         "- item\n1. first sub-item",
+-        "Findings.\n\n30. A numbered item.",
+-        "1. First.\n30. A numbered item.",
+     ],
+ )
+-def test_a_list_marker_after_a_bullet_one_or_elsewhere_is_no_figure(passage):
++def test_a_list_number_is_read_as_a_figure_so_it_is_no_issue_only_when_it_equals_no_withheld_size(
++    passage,
++):
+     assert _says(passage) == ()
++    assert any("figure 1 " in i for i in _says(passage, _cash_pack("-1", "905")))
+ 
+ 
+ @pytest.mark.parametrize(
+@@ -3178,49 +3167,12 @@ def test_a_full_date_on_a_line_hides_no_other_figure():
+     assert any("figure 30" in i for i in found), found
+ 
+ 
+-def _cash_163_pack():
+-    pack = _ndpack()
+-    pack["net_debt_change"] |= {"change_in_cash": "-163", "current_cash": "747"}
+-    return pack
+-
+-
+-@pytest.mark.parametrize(
+-    ("sentence", "pack"),
+-    [
+-        ("Cash fell by thirty.", None),
+-        ("Cash fell by THIRTY.", None),
+-        ("Net debt is eighty lower.", None),
+-        ("Gross debt changed by one hundred and ten.", None),
+-        ("Gross debt changed by One Hundred Ten.", None),
+-        ("Cash fell by one hundred and sixty-three.", _cash_163_pack()),
+-        ("Cash fell by one hundred sixty three.", _cash_163_pack()),
+-        ("Cash fell by one hundred sixty-three.", _cash_163_pack()),
+-    ],
+-)
+-def test_a_withheld_size_written_in_words_is_refused(sentence, pack):
+-    found = _says(sentence, pack)
+-    assert any("difference" in i and "reword" in i for i in found), found
+-
+-
+-def test_a_large_withheld_size_in_words_is_refused():
+-    pack = _ndpack()
+-    pack["net_debt_change"] |= {"change_in_cash": "-2005", "current_cash": "-1095"}
+-    for sentence in ("Cash fell by two thousand five.", "Cash fell by two thousand and five."):
+-        assert any("figure 2005" in i for i in _says(sentence, pack)), sentence
+-    pack["net_debt_change"] |= {"change_in_cash": "-250000", "current_cash": "-249090"}
+-    assert any("figure 250000" in i for i in _says("It fell by two hundred fifty thousand.", pack))
+-
+-
+ @pytest.mark.parametrize(
+     "sentence",
+     [
+-        "Cash fell by forty.",
+-        "Cash fell by thirty-one.",
+         "The one covenant is tested.",
+         "The thirtieth covenant is tested.",
+         "A hundred covenants and a dozen facilities.",
+-        "Cash fell by thirty point five.",
+-        "Cash fell by twenty and forty.",
+     ],
+ )
+ def test_a_number_in_words_that_is_no_withheld_size_is_accepted(sentence):
+@@ -3233,17 +3185,6 @@ def test_the_word_one_is_never_read_as_a_size():
+     assert _says("One facility matured, and no one asked.", pack) == ()
+ 
+ 
+-def test_a_size_in_words_is_accepted_in_its_own_issuer_row():
+-    net = (
+-        "| Net debt | 6190 US$m (FY2024) | 6110 US$m (FY2024) | Correction "
+-        "| Same definition; net debt is eighty lower after the correction. |"
+-    )
+-    assert cp8_issues(nd_row(LEVERAGE_ROW + "\n" + net), _ndpack()) == ()
+-    elsewhere = net.replace("Net debt |", "Refinancing |")
+-    found = cp8_issues(nd_row(LEVERAGE_ROW + "\n" + elsewhere), _ndpack())
+-    assert any("80" in i and "difference" in i for i in found), found
+-
+-
+ def _cash_pack(change: str, cash: str):
+     pack = _ndpack()
+     pack["net_debt_change"] |= {"change_in_cash": change, "current_cash": cash}
+@@ -3282,29 +3223,6 @@ def test_a_decimal_fraction_or_ordinal_in_words_is_not_read_in_part(sentence, pa
+     assert _says(sentence, pack) == ()
+ 
+ 
+-@pytest.mark.parametrize(
+-    ("sentence", "pack", "size"),
+-    [
+-        ("Cash fell by thirty and second-lien debt was repaid.", None, "30"),
+-        ("Cash fell by thirty and first-lien leverage rose.", None, "30"),
+-        ("Cash fell by thirty and half the facility was drawn.", None, "30"),
+-        (
+-            "Gross debt fell by one hundred and ten and a quarter of the notes were repaid.",
+-            None,
+-            "110",
+-        ),
+-        ("Cash fell by thirty quarter-on-quarter.", None, "30"),
+-        ("Cash fell by thirty second-lien loans.", None, "30"),
+-        ("At that point thirty was drawn from cash.", None, "30"),
+-        ("Cash showed a thirty-point swing.", None, "30"),
+-        ("Cash is point five of the facility.", _cash_pack("-5", "905"), "5"),
+-    ],
+-)
+-def test_a_spelled_size_beside_an_ordinal_looking_word_is_still_read(sentence, pack, size):
+-    found = _says(sentence, pack)
+-    assert any(f"figure {size} is the difference" in i for i in found), found
+-
+-
+ @pytest.mark.parametrize(
+     ("sentence", "pack"),
+     [
+@@ -3319,13 +3237,7 @@ def test_a_spelled_ordinal_fraction_or_decimal_is_still_not_read(sentence, pack)
+     assert _says(sentence, pack) == ()
+ 
+ 
+-@pytest.mark.parametrize("hyphen", ["‐", "‑", "‒", "–", "—", "―"])
+-def test_a_unicode_hyphen_does_not_split_a_spelled_size(hyphen):
+-    found = _says(f"Cash fell by thirty{hyphen}five.", _cash_pack("-35", "875"))
+-    assert any("figure 35" in i for i in found), found
+-
+-
+-# --- the year problem, the counts and a spelled size across lines (owner, 2026-11-12: "fix 1 and
++# --- the year problem, the counts and a number word across lines (owner, 2026-11-12: "fix 1 and
+ # 2"; controller rulings R1 to R3). Expectations hand-written from the rulings.
+ 
+ 
+@@ -3419,7 +3331,6 @@ def test_a_count_beside_a_count_noun_or_a_reference_word_is_no_withheld_size(sen
+     "sentence",
+     [
+         "Cash fell by 30.",
+-        "Cash fell by thirty.",
+         "A change of 30 in cash.",
+         "30 new modules ran.",
+         "Cash fell by 30 quarter-on-quarter.",
+@@ -3432,22 +3343,10 @@ def test_a_bare_number_beside_no_count_noun_is_still_a_withheld_size(sentence):
+     assert any("figure 30 is the difference" in i for i in found), found
+ 
+ 
+-@pytest.mark.parametrize(
+-    "sentence",
+-    [
+-        "Gross debt changed by one hundred\nand ten.",
+-        "Gross debt changed by one hundred and\nten.",
+-        "Gross debt changed by one\nhundred ten.",
+-    ],
+-)
+-def test_a_spelled_size_broken_across_lines_is_read_and_reported_once(sentence):
+-    found = [i for i in _hold(sentence) if "figure 110" in i]
+-    assert len(found) == 1, found
+-
+-
+ @pytest.mark.parametrize(
+     "text",
+     [
++        # No unit word follows a number word, so none is read (the recorded limit of W).
+         "Debt is one hundred\n\nten.",
+         "Debt is one hundred\n| Cash | ten |",
+         "Debt is one hundred\n- ten",
+@@ -3455,12 +3354,13 @@ def test_a_spelled_size_broken_across_lines_is_read_and_reported_once(sentence):
+         "Debt is one hundred\nand then nothing.",
+     ],
+ )
+-def test_a_spelled_number_is_not_joined_over_a_blank_line_row_heading_or_item(text):
++def test_a_number_word_with_no_unit_after_it_is_no_issue_across_a_line_break(text):
+     assert _hold(text) == ()
+ 
+ 
+ # --- fix round 1 of the counts branch: a year before a comma, ISO dates whole, two nouns dropped,
+-# a count noun on the next line, a table delimiter without outer pipes, a code after a year.
++# a digit count whose noun is on the next line, a table delimiter without outer pipes, a code
++# after a year.
+ # Expectations hand-written from the controller's rulings.
+ 
+ 
+@@ -3522,9 +3422,7 @@ def test_an_iso_date_is_exempt_as_a_whole_after_a_period_marker_or_month(sentenc
+     "sentence",
+     [
+         "Cash shows a 30 difference between the runs.",
+-        "Cash shows a thirty difference.",
+         "Cash records a 30 change.",
+-        "Cash records a thirty change.",
+         "Cash shows 30 differences.",
+     ],
+ )
+@@ -3533,24 +3431,15 @@ def test_change_and_difference_are_not_count_nouns(sentence):
+     assert any("figure 30 is the difference" in i for i in found), found
+ 
+ 
+-@pytest.mark.parametrize(
+-    "sentence", ["Both runs used thirty\nmodules.", "Both runs used 30\nmodules."]
+-)
+-def test_a_count_noun_on_the_next_line_of_the_paragraph_makes_a_count(sentence):
+-    assert _hold(sentence) == ()
+-
+-
+ @pytest.mark.parametrize(
+     "text",
+     [
+         "Cash fell by 30\n\nmodules.",
+         "Cash fell by 30\n- modules",
+         "Cash fell by 30\n### modules",
+-        "Cash fell by thirty\n| modules |",
+-        "Cash fell by thirty\n\nmodules.",
+     ],
+ )
+-def test_a_count_noun_over_a_blank_line_heading_row_or_item_makes_no_count(text):
++def test_a_digit_count_with_a_noun_on_another_line_stays_a_withheld_size(text):
+     found = _hold(text)
+     assert any("figure 30 is the difference" in i for i in found), found
+ 
+@@ -4181,6 +4070,45 @@ def test_a_basis_item_with_another_modules_plain_name_is_accepted_a_recorded_lim
+     assert basis_issues("Basis: Deep research (CP-2A)") == []
+ 
+ 
++RATES_PACK = {
++    **PACK,
++    "modules": [
++        {"module": "CP-2E", "ran_prior": False, "ran_current": True},
++        {"module": "CP-1", "ran_prior": True, "ran_current": True},
++        {"module": "CP-2A", "ran_prior": True, "ran_current": True},
++    ],
++}
++
++
++def rates_issues(basis: str, pack: dict = RATES_PACK) -> list[str]:
++    return [i for i in cp8_issues(_with_basis(basis), pack) if i.startswith("Basis item")]
++
++
++def test_the_listed_name_with_a_comma_is_accepted_for_the_run_that_held_the_module():
++    assert rates_issues("Basis: Rates, FX & hedging (CP-2E)") == []
++    ran_before = {
++        **RATES_PACK,
++        "modules": [{"module": "CP-2E", "ran_prior": True, "ran_current": False}],
++    }
++    assert rates_issues("Basis: Rates, FX & hedging (CP-2E), earlier run", ran_before) == []
++
++
++def test_a_listed_name_is_read_after_the_checks_white_space_normalisation():
++    assert rates_issues("Basis: Rates,  FX & hedging (CP-2E)") == []
++
++
++def test_a_name_that_is_not_the_listed_one_and_has_a_comma_is_refused_naming_the_item_to_write():
++    (this,) = rates_issues("Basis: Rates, FX and hedging (CP-2E)")
++    assert THREE_FORMS in this and "write `Rates, FX & hedging (CP-2E)`" in this
++    (earlier,) = rates_issues("Basis: Rates, FX and hedging (CP-2E), earlier run")
++    assert "write `Rates, FX & hedging (CP-2E), earlier run`" in earlier
++
++
++def test_the_models_own_names_for_a_code_stay_accepted():
++    assert rates_issues("Basis: Financial data foundation (CP-1)") == []
++    assert rates_issues("Basis: Deep research (CP-2A)") == []
++
++
+ def cell_issues(prior: str, current: str, pack: dict | None = None) -> list[str]:
+     row = f"| Total debt / EBITDA | {prior} | {current} | New period | Leverage fell by 0.60x. |"
+     found = cp8_issues(REGISTERS.replace(LEVERAGE_ROW, row), pack or PACK)
+@@ -4326,3 +4254,99 @@ def test_a_value_cell_the_refusal_states_can_be_written_when_the_pack_holds_a_do
+     assert cell_issues("6261 US$m (FY2024 reported)", "3.60x (FY2024)", pack) == []
+     (issue,) = cell_issues("6261 US$m (FY2024)", "3.60x (FY2024)", pack)
+     assert "write exactly `6261 US$m (FY2024 reported)`" in issue
++
++
++# --- C3: a number word is read by one form check (W), not by a spelled-number grammar -----------
++# `_ndpack` withholds the net debt change's cash difference, 30, and the net debt difference, 80.
++
++
++def _w_issues(passage):
++    return cp8_issues(nd_row(LEVERAGE_ROW, passage + "\n\n"), _ndpack())
++
++
++W_REFUSAL = (
++    "a difference is withheld in this handoff, so write every amount, ratio and difference in "
++    "digits with its unit; a number word is only for a count of things (`three modules`). If the "
++    "figure is a difference the pack withholds, leave it out."
++)
++
++
++@pytest.mark.parametrize(
++    ("sentence", "phrase"),
++    [
++        ("Cash fell by thirty million.", "thirty million"),
++        ("Cash fell thirty percent.", "thirty percent"),
++        ("Cash was about thirty basis points lower.", "thirty basis points"),
++        ("Leverage fell by twenty per cent.", "twenty per cent"),
++        ("Leverage rose by roughly four x.", "four x"),
++        ("Cash is twelve US$ lower.", "twelve US$"),
++        ("Cash was nearly ninety USD.", "ninety USD"),
++        ("Leverage is two hundred bps wider.", "two hundred bps"),
++        ("Cash is Seventy Five Million.", "Seventy Five Million"),
++    ],
++)
++def test_a_number_word_directly_before_a_unit_word_is_refused_with_the_form_once(sentence, phrase):
++    found = _w_issues(sentence)
++    assert [i for i in found if W_REFUSAL in i] == [f"`{phrase}`: {W_REFUSAL}"], found
++
++
++@pytest.mark.parametrize(
++    "sentence",
++    [
++        "Three modules ran.",
++        "Three UK remains the tenant.",
++        "Six Flags is the comparator.",
++        "The lender added three covenants.",
++        "Leverage was six times covered.",
++        "The two runs differ.",
++        "This run added four new modules, so their conclusions are new.",
++        "The issuer added two term loans.",
++        "Each moved the outlook up two steps.",
++    ],
++)
++def test_a_number_word_that_is_a_name_or_a_count_is_accepted(sentence):
++    assert _w_issues(sentence) == ()
++
++
++def test_a_number_word_is_not_refused_when_no_difference_is_withheld():
++    found = cp8_issues(with_row(LEVERAGE_ROW, "Revenue rose by thirty percent.\n\n"), PACK)
++    assert found == ()
++
++
++@pytest.mark.parametrize(
++    "sentence",
++    [
++        "The gap is thirty.",
++        "Gross debt fell by one hundred and ten.",
++        "Net debt is eighty lower.",
++        "Cash fell by thirty.",
++    ],
++)
++def test_a_size_in_words_with_no_unit_word_after_it_passes_the_recorded_limit(sentence):
++    # The recorded limit of W (`ponytail:` at `_WORDED`): only a listed unit word directly after a
++    # number word is refused; a size in words after a direction word is not read.
++    assert _w_issues(sentence) == ()
++
++
++def test_a_digit_count_beside_a_count_noun_is_accepted_and_a_new_noun_is_refused():
++    assert _w_issues("There are 30 modules.") == ()
++    found = _w_issues("There are 30 new modules.")
++    assert any("figure 30" in i and "difference of Cash" in i for i in found), found
++
++
++def test_a_numbered_list_item_number_equal_to_a_withheld_size_is_refused_with_a_repair():
++    found = _w_issues("30. Liquidity is unchanged.")
++    assert any("figure 30" in i and "difference of Cash" in i and "reword" in i for i in found), (
++        found
++    )
++    assert _w_issues("- Liquidity is unchanged.") == ()
++
++
++def test_a_count_and_its_noun_on_two_lines_is_no_count():
++    found = _w_issues("Liquidity changed across 30\nmodules in all.")
++    assert any("figure 30" in i and "difference of Cash" in i for i in found), found
++
++
++@pytest.mark.parametrize("sentence", ["It ran at 30 September 2024.", "It ran on 2024-09-30."])
++def test_a_written_date_beside_a_withheld_size_is_no_size(sentence):
++    assert _w_issues(sentence) == ()
