@@ -9,7 +9,11 @@ from __future__ import annotations
 
 import http.client
 import json
+import logging
+import socket
+import sqlite3
 import threading
+import time
 import urllib.parse
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -411,3 +415,108 @@ def test_a_wildcard_host_is_refused_at_start(tmp_path):
 
 def test_wildcard_host_is_refused():
     assert main(["--root", "x", "serve", "--host", "0.0.0.0"]) == 2
+
+
+def _raw(svc: Live, data: bytes) -> socket.socket:
+    sock = socket.create_connection(("127.0.0.1", svc.port), timeout=10)
+    sock.sendall(data)
+    return sock
+
+
+def _closed_within(sock: socket.socket, seconds: float) -> bool:
+    """True when the server closed the connection (EOF or reset) within ``seconds``."""
+    sock.settimeout(seconds)
+    try:
+        while sock.recv(4096):
+            pass
+    except (ConnectionResetError, BrokenPipeError):
+        return True
+    except TimeoutError:
+        return False
+    return True
+
+
+def test_a_trickling_connection_is_closed_at_the_deadline(svc, monkeypatch):
+    monkeypatch.setattr(service, "SOCKET_TIMEOUT", 0.5)
+    monkeypatch.setattr(service.Handler, "timeout", 5)  # per-read timeout longer than the deadline
+    host = f"127.0.0.1:{svc.port}"
+    sock = _raw(svc, f"GET /api/status HTTP/1.1\r\nHost: {host}\r\nX-Pad: ".encode())
+    stop = threading.Event()
+
+    def trickle() -> None:
+        while not stop.is_set():
+            try:
+                sock.sendall(b"a")
+            except OSError:
+                return
+            time.sleep(0.1)
+
+    thread = threading.Thread(target=trickle, daemon=True)
+    thread.start()
+    try:
+        assert _closed_within(sock, 4)
+    finally:
+        stop.set()
+        thread.join(timeout=5)
+        sock.close()
+    assert svc.call("GET", "/api/status")[0] == 200
+
+
+def test_one_address_has_a_share_of_the_connection_ceiling(svc, monkeypatch):
+    monkeypatch.setattr(service, "MAX_PER_ADDRESS", 3)
+    held = [_raw(svc, b"") for _ in range(3)]
+    try:
+        time.sleep(0.3)
+        extra = _raw(svc, b"")
+        assert _closed_within(extra, 3)
+        extra.close()
+        assert all(not _closed_within(sock, 0.3) for sock in held)
+    finally:
+        for sock in held:
+            sock.close()
+    time.sleep(0.3)
+    assert svc.call("GET", "/api/status")[0] == 200
+
+
+def test_a_short_body_is_a_refusal_not_a_traceback(svc, monkeypatch, caplog):
+    monkeypatch.setattr(service.Handler, "timeout", 1)
+    caplog.set_level(logging.INFO)
+    host = f"127.0.0.1:{svc.port}"
+    head = f"POST /api/me HTTP/1.1\r\nHost: {host}\r\nOrigin: http://{host}\r\n"
+    sock = _raw(svc, (head + 'Content-Length: 50\r\n\r\n{"na').encode())
+    sock.settimeout(10)
+    reply = sock.recv(4096)
+    sock.close()
+    time.sleep(0.2)
+    assert reply.split(b"\r\n")[0].split()[1] == b"400"
+    assert b"the request body did not arrive" in reply
+    assert not [record for record in caplog.records if record.exc_info]
+
+
+def test_an_http_09_request_line_gets_no_500(svc, caplog):
+    sock = _raw(svc, b"GET /api/me\r\n")
+    sock.settimeout(10)
+    reply = b""
+    while chunk := sock.recv(4096):
+        reply += chunk
+    sock.close()
+    time.sleep(0.2)
+    assert b"the service failed" not in reply and b" 500 " not in reply
+    assert not [record for record in caplog.records if record.exc_info]
+
+
+def test_a_save_waits_for_a_held_write_lock(svc_with_loop, cookie, tmp_path):
+    _, call = svc_with_loop
+    other = sqlite3.connect(
+        tmp_path / "signal" / "signal.db", isolation_level=None, check_same_thread=False
+    )
+    other.execute("BEGIN IMMEDIATE")
+    release = threading.Timer(0.5, lambda: other.execute("COMMIT"))
+    release.start()
+    try:
+        started = time.monotonic()
+        assert call("POST", "/api/stories/1/save", cookie=cookie)[0] == 200
+        assert time.monotonic() - started >= 0.3  # it did wait for the lock
+    finally:
+        release.join()
+        other.close()

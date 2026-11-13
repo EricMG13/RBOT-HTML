@@ -168,3 +168,16 @@ def test_new_count_compares_instants_not_text(db_feed):
 def test_new_count_refuses_unparseable_or_zoneless_since(db_feed, since):
     with pytest.raises(ViewError):
         new_count(db_feed, "ak", "latest", since)
+
+
+def test_ids_of_thousands_of_digits_raise_view_error(db_feed):
+    with pytest.raises(ViewError):
+        feed(db_feed, "ak", "topic:" + "9" * 5000)
+    with pytest.raises(ViewError):
+        feed(db_feed, "ak", "latest", before="2026-11-13T09:00:00+00:00|" + "9" * 5000)
+
+
+@pytest.mark.parametrize("since", ["9999-12-31T23:59:59-23:59", "0001-01-01T00:00:00+23:59"])
+def test_times_that_overflow_utc_raise_view_error(db_feed, since):
+    with pytest.raises(ViewError):
+        new_count(db_feed, "ak", "latest", since)

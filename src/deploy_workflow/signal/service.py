@@ -15,7 +15,9 @@ written again here. Every request is checked before any body byte is read:
 * Every response carries ``Cross-Origin-Resource-Policy: same-origin``, ``nosniff`` and the page
   policy ``Content-Security-Policy`` (same-origin scripts, styles, fonts and connections, ``data:``
   images for the brand marks, no framing, no inline script or style).
-* At most ``MAX_CONNECTIONS`` connections are open; one beyond that is closed at once.
+* At most ``MAX_CONNECTIONS`` connections are open, and at most ``MAX_PER_ADDRESS`` per remote
+  address; one beyond either is closed at once. A connection is shut down ``2 * SOCKET_TIMEOUT``
+  seconds after it opens, however it trickles. An HTTP/0.9 request line is closed without a reply.
 * A JSON body needs ``Content-Length`` (else 411), is at most 64 KiB (else 413) and must be a JSON
   object (else 400). Every connection serves one request and closes.
 
@@ -58,9 +60,12 @@ __all__ = ["STATIC", "Handler", "Loop", "StartError", "make_server", "serve"]
 log = logging.getLogger(__name__)
 
 MAX_JSON = 64 * 1024
-SOCKET_TIMEOUT = 60  # seconds a connection may stall; a stalled client cannot hold a thread
-# Each connection holds a thread for up to SOCKET_TIMEOUT; a few colleagues use the service.
+# Seconds one socket read may wait. It is per read, so a client trickling bytes would never hit it;
+# the absolute limit is the connection deadline, 2 * SOCKET_TIMEOUT from accept (Handler.setup).
+SOCKET_TIMEOUT = 60
+# Each connection holds a thread for up to the deadline; a few colleagues use the service.
 MAX_CONNECTIONS = 64
+MAX_PER_ADDRESS = 16  # one remote address may hold this many of the MAX_CONNECTIONS
 MAX_PARAMS = 20
 _POLICY = (
     "default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; "
@@ -299,32 +304,44 @@ class _Server(ThreadingHTTPServer):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         self.active_connections = 0
+        self._per_address: dict[str, int] = {}
         self._count = threading.Lock()
         super().__init__(*args, **kwargs)
 
     def verify_request(self, request: Any, client_address: Any) -> bool:
         with self._count:
-            if self.active_connections >= MAX_CONNECTIONS:
+            address = str(client_address[0])
+            if (
+                self.active_connections >= MAX_CONNECTIONS
+                or self._per_address.get(address, 0) >= MAX_PER_ADDRESS
+            ):
                 return False  # closed by the server loop with no handler thread
             self.active_connections += 1
+            self._per_address[address] = self._per_address.get(address, 0) + 1
         return True
 
-    def _release(self) -> None:
+    def _release(self, client_address: Any) -> None:
+        address = str(client_address[0])
         with self._count:
             self.active_connections -= 1
+            if self._per_address[address] <= 1:
+                del self._per_address[address]
+            else:
+                self._per_address[address] -= 1
 
     def process_request(self, request: Any, client_address: Any) -> None:
         try:
             super().process_request(request, client_address)
         except BaseException:
-            self._release()  # the handler thread never ran (the OS refused it), so it cannot
+            # the handler thread never ran (the OS refused it), so it cannot release
+            self._release(client_address)
             raise
 
     def process_request_thread(self, request: Any, client_address: Any) -> None:
         try:
             super().process_request_thread(request, client_address)
         finally:
-            self._release()
+            self._release(client_address)
 
 
 def _params(query: str) -> dict[str, str]:
@@ -353,6 +370,27 @@ class Handler(BaseHTTPRequestHandler):
     timeout = SOCKET_TIMEOUT
     server_version = "Signal"
     sys_version = ""
+    _deadline: threading.Timer | None = None
+
+    def setup(self) -> None:
+        super().setup()
+        # The absolute limit on this connection: the socket timeout is per read and a trickling
+        # client never reaches it, so a timer shuts the socket down 2 * SOCKET_TIMEOUT after accept.
+        self._deadline = threading.Timer(2 * SOCKET_TIMEOUT, self._expire, args=(self.connection,))
+        self._deadline.daemon = True
+        self._deadline.start()
+
+    @staticmethod
+    def _expire(connection: socket.socket) -> None:
+        try:
+            connection.shutdown(socket.SHUT_RDWR)
+        except OSError:  # already closed by the handler or the peer: nothing left to cut
+            pass
+
+    def finish(self) -> None:
+        if self._deadline is not None:
+            self._deadline.cancel()
+        super().finish()
 
     @property
     def _service(self) -> _Server:
@@ -367,6 +405,10 @@ class Handler(BaseHTTPRequestHandler):
     do_POST = do_DELETE = do_PUT = do_PATCH = do_HEAD = do_OPTIONS = do_GET
 
     def _serve(self) -> None:
+        if self.request_version == "HTTP/0.9":
+            self.close_connection = True  # no headers exist to check and none can be sent
+            log.info("%s: HTTP/0.9 request closed", self.address_string())
+            return
         try:
             if not self.path.startswith("/"):
                 raise _refuse(400, "the request target must be a path")
@@ -442,7 +484,11 @@ class Handler(BaseHTTPRequestHandler):
         length = int(text)
         if length > MAX_JSON:
             raise _refuse(413, f"a request body is at most {MAX_JSON // 1024} KiB")
-        data = self.rfile.read(length)
+        try:
+            data = self.rfile.read(length)
+        except OSError as error:  # the body stalled past the socket timeout or the peer reset
+            log.info("%s %s: request body did not arrive (%s)", self.command, self.path, error)
+            raise _refuse(400, "the request body did not arrive") from None
         if len(data) != length:
             raise _refuse(400, "the request body ended early")
         try:

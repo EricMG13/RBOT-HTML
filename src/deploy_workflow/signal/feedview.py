@@ -59,7 +59,12 @@ MAX_ID = 2**63 - 1
 
 def _id(number: str, what: str) -> int:
     """A decimal id that SQLite can hold, else ViewError."""
-    if not number.isascii() or not number.isdecimal() or int(number) > MAX_ID:
+    if (
+        not number.isascii()
+        or not number.isdecimal()
+        or len(number) > len(str(MAX_ID))  # before int(): a huge digit string raises ValueError
+        or int(number) > MAX_ID
+    ):
         raise ViewError(f"invalid {what} {number!r}")
     return int(number)
 
@@ -72,7 +77,10 @@ def _instant(text: str, what: str) -> str:
         raise ViewError(f"malformed {what} {text!r}") from exc
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         raise ViewError(f"{what} {text!r} has no time zone")
-    return _utc_text(parsed)
+    try:
+        return _utc_text(parsed)
+    except OverflowError as exc:  # a year-1 or year-9999 time with an offset leaves the UTC range
+        raise ViewError(f"{what} {text!r} is out of range") from exc
 
 
 def _view_clause(
