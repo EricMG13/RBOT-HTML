@@ -692,17 +692,18 @@ function drawingCaption(id,table) {
 }
 // A stated reason as the page reads a cell: held back (nothing) when it names an identifier or a calculation.
 // What a chart may draw of a handoff cell. A Forecast card (`v.headless`) reads every text with findingCell strict: a text it holds back is not drawn (the card's table says so).
-// The id values of every module of a run (Shapes.idTokens), once per run: a Forecast card holds them back wherever they stand in text; any other id-shaped word is ordinary text.
+// The id values of every module of a run (Shapes.idTokens), once per run: a strict reading holds them back wherever they stand in text; any other id-shaped word is ordinary text.
+// A module code (CP-1) is an id value of one module's table but is drawn (components.js findingCell). A run with no loaded output (or no run) has no tokens.
 const runTokenCache=new Map();
-function runTokens(run,own) {
+function runTokens(run) {
   if(!runTokenCache.has(run)){
-    const ids=Object.values(contexts[run]?.modules||{}).flatMap(entry=>entry.outputs).filter(out=>data[out]);
-    runTokenCache.set(run,[...new Set((ids.length?ids:[own]).flatMap(out=>moduleTableContext(out).tokens))]);
+    runTokenCache.set(run,[...new Set(Object.keys(data).filter(out=>data[out].run===run).flatMap(out=>moduleTableContext(out).tokens))].filter(token=>!/^CP-[0-9A-Z]+$/.test(token)));
   }
   return runTokenCache.get(run);
 }
-const strictContext=id=>({...moduleTableContext(id),tokens:runTokens(data[id].run,id),strict:true});
-const readCtx=(id,v)=>v?.headless?strictContext(id):moduleTableContext(id);
+// The page's one strict context: every text read as a findings page reads it, against the id values of the run.
+const strictContext=run=>({tokens:runTokens(run),strict:true});
+const readCtx=(id,v)=>v?.headless?{...moduleTableContext(id),...strictContext(data[id].run)}:moduleTableContext(id);
 const statedReason=(id,text,v)=>window.Components.findingCell(text,readCtx(id,v)).html??'';
 const cardPlain=(id,v,cell)=>{const text=String(cell??'');return !v?.headless||window.Components.findingCell(text,readCtx(id,v)).html!==undefined?plain(text):'';};
 const cardHtml=(id,v,cell)=>v?.headless?statedReason(id,String(cell??''),v):esc(cell);
@@ -1217,7 +1218,7 @@ function packSpans(wanted) {
 }
 const CARD={headless:true};
 // A card's context: strict, so every text it draws is read as a findings page reads it and then some (components.js findingCell).
-const cardContext=(id,title)=>({...strictContext(id),id,module:data[id].module,strict:true,evidenceHref:window.Evidence.href('registers',data[id].module,data[id].run),key:row=>`${id}:${row.line}`,caption:plain(title)});
+const cardContext=(id,title)=>({...readCtx(id,CARD),id,module:data[id].module,evidenceHref:window.Evidence.href('registers',data[id].module,data[id].run),key:row=>`${id}:${row.line}`,caption:plain(title)});
 const isPairContract=(chart,table)=>(!chart.kind||chart.kind==='grouped')&&(chart.columns||[chart.column]).length===1&&(chart.rows||table.rows).length>=1&&(chart.rows||table.rows).length<=2;
 // Two periods (or one) of a single measure: each period with its own label at the same weight, in the table's order. The contract does not mark which period is
 // later, and the page does not infer it, so nothing is emphasised.
@@ -1302,11 +1303,11 @@ function forecastView(context,id) {
   // The link opens the module that wrote the forecast handoff: CP-2G's forward model, or CP-1 for a layer-1 forecast.
   const fullName=forecast?.output&&(data[forecast.output].module==='CP-2G'?'the full forward credit model output':`the ${data[forecast.output].module} output the forecast was built from`);
   const full=forecast?.output?`<a class="text-action" href="${routeHref(data[forecast.output].module,modules[forecast.output].first,null,forecast.run,data[forecast.output].source)}">Open ${fullName}${icon('arrow-right')}</a>`:'';
-  // The register and the limitation lines are the model's own words. A file name, a module code, a calculation or scenario identifier inside them is held back
+  // The register and the limitation lines are the model's own words. A file name, a calculation or scenario identifier (an id value of any module of the run, strictContext) inside them is held back
   // (findingCell, strict) and one link to Evidence stands in; a source column and an identifier column are Evidence's.
   const owner=forecast?.output&&data[forecast.output]?data[forecast.output].module:null;
   // The register is the forecast handoff's (Evidence Registers of its module); the limitation lines are the calculation record's scope limits (Evidence Gaps, a group of their own).
-  const ctx={tokens:owner?moduleTableContext(forecast.output).tokens:[],strict:true,evidenceHref:window.Evidence.href('registers',owner,context)};
+  const ctx={...strictContext(context),evidenceHref:window.Evidence.href('registers',owner,context)};
   const limitsCtx={...ctx,evidenceHref:window.Evidence.href('gaps',owner,context)};
   const block=register&&register.headers.length?{headers:register.headers,rows:register.rows.map((cells,at)=>({line:at,cells}))}:null;
   const intro=register?.intro==null?null:window.Components.findingCell(register.intro,ctx).html;
@@ -1516,7 +1517,7 @@ function libraryChoices() {
   const runs=catalogueRuns(),values=pick=>[...new Set(runs.flatMap(pick).filter(Boolean))].sort().map(v=>[v,v]);
   return {sector:values(r=>r.sector),workflow:values(r=>r.workflow),issuer:issuerGroups(runs).filter(g=>g[0].issuer).map(g=>[g[0].issuer,new Set(g.map(r=>r.name)).size===1?g[0].name:g[0].issuer]).sort((a,b)=>a[1].localeCompare(b[1])),period:values(r=>r.period_kind),currency:values(r=>r.currency),
     // A limitation is an option only when it is clean under the strict findings rule (no file name, id, calculation ID or module code), and carries no register or module code either; the rest are Evidence's.
-    limitation:values(r=>(r.gaps||[]).filter(gap=>window.Components.findingCell(gap,{strict:true}).html!==undefined&&!/\b(?:EV|GAP|MON|DP|SRC)-\d{2,3}\b|\bCP-[0-9A-Z]+\b/.test(gap))),
+    limitation:values(r=>(r.gaps||[]).filter(gap=>window.Components.findingCell(gap,strictContext(libraryRunKey(r))).html!==undefined&&!/\b(?:EV|GAP|MON|DP|SRC)-\d{2,3}\b|\bCP-[0-9A-Z]+\b/.test(gap))),
     // No run records a completeness until a checklist is supplied; a filter that nothing can match is not offered, by the screen or the address.
     completion:runs.some(run=>run.completion!=null)?[['75','75% or above'],['50','50% or above'],['100','100% complete'],['unassessed','Not assessed']]:[],availability:[['report','Report available'],['handoff','No report available']],
     runs:[['latest','Latest run per issuer'],['any','Any run']],classification:[...Object.entries(CLASSIFICATIONS),['not_stated','Not stated']],

@@ -1001,7 +1001,7 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules, more
   const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag', 'eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'eventTicks', 'eventAsOf', 'eventStack', 'eventRoom', 'earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes', 'matchesHeading', 'readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml', 'passageControls', 'eventTimeline', '$', 'appDestinations', 'document', 'ChangesView'];
   const eventTimeline = realEventTimeline(esc, rich);
   const args = [libraryDefaults(), libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), libraryDefaults(), win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head', sections: more.sections?.[id] || [] }])), contexts, more.store || {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => '', ...['eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'eventTicks', 'eventAsOf', 'eventStack', 'eventRoom'].map(name => require('./calendar.js')[name]), ...['earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes'].map(name => require('./reader.js')[name]), (heading, prefix) => (prefix.startsWith('=') ? heading === prefix.slice(1) : heading.startsWith(prefix)), ...['readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml', 'passageControls'].map(name => require('./reader.js')[name]), eventTimeline, more.dom?.$, new Set(['W-Library', 'CP-OS']), more.dom?.document, require('./changes.js')];
-  return new Function(...names, `${src}; return {runReport, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, libraryFilters, libraryChoices, LIBRARY_COLUMNS, libraryView, libraryRows, libraryFacets, libraryCard, libraryCards, libraryLive, libraryChipValue, libraryCount, sameNameWords, libraryRunName, libraryModules, libraryLead, libraryStrip, libraryFiltered, moduleHead, headerChipMarkup, traceHref, drawerFoot, runName, updateWorkspaceChrome, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, chartIndex, moduleReport, reportParts, outlineMarkup, navigatorView, issuerMeta, startRunHref, startRunLink, drawnAnchors, defaultOutput, firstSection, cashflowSection, modelOptionLabels, forecastView, forecastCharts, chartCard, evidenceInput};`)(...args);
+  return new Function(...names, `${src}; return {runTokens, runReport, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, libraryFilters, libraryChoices, LIBRARY_COLUMNS, libraryView, libraryRows, libraryFacets, libraryCard, libraryCards, libraryLive, libraryChipValue, libraryCount, sameNameWords, libraryRunName, libraryModules, libraryLead, libraryStrip, libraryFiltered, moduleHead, headerChipMarkup, traceHref, drawerFoot, runName, updateWorkspaceChrome, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, chartIndex, moduleReport, reportParts, outlineMarkup, navigatorView, issuerMeta, startRunHref, startRunLink, drawnAnchors, defaultOutput, firstSection, cashflowSection, modelOptionLabels, forecastView, forecastCharts, chartCard, evidenceInput};`)(...args);
 }
 const countOf = (html, re) => (html.match(re) || []).length;
 
@@ -4866,6 +4866,61 @@ test('L3 consequence: calculation ids that are id values of the run (as on every
   const page = runPage(() => ({ [outId('CP-1')]: fcOutput({ sections, charts }), [outId('CP-X')]: calcs }), [], m => m, { record: steps(['CP-1', 'CP-X']), runFields: { asOf: '2025-03-31' } });
   const html = page.forecastCharts(RUN);
   assert.ok(!html.includes('C48') && !html.includes('C05'));
+});
+
+// ---- Task 10 fix round 3: one construction point for the strict context (views.js strictContext), keyed on the run.
+const calcsOutput = rows => runOutput('CP-X', { sections: [sec('Calculations', 2, 5, 'consumed', [table(6, ['Calculation ID', 'Result'], rows)])], state: { established: true, declared: null }, summary: null, words: {} });
+
+test('R3-1: the Forecast page register and limitation lines hold back the run\'s id values, with or without a forecast source', () => {
+  const sourced = [{ role: 'forecast', output: outId('CP-1'), run: RUN, path: `runs/${RUN}/x/forecast.md`, sha256: HASH_2, changed: false }];
+  for (const sources of [[], sourced]) {
+    const model = pickModel(HASH_1, {
+      mode: 'candidate', download: '../d/m.html', href: '../d/m.html', sources,
+      register: { heading: 'Register', intro: null, headers: ['assumption_id', 'driver', 'rationale'], rows: [['A-01', 'margin', 'FY2024 margin carried (C21); upside inherits'], ['A-02', 'margin', 'FY2023 margin (C22)'], ['A-03', 'growth', 'Fade from 16.2%']] },
+      cashflow: { units: 'USD m', columns: gridColumns, notes: [], limits: ['Margin held at C22.', 'Every figure is arithmetic.'], rows: [gridRow('Revenue', 'Revenue', false, [cell('value', '1'), cell('value', '2')])], other: null },
+    });
+    const page = runPage(() => ({ [outId('CP-1')]: fcOutput(), [outId('CP-X')]: calcsOutput([[7, 'C21', '1'], [8, 'C22', '2']]) }), [], m => m, { record: steps(['CP-1', 'CP-X']), runFields: PICK_RUNS, models: [model] });
+    const html = page.forecastView(RUN, HASH_1), below = html.slice(html.indexOf('<div class="report-tools'));
+    const label = `sources=${sources.length}`;
+    assert.ok(!/\bC2[12]\b/.test(strip(below)), `${label}: an id value of the run is drawn`);
+    const register = /<details[\s\S]*?<\/details>/.exec(below)?.[0] ?? '';
+    assert.ok(strip(register).includes('Fade from 16.2%') && register.includes('class="in-ev"'), label);
+    assert.ok(strip(below).includes('Every figure is arithmetic.') && strip(below).includes('1 further limitation is stated in Evidence'), label);
+  }
+});
+
+test('R3-2: a module code is drawn in a card note even when it is an id value of the run; a scenario id is held', () => {
+  const sections = fcSections(), rows = sections[2].blocks.find(b => b.type === 'table').rows;
+  rows[1].cells[3] = 'Revenue as CP-1 states it'; rows[2].cells[3] = 'Per the V03 case';
+  const other = runOutput('CP-X', { sections: [sec('Modules', 3, 10, 'consumed', [table(12, ['Module id', 'Scenario id', 'Role'], [[13, 'CP-1', 'V03', 'Upstream']])])], state: { established: true, declared: null }, summary: null, words: {} });
+  const page = runPage(() => ({ [outId('CP-1')]: fcOutput({ sections }), [outId('CP-X')]: other }), [], m => m, { record: steps(['CP-1', 'CP-X']), runFields: { asOf: '2025-03-31' } });
+  const note = /<div class="fc-note">.*?<\/div>/s.exec(cardOf(page.forecastCharts(RUN), 'Debt maturities'))?.[0] ?? '';
+  assert.ok(strip(note).includes('Revenue as CP-1 states it'), note);
+  assert.ok(!note.includes('V03'), note);
+});
+
+test('R3-3: the run\'s id values are the union over every module of the run, whichever module asks; no context of the run is needed', () => {
+  const tables = (code, header, id) => runOutput(code, { run: 'run-z', sections: [sec('Ids', 3, 10, 'consumed', [table(12, [header, 'Name'], [[13, id, 'x']])])], state: { established: true, declared: null }, summary: null, words: {} });
+  const z = code => `run-z/deliveries/d1/${code}.md`;
+  const page = runPage(d => d, [], m => m, { data: { [z('CP-1')]: tables('CP-1', 'Scenario id', 'V03'), [z('CP-2A')]: tables('CP-2A', 'Scenario id', 'W04') } });
+  // The second argument is the a19b8d6 signature (the asking output); the function ignores it now.
+  for (const code of ['CP-1', 'CP-2A']) assert.deepEqual([...page.runTokens('run-z', z(code))].sort(), ['V03', 'W04'], code);
+});
+
+test('R3-4: the strict context has one construction point', () => {
+  assert.equal(countOf(read('views.js'), /\bstrict:true\b/g), 1);
+});
+
+test('R3-5: the library limitation options read against the run when its context is loaded, and still draw when it is not', () => {
+  assert.deepEqual([...runPage().runTokens(null)], [], 'no run: no tokens');
+  const catalogue = [
+    { id: RUN, checklist: null, gaps: ['Margin held at C22.', 'Every figure is arithmetic.'] },
+    { id: 'unloaded-folder', checklist: null, gaps: ['No covenant data supplied.'] },
+  ];
+  const page = runPage(() => ({ [outId('CP-X')]: calcsOutput([[7, 'C21', '1'], [8, 'C22', '2']]) }), [], m => m, { record: steps(['CP-X']), catalogue });
+  const options = page.libraryChoices().limitation.map(([value]) => value);
+  assert.ok(options.includes('Every figure is arithmetic.') && options.includes('No covenant data supplied.'), options.join(' | '));
+  assert.ok(!options.includes('Margin held at C22.'), options.join(' | '));
 });
 
 // ======== Task 11, fix round 1 ========
