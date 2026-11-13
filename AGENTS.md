@@ -58,8 +58,9 @@ plans, staff roles, pauses and approval records are evidence, not inherited auth
   them, not just successful handoff generation. The HTML Model, charts and calculation
   JSON are parts of that issuer report; the separately delivered HTML report is retired.
   CP-OS owns this end-to-end completion condition, including delivery.
-- A presentation change needs a reader check (one real run read against the September
-  VMO2 reference, recorded in VERIFICATION.md with its scope) as well as a fidelity check.
+- A presentation change needs a fidelity check, recorded in VERIFICATION.md with its scope.
+  The reader check against the September VMO2 reference is retired (owner, 2026-11-13:
+  "remove vmo2 checker the cause was resolved").
 - Keep expected values independent of production calculations. Preserve exact
   amounts, missing versus zero, quantity family, currency, dates and source identities.
 - A live/model success requires actual retained model responses and downstream

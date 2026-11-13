@@ -347,3 +347,10 @@ headed `ID`. Reason: the first-column heuristic banned period labels such as `FY
 under a column headed `Calculation` or any other name is no longer banned from prose. The readers of earlier runs
 (`reader_passages`, `bottom_line_text`, `limitation_texts`, `is_earlier_format`) are not touched. Text only; the
 change is built in a later package.
+
+## Amendment, 2026-11-13
+
+Owner: "remove vmo2 checker the cause was resolved". The reading of one real run per change
+against the September VMO2 reference (decision 11 and the "Not machine-gated" paragraph) is no
+longer required. The VMO2 outputs stay the voice reference; fidelity checks and the mechanical
+prose checks are unchanged. `AGENTS.md` carries the rule.
