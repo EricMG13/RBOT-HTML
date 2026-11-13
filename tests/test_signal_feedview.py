@@ -145,3 +145,26 @@ def test_bad_requests_raise_view_error(db_feed, bad):
 def test_new_count(db_feed):  # every fixture story fetched at 09:40Z
     assert new_count(db_feed, "ak", "latest", "2026-11-13T09:39:00+00:00") == 36
     assert new_count(db_feed, "ak", "latest", "2026-11-13T09:40:00+00:00") == 0
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"view": "topic:99999999999999999999"},
+        {"view": "latest", "before": "2026-11-13T09:00:00+00:00|99999999999999999999"},
+        {"view": "latest", "before": "2026-11-13T09:00:00|5"},
+    ],
+)
+def test_oversized_ids_and_zoneless_cursor_raise_view_error(db_feed, bad):
+    with pytest.raises(ViewError):
+        feed(db_feed, "ak", **bad)
+
+
+def test_new_count_compares_instants_not_text(db_feed):
+    assert new_count(db_feed, "ak", "latest", "2026-11-13T04:40:00-05:00") == 0
+
+
+@pytest.mark.parametrize("since", ["garbage", "", "2026-11-13T09:39:00"])
+def test_new_count_refuses_unparseable_or_zoneless_since(db_feed, since):
+    with pytest.raises(ViewError):
+        new_count(db_feed, "ak", "latest", since)

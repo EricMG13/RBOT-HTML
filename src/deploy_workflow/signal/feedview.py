@@ -54,6 +54,27 @@ _SAVED = "EXISTS(SELECT 1 FROM saves v WHERE v.story_id = s.id AND v.user_name =
 _IN_TOPIC = "EXISTS(SELECT 1 FROM topic_stories ts WHERE ts.story_id = s.id AND ts.topic_id = ?)"
 
 
+MAX_ID = 2**63 - 1
+
+
+def _id(number: str, what: str) -> int:
+    """A decimal id that SQLite can hold, else ViewError."""
+    if not number.isascii() or not number.isdecimal() or int(number) > MAX_ID:
+        raise ViewError(f"invalid {what} {number!r}")
+    return int(number)
+
+
+def _instant(text: str, what: str) -> str:
+    """The stored UTC text of a zoned ISO time, else ViewError."""
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError as exc:
+        raise ViewError(f"malformed {what} {text!r}") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ViewError(f"{what} {text!r} has no time zone")
+    return _utc_text(parsed)
+
+
 def _view_clause(
     db: sqlite3.Connection, user_name: str, view: str
 ) -> tuple[str | None, list[object]]:
@@ -66,7 +87,7 @@ def _view_clause(
         return _SAVED, [user_name]
     prefix, _, number = view.partition(":")
     if prefix == "topic" and number.isascii() and number.isdecimal():
-        topic_id = int(number)
+        topic_id = _id(number, "topic id")
         if db.execute("SELECT 1 FROM topics WHERE id=?", (topic_id,)).fetchone() is None:
             raise ViewError(f"no topic with id {topic_id}")
         return _IN_TOPIC, [topic_id]
@@ -75,13 +96,9 @@ def _view_clause(
 
 def _cursor(before: str) -> tuple[str, int]:
     stamp, bar, number = before.rpartition("|")
-    if not bar or not number.isascii() or not number.isdecimal():
+    if not bar:
         raise ViewError(f"malformed cursor {before!r}")
-    try:
-        datetime.fromisoformat(stamp)
-    except ValueError as exc:
-        raise ViewError(f"malformed cursor {before!r}") from exc
-    return stamp, int(number)
+    return _instant(stamp, "cursor time"), _id(number, "cursor id")
 
 
 def _search_match(query: str) -> str | None:
@@ -161,10 +178,11 @@ def feed(
 
 def new_count(db: sqlite3.Connection, user_name: str, view: str, since: str) -> int:
     """Stories in the view fetched after `since`."""
+    stamp = _instant(since, "since")
     clause, params = _view_clause(db, user_name, view)
     where = " AND " + clause if clause is not None else ""
     row = db.execute(
-        "SELECT COUNT(*) FROM stories s WHERE s.fetched_at > ?" + where, [since, *params]
+        "SELECT COUNT(*) FROM stories s WHERE s.fetched_at > ?" + where, [stamp, *params]
     ).fetchone()
     return int(row[0])
 
