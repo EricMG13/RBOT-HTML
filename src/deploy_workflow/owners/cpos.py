@@ -31,6 +31,7 @@ import sys
 import warnings
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from types import MappingProxyType
@@ -308,6 +309,27 @@ def _handoff(  # noqa: PLR0913 - existing signature
     raise ValueError(f"cpos_module_failed: {task.module_id}: {'; '.join(feedback)}")
 
 
+def _with_web_checks(
+    execute: Callable[[HandoffTask], bytes],
+    check: Callable[[HandoffTask, bytes], tuple[str, ...]],
+) -> Callable[[HandoffTask, bytes], tuple[str, ...]]:
+    """The check ``_handoff`` runs on every response it holds, a retained one on resume included:
+    the launcher's checker, then the web checks of the run's lookup (``HandoffExecutor.web_issues``,
+    none unless the module is offered lookup). The executor's own loop gives a live write the same
+    web issues through ``ModuleTools`` and ``execute.check`` stays the bare checker, so a live
+    write's feedback names each issue once: this wrapper runs only on the response the loop
+    returned, which that loop accepted, and on the next attempt's feedback."""
+    from deploy_workflow.model.handoff import HandoffExecutor
+
+    if not isinstance(execute, HandoffExecutor):
+        return check
+
+    def checked(task: HandoffTask, raw: bytes) -> tuple[str, ...]:
+        return (*check(task, raw), *execute.web_issues(task, raw))
+
+    return checked
+
+
 COMPACTION_NOTE = ".compaction.json"  # beside ``<attempt>.response.md``: the context was summarised
 
 
@@ -579,7 +601,7 @@ def run_handoffs(  # noqa: C901, PLR0912, PLR0913, PLR0915 -- legacy orchestrato
                     task,
                     directory,
                     execute,
-                    check,
+                    _with_web_checks(execute, check),
                     request.max_attempts,
                     retained=retained.get(module_id),
                 )
@@ -829,22 +851,43 @@ def run_live_handoffs(  # noqa: PLR0913 -- the explicit paid entry point takes e
     rulings_root: Path | None = None,
     effort_by_module: Mapping[str, str] | None = None,
     on_notice: Callable[[str], None] | None = None,
+    web_lookup: str = "default",
+    web_hosts: Sequence[str] = (),
+    lookup_cutoff: date | None = None,
 ) -> Path:
     """Explicit paid entry point; callers supply an evidence/instruction checker.
+
+    ``web_lookup`` (``default``, ``on`` or ``off``), ``web_hosts`` (the case's own
+    investor-relations hosts) and ``lookup_cutoff`` (the run's research cutoff; the as-of date
+    when None) set the research module's page and SEC EDGAR lookups. ``default`` is settled
+    here, against the plan's modules and case kind, so the executor and ``loop.json`` hold the
+    answer; a run folder started earlier keeps the setting its ``live/loop.json`` recorded, and a
+    contradicting setting is refused (``ValueError``).
 
     No provider execution occurs during build, import, replay or normal delivery.
     Credentials come from the launching environment, never a file in this API.
     """
     import os
 
-    from deploy_workflow.model.handoff import HandoffExecutor
+    from deploy_workflow.model.handoff import (
+        HandoffExecutor,
+        recorded_web_lookup,
+        settled_web_lookup,
+    )
     from deploy_workflow.model.redact import Redactor
     from deploy_workflow.model_testing.configs import CONFIGS
+    from deploy_workflow.research.weblookup import Runtime
 
     request = HandoffPlan.model_validate_json(manifest.read_bytes())
     if request.execution != "live-provider":
         raise ValueError("cpos_live_mode: manifest must explicitly declare live-provider")
     environment = os.environ if environ is None else environ
+    lookup = settled_web_lookup(
+        web_lookup,
+        list(request.instructions),
+        request.run.case_kind,
+        recorded_web_lookup(directory / "live" / "loop.json"),
+    )
     adapter = live_adapter_for(CONFIGS[config], ruling, environment, rulings_root)
     executor: HandoffExecutor | None = None
     try:
@@ -860,6 +903,10 @@ def run_live_handoffs(  # noqa: PLR0913 -- the explicit paid entry point takes e
             web_search=web_search_run(config, ruling, rulings_root),
             effort_by_module=effort_by_module,
             notice=on_notice,
+            web_lookup=lookup,
+            web_hosts=web_hosts,
+            lookup_cutoff=lookup_cutoff,
+            lookup_runtime=Runtime(env=environment),
         )
         result = run_handoffs(
             manifest,

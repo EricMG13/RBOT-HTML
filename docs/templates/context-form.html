@@ -1838,7 +1838,7 @@ function errorStage(text) {
   if (/\b(modules?|turns|level|model|effort|Claude Opus)\b/i.test(text)) return 'pathway';
   return '';
 }
-let SUMMARY = null;        // {key, answers, error, digest, modules, items, documents, ignored, omitted, changes} for the answers and files held
+let SUMMARY = null;        // {key, answers, error, digest, modules, items, documents, ignored, omitted, changes, lookup} for the answers and files held
 let SUMMARY_BUSY = false;
 let RENDERED = null;       // the summary the module table was built for
 let RENDERED_KEY = '';     // the page's own rule items that table was built from (pageKey)
@@ -1995,13 +1995,17 @@ function defaultedInputs(o) {
     row('Ratings', count(o.ratings.length, 'rating'), !o.ratings.length), assumptions, row('Research questions', count(o.research_questions.length, 'question'), !o.research_questions.length),
     row('Relative value mode', mo.cp3_mode ? shown_('cp3_mode', mo.cp3_mode) : 'Left to the module', !mo.cp3_mode), row('Deep Debate', mo.cp6_deep_debate ? 'On' : 'Off', !mo.cp6_deep_debate)];
 }
+// The launcher's own lookup statement for the research module ('Lookup:   on: ...' and, when present, 'SEC:      ...'),
+// one note per line on that module's row, drawn as text: the card beside it is already as tall as the layout allows.
+const lookupItems = () => !SUMMARY.modules.includes('CP-DR') || !Array.isArray(SUMMARY.lookup) ? [] :
+  SUMMARY.lookup.map((line, i) => ({id: `service:CP-DR:lookup:${i}`, scope: 'CP-DR', outcome: 'information', reason: String(line).replace(/\s+/g, ' ')}));
 function renderReview(sq, o) {
   renderState();
   if (RENDERED !== SUMMARY) {
     RENDERED = SUMMARY;
     RENDERED_KEY = pageKey(o);
     $('rv-ready').textContent = '';
-    if (summaryOk()) $('rv-ready').append(readyTable(sq, pageItems(o, SUMMARY.modules, SUMMARY.items)));
+    if (summaryOk()) $('rv-ready').append(readyTable(sq, [...pageItems(o, SUMMARY.modules, SUMMARY.items), ...lookupItems()]));
   }
   renderFacts(o);
   const defaults = $('rv-defaults');

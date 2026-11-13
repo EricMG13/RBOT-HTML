@@ -4,6 +4,77 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-13 — CP-DR web lookup: page fetch and SEC EDGAR tools (branch `claude/t5-cpdr-lookup-2e88f4`)
+
+Ruling: `docs/rulings/2026-11-13-cpdr-web-lookup.md`. Scope is **offline only**: no live request, no
+provider call, no paid run. Every test uses hand-written fixtures and fake resolvers, connectors and
+clocks. SEC JSON field names are unverified against real responses. A real run needs the owner to
+set `DEPLOY_WORKFLOW_SEC_USER_AGENT` and is a separate paid action.
+
+- Change: `fetch_page`, `sec_company_search`, `sec_filing_list` and `sec_concept_facts` for CP-DR;
+  an allowlist of 28 domains; pages retained under `<run>/live/web/` with a status against the research
+  cutoff; fail-closed acceptance checks on CP-DR's handoff; `--web-lookup` and `--web-host`.
+- Commands, each run on the tree of the commit that carries this entry (second pass, Task 5, on top
+  of the Task 4 commit 72c868b):
+  - `uv run pytest tests/test_weblookup.py tests/test_web_lookup_tools.py tests/test_web_search_scope.py tests/test_handoff_loop.py -q`: 589 passed, exit=0 (fix round 1).
+  - `uv run pytest tests/test_run_start_submissions.py tests/test_run_start_page.py tests/test_run_start_service.py -q`: 375 passed, exit=0 (headless Chrome; two earlier runs under load lost one or two Chrome launches each, exit status 2, and those tests pass alone).
+  - `uv run pytest tests/test_cpos_launch.py -q`: 806 passed, 1 skipped (the paid test), exit=0.
+  - `uv run python tools/quality_gate.py`: 0 findings in 28 changed files, exit=0 (fix round 1).
+  - Instruction size (Task 6): `earnings_update` 521,231 -> 520,888 characters (-343; `INSTRUCTION_BUDGET` unchanged), from the CP-DR method text only (named edit 2c names the two web paragraphs once as "a web paragraph"); `WEB_LOOKUP_RULES` (sent at call time, not in the total) 2,775 -> 2,613 (-162). Probe: `.superpowers/sdd/t5-cpdr-lookup/probes/t6_instruction_size.py`.
+- Scope of the acceptance tests (fix round 3): 15 cases (five `test_rt_*` tests) run the launcher's real checker on a CP-DR handoff in the method's register layout (TDR.1 to
+  TDR.6, the house Basis-line citation form); the remaining acceptance tests call
+  `web_handoff_issues` directly or a stub checker (unit scope). Two launcher tests cover the
+  relaunch rule (a started folder keeps its recorded lookup setting).
+- Hostile cases covered by tests: redirect off the allowlist; oversized body (refused, not
+  truncated); private and local addresses, also on a redirect hop; a post-cutoff page (later event,
+  rejected in a TDR.6 row); a quote not in the cited page; the User-Agent variable missing (refused,
+  names the variable) and never written anywhere; an injected instruction in page text; a forged
+  `<<<END>>>` delimiter; a PDF answer (refused, nothing retained).
+- Reviews: per-task review and two security reviews with probes. Findings were fixed in follow-up
+  commits: 2b34e1a, 0315d23, 0c61069, 73e5490, then the whole-branch review's fix round 3 (the
+  check's citation form, list-item units, TDR.6 one-hop evidence, hosted-search URLs and the
+  relaunch rule; see `git log --oneline 82b17f3..HEAD`).
+- Second-pass review (outside review of the branch): W1 an SEC filing document is dated by its
+  filing date from a filing list retained in the run, W2 a page is dated by the later of its
+  published and modified dates, N1 a cached row gets the index shape check, N2 an unreadable page
+  file gives a plain message (all in 72c868b); W5 a resumed run applies the web checks to a retained
+  CP-DR handoff (`HandoffExecutor.web_issues` through `cpos._with_web_checks`, tested with the
+  launcher's real `checker` in `test_w5_*` of `tests/test_cpos_launch.py`); W4 the run-start
+  summary carries the launcher's own `Lookup:` and `SEC:` lines, drawn on the research module's row
+  (`tests/test_run_start_submissions.py`, `test_run_start_page.py`). W3 (URLs that carry run material
+  are flagged, not refused) was answered, not changed: the ruling gives the reason. Commits on this
+  branch for the pass: 72c868b, then the Task 5 code and docs commits (`git log --oneline
+  e76625c..HEAD` also lists the merged-in main commits).
+- Security review of 72c868b, fix round 1 (the commit after c0220c8; `git log --oneline
+  c0220c8..HEAD`): an unreadable retained page gives the plain sentence on a repeated `fetch_page`
+  too; a filing list is recognised by its submissions address as well as its tool, and a document
+  retained before its list is re-dated by a new index row on the next fetch of its address (no
+  request; pages and bytes are counted per distinct address); the published date is the first found (meta, JSON-LD,
+  body line, `<time>`) and the modified date the latest stated, `page_date` the later of the two;
+  the filing-date lookup compares the host as the allowlist does, decodes the path, uses the latest
+  of several accessions, reads a list through the content-type extension and logs a damaged index.
+- Fix round 2 (re-review of 1c5daed and the Task 5 Low items): the page budget is the number of
+  distinct `url` values in the index and the byte budget the sum of `bytes` over them (a body
+  served at many addresses is charged per address; the re-dated row stays free); an unreadable
+  page that is later re-dated no longer stops `ModuleTools` registering later rows; the resume
+  recheck of a damaged index uses no known pages, as the live write does, and gives the one plain
+  issue only when that leaves the handoff an issue; a row whose `url`, `final_url` or
+  `content_type` is not text is a damaged index; a torn last index line is cut off before the next
+  append. Tests: `test_r1_*`, `test_r2_*`, `test_r3_*`, `test_r4_*`, and the extended
+  `test_a_torn_last_index_line_is_ignored_and_repaired`.
+- Low batch (re-review of 230f68b; commit: the one after 230f68b, `git log --oneline 230f68b..HEAD`): a row is a line that ends with a newline, so `_read_index` ignores an unterminated last line whether or not it parses (as `_append_row` cuts it); with a damaged index the resume recheck gives the one plain issue whenever the handoff names any web source (a `web-` id or an address), whatever the hosted-search setting. Tests: `test_l1_*`, `test_l2_*`.
+- Relaunch rule: a relaunch compares the recorded lookup setting with what the flag settles to for
+  the run's modules and case kind (a run without CP-DR started with `--web-lookup on` records `off`
+  and relaunches with the same flag).
+- Ruling points: with hosted `web_search` also on, a `## Sources` URL that was not fetched is
+  accepted (owner point open); the dropped checks are governed by instruction only.
+- Merge with `claude/quality-defects-appendix-cpdr` (67 commits): both records kept; on the merged tree
+  the web lookup, launcher and handoff-loop tests, `test_cpos_launch.py` and the quality gate exit 0.
+- Run-start summary change (the `Lookup:` and `SEC:` notes on the research module's row): its
+  fidelity check is `tests/test_run_start_submissions.py` and `tests/test_run_start_page.py`
+  (headless Chrome, synthetic case).
+- Not verified: live network behaviour; real SEC responses, headers, encodings and content types; real model use of the
+  tools and its citations; the full suite; concurrent writers to one run's web folder.
 ## 2026-11-13 — No net debt, net leverage or liquidity is published for a forecast year with negative cash (branch `claude/negative-cash-not-calculable`)
 Scope: offline; no provider or model call; no paid run. Owner ruling `docs/rulings/2026-11-13-negative-cash-not-calculable.md`. At publication only (`cpos_forecast._published`): a year whose closing cash is known and below zero writes `net_debt`, `net_leverage` and `liquidity` to `forecast_exact.json` as missing with "Not calculable: cash is negative before funding"; closing cash stays published; zero, positive or missing cash is unchanged; `cp2g.py`, the roll-forward and the break tests are untouched. A block that never reaches negative cash publishes byte-identical files; a delivery already made is not re-derived, and one delivered again with a negative-cash year gets a new delivery beside the old.
 - Fidelity check, scope: ONE real run (`tdg-full-copilot-sol-high-001-resume`, TransDigm, as of 30 September 2024), re-derived by the controller from its own CP-1 and CP-2G handoffs on the branch merged with `main` (exit 0), against the forward credit model's own cells. Downside, shock at 0.3: FY2025 closing cash 1,553.50, net debt 22,746.50, net leverage 6.81x, liquidity 2,396.50 (published); FY2026 (cash -309.77) and FY2027 (cash -2,165.72) each publish the three as missing with the reason, where the module prints "Not calculable: funded closing cash and debt not established"; total leverage 7.28x / 7.25x / 7.22x unchanged. Shock as sent (0.0184): only FY2027 (cash -898.89) is missing. Base, upside and own-drivers cases never reach negative cash and equal the parent byte for byte (reviewer's probe). Page, by reading `store.py` and `views.js` and by the reviewer's grid probe, not in a browser: a missing cell is drawn "n.a." with its reason and listed under "Not available", never 0; charts, the changes comparison and the library metrics do not read this file.
@@ -893,84 +964,3 @@ Owner: "Add docx compatibility too". Input only: nothing is written as Word.
   - Quality gate: 0 findings.
 - Not verified: Word files made by Word itself; the tests build minimal files by hand.
 
-## 2026-11-10 — Web search for the research module, offline (branch `claude/optimistic-johnson-bmnwip`, after main `1fbc57c`)
-
-Owner: "Cp-dr supplies the peers … By default cp-dr always provides the peers or 1C and 2 can never
-run", then "Yes" to working out web search for CP-DR. No provider was called; no paid run.
-
-- Sources:
-  - OpenAI pages fetched 2026-11-10 through owner-approved network access: the pricing page, the
-    web search guide, the Responses reference and the gpt-6.1-sol model page.
-  - Quoted in `cases/pricing/openai-web-search.json`: USD 10.00 per 1,000 calls plus search
-    content tokens at model rates; tool `{"type": "web_search"}`; `include`
-    `web_search_call.action.sources`; `max_tool_calls`; web search listed as supported for
-    gpt-6.1-sol.
-- What changed:
-  - **Grant.** CP-DR searches only when the run's ruling lists `web-search` on its `configs:`
-    line (`owners/cpos.py` `web_search_ruled`), and only on OpenAI. Other providers are refused
-    before a call. The launcher prints a `Web:` line when CP-DR runs.
-  - **Request.** Only CP-DR's requests carry the hosted tool, with at most 16 calls per response.
-    Its system text adds the rules: public names only in a query, nothing published after the
-    research cutoff, every web item cited by URL and date, figures quoted verbatim.
-  - **Record.** A reply's `web_search_call` items are kept in the response record under
-    `openai-web-search` and never sent back. A reasoning item before one is dropped, since it
-    would go back without the item that followed it.
-  - **Money.** Each searching call holds USD 0.16 more and is charged USD 0.01 per search action.
-    Opening a page or searching within one is not charged; the guide names only search actions.
-    A sent reply that cannot be read is charged the whole USD 0.16.
-- Unchanged without the grant: the stored request and the OpenAI body for CP-2 and for CP-DR
-  hash the same before and after (checked by script on both checkouts).
-- Tests:
-  - Written first: `tests/model/test_providers.py` (3) and `tests/test_handoff_loop.py` (3) failed
-    at import before the code existed. `tests/test_cpos_launch.py` (1) fails with the launcher's
-    grant wiring reverted.
-  - Added after: the unreadable-reply charge test; reverting that charge to zero fails it.
-  - `tests/model/test_pricing.py` pins the fee to the key file.
-  - `tests/model`, the loop, launcher, library-page, context-form and inbox-watcher tests: 1,178
-    passed, 3 skipped. 8 failed, every one of them also failing on unchanged code here: the 3 on
-    `tests/known-failures.txt`, and 5 inbox-watcher permission tests, because the sandbox runs as
-    root.
-  - Quality gate: 0 findings.
-- Not verified, until a paid run:
-  - that web search runs with `store: false`;
-  - that search content tokens are in `usage.input_tokens`;
-  - that CP-DR ends a searching turn with a tool call under `tool_choice: "required"`;
-  - whether its peer pack respects the cutoff;
-  - whether CP-1C then has peers.
-- Not done: the standing inbox ruling and every other ruling are unchanged, so web search stays off
-  until the owner adds `web-search` to a ruling.
-- Merged as `88c50ee` (#30). Owner: "Merge then test".
-  - Ruling `docs/rulings/2026-11-10-cpdr-web-search-test.md`: CP-0, CP-1, CP-DR and CP-1C on TDG,
-    `sol-medium` with web search, cap USD 10.
-  - Dry launch here (no provider call) with tdg-all-001's context and a one-line stand-in source:
-    the four modules are accepted and the launcher prints "CP-DR searches the web (the ruling lists
-    web-search)".
-  - Each call holds USD 5.73, or 5.89 for CP-DR, so the run can spend about USD 4.10 before the
-    next hold no longer fits the cap. A stop there can be resumed.
-  - The paid run needs the owner's machine, which has the TDG files and the key.
-
-## 2026-11-10 — Context form against live run tdg-all-001 (branch `claude/optimistic-johnson-bmnwip`, after main `53a5632`)
-
-Owner: "Yes do that" (compare tdg-all-001 with the form's forecast), "Your recommendation", then
-"Cp-dr supplies the peers, the user does not provide them unless they specifically want to in the
-context file…" and "User can provide peers but it is optional". Design note section 8. Compared
-against the run's record below. The run folder was not read.
-
-- Forecasts were made before the run reported. Of the 10 modules with a recorded outcome, the form
-  flagged 9 and the launcher's `run_expectations` 5. The form's miss was CP-DR: Ready, but Blocked.
-  The form's 4 Gaps for a missing source (CP-1C, CP-2H, CP-3D, CP-3) came back Blocked.
-  CP-1D's Gap came back Restricted.
-- CP-1D: no bridge is now Limited (its reads worked in the run).
-- CP-DR: the form no longer asks for the peers' filings. Supplying peers is optional: add the
-  peers' filings to the folder, which CP-DR is told to read, or give your own peer figures. CP-DR
-  carries a Note, not counted: CP-OS gives no module a web search tool (`model/handoff.py`
-  `TOOLS`). CP-OS sends CP-DR both cp-os's SKILL v1.1 (2026-07-22, web or hybrid research; blocks
-  without web) and `cpdr.md` (2026-10-31, LOCAL). Neither reaches public peers here.
-- Not changed: CP-2H, CP-3D and CP-3 had every read refused in the run, so they wait for a rerun.
-  The registry keeps CP-DR optional for CP-1C and CP-2. That is a registry decision, not a form
-  one.
-- Tests: `test_the_research_module_supplies_the_peers_and_the_bridge_is_forecast_as_run` fails on
-  the first version of this change, which asked about peer files, and passes now.
-  `tests/test_library_page_browser.py` and `tests/test_context_form.py`: 45 passed. Quality gate: 0
-  findings.
-- Not verified: no live run of the changed forecast; one issuer, one date.

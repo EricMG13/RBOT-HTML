@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import types
 import typing
 from collections import Counter
@@ -2470,6 +2471,8 @@ def test_every_module_is_told_what_stands_for_acceptance_scripts_and_questions(t
 # CP-8 pin recomputed on 2026-11-13 (merge of origin/main into claude/deploy-v-methods): it is the
 # merge of main's CP-8 method change (cp8.md redesign) with this branch's appendix section. Every
 # other pin is this branch's value; main changed no other method text.
+# CP-DR pin recomputed on 2026-11-13 for named edit 2c (the lookup paragraph; t5-cpdr-lookup)
+# and again after the base merge that added the register-scope section.
 # Ten pins recomputed on 2026-11-13 and again the same day for the canon-rule clause, CP-5's and
 # CP-6's two kept ids, CP-2E's kept ESG tables and the routing-ids sentence in every section
 # (T4, ruling 2026-11-13-appendix-and-routing-scope.md): CP-0, CP-1A, CP-DR, CP-2, CP-2A, CP-2E,
@@ -2496,7 +2499,7 @@ METHOD_TEXT_SHA256_AT_1B41E65 = {
     "CP-5": "d9298b83eba40be26a7cc6ddf5d5c12558e5c5cd471e7ce39e9c3942dc27f733",
     "CP-6": "3c5666e0da9f1898005a01dfdecc117580118bd2cdaa9796b84e646262ed80d5",
     "CP-8": "0a0b339a9f9a284328b9a6fb50513a9bd03f2aa58dd45a387fe057b6ce2612c3",
-    "CP-DR": "a653c33d85726c2eafd65b91940ecaa8cb7787a158c3f9439ffea2a139f18657",
+    "CP-DR": "476b3e75a7b1f5d0d3349512bb220fde603988caa9cd4af5f8f62996dae0cd81",
     "CP-L10": "5b0e904dd62e1d1b341ec3d7d1717500d68ce1aee734b347e0dbbdfbe696b006",
 }
 
@@ -7255,6 +7258,365 @@ def test_a_note_for_the_separate_cp8_comparison_prints_the_same_review_line(tmp_
     )
     cpos.report_compaction(tmp_path, "requests/CP-8/fp/2.response.md", "CP-8")
     assert capsys.readouterr().err == ""
+
+
+# ---- Web lookup (CP-DR's fetch_page and SEC tools): the flag, the readiness lines and the
+# hand-over to the live run. The rule itself is `web_lookup_offered`; the rest is in
+# tests/test_web_lookup_tools.py.
+SEC_AGENT_VARIABLE = "DEPLOY_WORKFLOW_SEC_USER_AGENT"
+SEC_AGENT_VALUE = "Example Co person@example.invalid"
+
+
+def lookup_output(tmp_path, capsys, kind, *flags, agent=None, monkeypatch=None):
+    """Everything the launcher printed, read once: capsys is drained by the read."""
+    if monkeypatch is not None:
+        if agent is None:
+            monkeypatch.delenv(SEC_AGENT_VARIABLE, raising=False)
+        else:
+            monkeypatch.setenv(SEC_AGENT_VARIABLE, agent)
+    argv = launch(tmp_path, "--modules", "CP-DR", *flags)
+    with_case_kind(tmp_path / "context.json", kind)
+    assert main(argv) == 0
+    out = capsys.readouterr()
+    return out.out + out.err
+
+
+def lookup_lines(tmp_path, capsys, kind, *flags, agent=None, monkeypatch=None):
+    text = lookup_output(tmp_path, capsys, kind, *flags, agent=agent, monkeypatch=monkeypatch)
+    return [line for line in text.splitlines() if line.startswith(("Lookup:", "SEC:"))]
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        (
+            "public",
+            (),
+            (
+                "Lookup:   on: CP-DR may fetch allowlisted public pages and SEC EDGAR "
+                "(public case default)"
+            ),
+        ),
+        ("private", (), "Lookup:   off: private case (default); --web-lookup on forces it"),
+        ("synthetic", (), "Lookup:   off: synthetic case (default); --web-lookup on forces it"),
+        ("private", ("--web-lookup", "on"), "Lookup:   on (forced by --web-lookup on)"),
+        ("public", ("--web-lookup", "off"), "Lookup:   off (forced by --web-lookup off)"),
+        (
+            "public",
+            (
+                "--web-lookup",
+                "default",
+                "--web-host",
+                "ir.example.com",
+                "--web-host",
+                "Ir2.Example.com",
+            ),
+            (
+                "Lookup:   on: CP-DR may fetch allowlisted public pages and SEC EDGAR "
+                "(public case default); case hosts: ir.example.com, ir2.example.com"
+            ),
+        ),
+    ],
+)
+def test_the_run_summary_says_whether_cpdr_may_look_things_up(tmp_path, capsys, monkeypatch, case):
+    kind, flags, line = case
+    text = lookup_output(
+        tmp_path, capsys, kind, *flags, agent=SEC_AGENT_VALUE, monkeypatch=monkeypatch
+    )
+    assert [x for x in text.splitlines() if x.startswith(("Lookup:", "SEC:"))] == [line]
+    assert SEC_AGENT_VALUE not in text
+
+
+def test_the_sec_line_appears_when_lookup_is_on_and_the_contact_string_is_not_set(
+    tmp_path, capsys, monkeypatch
+):
+    found = lookup_lines(tmp_path, capsys, "public", monkeypatch=monkeypatch)
+    assert found[1] == (
+        "SEC:      sec.gov lookups will be refused: DEPLOY_WORKFLOW_SEC_USER_AGENT is not set"
+    )
+    (tmp_path / "b").mkdir()
+    off = lookup_lines(tmp_path / "b", capsys, "private", monkeypatch=monkeypatch)
+    assert len(off) == 1  # nothing to refuse while lookup is off
+
+
+def test_the_lookup_line_is_printed_only_when_the_research_module_runs(tmp_path, capsys):
+    assert main(launch(tmp_path, "--modules", "CP-4")) == 0
+    assert "Lookup:" not in capsys.readouterr().out
+
+
+def test_a_default_relaunch_of_a_run_started_without_lookup_resumes(tmp_path, provider):
+    argv = launch(tmp_path, "--modules", "CP-4", "--live", "--ruling", str(RULING))
+    with_case_kind(tmp_path / "context.json", "public")
+    routes = prepare_routes(tmp_path, "sol-medium")
+    provider.answer = lambda context: answer(context, routes)
+    assert main([*argv, "--web-lookup", "off"]) == 0
+    sent = list(provider.calls)
+    assert main(argv) == 0  # the default: no research module here, so loop.json stays as it was
+    assert provider.calls == sent
+    assert "web_lookup" not in json.loads((tmp_path / "out/live/loop.json").read_text())
+    (tmp_path / "b").mkdir()
+    argv = launch(tmp_path / "b", "--modules", "CP-4", "--live", "--ruling", str(RULING))
+    with_case_kind(tmp_path / "b/context.json", "public")
+    assert main(argv) == 0  # a default first launch writes no web_lookup key either
+    assert "web_lookup" not in json.loads((tmp_path / "b/out/live/loop.json").read_text())
+
+
+def test_a_run_started_with_lookup_off_keeps_it_off_on_relaunch(tmp_path, provider, capsys):
+    argv = launch(tmp_path, "--modules", "CP-DR", "--live", "--ruling", str(RULING))
+    with_case_kind(tmp_path / "context.json", "public")
+    routes = prepare_routes(tmp_path, "sol-medium", modules=("CP-DR",))
+    provider.answer = lambda context: answer(context, routes)
+    assert main([*argv, "--web-lookup", "off"]) == 0
+    sent = list(provider.calls)
+    capsys.readouterr()
+    assert main(argv) == 0
+    assert provider.calls == sent
+    out = capsys.readouterr().out
+    assert "Lookup:   off (as recorded when this run folder was started)" in out
+    assert main([*argv, "--web-lookup", "on"]) == 2
+    assert "was off when this run folder was started" in capsys.readouterr().err
+    assert provider.calls == sent
+
+
+def test_an_identical_on_relaunch_of_a_run_without_cp_dr_resumes(tmp_path, provider):
+    argv = launch(tmp_path, "--modules", "CP-4", "--live", "--ruling", str(RULING))
+    with_case_kind(tmp_path / "context.json", "public")
+    routes = prepare_routes(tmp_path, "sol-medium")
+    provider.answer = lambda context: answer(context, routes)
+    command = [*argv, "--web-lookup", "on"]
+    assert main(command) == 0  # settles to off: no research module in this run
+    sent = list(provider.calls)
+    assert main(command) == 0  # the same command again compares what it settles to, not the flag
+    assert provider.calls == sent
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "https://ir.example.com",
+        "ir.example.com/x",
+        "ir.example.com:8443",
+        "*.example.com",
+        "10.1.2.3",
+        "intranet",
+    ],
+)
+def test_a_web_host_must_be_a_bare_host_name(tmp_path, capsys, bad):
+    with pytest.raises(SystemExit) as stop:
+        main(launch(tmp_path, "--modules", "CP-DR", "--web-host", bad))
+    assert stop.value.code == 2
+    assert "--web-host" in capsys.readouterr().err
+
+
+def test_an_unknown_web_lookup_value_is_refused(tmp_path):
+    with pytest.raises(SystemExit) as stop:
+        main(launch(tmp_path, "--modules", "CP-DR", "--web-lookup", "maybe"))
+    assert stop.value.code == 2
+
+
+def test_the_live_run_is_handed_the_lookup_setting_hosts_and_cutoff(tmp_path, monkeypatch):
+    from datetime import date
+
+    monkeypatch.setenv(cpos_launch.KEY_VARIABLES["openai"], "sk-test-" + "x" * 30)
+    seen = {}
+
+    def fake_run(manifest, directory, **kwargs):
+        seen.update(kwargs)
+        return directory / "delivery.json"
+
+    monkeypatch.setattr(cpos_launch, "run_live_handoffs", fake_run)
+    argv = launch(
+        tmp_path, "--modules", "CP-DR", "--live", "--ruling", str(RULING), "--no-library",
+        "--web-lookup", "on", "--web-host", "ir.example.com",
+    )  # fmt: skip
+    assert main(argv) == 0
+    assert (seen["web_lookup"], seen["web_hosts"]) == ("on", ("ir.example.com",))
+    assert seen["lookup_cutoff"] == date(2025, 3, 31)  # the as-of date: the context sets no cutoff
+
+
+def test_a_context_cutoff_before_the_as_of_date_is_the_lookup_cutoff(tmp_path, monkeypatch):
+    from datetime import date
+
+    monkeypatch.setenv(cpos_launch.KEY_VARIABLES["openai"], "sk-test-" + "x" * 30)
+    seen = {}
+    monkeypatch.setattr(
+        cpos_launch, "run_live_handoffs", lambda m, d, **k: seen.update(k) or d / "delivery.json"
+    )
+    argv = launch(tmp_path, "--modules", "CP-DR", "--live", "--ruling", str(RULING), "--no-library")
+    path = tmp_path / "context.json"
+    data = json.loads(path.read_text())
+    data["run"]["cutoff"] = "2025-01-15"
+    path.write_text(json.dumps(data))
+    assert main(argv) == 0
+    assert seen["lookup_cutoff"] == date(2025, 1, 15)
+
+
+def test_run_live_handoffs_resolves_the_default_against_the_case_kind(tmp_path, monkeypatch):
+    from deploy_workflow.model import handoff
+    from deploy_workflow.owners import cpos
+
+    class Stop(Exception):
+        pass
+
+    seen = {}
+
+    def executor(*args, **kwargs):
+        seen.update(kwargs)
+        raise Stop
+
+    for kind, expected in (("public", "on"), ("private", "off")):
+        monkeypatch.setattr(handoff, "HandoffExecutor", executor)
+        monkeypatch.setattr(cpos, "live_adapter_for", lambda *a, **k: object())
+        out = tmp_path / kind
+        out.mkdir()
+        prepare(
+            with_case_kind(context_file(out), kind),
+            issuer_folder(out),
+            out / "out",
+            config="sol-medium",
+            cap="50",
+        )
+        with pytest.raises(Stop):
+            cpos.run_live_handoffs(
+                out / "out/workflow.json",
+                out / "live",
+                ruling=RULING,
+                check=lambda *_: (),
+                environ={SEC_AGENT_VARIABLE: SEC_AGENT_VALUE},
+            )
+        assert seen["web_lookup"] == expected
+        assert seen["lookup_runtime"].env[SEC_AGENT_VARIABLE] == SEC_AGENT_VALUE
+
+
+# A resumed run applies the web checks to a retained CP-DR handoff (Task 5, W5). The checker is the
+# launcher's own (`checker(layout)`); the run is the one real loop with the fake provider.
+
+
+def retained_cpdr(tmp_path, provider, kind="public"):
+    """A finished CP-DR run, and its retained response pinned in a manifest for a second folder.
+    Returns (manifest, layout, the response text, the second folder's live folder)."""
+    argv = launch(tmp_path, "--modules", "CP-DR", "--live", "--ruling", str(RULING))
+    with_case_kind(tmp_path / "context.json", kind)
+    routes = prepare_routes(tmp_path, "sol-medium", modules=("CP-DR",))
+    provider.answer = lambda context: answer(context, routes)
+    assert main(argv) == 0
+    out = tmp_path / "out"
+    (record,) = out.glob("requests/CP-DR/*/1.request.json")
+    asked = json.loads(record.read_text())
+    response = (record.parent / "1.response.md").read_text()
+    request = HandoffPlan.model_validate_json((out / "workflow.json").read_bytes())
+    return request, asked, response, out
+
+
+def resume_with(retained, response, again):
+    request, asked, _, out = retained
+    path = "retained/CP-DR.md"
+    (out / path).parent.mkdir(exist_ok=True)
+    (out / path).write_text(response)
+    pin = RetainedHandoff(
+        path=path,
+        sha256=hashlib.sha256(response.encode()).hexdigest(),
+        source_hashes=asked["sources"],
+        upstream=asked["handoffs"],
+    )
+    manifest = out / "workflow-retained.json"
+    manifest.write_text(
+        request.model_copy(update={"retained_handoffs": {"CP-DR": pin}}).model_dump_json()
+    )
+    return cpos_launch.run_live_handoffs(
+        manifest,
+        again,
+        ruling=RULING,
+        check=checker(request.layout),
+        max_turns=4,
+        max_output_tokens=cpos_launch.MAX_OUTPUT_TOKENS,
+    )
+
+
+def cites_a_page(response: str, sid: str, url: str) -> str:
+    from test_web_lookup_tools import row
+
+    table = (
+        "| Source | URL | Publisher | Stated date | Source type |\n|---|---|---|---|---|\n"
+        f"{row(sid, url)}\n"
+    )
+    return response.replace("## Sources\n", "## Sources\n\n" + table, 1)
+
+
+def retain_page(again: Path) -> tuple[str, str]:
+    """Fetch the fake issuer page into ``again/live/web`` with the real lookup; its id and url."""
+    from test_web_lookup_tools import HOST, PAGE, FakeNet, make, pages
+
+    lookup = make(again / "scratch", FakeNet(pages()), case_hosts=frozenset({HOST}))
+    item = lookup.fetch_page(PAGE)
+    shutil.copytree(again / "scratch" / "run" / "web", again / "live" / "web")
+    return item.source_id, PAGE
+
+
+MISSING_PAGE = "web-0123456789ab"
+
+
+def test_w5_a_retained_cpdr_handoff_citing_a_page_absent_from_the_index_is_rejected_on_resume(
+    tmp_path, provider
+):
+    from test_web_lookup_tools import PAGE
+
+    retained = retained_cpdr(tmp_path, provider)
+    response = retained[2]
+    again = tmp_path / "again"
+    (again / "live" / "web").mkdir(parents=True)
+    (again / "live" / "web" / "index.jsonl").write_text("")
+    bad = cites_a_page(response, MISSING_PAGE, PAGE)
+    with pytest.raises(ValueError, match="cpos_retained_rejected: CP-DR") as raised:
+        resume_with(retained, bad, again)
+    assert MISSING_PAGE in str(raised.value)
+    assert "retained web pages could not be read" not in str(raised.value)
+
+
+def test_w5_the_same_retained_handoff_with_its_page_in_the_index_is_accepted(tmp_path, provider):
+    retained = retained_cpdr(tmp_path, provider)
+    response = retained[2]
+    again = tmp_path / "again"
+    sid, url = retain_page(again)
+    good = cites_a_page(response, sid, url)
+    resume_with(retained, good, again)
+    assert json.loads((again / "live" / "loop.json").read_text())["web_lookup"] is True
+
+
+def test_w5_with_lookup_off_a_retained_handoff_is_checked_as_before(tmp_path, provider):
+    from test_web_lookup_tools import PAGE
+
+    retained = retained_cpdr(tmp_path, provider, kind="private")
+    response = retained[2]
+    bad = cites_a_page(response, MISSING_PAGE, PAGE)
+    resume_with(retained, bad, tmp_path / "again")
+    assert "web_lookup" not in json.loads((tmp_path / "again/live/loop.json").read_text())
+
+
+def test_w5_a_damaged_index_rejects_a_retained_cpdr_handoff_with_one_plain_issue(
+    tmp_path, provider
+):
+    retained = retained_cpdr(tmp_path, provider)
+    response = retained[2]
+    again = tmp_path / "again"
+    (again / "live" / "web").mkdir(parents=True)
+    (again / "live" / "web" / "index.jsonl").write_text('{"bytes": "x"}\n{"bytes": 1}\n')
+    from test_web_lookup_tools import PAGE
+
+    with pytest.raises(ValueError, match="cpos_retained_rejected: CP-DR") as raised:
+        resume_with(retained, cites_a_page(response, MISSING_PAGE, PAGE), again)
+    assert "retained web pages could not be read" in str(raised.value)
+    assert str(tmp_path) not in str(raised.value)
+
+
+def test_w5_a_damaged_index_accepts_a_retained_cpdr_handoff_that_cites_no_web_page(
+    tmp_path, provider
+):
+    retained = retained_cpdr(tmp_path, provider)
+    again = tmp_path / "again"
+    (again / "live" / "web").mkdir(parents=True)
+    (again / "live" / "web" / "index.jsonl").write_text('{"bytes": "x"}\n{"bytes": 1}\n')
+    resume_with(retained, retained[2], again)  # as the live write accepted it
 
 
 def test_distinct_uncharged_starts_in_one_call_are_counted_apart_and_one_attempt_once(tmp_path):

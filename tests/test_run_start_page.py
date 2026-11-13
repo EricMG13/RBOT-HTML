@@ -847,6 +847,32 @@ def test_the_review_shows_the_services_forecast_per_module(page):
     assert "confirmed when the summary is made" not in seen["ready"]
 
 
+def test_the_review_draws_the_launchers_lookup_statement_as_text(page):
+    seen = page.run(f"""
+    await issuer('credit_snapshot', [file('annual.txt', {json.dumps(REPORT)})]);
+    await review();
+    const row = () => document.querySelector('#rv-ready [data-module="CP-DR"]');
+    const own = row().textContent, lines = [...SUMMARY.lookup];
+    const facts = document.getElementById('rv-facts').textContent;
+    SUMMARY.lookup = ['Lookup:   on: <img src=x onerror="window.pwned=1"> (marker)',
+      'SEC:      sec.gov lookups will be refused: A is not set'];
+    RENDERED = null;
+    const o = build();
+    renderReview(seqFor(o), o);
+    return {{lines, own, facts, drawn: row().textContent, pwned: window.pwned === 1,
+      images: document.querySelectorAll('#rv-ready img').length}};
+    """)
+    lines = seen["lines"]
+    assert lines[0].startswith("Lookup:   on: CP-DR may fetch allowlisted public pages")
+    for line in lines:  # the launcher's own lines, whitespace collapsed, module codes as names
+        assert named(" ".join(line.split())) in seen["own"]
+    assert not re.search(r"\bCP-[A-Z0-9]+\b", seen["own"])
+    assert "Lookup" not in seen["facts"]  # one place: the research module's row
+    assert 'Lookup: on: <img src=x onerror="window.pwned=1"> (marker)' in seen["drawn"]
+    assert "SEC: sec.gov lookups will be refused: A is not set" in seen["drawn"]
+    assert seen["images"] == 0 and seen["pwned"] is False
+
+
 def test_the_page_offers_the_lite_credit_assessment_and_the_service_reviews_its_five_modules(page):
     """The lite credit assessment (CP-0, CP-1, CP-1A, CP-2, CP-2A) is the second pathway offered.
     The deactivated short credit snapshot is not offered at all."""
