@@ -314,8 +314,8 @@
   "docs/rulings/2026-11-10-cpdr-web-search-test.md": "ae9500b29951967be30b4051dec24d93f2e45946",
   "docs/rulings/2026-11-10-short-live-test.md": "dab8c130f0a357be4566b2e7da0dd4664b061136",
   "docs/rulings/2026-11-11-cpdr-web-search-live-test.md": "180e0423875bb5528352028903838fdea7845b61",
-  "docs/rulings/2026-11-11-module-presets-and-changes.md": "ddcfcc5daa0a379c4f6f6389d8aae2c87cf75597",
-  "docs/rulings/2026-11-11-reader-and-issuer-report.md": "118a5b02940356918453004d10cbabb02047b0c4",
+  "docs/rulings/2026-11-11-module-presets-and-changes.md": "8f9ec4bb14fd1c70ca07503344805222cfea43a4",
+  "docs/rulings/2026-11-11-reader-and-issuer-report.md": "0d995b996b1b45bb474a46c038c431cc21f7546e",
   "docs/rulings/2026-11-11-reader-format-live-test.md": "39bf927a2e41ea15480adabd0d4879f9b5c76bf7",
   "docs/rulings/2026-11-11-run-start-submit.md": "cf7ab1c62e688fed6ba540e8107e294a9ae5ee89",
   "docs/rulings/2026-11-12-credit-snapshot-claude-rerun.md": "327963ca7484d0bdfd979c7f81cbe4621640d87d",
@@ -804,6 +804,6 @@
   "tools/work_pc_delta.py": "fa5e9e81c534657f593cb8752a94de10cba0eead",
   "uv.lock": "7a4f05aeff999e9284ec29f34acacdd2619d64b1"
  },
- "head": "ad3f1b2e9e79daec1dc9a376368c92dc01d7d68a",
- "head_date": "2026-11-13T01:00:41Z"
+ "head": "e8f3e1f1bdf8a7edc64e445fa0f8c516580b2a99",
+ "head_date": "2026-11-13T04:16:17Z"
 }
