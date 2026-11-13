@@ -1748,7 +1748,7 @@ test('live run activity draws one card per running run: name, pathway, submitter
   assert.ok(!html.includes('Initech') && !html.includes('<a '), 'a finished run is not drawn, and no run links to a report');
   assert.strictEqual(countOf(html, /<li class="run-card /g), 1);
   const card = html.slice(html.indexOf('<li class="run-card'));
-  assert.ok(card.includes('<span class="run-path">Credit snapshot</span>') && card.includes('<span class="run-by">submitted by Dana</span>') && card.includes('<span class="run-time">started 9 November 2026, 13:41 UTC</span>'));
+  assert.ok(card.includes('<span class="run-path">Full credit assessment</span>') && card.includes('<span class="run-by">submitted by Dana</span>') && card.includes('<span class="run-time">started 9 November 2026, 13:41 UTC</span>'));
   assert.ok(card.indexOf('rmark running') < card.indexOf('class="steps-w"'), 'the run mark comes before the steps');
   assert.ok(!card.includes('<progress'), 'C13 steps replace the progress bar');
 });
@@ -1861,7 +1861,7 @@ test('waiting runs are a compact list: the queued mark, name, pathway and submit
   assert.ok(!html.includes('<table') && !html.includes('<th'), 'a list, not a grid');
   const rows = html.split('<li class="live-run live-queued').slice(1);
   assert.strictEqual(rows.length, 2);
-  assert.ok(rows[0].includes('rmark queued') && rows[0].includes('Qone') && rows[0].includes('Credit snapshot') && rows[0].includes('submitted by Dana') && rows[0].includes('waiting for a slot') && !rows[0].includes('Stalled'));
+  assert.ok(rows[0].includes('rmark queued') && rows[0].includes('Qone') && rows[0].includes('Full credit assessment') && rows[0].includes('submitted by Dana') && rows[0].includes('waiting for a slot') && !rows[0].includes('Stalled'));
   assert.ok(rows[1].includes('rmark stalled') && rows[1].includes('<span class="state-w">Stalled</span>') && !rows[1].includes('rmark queued'));
   assert.ok(html.indexOf('Runner') < html.indexOf('Qone'), 'Running comes first');
 });
@@ -3231,7 +3231,7 @@ test('Report history: a vertical run timeline with the date as written, the path
   assert.ok(html.includes('<ol class="tl tl-v">') && html.includes('aria-label="Runs of Synthetic Issuer, latest as-of date first"') && !html.includes('<table'));
   assert.ok(html.includes('<span data-count>4</span> runs'));
   const [a, b, d, c] = histRows(html);
-  assert.deepEqual([strip(a.date), strip(a.pathway)], ['31 December 2025', 'Credit snapshot']);
+  assert.deepEqual([strip(a.date), strip(a.pathway)], ['31 December 2025', 'Full credit assessment']);
   assert.deepEqual([strip(b.date), strip(d.date)], ['31 March 2025', '31 March 2025']);
   assert.deepEqual([strip(c.date), strip(c.pathway)], ['Not recorded', 'Not recorded']);
   const titles = row => dotLabels(row.dots).map(label => label.split(': ')[0]);
@@ -3255,7 +3255,7 @@ test('Report history: What changed opens the run\'s Changes page, and is absent 
   const recorded = { first_run: false, pack: { prior: { run: 'x', as_of: '2024-01-01', pathway: 'credit_snapshot' }, measures: [] } };
   const page = runPage(d => d, [], m => m, { ...HIST, runFields: { ...HIST.runFields, changes: recorded }, contexts: { ...HIST.contexts, 'run-b': { ...HIST.contexts['run-b'], changes: recorded } } });
   const [a, b, d, c] = histRows(page.historyView(RUN));
-  assert.ok(a.links.includes('<a class="text-action" href="#W-Changes/changes?c=run-a" aria-label="What changed in the run of 31 December 2025, Credit snapshot">What changed'));
+  assert.ok(a.links.includes('<a class="text-action" href="#W-Changes/changes?c=run-a" aria-label="What changed in the run of 31 December 2025, Full credit assessment">What changed'));
   assert.ok(b.links.includes('href="#W-Changes/changes?c=run-b"'), 'run-d is the earlier run of the same pathway');
   assert.ok(!d.links.includes('What changed') && !c.links.includes('What changed'), 'a run whose record holds no comparison, and a run of no pathway, have nothing for the Changes page to show');
   const one = runPage(d => d, [], m => m, { catalogue: [zedRun()], runFields: { ...synthetic, asOf: '2025-01-01' } }).historyView(RUN);
@@ -3290,9 +3290,9 @@ test('Earlier methods: the badge sits beside Earlier format in the Report histor
     assert.equal(strip(b.marks), 'Completed · 1 not assessable Earlier methods Latest');
     assert.equal(strip(d.marks), 'Completed Earlier', 'no list, no badge');
     assert.ok(b.marks.includes('<span class="badge badge-gray earlier-methods">Earlier methods</span>'));
-    assert.equal(strip(page.runLabel('W-Evidence', RUN).replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: 31 December 2025 · Credit snapshot · Run A Earlier format Earlier methods');
-    assert.equal(strip(page.runLabel('W-Forecast', 'run-b').replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: 31 March 2025 · Credit snapshot Earlier methods');
-    assert.equal(strip(page.runLabel('W-Forecast', 'run-d').replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: 31 March 2025 · Credit snapshot');
+    assert.equal(strip(page.runLabel('W-Evidence', RUN).replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: 31 December 2025 · Full credit assessment · Run A Earlier format Earlier methods');
+    assert.equal(strip(page.runLabel('W-Forecast', 'run-b').replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: 31 March 2025 · Full credit assessment Earlier methods');
+    assert.equal(strip(page.runLabel('W-Forecast', 'run-d').replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: 31 March 2025 · Full credit assessment');
   } finally {
     delete HIST.contexts['run-b'].methodChanges;
     delete HIST.runFields.methodChanges;
@@ -3304,7 +3304,7 @@ test('Report history: the selected run\'s entry is marked aria-current and every
   const rows = histRows(html);
   assert.deepEqual(rows.map(r => r.attrs.includes('aria-current="true"')), [false, true, false, false]);
   for (const row of rows) assert.ok(/<a class="text-action" href="#W-Overview\/overview\?c=run-[a-d]" aria-label="Open run: [^"]+">Open overview/.test(row.links), row.links);
-  assert.ok(rows[1].links.includes('aria-label="Open run: 31 March 2025, Credit snapshot"'));
+  assert.ok(rows[1].links.includes('aria-label="Open run: 31 March 2025, Full credit assessment"'));
   assert.ok(rows[1].marks.includes('<span class="badge badge-gray">Showing</span>') && !rows[0].marks.includes('Showing'));
 });
 
@@ -3319,9 +3319,9 @@ test('M6: a handoff the build could not read is not an Earlier format; a run wit
 test('run label: the run\'s date, pathway and code, the Earlier format badge only where H7 holds, and the link to the Report history', () => {
   const page = histPage();
   const earlier = page.runLabel('W-Evidence', RUN);
-  assert.equal(strip(earlier.replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: 31 December 2025 · Credit snapshot · Run A Earlier format');
+  assert.equal(strip(earlier.replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: 31 December 2025 · Full credit assessment · Run A Earlier format');
   assert.ok(earlier.includes('<a class="text-action" href="#W-Report/history?c=run-a">All runs of this issuer</a>'));
-  assert.equal(strip(page.runLabel('W-Forecast', 'run-b').replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: 31 March 2025 · Credit snapshot', 'the run code is the Evidence page\'s: no code on the Forecast page');
+  assert.equal(strip(page.runLabel('W-Forecast', 'run-b').replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: 31 March 2025 · Full credit assessment', 'the run code is the Evidence page\'s: no code on the Forecast page');
   assert.equal(strip(page.runLabel('W-Overview', 'run-c').replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: Not recorded · Not recorded');
   assert.ok(page.runLabel('CP-1', 'run-b').includes('href="#W-Report/history?c=run-b"'));
 });
@@ -3813,19 +3813,19 @@ const HASH_1 = 'a1b2c3d4'.repeat(8), HASH_2 = 'e5f6a7b8'.repeat(8);
 
 test('model picker: one delivery reads the run name (date and pathway), with no hash', () => {
   const models = [pickModel(HASH_1)];
-  assert.deepEqual(pickPage(models).modelOptionLabels(models), ['31 March 2025 · Credit snapshot']);
+  assert.deepEqual(pickPage(models).modelOptionLabels(models), ['31 March 2025 · Full credit assessment']);
 });
 
 test('model picker: two deliveries of one run differ by the first eight characters of the delivery id', () => {
   const models = [pickModel(HASH_1), pickModel(HASH_2)];
-  assert.deepEqual(pickPage(models).modelOptionLabels(models), ['31 March 2025 · Credit snapshot · a1b2c3d4', '31 March 2025 · Credit snapshot · e5f6a7b8']);
+  assert.deepEqual(pickPage(models).modelOptionLabels(models), ['31 March 2025 · Full credit assessment · a1b2c3d4', '31 March 2025 · Full credit assessment · e5f6a7b8']);
 });
 
 test('model picker: the relationship is appended only when recorded', () => {
   const models = [pickModel(HASH_1, { previous: HASH_2 }), pickModel(HASH_2)];
   const [first, second] = pickPage(models).modelOptionLabels(models);
-  assert.equal(first, `31 March 2025 · Credit snapshot · a1b2c3d4 · supersedes 31 March 2025 · Credit snapshot · e5f6a7b8`);
-  assert.equal(second, `31 March 2025 · Credit snapshot · e5f6a7b8 · superseded by 31 March 2025 · Credit snapshot · a1b2c3d4`);
+  assert.equal(first, `31 March 2025 · Full credit assessment · a1b2c3d4 · supersedes 31 March 2025 · Full credit assessment · e5f6a7b8`);
+  assert.equal(second, `31 March 2025 · Full credit assessment · e5f6a7b8 · superseded by 31 March 2025 · Full credit assessment · a1b2c3d4`);
   assert.ok(!pickPage([pickModel(HASH_1)]).modelOptionLabels([pickModel(HASH_1)])[0].includes('relationship'));
 });
 
@@ -3838,12 +3838,12 @@ test('model picker: with no run context the run folder is named, then the delive
 
 test('model picker: a relationship names a listed delivery by its label and an unlisted one by its id', () => {
   const models = [pickModel(HASH_1, { previous: HASH_2 })];
-  assert.equal(pickPage(models).modelOptionLabels(models)[0], `31 March 2025 · Credit snapshot · supersedes ${HASH_2}`);
+  assert.equal(pickPage(models).modelOptionLabels(models)[0], `31 March 2025 · Full credit assessment · supersedes ${HASH_2}`);
 });
 
 test('model picker: ids that share their first eight characters read with the whole id', () => {
   const models = [pickModel('tdg-forecast-005'), pickModel('tdg-forecast-006')];
-  assert.deepEqual(pickPage(models).modelOptionLabels(models), ['31 March 2025 · Credit snapshot · tdg-forecast-005', '31 March 2025 · Credit snapshot · tdg-forecast-006']);
+  assert.deepEqual(pickPage(models).modelOptionLabels(models), ['31 March 2025 · Full credit assessment · tdg-forecast-005', '31 March 2025 · Full credit assessment · tdg-forecast-006']);
 });
 
 test('model picker: a delivery for a run the library does not list is named by its own run folder, not the page run', () => {
@@ -3993,7 +3993,7 @@ test('the issuer header: the name, then chips for the period and the pathway in 
   page.updateWorkspaceChrome('W-Overview');
   const header = dom.header.innerHTML;
   assert.ok(header.includes(`<h1 title="Synthetic Issuer">Synthetic Issuer</h1>`));
-  assert.ok(header.includes('<p class="hchips"><span class="hchip">FY2025</span><span class="hchip">Credit snapshot</span></p>'), header);
+  assert.ok(header.includes('<p class="hchips"><span class="hchip">FY2025</span><span class="hchip">Full credit assessment</span></p>'), header);
   assert.ok(!header.includes('Methods changed'), 'no method change, no amber chip');
   for (const [name, markup] of [['header', header], ['tabs', dom.tabs.innerHTML], ['context bar', dom.bar.innerHTML]]) assert.ok(!markup.includes(RUN_CODE), `${name} carries the run code`);
   assert.deepEqual([...dom.tabs.innerHTML.matchAll(/>([^<]+)<\/a>/g)].map(m => m[1]), ['Report', 'Overview', 'Changes', 'Modules', 'Forecast', 'Evidence']);
@@ -4087,7 +4087,7 @@ test('Q3: findings pages name a run by date and pathway, never by its code: othe
   const src = read('views.js'), screen = read('screen.js');
   assert.ok(!/unavailableView[\s\S]*?\$\{esc\(run\.run\)\}/.test(src.slice(src.indexOf('function unavailableView('), src.indexOf('function unavailableView(') + 900)), 'the other-runs link text is not the run code');
   assert.ok(src.slice(src.indexOf('function unavailableView(')).includes('esc(runName(run))'));
-  assert.equal(page.runName(HIST.contexts['run-b']), '31 March 2025 · Credit snapshot');
+  assert.equal(page.runName(HIST.contexts['run-b']), '31 March 2025 · Full credit assessment');
   assert.ok(!screen.includes('${contexts[next.context].run}, '), 'the announcement does not read the run code');
   assert.ok(screen.includes('${runName(contexts[next.context])}, '));
 });
@@ -4433,7 +4433,7 @@ test('Low 8-10, 12: a held-back not-assessable reason shows the fixed label and 
   const model = pickModel(HASH_1, { mode: 'candidate', download: '../d/m.html', href: '../d/m.html', previous: HASH_2, register: { heading: 'Register', intro: 'See K_10.htm.jsonl for SC1', headers: ['driver', 'rationale'], rows: [['growth', 'Fade']] }, cashflow: { units: 'USD m', columns: gridColumns, notes: [], limits: [], rows: [gridRow('Revenue', 'Revenue', false, [cell('value', '1'), cell('value', '2')])], other: null } });
   const html = fcPage(undefined, { models: [model], runFields: PICK_RUNS }).forecastView(RUN, HASH_1);
   const frame = html.slice(html.indexOf('class="frame-head"'), html.indexOf('</iframe>'));
-  assert.ok(frame.includes('<h2>Published model</h2>') && frame.includes('31 March 2025 · Credit snapshot') && !/supersedes|a1b2c3d4|run-a/.test(frame), frame);
+  assert.ok(frame.includes('<h2>Published model</h2>') && frame.includes('31 March 2025 · Full credit assessment') && !/supersedes|a1b2c3d4|run-a/.test(frame), frame);
   assert.ok(!html.includes('register-intro') && !html.includes('jsonl'));
 });
 
@@ -4651,12 +4651,12 @@ test('library cards: one card per issuer, each with its name, ticker and sector,
   const [alpha, beta, gamma, delta, noc] = cards; // the catalogue's order of first appearance
   // Beta: two runs in the library, drawn from the later one; its declared state and first sentence are the Committee decision's.
   assert.ok(beta.includes('<h3 class="lc-name" id="lc-1">Beta Aero Inc</h3><p class="lc-meta">BET · Aerospace</p>'));
-  assert.ok(beta.includes('<p class="lc-when">30 June 2025</p><span class="badge badge-gray lc-path">Credit snapshot</span><span class="state warn"><svg') && strip(beta).includes('Restricted'));
+  assert.ok(beta.includes('<p class="lc-when">30 June 2025</p><span class="badge badge-gray lc-path">Full credit assessment</span><span class="state warn"><svg') && strip(beta).includes('Restricted'));
   assert.ok(beta.includes('<p class="lc-lead">Hold the position.</p>'));
   assert.deepEqual(dotLabels(beta).map(label => label), ['Source readiness: Ready', 'Downside: Not assessable', 'Committee decision: Restricted']);
-  assert.ok(beta.includes('<a class="lc-open" href="#W-Overview/overview?c=run-b" aria-label="Open overview: Beta Aero Inc, 30 June 2025 · Credit snapshot">Open overview<img'));
+  assert.ok(beta.includes('<a class="lc-open" href="#W-Overview/overview?c=run-b" aria-label="Open overview: Beta Aero Inc, 30 June 2025 · Full credit assessment">Open overview<img'));
   assert.ok(beta.includes('<a class="lc-hist" href="#W-Report/history?c=run-b" aria-label="Report history: Beta Aero Inc">2 runs</a>'));
-  assert.ok(beta.includes('<button class="secondary-action lc-details" type="button" data-library-select="1" aria-expanded="false" aria-controls="run-detail" aria-label="Details: Beta Aero Inc, 30 June 2025 · Credit snapshot">Details</button>'));
+  assert.ok(beta.includes('<button class="secondary-action lc-details" type="button" data-library-select="1" aria-expanded="false" aria-controls="run-detail" aria-label="Details: Beta Aero Inc, 30 June 2025 · Full credit assessment">Details</button>'));
   // Alpha: a lead with no declared state has no badge; its first sentence still shows.
   assert.ok(alpha.includes('<p class="lc-lead">Hold the position.</p>') && !alpha.includes('class="state'), 'a missing declared state draws no badge');
   assert.deepEqual(dotLabels(alpha), ['Financial foundation', 'Committee decision']);
@@ -4691,7 +4691,7 @@ test('library: the cards and the list are two panes of one block with the shared
   assert.deepEqual([...html.matchAll(/<th scope="col"[^>]*>(?:<button[^>]*>)?([^<]*?)(?: <span|<\/)/g)].map(m => m[1].trim()), ['Issuer', 'Run', 'Sector', 'Evidence date', 'Leverage', 'Net leverage', 'Coverage', 'Rating', 'Completeness', 'Open']);
   const rows = [...html.matchAll(/<tr[^>]*>(.*?)<\/tr>/gs)].filter(m => m[1].includes('<td')).map(m => [...m[1].matchAll(/<td[^>]*>(.*?)<\/td>/gs)].map(c => decode(strip(c[1]))));
   assert.equal(rows.length, 5);
-  assert.equal(rows[1][1], '30 June 2025 · Credit snapshot', 'the Run column names the run by period and pathway');
+  assert.equal(rows[1][1], '30 June 2025 · Full credit assessment', 'the Run column names the run by period and pathway');
   assert.equal(rows[4][1], '28 February 2025 · Credit Snapshot', 'a run the store does not hold keeps its catalogue date and workflow');
   assert.ok(!html.includes('run-id'), 'no run id column');
   // Two runs of one issuer with one name (Any run lists both of Beta\'s: the same period would name both alike) are told apart by a fixed word.
@@ -4747,7 +4747,7 @@ test('library home: a running run is a row with the C31 mark and the C13 steps: 
   const html = libPage({ activity: LIVE }).libraryLive();
   assert.equal(countOf(html, /<li class="live-row">/g), 2, 'the running run and the waiting one');
   assert.ok(html.startsWith('<section class="lib-live" aria-labelledby="lib-live-h"><h2 class="eyebrow lib-eyebrow" id="lib-live-h">Running now</h2>'));
-  assert.ok(html.includes('<strong class="lv-name">Northbridge &lt;Synthetic&gt; &amp; Co</strong><span class="lv-pathway">Credit snapshot</span>'));
+  assert.ok(html.includes('<strong class="lv-name">Northbridge &lt;Synthetic&gt; &amp; Co</strong><span class="lv-pathway">Full credit assessment</span>'));
   assert.ok(html.includes('<span class="state new rmark running"><span class="lat" aria-hidden="true">') && html.includes('<span class="state-w">Running</span>'), 'the mark has its word');
   assert.deepEqual([...html.matchAll(/<li class="step (\w+)" data-tip="([^"]*)"/g)].map(m => [m[1], m[2]]), [['done', 'Source readiness: done'], ['running', 'Financial foundation: running'], ['waiting', 'Downside: waiting'], ['waiting', 'Committee decision: waiting']]);
   assert.ok(html.includes('<span class="steps-k">Running</span> Financial foundation') && html.includes('<span class="steps-n">1 of 4 done</span>'));
@@ -4906,7 +4906,7 @@ test('Info: a held-back bridge label leaves no empty list item; the module-page 
   const two = fcPage(undefined, { models: [mk(HASH_1), mk(HASH_2)], runFields: { ...PICK_RUNS, evidence: EVIDENCE } }).evidenceInput(RUN);
   const heads = [...window_Evidence().view(two, { tab: 'gaps', module: null }).matchAll(/<div class="ev-grp-h"><span>([^<]*)<\/span><span class="ev-cd">Model scope limits/g)].map(m => m[1]);
   assert.equal(new Set(heads).size, 2, heads.join(' | '));
-  assert.ok(heads.every(h => h.includes('31 March 2025 · Credit snapshot')), heads.join(' | '));
+  assert.ok(heads.every(h => h.includes('31 March 2025 · Full credit assessment')), heads.join(' | '));
 });
 
 test('L3 consequence: calculation ids that are id values of the run (as on every real run) are held in a title and a footnote even without the word "calculation"', () => {
@@ -5087,7 +5087,7 @@ test('card: the lead sentence is clamped to four lines; Details is a button with
   assert.ok(/\.lc-lead\{[^}]*-webkit-line-clamp:4;line-clamp:4;overflow:hidden/.test(css));
   const page = libPage(), view = page.libraryRows();
   const cards = () => page.libraryResults(page.libraryRows(), 'cards').split('<article class="lib-card"').slice(1);
-  assert.ok(cards()[1].includes('<span class="badge badge-gray lc-path">Credit snapshot</span>') && cards()[1].includes('<p class="lc-when">30 June 2025</p>'));
+  assert.ok(cards()[1].includes('<span class="badge badge-gray lc-path">Full credit assessment</span>') && cards()[1].includes('<p class="lc-when">30 June 2025</p>'));
   assert.ok(cards()[1].includes('class="secondary-action lc-details"') && cards()[1].includes('aria-expanded="false"'));
   page.libraryState.selected = 'run-b'; page.libraryState.opened = true;
   assert.ok(cards()[1].includes('aria-expanded="true"') && cards()[0].includes('aria-expanded="false"'));

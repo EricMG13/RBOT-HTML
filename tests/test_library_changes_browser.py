@@ -168,7 +168,7 @@ def test_the_changes_tab_sits_between_overview_and_modules_and_shows_the_compari
     assert console == []
     assert tab_names(dom) == ["Report", "Overview", "Changes", "Modules", "Forecast", "Evidence"]
     assert re.search(r'<a href="#W-Changes/changes[^"]*" aria-current="page"', dom)
-    assert "Since 30 September 2024 · Credit snapshot" in dom
+    assert "Since 30 September 2024 · Full credit assessment" in dom
     assert BOTTOM in dom and "Cash is USD 6,300 million." in dom
     # Part 2: values as the pack writes them, drawn as the earlier and current side of a card;
     # leverage is Not comparable and shows no difference on the route or in Evidence.

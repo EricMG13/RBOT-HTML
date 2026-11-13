@@ -1,0 +1,333 @@
+diff --git a/docs/rulings/2026-11-13-tdg-full-copilot-sol-high.md b/docs/rulings/2026-11-13-tdg-full-copilot-sol-high.md
+new file mode 100644
+index 0000000..1e4e2e1
+--- /dev/null
++++ b/docs/rulings/2026-11-13-tdg-full-copilot-sol-high.md
+@@ -0,0 +1,27 @@
++# A second TDG full credit assessment through GitHub Copilot on GPT Sol, every module at high effort
++
++lifts: live-provider-pause
++by: user
++date: 2026-11-13
++configs: copilot-sol-medium
++
++While the medium run of `2026-11-13-tdg-full-copilot-sol-rerun.md` was in progress the user
++instructed "run second run sol high". Asked for the route, the user chose "GitHub Copilot, all
++modules high"; asked for the cap and start, "USD 25, start now".
++
++Cap: USD 25 for the run folder.
++
++Scope: one CP-OS launch of the `credit_snapshot` preset (Full credit assessment) on
++`copilot-sol-medium` with every module of the run sent at high effort (`--high-modules`), so
++gpt-6.1-sol at high effort through the GitHub Copilot SDK. Same files, context, code (`main` at
++`b2780e8`), credential and runtime as the medium run. CP-8 compares with the copy of
++`tdg-proof-snapshot-opus-002` (`--prior`), as the medium run does, not with the medium run, which was
++unfinished when this one started. The run folder is `tdg-full-copilot-sol-high-001` in the same
++scratchpad workspace, outside this repository and every retained run directory.
++
++It runs alongside the medium run; the two differ only in effort. It proves this dated case and route
++only; automated checks cover handoff structure, not analytical accuracy. Outputs are candidates until
++reviewed.
++
++Extension (same day): this run stopped at CP-5 and is picked up in a copy of its folder; see the
++extension in `2026-11-13-tdg-full-copilot-sol-rerun.md`.
+diff --git a/docs/rulings/2026-11-13-tdg-full-copilot-sol-rerun.md b/docs/rulings/2026-11-13-tdg-full-copilot-sol-rerun.md
+new file mode 100644
+index 0000000..0245062
+--- /dev/null
++++ b/docs/rulings/2026-11-13-tdg-full-copilot-sol-rerun.md
+@@ -0,0 +1,44 @@
++# One TDG full credit assessment through GitHub Copilot on GPT Sol
++
++lifts: live-provider-pause
++by: user
++date: 2026-11-13
++configs: copilot-sol-medium
++
++The user instructed "re-run TDG on Sol github". Asked which pathway, the user chose "Full credit
++assessment"; asked what "Sol github" means for the provider route, "GitHub Copilot, GPT Sol"; asked
++for the cap, "USD 10 lite / USD 25 full".
++
++Cap: USD 25 for the run folder.
++
++Scope: one CP-OS launch of the `credit_snapshot` preset (Full credit assessment), with CP-8 against a
++copy of the earlier run `tdg-proof-snapshot-opus-002`, on `copilot-sol-medium` (gpt-6.1-sol, medium
++effort through the GitHub Copilot SDK), over the retained historical TDG FY2024 public files
++(`~/Documents/Final-workflow-PY/data/public-corpus/v1/TDG`, read only) with the context
++`runs/tdg-context-2024-09-30.json` (a copy; the file the earlier TDG runs used). The run folder is
++`tdg-full-copilot-sol-001` in a workspace in the launching session's scratchpad, outside this
++repository and every retained run directory. The code is `main` at `b2780e8` (the Deploy V method
++texts of PR #93 and the full and lite assessments of PR #96).
++
++Credential: the gh CLI's active account (`COPILOT_USE_GH_LOGIN=1`, no `COPILOT_GITHUB_TOKEN`), as in
++`2026-11-09-copilot-small-test.md`; runtime 1.0.105 (`COPILOT_CLI_PATH`). That account pays. No
++credential file is read by the launcher. Prompts carry public TDG filing text to GitHub and the model
++vendor. Web search is not offered on this route, so CP-DR reads only the run's files.
++
++It proves this dated case and route only; automated checks cover handoff structure, not analytical
++accuracy. Outputs are candidates until reviewed. It is not a lite run and does not supply the reader
++check the lite credit assessment still needs.
++
++Extension (same day). Both runs stopped at CP-5 after ten accepted modules (medium USD 5.77, high
++USD 7.78): its handoff was refused three times for one table whose header had 7 cells and separator 8,
++and the refusal named no line (fixed in `08df6a4`). The launcher does not resend a module that already
++started, and a new run cannot reuse another run's handoffs. Told this, the user said "bypass existing
++rules and use existing handoffs to pick up from where you left off. we are comparing outputs, quality
++and telemetry between runs.", then "resume". So each stopped folder is copied
++(`tdg-full-copilot-sol-001-resume`, `tdg-full-copilot-sol-high-001-resume`), CP-5's retained attempts
++are removed from the copy only (`requests/CP-5` and its `live/modules` folder), and the copy is
++relaunched with the same arguments: the ten accepted handoffs replay from retained responses and CP-5,
++CP-6 and CP-8 are paid, under the same USD 25 ceiling per folder, which still counts the spend already
++made. The stopped folders are kept unchanged. This is a one-off bypass of the never-resend guard for
++these two folders; the guard itself is unchanged. CP-5's telemetry in the resumed folders covers only
++the second attempt; the first is in the stopped folders.
+diff --git a/runs/tdg-copilot-sol-medium-vs-high.md b/runs/tdg-copilot-sol-medium-vs-high.md
+new file mode 100644
+index 0000000..b8ad004
+--- /dev/null
++++ b/runs/tdg-copilot-sol-medium-vs-high.md
+@@ -0,0 +1,118 @@
++# TDG FY2024 (as of 2024-09-30): full credit assessment on Copilot gpt-6.1-sol, medium vs high effort
++
++Rulings: `docs/rulings/2026-11-13-tdg-full-copilot-sol-rerun.md`,
++`docs/rulings/2026-11-13-tdg-full-copilot-sol-high.md`. Historical case; not a current credit view.
++One run per setting, so differences may be run-to-run variation rather than effort.
++
++## Bottom line
++
++- Same credit conclusion in both runs: Requires More Work, relative value Unclear, no size. The same
++  core figures, and no wrong shared figure was found in either run.
++- High effort cost 1.32x (USD 11.37 vs 8.62) and took 1.40x the model time (95 vs 68 minutes).
++- High was judged better in 9 of 13 modules, medium in none, no material difference in 3, and CP-5 a
++  split. The gain is evidence a committee would use, not a different view. Most of it traces to one
++  figure medium did not use: next year's scheduled interest of USD 1,524 million.
++- Medium made two analytical errors that travelled downstream; high made none of that kind, but it
++  missed the capex guidance and one stated date.
++- Both runs stopped at CP-5 on the first attempt for the same checker reason, unrelated to effort.
++
++## Runs
++
++| Side | Run folder (scratchpad workspace `tdg-ws/runs/`) | Effort | Modules | Charged USD |
++| --- | --- | --- | --- | --- |
++| Medium | `tdg-full-copilot-sol-001-resume` | medium, every call | 13 accepted, delivered | 8.62 |
++| High | `tdg-full-copilot-sol-high-001-resume` | high, every call (`--high-modules`) | 13 accepted, delivered | 11.37 |
++| Earlier run (context only) | `tdg-proof-snapshot-opus-002` | claude-opus-5-5 medium | 13 | 19.45 |
++
++Like for like between medium and high: same code (`main` at `b2780e8`), instructions, files, context,
++route and CP-8 comparison run. Not like for like with the earlier Opus run: it used the method texts
++from before PR #93, so it is listed for scale only.
++
++Both runs stopped at CP-5 after ten accepted modules and were finished in copies of their folders with
++CP-5's retained attempts removed (the owner's instruction, recorded in the first ruling). CP-5's cost
++below includes the failed attempt. Both runs carry the run id `…-copilot-sol-medium`, because the id
++comes from the configuration name; the effort actually sent is in each call's `requested_effort`.
++
++## Telemetry per module (`live/calls.jsonl`, `events.jsonl`, delivered handoffs)
++
++USD / model calls / drafts rejected / reasoning tokens / model seconds / handoff words.
++
++| Module | Medium | High | High ÷ medium USD |
++| --- | --- | --- | --- |
++| CP-0 | 0.29 / 8 / 0 / 491 / 201 / 5,139 | 0.43 / 11 / 0 / 5,485 / 385 / 6,448 | 1.48 |
++| CP-1 | 0.42 / 10 / 1 / 1,227 / 268 / 7,587 | 0.63 / 18 / 1 / 4,271 / 453 / 8,978 | 1.50 |
++| CP-1A | 0.55 / 12 / 1 / 831 / 342 / 9,569 | 0.66 / 14 / 1 / 2,903 / 445 / 11,474 | 1.20 |
++| CP-DR | 0.28 / 8 / 0 / 1,099 / 151 / 3,603 | 0.44 / 10 / 0 / 3,972 / 266 / 5,493 | 1.57 |
++| CP-4 | 0.37 / 6 / 0 / 137 / 67 / 1,714 | 0.37 / 4 / 0 / 667 / 67 / 1,396 | 1.00 |
++| CP-2 | 0.44 / 6 / 0 / 993 / 269 / 7,882 | 0.61 / 11 / 0 / 2,430 / 371 / 10,004 | 1.39 |
++| CP-2A | 0.62 / 14 / 1 / 3,658 / 381 / 10,143 | 0.80 / 15 / 1 / 5,080 / 537 / 12,487 | 1.29 |
++| CP-2E | 0.66 / 12 / 1 / 1,092 / 350 / 9,295 | 0.80 / 12 / 1 / 3,286 / 439 / 10,479 | 1.21 |
++| CP-2G | 0.41 / 8 / 0 / 1,711 / 300 / 8,294 | 0.77 / 20 / 0 / 6,545 / 613 / 11,980 | 1.88 |
++| CP-3 | 0.80 / 12 / 1 / 1,160 / 352 / 11,203 | 0.97 / 11 / 1 / 2,964 / 434 / 14,908 | 1.21 |
++| CP-5 | 2.26 / 21 / 4 / 4,854 / 649 / 8,508 | 2.80 / 20 / 3 / 11,483 / 952 / 9,941 | 1.24 |
++| CP-6 | 0.73 / 8 / 0 / 545 / 566 / 8,575 | 0.99 / 8 / 1 / 3,209 / 357 / 10,693 | 1.36 |
++| CP-8 | 0.79 / 11 / 0 / 850 / 166 / 3,498 | 1.08 / 11 / 0 / 5,966 / 380 / 3,985 | 1.37 |
++| Total | 8.62 / 136 / 9 / 18,648 / 4,060 / 95,010 | 11.37 / 165 / 9 / 58,261 / 5,700 / 118,266 | 1.32 |
++
++- Tokens: medium 15.4 million input (87% read from cache) and 245,000 output; high 19.6 million input
++  (87% cached) and 352,000 output. No call errored in either run.
++- High used 3.1x the reasoning tokens and wrote 24% more words. Rejected drafts were equal (9 each).
++- CP-5 is a quarter of each run's cost: it reads every other handoff, and its first attempt failed.
++- Earlier Opus run, for scale: USD 19.45, 162 calls, 112,609 reasoning tokens, 75,985 words.
++
++## Analysis quality (independent read of both runs' handoffs; figures checked against the 10-K)
++
++| Module (what it does in this run) | Verdict | What decides it |
++| --- | --- | --- |
++| CP-0 source readiness | No material difference | Same go-ahead and restrictions. |
++| CP-1 financial foundation and credit metrics | High, narrowly | Medium calls the November 2027 notes a data conflict; they fall in fiscal 2028, as the 10-K says. High includes the USD 487 million securitization in FY2025 maturities (580, not 93). High left the October draw and distribution dates as month only although the 10-K gives 16 and 18 October. |
++| CP-1A business and governance | High | High cites the 10-K's order for excess cash (debt prepayment last) and reconciles the FY2024 distribution (1,937 + 83 + 18 = 2,038). Medium says the 2033 maturity day is not established; the 10-K states it. |
++| CP-DR deep research | High | Medium excluded the 10-K as post-cutoff although no cutoff was set. High built a retrieval list of the credit agreement, amendments 13-17 and indentures, and found that Amendment No. 17 is titled differently in the exhibit index and the debt note. Neither could answer its two questions (web search off). |
++| CP-4 legal and covenants | No material difference | Both correctly Blocked: no executed governing document in the files. |
++| CP-2 fundamental credit | High | High sets FY2024 EBITDA against next year's scheduled interest: 4,173 / 1,524 = 2.74x, against the historical 3.60x that medium only restates. High omits the issuer's pro forma liquidity of 2,919, which medium keeps. |
++| CP-2A downside stress | High | High's interest shock (30%) is tied to the step-up from 1,158 to 1,524; medium's (2.5-10%) ignores it, leaving about USD 318 million too much free cash flow in its moderate case. Arithmetic is right in both. |
++| CP-2E rates, FX, hedging, ESG | No material difference | Identical rate findings, all checked. |
++| CP-2G forecast | High, with one flaw | Medium published no forecast, saying total debt was missing, while its own handoff states 24,880. High published full base and downside paths (recomputed, correct) but used capex at 2.08% of sales, not the guided 2.5-3.5%, overstating free cash flow by about 82 in FY2025. |
++| CP-3 credit view | High, slightly | Same recommendation. High quantifies what would change it (FY2026 funding gap of 310.26 if distributions repeat; coverage watch 2.00x against a downside of 1.68x); medium's is qualitative because its CP-2G withheld the forecast. |
++| CP-5 QA gate | Split | Medium raised 4 Material issues, all real, including its own CP-1 maturity error and the withheld forecast. High raised 2 Material and 2 Minor, all real, one over-graded. Medium missed an orphan calculation reference in its own CP-3 of the kind high caught in its run. |
++| CP-6 committee challenge | High, slightly | Both specific to this issuer. High's best question is the 3.60x-to-2.74x coverage point; medium's is that the October payment was 2.31x annual free cash flow. |
++| CP-8 changes vs earlier run | High, slightly | Same headline (issuer unchanged; Watchlist became Requires More Work). High attributes more changes (maturities 93 to 580; forecast yield basis). High wrongly says no combined October pro forma is stated; its own CP-1 states it. |
++
++Errors by kind:
++
++- Medium, analytical: the false maturity "conflict" (CP-1, repeated in CP-DR as a research target);
++  the forecast withheld on an input the handoff itself held (CP-2G, which weakened CP-3 and CP-8);
++  the interest stress calibrated to history.
++- High, sourcing: October dates left as month only in CP-1 (its CP-1A has them); capex guidance not
++  used in CP-2G; pro forma liquidity 2,919 omitted in CP-2; one contradiction in CP-8.
++- Both: heavily hedged, long appendix tables that repeat "Not supplied".
++
++## Issuer report
++
++- Both deliveries have all 11 blocks populated, nothing unplaced, the same structure.
++- In both, the front-page call reads "Assessment pending": neither shows the Requires More Work
++  recommendation that CP-3 and CP-6 give.
++- The financials grid has 83 rows on medium and 16 on high, and the company profile 5 rows against 1,
++  both from how each CP-1 wrote its tables.
++- The high run's report and handoffs are labelled `copilot-sol-medium` (run id and delivery scope), so
++  a reader cannot tell from the report which effort produced it.
++
++## Findings for the workflow, not for effort
++
++- The checker's "Invalid Markdown table header" refusal named no line; it stopped both runs at CP-5,
++  as it stopped CP-1D on 2026-11-12 (`tdg-mixed-effort-comparison.md`). With the line and the cell
++  counts in the message (`08df6a4`), CP-5 was accepted in both relaunches.
++- A stopped module cannot be resumed and a new run cannot reuse accepted handoffs; the pick-up here
++  was a manual bypass in copies.
++- The run id and delivery scope do not record `--high-modules`.
++- The front-page call does not pick up the recommendation.
++
++## Scope and limits
++
++- One run per effort level; one issuer, one date, one route; web search off.
++- The quality read was done by three reviewing agents (Opus), each on a group of modules, checking a
++  sample of figures against the 10-K source text and redoing computed values. No person has read the
++  handoffs or opened the library pages.
++- Not checked: every row of the financial statements tables; the upside cases; all of high's forecast
++  rows; the annual-report PDF (no extracted text); the 10-Q pages cited in CP-DR; how the report
++  renders.
+diff --git a/src/deploy_workflow/handoff_delivery.py b/src/deploy_workflow/handoff_delivery.py
+index 457f7d7..7cb338e 100644
+--- a/src/deploy_workflow/handoff_delivery.py
++++ b/src/deploy_workflow/handoff_delivery.py
+@@ -307,24 +307,43 @@ def table(rows: list[tuple[int, str]]) -> tuple[list[str], list[tuple[int, str,
+         elif selected:
+             break
+ 
+-    def cells(text: str) -> list[str]:
++    def cells(line: int, text: str) -> list[str]:
+         if not text.endswith("|"):
+-            raise ValueError("Markdown table rows require both boundary pipes")
++            raise ValueError(f"Markdown table rows require both boundary pipes: line {line}")
+         return [c.strip().replace(r"\|", "|") for c in re.split(r"(?<!\\)\|", text[1:-1])]
+ 
+     if len(selected) < 3:
+-        raise ValueError("Expected a populated Markdown table")
+-    headers = cells(selected[0][1])
+-    separator = cells(selected[1][1])
++        where = f": the table starts at line {selected[0][0]}" if selected else ""
++        raise ValueError(f"Expected a populated Markdown table{where}")
++    head_line, head_text = selected[0]
++    headers = cells(head_line, head_text)
++    separator = cells(*selected[1])
+     if (
+         len(headers) < 2
+         or len(separator) != len(headers)
+         or not all(re.fullmatch(r":?-{3,}:?", c) for c in separator)
+     ):
+-        raise ValueError("Invalid Markdown table header")
+-    result = [(line, raw, cells(raw)) for line, raw in selected[2:]]
+-    if any(len(values) != len(headers) or not values[0] for _, _, values in result):
+-        raise ValueError("Markdown table row does not match its header")
++        dashes = all(re.fullmatch(r":?-{3,}:?", c) for c in separator)
++        fault = (
++            f"the header has {len(headers)} cells and the separator row has {len(separator)}"
++            if dashes or len(separator) != len(headers)
++            else "the second row is not made of --- cells"
++        )
++        raise ValueError(
++            f'Invalid Markdown table header at line {head_line}: {fault} ("{head_text[:80]}")'
++        )
++    result = [(line, raw, cells(line, raw)) for line, raw in selected[2:]]
++    for line, _, values in result:
++        if len(values) != len(headers):
++            raise ValueError(
++                f"Markdown table row does not match its header at line {line}: "
++                f"the row has {len(values)} cells and the header has {len(headers)}"
++            )
++        if not values[0]:
++            raise ValueError(
++                f"Markdown table row does not match its header at line {line}: "
++                "its first cell is empty"
++            )
+     return headers, result
+ 
+ 
+diff --git a/tests/test_handoff_delivery_table.py b/tests/test_handoff_delivery_table.py
+new file mode 100644
+index 0000000..65622e5
+--- /dev/null
++++ b/tests/test_handoff_delivery_table.py
+@@ -0,0 +1,63 @@
++"""The table reader's refusals name the line and the fault, so a model can fix its draft."""
++
++import pytest
++
++from deploy_workflow.handoff_delivery import table
++
++HEAD = "| A | B | C | D | E | F | G |"
++SEP7 = "|---|---|---|---|---|---|---|"
++SEP8 = "|---|---|---|---|---|---|---|---|"
++ROW = "| 1 | 2 | 3 | 4 | 5 | 6 | 7 |"
++
++
++def refusal(*lines: str, start: int = 231) -> str:
++    with pytest.raises(ValueError) as caught:
++        table([(start + i, text) for i, text in enumerate(lines)])
++    return str(caught.value)
++
++
++def test_header_and_separator_cell_counts_are_named_at_the_header_line() -> None:
++    message = refusal(HEAD, SEP8, ROW)
++    assert message.startswith("Invalid Markdown table header")
++    assert "line 231" in message
++    assert "7 cells" in message
++    assert "separator row has 8" in message
++    assert "| A | B | C" in message
++
++
++def test_separator_that_is_not_dashes_is_named() -> None:
++    message = refusal(HEAD, ROW, ROW)
++    assert message.startswith("Invalid Markdown table header")
++    assert "line 231" in message
++    assert "not made of ---" in message
++
++
++def test_row_with_wrong_cell_count_names_its_line_and_counts() -> None:
++    message = refusal(HEAD, SEP7, ROW, "| 1 | 2 |", start=40)
++    assert message.startswith("Markdown table row does not match its header")
++    assert "line 43" in message
++    assert "2 cells" in message
++    assert "7" in message
++
++
++def test_row_with_empty_first_cell_names_its_line() -> None:
++    message = refusal(HEAD, SEP7, "|  | 2 | 3 | 4 | 5 | 6 | 7 |", start=40)
++    assert message.startswith("Markdown table row does not match its header")
++    assert "line 42" in message
++    assert "first cell is empty" in message
++
++
++def test_missing_closing_pipe_names_its_line() -> None:
++    message = refusal(HEAD, SEP7, "| 1 | 2 | 3", start=40)
++    assert message.startswith("Markdown table rows require both boundary pipes")
++    assert "line 42" in message
++
++
++def test_too_short_table_names_its_first_line() -> None:
++    message = refusal(HEAD, SEP7, start=12)
++    assert message.startswith("Expected a populated Markdown table")
++    assert "line 12" in message
++
++
++def test_no_table_keeps_the_plain_message() -> None:
++    assert refusal() == "Expected a populated Markdown table"

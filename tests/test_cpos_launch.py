@@ -7,6 +7,7 @@ import os
 import re
 import types
 import typing
+from collections import Counter
 from decimal import Decimal
 from fractions import Fraction
 from pathlib import Path
@@ -39,6 +40,7 @@ from deploy_workflow.owners.cpos import (
     RetainedHandoff,
     _checked_handoff,
     _handoff,
+    run_live_handoffs,
 )
 from deploy_workflow.owners.cpos_launch import (
     METHODS,
@@ -46,9 +48,10 @@ from deploy_workflow.owners.cpos_launch import (
     checker,
     main,
     prepare,
+    refuse_deactivated,
     without_for,
 )
-from deploy_workflow.run_expectations import Item
+from deploy_workflow.run_expectations import RULES, Item
 
 ROOT = Path(__file__).resolve().parents[1]
 RULING = ROOT / "docs/rulings/2026-11-05-live-loop-tests.md"  # configs: sol-medium
@@ -74,7 +77,8 @@ COVENANT_ROUTES = {
     ("maturity-wall", "CP-1", "Chart data: debt maturities", "chart"),
 }
 # Run order for each pathway (registry.plan over the preset, CP-MODEL and CP-8 removed; required
-# producers such as CP-1A are added). Owner, 2026-11-11: CP-DR and CP-2E are in every preset.
+# producers such as CP-1A are added). Owner, 2026-11-11: CP-DR and CP-2E are in every preset except
+# the lite credit assessment (listed here) and the deactivated short snapshot (SHORT_SNAPSHOT).
 PATHWAY_MODULES = {
     "credit_snapshot": (
         *("CP-0", "CP-1", "CP-1A", "CP-DR", "CP-4", "CP-2", "CP-2A", "CP-2E", "CP-2G", "CP-3"),
@@ -93,6 +97,7 @@ PATHWAY_MODULES = {
     "portfolio_decision": (
         *("CP-0", "CP-1", "CP-1A", "CP-DR", "CP-2", "CP-2E", "CP-3", "CP-5", "CP-6"),
     ),
+    "lite_credit_assessment": ("CP-0", "CP-1", "CP-1A", "CP-2", "CP-2A"),
 }
 # The owner's preset answer key (2026-11-11), hand-written as sets: what each pathway requests.
 PRESET_ANSWER_KEY = {
@@ -109,8 +114,33 @@ PRESET_ANSWER_KEY = {
     # Owner, 2026-11-11 ("3. approved"): its own pathway of CP-0, CP-1 and one CP-L10 page; it gets
     # no CP-DR, CP-2E, CP-MODEL or CP-2G.
     "short_snapshot": "CP-0 CP-1 CP-L10",
+    # The lite credit assessment (owner): the credit snapshot's CP-1, CP-1A and CP-2 sections plus
+    # CP-2A's two downside blocks. No CP-MODEL (ruling 2026-11-13): the chart strip and credit
+    # metrics are routed to CP-1 and no forecast is published.
+    "lite_credit_assessment": "CP-0 CP-1 CP-1A CP-2 CP-2A",
 }
 SHORT_SNAPSHOT = ("CP-0", "CP-1", "CP-L10")
+# Run order of the lite pathway and its report blocks, written by hand from the Front Page: the
+# credit snapshot's blocks that CP-1, CP-1A and CP-2 write, then CP-2A's two downside blocks.
+LITE_MODULES = ("CP-0", "CP-1", "CP-1A", "CP-2", "CP-2A")
+LITE_BLOCKS = (
+    "key-findings",
+    "company-operating-model",
+    "model-chart-strip",
+    "financials-credit-metrics",
+    "strengths-weaknesses",
+    "company-profile",
+    "transaction-summary",
+    "downside-stress",
+    "break-points",
+)
+# The credit snapshot's own blocks and modules, unchanged by the lite pathway (hand-written).
+FULL_BLOCKS = (
+    *("key-findings", "company-operating-model", "model-chart-strip", "capital-structure"),
+    *("financials-credit-metrics", "strengths-weaknesses", "relative-value", "company-profile"),
+    *("transaction-summary", "portfolio-fit", "committee-challenge", "what-changed"),
+)
+DEACTIVATED = "The short credit snapshot is deactivated. Use the lite credit assessment."
 
 
 def context_file(tmp_path: Path, pathway: str = "covenant_refinancing") -> Path:
@@ -420,9 +450,23 @@ for _heading, (_module, _types, _) in MAPS.items():
     OWNER_TABLES.setdefault(_module, {})[_heading] = synthetic_table(
         EDGE_HEAD, f"| Synthetic A | Synthetic link | {_types[0]} | Synthetic B | Synthetic p.1 |"
     )
-SCORED = ("CP-1B", "CP-1C", "CP-1D", "CP-2A", "CP-2D", "CP-2E", "CP-2G", "CP-2H", "CP-3")
+SCORED = (
+    "CP-0",
+    "CP-1A",
+    "CP-1B",
+    "CP-1C",
+    "CP-1D",
+    "CP-2",
+    "CP-2A",
+    "CP-2D",
+    "CP-2E",
+    "CP-2G",
+    "CP-2H",
+    "CP-3",
+    "CP-3C",
+)
 SCORED += ("CP-3D", "CP-4", "CP-4C", "CP-5", "CP-6", "CP-DR")
-UNSCORED = ("CP-0", "CP-1", "CP-1A", "CP-L10", "CP-2", "CP-3C", "CP-8")
+UNSCORED = ("CP-1", "CP-L10", "CP-8")
 CONFIDENCE_ROWS = (
     "| Directly Sourced | 8 |\n| Calculated | 2 |\n| Assumption-Based | 2 |\n"
     "| Analyst Inference | 0 |\n| Weak Lineage | 0 |\n| Untraced | 0 |\n| Conflicting | 0 |\n"
@@ -530,6 +574,7 @@ def provider(monkeypatch):
         calls.append((context["module_id"], self.config_id, request.effort))
         if any(hosted_kind(t) for t in request.tools):
             provider.searched.append(context["module_id"])
+        provider.systems.setdefault(context["module_id"], request.messages[0].text)
         # The real provider body builder must accept what the handoff loop sends this model.
         provider.models.add(json.loads(build(self._model, request, "not-a-real-key").body)["model"])
         turn = Turn(
@@ -556,6 +601,7 @@ def provider(monkeypatch):
     monkeypatch.setattr(LiveAdapter, "complete", complete)
     provider.calls = calls
     provider.searched = []
+    provider.systems = {}
     provider.models = set()
     provider.reported = "fake"
     provider.answer = lambda context: pytest.fail("no answer set")
@@ -1089,24 +1135,33 @@ def test_cp_l10_is_a_prose_module_sent_the_reader_passages_and_its_own_method(tm
     assert "financial change screen" not in method.lower()
 
 
-def test_a_short_snapshot_runs_end_to_end_to_a_verified_delivery(tmp_path, provider, capsys):
-    argv = launch(tmp_path, "--live", "--ruling", str(RULING), pathway="short_snapshot")
-    routes = list(
-        prepare(
-            tmp_path / "context.json",
-            tmp_path / "issuer",
-            tmp_path / "preview",
-            config="sol-medium",
-            cap="50",
-        ).plan.layout.routes
+def test_a_short_snapshot_still_runs_end_to_end_through_the_lower_level_functions(
+    tmp_path, provider, capsys
+):
+    """The launcher refuses a new short-snapshot run (`main`); `prepare` and `run_live_handoffs`,
+    which read past and retained runs, still carry it to a verified delivery."""
+    launch(tmp_path, pathway="short_snapshot")  # writes the context and the issuer folder
+    prepared = prepare(
+        tmp_path / "context.json",
+        tmp_path / "issuer",
+        tmp_path / "out",
+        config="sol-medium",
+        cap="50",
     )
+    routes = list(prepared.plan.layout.routes)
     provider.answer = lambda context: short_snapshot_answer(context, routes)
-    assert main(argv) == 0
+    run_live_handoffs(
+        prepared.manifest,
+        prepared.directory,
+        ruling=RULING,
+        check=checker(prepared.layout),
+        config="sol-medium",
+    )
     out = tmp_path / "out"
     assert tuple(c[0] for c in provider.calls) == SHORT_SNAPSHOT
-    receipt = next((out / "deliveries").glob("*/delivery.json"))
-    assert verify_delivery(next(out.glob("delivery-*.json")), receipt.parent) == receipt
-    assert "Short Credit Snapshot" in json.loads(receipt.read_text())["scope"]
+    delivered = next((out / "deliveries").glob("*/delivery.json"))
+    assert verify_delivery(next(out.glob("delivery-*.json")), delivered.parent) == delivered
+    assert "Short Credit Snapshot" in json.loads(delivered.read_text())["scope"]
 
 
 def short_snapshot_issues(
@@ -1182,6 +1237,152 @@ def test_the_checker_refuses_a_short_snapshot_that_breaks_the_reader_checks(
 ):
     issues = short_snapshot_issues(tmp_path, change)
     assert any(complaint in i for i in issues), issues
+
+
+# --- The lite and full credit assessments; the deactivated short snapshot ---------------
+
+
+def test_the_lite_preset_is_cp0_cp1_cp1a_cp2_cp2a_with_no_cp_model():
+    from deploy_vii.contracts import PATHWAY_MODULES as PRESETS
+
+    assert PRESETS["lite_credit_assessment"] == LITE_MODULES
+    assert "CP-MODEL" not in PRESETS["lite_credit_assessment"]
+    # Owner, 2026-11-13: lite has neither CP-DR nor CP-2E.
+    assert not {"CP-DR", "CP-2E"} & set(PRESETS["lite_credit_assessment"])
+
+
+def test_the_lite_pathway_plans_exactly_cp0_cp1_cp1a_cp2_cp2a_in_order(tmp_path):
+    prepared, _ = all_instructions(tmp_path, "lite_credit_assessment")
+    assert tuple(prepared.plan.instructions) == LITE_MODULES
+    assert prepared.ordered == LITE_MODULES
+    assert prepared.plan.run.requested_modules == LITE_MODULES
+    assert prepared.layout.title.endswith("Lite credit assessment")
+
+
+def test_every_lite_block_is_routed_to_a_module_in_the_run(tmp_path):
+    from deploy_vii.report_view import pathways
+
+    lite = next(p for p in pathways() if p.id == "lite_credit_assessment")
+    assert lite.blocks == LITE_BLOCKS
+    assert lite.title == "Lite credit assessment"
+    prepared, _ = all_instructions(tmp_path, "lite_credit_assessment")
+    assert prepared.omitted == ()
+    assert prepared.layout.blocks == LITE_BLOCKS
+    assert {r.module_id for r in prepared.layout.routes} <= set(LITE_MODULES)
+    by_block = {r.block_id: r.module_id for r in prepared.layout.routes}
+    assert by_block["key-findings"] == "CP-2"
+    assert by_block["company-operating-model"] == "CP-1A"
+    assert by_block["downside-stress"] == by_block["break-points"] == "CP-2A"
+    # No CP-MODEL: the chart strip and credit metrics are CP-1's, and its instruction asks for
+    # neither the period table nor the layer-1 forecast block (ruling 2026-11-13).
+    assert by_block["model-chart-strip"] == by_block["financials-credit-metrics"] == "CP-1"
+    assert prepared.plan.publish_forecast is False
+    cp1 = (prepared.directory / "instructions/CP-1.md").read_text()
+    assert cpos_launch.LAYER1_FORECAST_BLOCK not in cp1
+    assert cpos_launch.PERIOD_TABLE_BLOCK not in cp1
+
+
+def test_the_credit_snapshot_is_the_full_credit_assessment_with_its_modules_and_blocks_unchanged():
+    from deploy_vii.contracts import PATHWAY_MODULES as PRESETS
+    from deploy_vii.report_view import pathways
+
+    full = next(p for p in pathways() if p.id == "credit_snapshot")
+    assert full.title == "Full credit assessment"
+    assert full.blocks == FULL_BLOCKS
+    assert tuple(PRESETS["credit_snapshot"]) == (
+        *("CP-0", "CP-1", "CP-MODEL", "CP-1A", "CP-DR", "CP-2", "CP-2A", "CP-2E", "CP-2G"),
+        *("CP-4", "CP-3", "CP-5", "CP-6"),
+    )
+
+
+def test_the_launcher_refuses_a_new_short_snapshot_run_with_the_message(tmp_path, capsys):
+    argv = launch(tmp_path, pathway="short_snapshot")
+    assert main(argv) == 2
+    assert DEACTIVATED in capsys.readouterr().err
+    assert not (tmp_path / "out").exists()
+
+
+def test_the_helper_refuses_only_a_deactivated_pathway():
+    with pytest.raises(LaunchRefused, match=re.escape(DEACTIVATED)):
+        refuse_deactivated("short_snapshot")
+    for pathway in (*PRESET_ANSWER_KEY, "unknown"):
+        if pathway != "short_snapshot":
+            refuse_deactivated(pathway)
+
+
+def test_the_short_snapshot_instructions_still_build_through_the_lower_level_function(tmp_path):
+    _, texts = all_instructions(tmp_path, "short_snapshot")
+    assert tuple(texts) == SHORT_SNAPSHOT
+
+
+def test_the_lite_pathway_runs_end_to_end_to_a_verified_delivery_with_a_synthetic_provider(
+    tmp_path, provider, capsys
+):
+    """A synthetic run: a fake provider answers from hand-written text, so this proves the wiring,
+    the checks and the delivered layout, and no model or analytical quality."""
+    argv = launch(tmp_path, "--live", "--ruling", str(RULING), pathway="lite_credit_assessment")
+    routes = list(
+        prepare(
+            tmp_path / "context.json",
+            tmp_path / "issuer",
+            tmp_path / "preview",
+            config="sol-medium",
+            cap="50",
+        ).plan.layout.routes
+    )
+    # No CP-MODEL and no CP-2G: CP-1 writes no forecast block, and none is published.
+    provider.answer = lambda context: answer(context, routes)
+    assert main(argv) == 0
+    seen = capsys.readouterr()
+    # Nothing was requested, so nothing is reported as withheld (as for a short-snapshot run).
+    assert "Model not published" not in seen.err
+    out = tmp_path / "out"
+    completed = json.loads(next(out.glob("completed-*.json")).read_text())
+    assert completed["cp_forecast_published"] is False and completed["forecast_failure"] is None
+    assert completed["cp_model_published"] is False
+    assert tuple(c[0] for c in provider.calls) == LITE_MODULES
+    receipt = next((out / "deliveries").glob("*/delivery.json"))
+    assert verify_delivery(next(out.glob("delivery-*.json")), receipt.parent) == receipt
+    delivered = json.loads(receipt.read_text())
+    assert "Lite credit assessment" in delivered["scope"]
+    assert "Sections not produced: none." in delivered["scope"]
+    report = ReportView.model_validate_json((receipt.parent / "report-view.json").read_text())
+    assert tuple(block.block_id for block in report.blocks) == LITE_BLOCKS
+
+
+# Prompt-size budget: the most characters (head plus method text, CP-8 left out) each pathway's
+# instructions may total. An answer key of literal numbers: the lite and full credit assessments'
+# are the owner's; each other pathway's is its measured total (2026-11-13: covenant_refinancing
+# 1,091,950; distressed_restructuring 1,124,925; earnings_update 518,628; portfolio_decision
+# 902,476; relative_value 1,017,908; short_snapshot 140,075) rounded up to the next 10,000 plus 5%.
+# credit_snapshot measured 1,273,034 and lite_credit_assessment 392,429 (CP-MODEL removed).
+INSTRUCTION_BUDGET = {
+    "lite_credit_assessment": 420_000,
+    "credit_snapshot": 1_340_000,
+    "covenant_refinancing": 1_155_000,
+    "distressed_restructuring": 1_186_500,
+    "earnings_update": 546_000,
+    "portfolio_decision": 955_500,
+    "relative_value": 1_071_000,
+    "short_snapshot": 157_500,
+}
+
+
+def test_the_budget_names_every_pathway():
+    from deploy_vii.contracts import PATHWAY_MODULES as PRESETS
+
+    assert set(INSTRUCTION_BUDGET) == set(PRESETS)
+
+
+@pytest.mark.parametrize("pathway", sorted(INSTRUCTION_BUDGET))
+def test_a_pathways_instructions_stay_within_their_size_budget(tmp_path, pathway):
+    _, texts = all_instructions(tmp_path, pathway)
+    total = sum(len(text) for module, text in texts.items() if module != "CP-8")
+    ceiling = INSTRUCTION_BUDGET[pathway]
+    assert total <= ceiling, (
+        f"{pathway}: the instructions grew to {total:,} characters, {total - ceiling:,} over "
+        f"the {ceiling:,} budget"
+    )
 
 
 @pytest.mark.parametrize("pathway", sorted(PATHWAY_MODULES))
@@ -1492,6 +1693,7 @@ READER_LAYER_SECTIONS = (
     "docs/reuse/selected-methods/CANON_SHARED.md § Reader-facing research layer",
     "docs/reuse/selected-methods/CANON_SHARED.md § Credit-research reading order",
 )
+CANON_APPENDIX_SECTION = "docs/reuse/selected-methods/CANON_SHARED.md § Analytical appendix"
 
 
 def all_texts(tmp_path: Path) -> dict[str, str]:
@@ -1686,11 +1888,21 @@ SKILLS = "docs/reuse/selected-methods/skills/"
 # Written from each SKILL.md's own words ("mandatory, not optional", "binding method for the ...
 # phase", "they bind every run", "Read ...; materialize its run-specific brief"), not from METHODS.
 BINDING_COMPANIONS = {
+    "CP-0": ("cp-0-source-readiness/references/REF_CP-0_STEPS.md",),
     "CP-1B": (
         "cp-1b-earnings-delta/SKILL.md",
         "cp-1b-earnings-delta/references/REF_CP-1B_STEPS.md",
     ),
+    "CP-1A": (
+        "cp-1a-business-transaction-fact-pack/references/REF_CP-1A_STEPS.md",
+        "cp-1a-business-transaction-fact-pack/references/REF_CP-2C_STEPS.md",
+    ),
+    "CP-2": ("cp-2-fundamental-credit-synthesizer/references/REF_CP-2_STEPS.md",),
     "CP-2A": ("cp-2a-downside-pathway/references/REF_CP-2A_STEPS.md",),
+    "CP-3C": (
+        "cp-3c-refinancing-lme-risk/references/REF_CP-3C_STEPS.md",
+        "cp-3c-refinancing-lme-risk/references/CP-3C_RUNBOOK.md",
+    ),
     "CP-3": (
         "cp-3-relative-value-security-selection/references/CP-3A_RUNBOOK.md",
         "cp-3-relative-value-security-selection/references/CP-3B_RUNBOOK.md",
@@ -1709,7 +1921,22 @@ BINDING_COMPANIONS = {
     "CP-DR": ("cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md",),
 }
 SKILL_MODULES = [
-    *("CP-1B", "CP-1C", "CP-1D", "CP-2A", "CP-2D", "CP-2E", "CP-2G", "CP-2H", "CP-3", "CP-3D"),
+    *(
+        "CP-0",
+        "CP-1A",
+        "CP-1B",
+        "CP-1C",
+        "CP-1D",
+        "CP-2",
+        "CP-2A",
+        "CP-2D",
+        "CP-2E",
+        "CP-2G",
+        "CP-2H",
+        "CP-3",
+        "CP-3C",
+        "CP-3D",
+    ),
     *("CP-4", "CP-4C", "CP-5", "CP-6", "CP-DR"),
 ]
 
@@ -1718,6 +1945,391 @@ def test_each_module_is_sent_the_companions_its_method_calls_binding():
     for module, names in BINDING_COMPANIONS.items():
         for name in names:
             assert SKILLS + name in METHODS[module], (module, name)
+
+
+def selector_headings(text):
+    """The `### ...` headings of the selector list ("Report selectors, each exactly once")."""
+    block = text.partition("Report selectors, each exactly once")[2].partition(
+        cpos_launch.METHOD_MARK
+    )[0]
+    return re.findall(r"^- `(### [^`]+)`", block, flags=re.MULTILINE)
+
+
+def test_cp2_and_cp1a_run_the_deploy_v_skills_not_the_deploy_vii_stand_ins(tmp_path):
+    """Owner, 2026-11-13 ("Build rec. 1, then run"): the 18-step CP-2 skill and the CP-1A skill
+    with its CP-2C bundle are sent; the short JSON-transport stand-ins are not."""
+    cp2 = cpos_launch.method_text("CP-2")
+    for phrase in (
+        "# CP-2 \u2014 FundamentalCreditSynthesizer",
+        "#### Workflow \u2014 18 Steps",
+        "business profile vs typical leveraged-credit issuers in the sector",
+    ):
+        assert phrase in cp2, phrase
+    for phrase in (
+        "You receive no source text",
+        "no peer ranking",
+        "src/deploy_vii/methods/cp2.md",
+    ):
+        assert phrase not in cp2, phrase
+    cp1a = cpos_launch.method_text("CP-1A")
+    assert "# CP-1A Business Transaction Fact Pack" in cp1a
+    assert "## Absorbed phase \u2014 CP-2C, binding on every CP-1A run" in cp1a
+    assert "## REF_CP-2C_01_SourceGateReadiness.md" in cp1a  # a line of REF_CP-2C_STEPS.md
+    for phrase in ("src/deploy_vii/methods/cp1a.md", "Python owns every figure"):
+        assert phrase not in cp1a, phrase
+    # Selectors read from the prepared text before the change; Confidence inputs is the addition.
+    _, texts = all_instructions(tmp_path)
+    expected = {
+        "CP-2": ["### Map: credit-risk transmission"],
+        "CP-1A": [
+            "### Events: Issuer history",
+            "### Map: ownership and control",
+            "### Map: operating model to credit",
+        ],
+    }
+    for module, old in expected.items():
+        got = selector_headings(texts[module])
+        assert sorted(got) == sorted([*old, "### Confidence inputs"]), module
+        assert "`### Confidence inputs`" in texts[module].partition(cpos_launch.METHOD_MARK)[0]
+
+
+def test_cp3c_runs_the_deploy_v_skill_not_the_deploy_vii_stand_in():
+    """The stand-in (cp3c.md) forced the liability-management path to Insufficient Information
+    and barred every digit from text; the Deploy V skill assesses legal capacity, sponsor
+    willingness, the path taxonomy and a scenario map."""
+    text = cpos_launch.method_text("CP-3C")
+    for heading in (
+        "# CP-3C Refinancing and Liability-Management Risk",
+        "## REF_CP-3C_04_LegalCapacityForLME.md",
+        "## REF_CP-3C_05_SponsorGovernanceWillingness.md",
+        "## Refinancing / LME Path Taxonomy (12 paths)",
+        "## REF_CP-3C_10_ScenarioMap.md",
+    ):
+        assert heading in text, heading
+    for phrase in (
+        "Text carries no figure and no digit",
+        "The liability-management path is Insufficient Information",
+        "src/deploy_vii/methods/cp3c.md",
+    ):
+        assert phrase not in text, phrase
+    # The r17 edit: register T3D.2 carries Scale, in the skill and in the step file.
+    assert "Currency`|`Scale`|`Maturity Date`" in text
+    assert "        - Currency\n        - Scale\n        - Maturity Date\n" in text
+
+
+def test_cp0_runs_the_deploy_v_skill_not_the_json_stand_in(tmp_path):
+    """The stand-in (cp0.md) asks for a ReadinessReview matching a JSON Schema and applies a
+    digit rule to `analysis[].text`; this transport is Markdown. CP-0 now gets Deploy V's skill
+    and its step file, and a project block that says what the launcher already did."""
+    _, texts = all_instructions(tmp_path, modules=("CP-0", "CP-1", "CP-2A"))
+    text = texts["CP-0"]
+    head, _, method = text.partition(cpos_launch.METHOD_MARK)
+    for heading in (
+        "## Runbook \u2014 binding method, inline",
+        "#### Source hierarchy",
+        # run_expectations cites this sentence as the source of its management-claims rule.
+        (
+            "1 \u2014 controlling/primary filings, executed legal documents and official "
+            "schedules; 2 \u2014 issuer/agency releases, presentations, certificates and reports;"
+        ),
+        "#### T8 recommended-run command contract",
+        (
+            "- **required_register_ids**: T1; T2; T3; T4; T5; T6; T7; T8; "
+            "P1; P2; P3; P4; P5; P6; P7; P8"
+        ),
+        "## REF_CP-0_I_DownstreamReadiness.md",
+        "**Recommended Run Command Sheet**",
+    ):
+        assert heading in method, heading
+    for phrase in ("ReadinessReview", "JSON Schema", "src/deploy_vii/methods/cp0.md"):
+        assert phrase not in text, phrase
+    # The management-claims expectation cites the sentence the CP-0 method text sent carries,
+    # not the stand-in's wording: the citation and the sent text must agree.
+    cited = next(r for r in RULES if r.key == "run-financials-management-claims").basis
+    source_hierarchy = (
+        "1 \u2014 controlling/primary filings, executed legal documents and official "
+        "schedules; 2 \u2014 issuer/agency releases, presentations, certificates and reports;"
+    )
+    assert source_hierarchy in cited
+    assert source_hierarchy in method
+    assert "cp0.md" not in cited
+    # The project block: sent to CP-0 only, in the head before the method.
+    for words in (
+        "already listed, hashed and pinned the sources",
+        "Do not write the registers P1, P2, P4, P6, P7 and P8",
+        "Write P3 and P5",
+        "T1 input gate, T2 source register, T3 source hierarchy",
+        "T8 recommended run command sheet",
+        "the minimum missing documents",
+        "only for a source the effective-source set does not carry",
+        "never a readiness ground and never a `CONDITIONAL` condition",
+        "The package, parse and hash checks were done by the launcher: record no result for them",
+        "the objective is the selected pathway's use case",
+        "record it in T1",
+    ):
+        assert words in head, words
+    assert all(
+        "already listed, hashed and pinned" not in t.partition(cpos_launch.METHOD_MARK)[0]
+        for name, t in texts.items()
+        if name != "CP-0"
+    )
+    assert "HOST SOURCE PREPARATION" not in text
+    # CP-0 is a data module and is now scored: it owes the bottom line and the confidence inputs.
+    assert "`### Confidence inputs`" in head
+
+
+CPDR_QUESTIONS = (
+    "`competition`",
+    "`metric-definitions`",
+    "`valuation-context`",
+    "`market-demand`",
+    "`industry-structure`",
+    "`regulation`",
+)
+OPEN_WEB_SENTENCE = "There is no open-web discovery in this host. Never substitute"
+PACK_TOOLS_ONLY_QUOTE = "returned by `read_pages` or `search_source`; `period_end`"
+PACK_TOOLS_ONLY_READ = "read only with `list_sources`, `read_pages` and `search_source`. Item text"
+
+
+def test_cpdr_runs_one_method_text_the_cp_os_version_2_skill():
+    """The versions report (CP-DR, conflicts 1-7): the v1 skill plus `cpdr.md` disagreed on who
+    writes the tables, the tool names and the answer states. One text now: cp-os version 2.0."""
+    text = cpos_launch.method_text("CP-DR")
+    assert "src/deploy_vii/methods/cpdr.md" not in text
+    assert "Version: 2.0 | Date: 2026-11-04 | Method cp-dr/2026-10-31" in text
+    at = [text.index(question) for question in CPDR_QUESTIONS]
+    assert at == sorted(at)
+    assert "Never type an amount that is not inside the quote" in text
+    for phrase in ("Python composes the tables", "search_pack", "answered/partly/not_found"):
+        assert phrase not in text, phrase
+    # Named edit 2b (caos-databricks vendor/deploy-v): a gap row is typed `gap`, and missing
+    # evidence is Complete with Gaps, never Blocked; the step bundle says the same.
+    assert "whose `claim_type` is `gap`" in text
+    assert "whose `claim_type` is `source_characterisation`" not in text
+    assert "Missing evidence makes a question UNRESOLVED and the run Complete with Gaps" in text
+    assert "Missing evidence alone is never `Blocked`." in text
+    assert "a gap row, which records a search that found nothing, takes `gap`" in text
+
+
+def test_cpdr_open_web_limit_is_conditional_on_the_web_search_rules(tmp_path, provider):
+    """Named edit 2a. The skill said there is no open-web discovery in this host while the project
+    offers `web_search` with WEB_SEARCH_RULES appended to the system text. The condition is named as
+    the model receives it: the paragraph that begins "web_search reaches public web pages"."""
+    from deploy_workflow.model.handoff import WEB_SEARCH_RULES
+
+    assert WEB_SEARCH_RULES.lstrip().startswith("web_search reaches public web pages")
+    assert OPEN_WEB_SENTENCE not in cpos_launch.method_text("CP-DR")
+    root = tmp_path / "rulings"
+    root.mkdir()
+    for name, configs in (("on.md", "sol-medium, web-search"), ("off.md", "sol-medium")):
+        lines = (
+            "lifts: live-provider-pause",
+            "by: user",
+            "date: 2026-11-10",
+            f"configs: {configs}",
+        )
+        (root / name).write_text("\n".join(lines) + "\n")
+    assert main(launch(tmp_path, "--ruling", str(RULING), pathway="relative_value")) == 0
+    routes = prepare_routes(tmp_path, "sol-medium", modules=None)
+    provider.answer = lambda context: answer(context, routes)
+    manifest = tmp_path / "out/workflow.json"
+    layout = HandoffPlan.model_validate_json(manifest.read_bytes()).layout
+    systems = {}
+    for name in ("on.md", "off.md"):
+        provider.systems.clear()
+        cpos_launch.run_live_handoffs(
+            manifest,
+            tmp_path / name,
+            ruling=root / name,
+            check=checker(layout),
+            max_turns=4,
+            max_output_tokens=cpos_launch.MAX_OUTPUT_TOKENS,
+            rulings_root=root,
+        )
+        systems[name] = provider.systems["CP-DR"]
+    for name, granted in (("on.md", True), ("off.md", False)):
+        system = systems[name]
+        assert (WEB_SEARCH_RULES in system) is granted
+        assert OPEN_WEB_SENTENCE not in system
+        condition = "unless this run's instruction carries the paragraph that begins \"web_search"
+        assert condition in system
+        for question in CPDR_QUESTIONS:
+            assert question in system
+        assert "Never type an amount that is not inside the quote" in system
+        # Named edit 2a-4: the reading and TDR.6 quote clauses no longer name pack tools alone.
+        assert PACK_TOOLS_ONLY_QUOTE not in system
+        assert PACK_TOOLS_ONLY_READ not in system
+        assert 'or, when the paragraph that begins "web_search reaches' in system
+        assert "Python composes the tables" not in system
+        assert "search_pack" not in system
+
+
+# ---- Deploy V methods plan, Task 5A (2026-11-13): CP-2D, CP-4 and CP-4C send the caos-databricks
+# versions (vendor/deploy-v, repo HEAD dfff264) with named edits: the `qa_status` map sentence of
+# common rule 10 (all three) and CP-4C's LITE profile text are removed. Each module: one sentence
+# of the new text is in the built instruction, one sentence of the old text and each removed
+# sentence are not.
+def test_cp2d_instruction_carries_the_six_column_months_to_empty_register(tmp_path):
+    text = instruction_text(tmp_path, "CP-2D")
+    assert (
+        "T2E.6: `Calculation`|`Result`|`Formula / Inputs`|`Cash-Burn Basis`|`Status`|`Source Trace`"
+        in text
+    )
+    assert (
+        "where the period is cash-generative (average monthly burn at or below zero) there is no "
+        "runway to exhaust and `Result` is `Not Calculable`" in text
+    )
+    assert (
+        "T2E.5: `Bridge Item`|`Amount`|`Currency and Scale`|`Source / Calculation`|`Status`"
+        "|`Credit Comment`|`Source Trace`" in text
+    )
+    assert "T2E.6: Months to Empty result (numeric) + calculation basis narrative" not in text
+    assert "`qa_status` follows the run's own status" not in text  # the named edit
+
+
+def test_cp4_instruction_asks_for_the_reason_form_of_the_placeholder(tmp_path):
+    text = instruction_text(tmp_path, "CP-4")
+    assert (
+        "write `[Insufficient Information] — ` and name the missing document (for example "
+        "`[Insufficient Information] — intercreditor agreement not in the source set`), never "
+        "the bare placeholder" in text
+    )
+    assert "`[Insufficient Information]` where the document is not provided." not in text
+    assert "`qa_status` follows the run's own status" not in text  # the named edit
+
+
+def test_cp4c_instruction_answers_no_distress_gate_with_not_applicable(tmp_path):
+    text = instruction_text(tmp_path, "CP-4C")
+    assert (
+        "Without a documented distress gate the module builds no restructuring scenario and "
+        "returns `Not Applicable` (Phase 1), which is a complete answer; only an unresolved "
+        "scope holds the run." in text
+    )
+    assert "Requires a validated handoff from CP-0, CP-1, CP-2A, CP-2G and CP-4" in text  # E4
+    # Named edit E4 (2026-11-13): the profile distinction no longer exists in the text.
+    assert "In FULL_CREDIT_32, requires" not in text
+    assert "in both profiles" not in text
+    assert "Optional upstream, used when present: CP-2A, CP-2G, CP-4." not in text
+    for gone in (  # the named edits: caos-only profile text and the qa_status map
+        "LITE_CREDIT_22",
+        "UPGRADE",
+        "`qa_status` follows the run's own status",
+    ):
+        assert gone not in text, gone
+
+
+def test_a_handoff_in_the_new_register_shapes_passes_the_chart_checks():
+    """Nothing in the CP-OS checker reads T2E.5, `Months to Empty` or a CP-4C `Not Applicable`
+    answer: `chart_issues` reads only the `### Chart data:` tables. A cash-generative CP-2D and a
+    CP-4C with no distress gate state every chart amount as `Not supplied: <reason>`."""
+    gap = "Not supplied: the period is cash-generative, there is no runway"
+    text = "### Chart data: liquidity bridge\n\n" + synthetic_table(
+        ALLOCATION_HEAD,
+        f"| Opening liquidity | {gap} | US$m | S. |",
+        f"| Closing liquidity | {gap} | US$m | S. |",
+    )
+    bridge = next(t for t in cpos_launch.OWNER_TABLES["CP-2D"])
+    assert cpos_launch.chart_issues(text, bridge) == ()
+    na = "Not supplied: no documented distress gate, CP-4C returned Not Applicable"
+    recovery = f"### {RECOVERY}\n\n" + synthetic_table(
+        RECOVERY_HEAD, f"| {na} | {na} | {na} | {na} | {na} | US$m | S. |"
+    )
+    spec = next(t for t in cpos_launch.OWNER_TABLES["CP-4C"] if t.heading == RECOVERY)
+    assert cpos_launch.chart_issues(recovery, spec) == ()
+
+
+# ---- Deploy V methods plan, Task 5B (2026-11-13): seven sent skills take one small named
+# correction each from caos-databricks vendor/deploy-v (repo HEAD dfff264) or cp-os 115f664. Each
+# module: one sentence of the new text is in the built instruction and the sentence it replaced is
+# not. Nothing in the CP-OS checker reads a T2.10 Direction, a T2H.3 `case`, a T1D `NONE` row or
+# the skills' critical-cell blocklist (`chart_issues` reads only the `### Chart data:` tables).
+def blocklist_lines(text: str) -> list[str]:
+    return [line for line in text.splitlines() if "critical_cell_values_casefold" in line]
+
+
+def test_cp5_instruction_says_cp6_runs_after_cp5_and_is_not_its_input(tmp_path):
+    text = instruction_text(tmp_path, "CP-5")
+    assert (
+        "**Downstream (QA gate):** CP-6 and CP-6A run only after this handoff is accepted (the "
+        "catalog's CP-5 \u2192 CP-6 QA gate); they are never CP-5's input" in text
+    )
+    assert "CP-6 and CP-6A run after CP-5 and are not its input" in text
+    for gone in (  # the sentences that said CP-5 reads CP-6 and CP-6A
+        "All analytical modules (CP-1 through CP-4A, CP-6, CP-6A), CP-5A QA output",
+        "all analytical modules (CP-1 through CP-4A, CP-6, CP-6A)",
+        "(especially CP-3, CP-6, CP-6A)",
+    ):
+        assert gone not in text, gone
+
+
+def test_cp6_instruction_says_its_qa_gate_is_cp5_upstream_of_it(tmp_path):
+    text = instruction_text(tmp_path, "CP-6")
+    assert (
+        "Its QA gate is CP-5: CP-6 runs only after CP-5's handoff is accepted (Passed or "
+        "Restricted), so CP-5 is upstream of CP-6 and never its consumer." in text
+    )
+    assert (
+        "**Upstream (QA gate):** CP-5, CP-5A (accepted before this module runs; "
+        "CP-5 is never its consumer)" in text
+    )
+    assert "UP (QA gate): CP-5, CP-5A | DOWN (Analytical): CP-6A" in text
+    assert "UP (QA gate): CP-5, CP-5A | DOWN (Analytical): (terminal L6 module)" in text
+    assert "**Downstream (QA):** CP-5, CP-5A" not in text  # the stale header lines
+    assert "DOWN (QA): CP-5, CP-5A" not in text
+
+
+def test_cp2_instruction_splits_a_mixed_direction_and_gives_none_supported_a_row(tmp_path):
+    text = instruction_text(tmp_path, "CP-2")
+    assert (
+        "A driver that cuts both ways is split into a Positive row and a Negative row, each "
+        "with its own `Credit Implication` (canon: Mixed->split); `Mixed` is never a Direction."
+        in text
+    )
+    assert "`Driver` `None supported`, `Evidence` naming what was reviewed" in text
+    assert "- Direction: Positive / Negative / Mixed" not in text
+    assert "**values**: Positive; Negative; Mixed" not in text
+
+
+def test_cp1d_instruction_gives_an_empty_cp1_bridge_one_none_row_per_register(tmp_path):
+    prepared, *_ = good_task(tmp_path, "CP-1D", "earnings_update")  # CP-1D's pathway
+    text = (tmp_path / "out" / prepared.plan.instructions["CP-1D"].path).read_text()
+    assert (
+        "T1D.1\u2013T1D.4 then each carry one row stating that no add-back exists (`Add-Back ID` "
+        "`NONE`" in text
+    )
+    assert "T1D.4 bridges reported EBITDA to itself, and Steps 5\u20137 still run." in text
+    assert "present in T1D.1 (one `NONE` row when the bridge is empty); achievability" in text
+    assert "present in T1D.1; achievability" not in text
+
+
+def test_cp2g_instruction_says_the_assumption_register_carries_base_and_downside_rows(tmp_path):
+    text = instruction_text(tmp_path, "CP-2G")
+    assert (
+        "In the assumption register (T2H.3) each row's `case` is `base`, `upside` or `downside` "
+        "(any capitalisation, and the word may lead a longer label such as `Base case`), and the "
+        "register carries rows for both `base` and `downside`." in text
+    )
+    assert "or `analyst_judgment`. Store exact source and locator" not in text
+
+
+def test_cp2h_blocklist_no_longer_refuses_unknown(tmp_path):
+    (line,) = blocklist_lines(instruction_text(tmp_path, "CP-2H"))
+    assert "unknown" not in line
+    assert line.endswith(
+        "; n/a; tbd; not calculable from provided materials; not assessable; unavailable"
+    )
+
+
+def test_cp3_blocklists_no_longer_refuse_not_assessable(tmp_path):
+    text = instruction_text(tmp_path, "CP-3")
+    # CP-3's own list and the CP-3A and CP-3B copies, each a value line of the method text
+    lines = [x for x in text.splitlines() if "[insufficient information]; insufficient" in x]
+    assert len(lines) == 3
+    for line in lines:
+        assert "not assessable" not in line
+        assert line.endswith(
+            "; n/a; tbd; unknown; not calculable from provided materials; unavailable"
+        )
 
 
 def test_cp1b_runs_the_deploy_v_method_not_the_structured_runtime_step():
@@ -1737,9 +2349,10 @@ def test_skill_modules_carry_the_confidence_score_rules_their_script_would_apply
         assert body.startswith("## CP_CONFIDENCE_SCORE.md\n")
         assert "score = clamp( (0.6 * E + 0.4 * C) * S - P , 0 , 100 )" in body
         assert "CP_LIMITATION_TAXONOMY" not in body  # the next canon section is not swept in
-    assert [name for name, _ in cpos_launch.method_sections("CP-2")][1:] == list(
-        READER_LAYER_SECTIONS
-    )
+    assert [name for name, _ in cpos_launch.method_sections("CP-L10")][1:] == [
+        *READER_LAYER_SECTIONS,
+        CANON_APPENDIX_SECTION,
+    ]
 
 
 def test_the_method_archive_lists_every_sent_file_with_its_hash():
@@ -1804,29 +2417,58 @@ def test_every_module_is_told_what_stands_for_acceptance_scripts_and_questions(t
 # methods" when the text after METHOD_MARK differs, so the shared-text change must leave every
 # one of these as it was. CP-8 alone changed on main after that commit (36a4c52, 184bfbb, 1e46c49:
 # src/deploy_vii/methods/cp8.md, the withheld-difference rules); its pin is the merged text.
+# CP-1D, CP-2, CP-2G, CP-2H, CP-3, CP-5 and CP-6 changed on 2026-11-13 (Deploy V methods plan,
+# Task 5B): each takes one small named correction, so runs made before it are correctly marked
+# "Earlier methods" for these seven modules.
+# CP-2D, CP-4 and CP-4C changed on 2026-11-13 (Deploy V methods plan, Task 5A): they now send the
+# caos-databricks versions with named edits, so runs made before it are correctly marked "Earlier
+# methods" for these three modules.
+# CP-4C changed again on 2026-11-13 (minors batch, named edit E4): the two phrases that pointed at
+# the removed profile distinction (`In FULL_CREDIT_32, ` and ` in both profiles`) are cut.
+# CP-3C changed on 2026-11-13 (Deploy V methods plan, Task 2): it now sends Deploy V's skill, so
+# runs made before it are correctly marked "Earlier methods" for CP-3C.
+# CP-0 changed on 2026-11-13 (Deploy V methods plan, Task 3): it now sends Deploy V's skill, so
+# runs made before it are correctly marked "Earlier methods" for CP-0.
+# CP-DR changed on 2026-11-13 (Deploy V methods plan, Task 4): it now sends the cp-os version 2.0
+# skill with two named edits and no longer sends cpdr.md, so runs made before it are correctly
+# marked "Earlier methods" for CP-DR.
+# CP-1A and CP-2 changed on 2026-11-13 (owner: "Build rec. 1, then run"): they now send Deploy V's
+# skills, so runs made before it are correctly marked "Earlier methods" for these two modules.
+# Every prose module changed on 2026-11-13 (Deploy V methods plan, Task 6): the canon's Analytical
+# appendix section is now sent after the reader-layer sections. The data modules (CP-0, CP-1,
+# CP-1C, CP-PARSE) are unchanged.
+# CP-6 changed again on 2026-11-13 (Task 5B fix round 1): its four stale `Downstream (QA)` header
+# lines now say CP-5 is its upstream QA gate (caos wording).
+# CP-2A changed again on 2026-11-13 (Deploy V methods plan, Task 6): it now sends the CP-OS-only
+# copy of the short stress text (tables T2DS.n, two stale statements removed) instead of cp2a.md.
+# CP-2A pin changed again on 2026-11-13 (final fix wave): the copy's line-1 comment now says it is
+# the CP-OS copy of cp2a.md; nothing else in the file changed.
+# CP-8 pin recomputed on 2026-11-13 (merge of origin/main into claude/deploy-v-methods): it is the
+# merge of main's CP-8 method change (cp8.md redesign) with this branch's appendix section. Every
+# other pin is this branch's value; main changed no other method text.
 METHOD_TEXT_SHA256_AT_1B41E65 = {
-    "CP-0": "ff1c92c296681a7dce3325f2ce588d7ff3af9a13c3a0aa8c21289642195873f7",
+    "CP-0": "e8d3e77bc48bc98e2fd8595e7b46ee7fc786e859591cf244325f3508b7d5dac9",
     "CP-1": "02477a91d582f6301b2dbfadd96572ea75f9845493de337d7160a55111b62170",
-    "CP-1A": "6a85341f7ce9d89189027ccba0a88504873819f2a6d498df2814f991120cbd6e",
-    "CP-1B": "7cd20df691582416e0ffd069d9f7aa8f7ac64d30c7682383dd7b8134b8dfa763",
+    "CP-1A": "4c8efcfafe748cd01e6c856041349397c77384c3c82566b1f36a429535c01639",
+    "CP-1B": "38d9fa7b075d1ce5d0cd21bcc216f57f37369cd4db395b3f1fb65498697a509f",
     "CP-1C": "9353afdbce820f59c2dcabc951fc1ff3813174b3c84e79b47bc22bea97f3bbe8",
-    "CP-1D": "50cc8ec34ed140f22859fd384eb7f16d81acc3404728b0493f642d5ba4daf4b1",
-    "CP-2": "bef6d197f08b0b66ae137a209e056d553baf383b18dc40173c27fa734cff2de8",
-    "CP-2A": "a594a8e8c7427f063274fc48961fbe2603b3bc0e032ff345222579fe57ef4c50",
-    "CP-2D": "2f977243550b0c76f1cccf41d7d11e66061280e8743d2fe5454a9cacdf9b9d1a",
-    "CP-2E": "4d730920f241c7f7d762a7606890aa2f0b567e1b85372ab3ff659a462ab5d4a7",
-    "CP-2G": "6d15e5eee90a18410466fad2d60efb05740f7eb0972595ceae8116ba1f0db76f",
-    "CP-2H": "e98d0b0c5c84059ef7f10e595c270c4532cf29246c612bb0f108809010c3e3a8",
-    "CP-3": "144798da83e3aab842f8a2e187008a95ecc5c7b387f9e5bc1b31b92ffdf20f1c",
-    "CP-3C": "51efb56c61d6f8051d134efbfcdc76aa8eb2af3c3a7331b449c093d24279803e",
-    "CP-3D": "e43f2d5d73d7e15e24d53e302d84d8eca543e14848656dc3a3dc7fb85fde25f8",
-    "CP-4": "fb2e764ed645f3d65112aebe8db12feb215763ffdaca25e6d70a627250d1c6bc",
-    "CP-4C": "2e70ce4fd894deba7bc2a6234953689f898d73c0ac093336806d70fd16815d8e",
-    "CP-5": "a0b02519822dbd84ba928f026b0e3aa8a7a82ba71604059e9f7ceec9f395bb90",
-    "CP-6": "32fdd06787a47c6351924f1371b90a8b6937c11fbfcb04404eb6590de0ec3b0b",
-    "CP-8": "560e6026abc340b8240a2fb4397f43a52ccb9386c5810ae1cc3b74e063e45075",
-    "CP-DR": "54a57f559181087df17e476d271b71c67b00f38e87288f95c7831cbd3e3a056e",
-    "CP-L10": "527d90f10ce7c541cc15f2e702f73502199f6628335c95e66b64920e7cfba18d",
+    "CP-1D": "d4d1ee4507d743cdb9d98bffd865ca3d012a4b4fb79a92a275cfc6a796bff453",
+    "CP-2": "f925b66f13cff7bd7801d1c3cf7120eb1317126c8605bf1ff1875ce62ed3c162",
+    "CP-2A": "5caf04f5b39bae89726bcd5929e8f17ca14b7d753f1ac718d58eda27baf9569f",
+    "CP-2D": "fe39c49f842c99f6ffd390bd409cbb44adbbe397720d0a0d4d935b52a34a8fda",
+    "CP-2E": "ab111a4fb0bd201b84dbec916ccdba6e5df92f60671b2d419949ca34d6118e34",
+    "CP-2G": "268a85d82da39c9b7b66474b4052eb23b310f7fc5ce0c9d7efa25766a5699cf2",
+    "CP-2H": "f500af91511584f3dda4d0dd10180766dabe19d81de7df12a99b6da2d92e89b4",
+    "CP-3": "b84b8a08baa01a24a12f9f5e92a24dc735129a9dfec1449b4d8329833deef123",
+    "CP-3C": "d1038d5097955d6bf47ccae01fee07bdc1db0b2e49eb7b77d0153c07b48768ac",
+    "CP-3D": "a35a8a1d6f1b7aaecf7e98613e80a04c4c158f9163f315edbd004647463aa698",
+    "CP-4": "a769b7456e5661d70cb25388fc4acb444cfd0aecd8f778554f98369ebadc7f7e",
+    "CP-4C": "1d96547563190f89b909c37ea47969ecb04a2c794c5971b6db8f7c94c836b1f8",
+    "CP-5": "9ac221698cc36a06473ce8cd9c2128c1705da362b289163d4ab54fda0d418d76",
+    "CP-6": "115d07e8934f049b920e497834bcf61d53c6fe0cdd0266daf56b87d18d5e1f26",
+    "CP-8": "0a0b339a9f9a284328b9a6fb50513a9bd03f2aa58dd45a387fe057b6ce2612c3",
+    "CP-DR": "83aa5447c37db42db2e3df91cdd0cfaf491f37c0436fc8257c0d5fb43e735353",
+    "CP-L10": "5b0e904dd62e1d1b341ec3d7d1717500d68ce1aee734b347e0dbbdfbe696b006",
 }
 
 
@@ -1923,7 +2565,8 @@ def test_cp2a_is_told_which_method_governs_the_stress_sizes(tmp_path):
     tdg-forecast-005: CP-2A gave no shock, so no stress case was computed."""
     _, texts = all_instructions(tmp_path, modules=("CP-0", "CP-1", "CP-2A", "CP-2G"))
     head = texts["CP-2A"].partition(cpos_launch.METHOD_MARK)[0]
-    assert "`src/deploy_vii/methods/cp2a.md` governs" in head
+    assert "`CP-2A_STRESS_DESIGN_CPOS.md` governs" in head
+    assert "cp2a.md" not in head
     assert "labelled analyst assumptions" in head and "anchored to a stated figure" in head
     assert "an EBITDA decline and a cash-interest rate increase" in head
     assert "at most four decimal places" in head
@@ -1964,7 +2607,7 @@ def test_the_presets_are_the_owners_answer_key():
     assert all(len(m) == len(set(m)) for m in PRESETS.values())
 
 
-@pytest.mark.parametrize("pathway", sorted(PATHWAY_MODULES))
+@pytest.mark.parametrize("pathway", sorted(set(PATHWAY_MODULES) - {"lite_credit_assessment"}))
 @pytest.mark.parametrize("peer_source", ["cp_dr_public", "user_list", "user_comps", "none"])
 def test_cpdr_and_cp2e_are_in_every_pathway_and_run_in_order(tmp_path, pathway, peer_source):
     """Owner, 2026-11-11: "cp-dr should be on every run or cp-1c wont work. so should cp-2e."
@@ -2008,6 +2651,11 @@ def test_cpdr_is_asked_for_the_peer_pack_cp1c_reads_by_default(
         for phrase in ("TDR.4", "TDR.5", "TDR.6", "`revenue`, `ebitda`, `debt`, `interest`, `ffo`"):
             assert phrase in research, phrase
         assert "Name no peer and type no figure from memory" in research
+        assert "cpdr.md" not in research  # CP-DR is no longer sent that file
+        assert "as your method's PEER PACK section describes them" in research
+        assert "that row cites its TDR.2 gap row" in research
+        assert "whose `peer_id` is `none` (row header `none.none`)" in research
+        assert "still write the three tables" in research
         benchmark = texts["CP-1C"].partition(cpos_launch.METHOD_MARK)[0]
         assert "take the peer set and its figures from the CP-DR handoff's TDR.4" in benchmark
         assert "You own inclusion, comparability, normalisation and every statistic" in benchmark
@@ -2117,6 +2765,7 @@ CHART_HEADERS = {
     [
         *("credit_snapshot", "earnings_update", "relative_value", "covenant_refinancing"),
         *("distressed_restructuring", "portfolio_decision", "short_snapshot"),
+        "lite_credit_assessment",
     ],
 )
 def test_every_pathway_asks_cp1_for_the_four_chart_tables_and_requires_them(tmp_path, pathway):
@@ -3477,10 +4126,7 @@ def test_the_cp2g_instruction_asks_for_the_row_and_period_of_every_base_operand(
         "exact first-cell text",
         "exact header text",
         "of one of the CP-1 handoff's tables",
-        (
-            "Name the cell of every operand that has an amount: `row` and `period`, or in a table "
-            "with one row per period"
-        ),
+        "Name the cell of every operand that has an amount by `row` and `period` and nothing else.",
         "positive magnitude",
         "with its sign reversed",
         "is not a cell",
@@ -3590,19 +4236,24 @@ def test_a_short_snapshot_run_in_the_library_is_listed_with_its_label_and_cp_l10
     """Owner, 2026-11-11: CP-2 and CP-6 do not run in a short snapshot, so CP-L10 leads (H5)."""
     from test_library_page_browser import visit
 
-    argv = launch(tmp_path, "--live", "--ruling", str(RULING), pathway="short_snapshot")
-    argv[argv.index("--out") + 1] = str(tmp_path / "runs" / RUN_ID)
-    routes = list(
-        prepare(
-            tmp_path / "context.json",
-            tmp_path / "issuer",
-            tmp_path / "preview",
-            config="sol-medium",
-            cap="50",
-        ).plan.layout.routes
+    launch(tmp_path, pathway="short_snapshot")  # writes the context and the issuer folder
+    prepared = prepare(
+        tmp_path / "context.json",
+        tmp_path / "issuer",
+        tmp_path / "runs" / RUN_ID,
+        config="sol-medium",
+        cap="50",
     )
+    routes = list(prepared.plan.layout.routes)
     provider.answer = lambda context: short_snapshot_answer(context, routes)
-    assert main(argv) == 0
+    run_live_handoffs(
+        prepared.manifest,
+        prepared.directory,
+        ruling=RULING,
+        check=checker(prepared.layout),
+        config="sol-medium",
+    )
+    cpos_launch._refresh_library(prepared.directory)
     assert "Library not updated" not in capsys.readouterr().err
     text = (tmp_path / "library/data.js").read_text(encoding="utf-8")
     data = json.loads(text.removeprefix("window.CREDIT_OS_DATA=").rstrip().removesuffix(";"))
@@ -3679,6 +4330,65 @@ def test_each_pathways_run_reaches_the_library_screens(tmp_path, provider, capsy
         assert console == [], (route, console)
         assert UNFILLED.search(shown) is None, (route, UNFILLED.findall(shown))
         assert ISSUER in shown, route
+
+
+@pytest.mark.browser
+def test_a_lite_run_fills_the_library_pages_and_its_forecast_page_states_the_gap(
+    tmp_path, provider, capsys
+):
+    """A synthetic lite run (no CP-MODEL, so no forecast) launched into runs/ and read in the real
+    library: it is labelled "Lite credit assessment", CP-2 writes the Overview lead, the Forecast
+    page says that no forecast was published, and no page shows an unfilled value."""
+    from test_library_page_browser import visit
+
+    argv = launch(tmp_path, "--live", "--ruling", str(RULING), pathway="lite_credit_assessment")
+    argv[argv.index("--out") + 1] = str(tmp_path / "runs" / RUN_ID)
+    routes = list(
+        prepare(
+            tmp_path / "context.json",
+            tmp_path / "issuer",
+            tmp_path / "preview",
+            config="sol-medium",
+            cap="50",
+        ).plan.layout.routes
+    )
+    provider.answer = lambda context: answer(context, routes)
+    assert main(argv) == 0
+    seen = capsys.readouterr()
+    assert "Library not updated" not in seen.err and "Model not published" not in seen.err
+    assert tuple(c[0] for c in provider.calls) == LITE_MODULES
+    text = (tmp_path / "library/data.js").read_text(encoding="utf-8")
+    data = json.loads(text.removeprefix("window.CREDIT_OS_DATA=").rstrip().removesuffix(";"))
+    assert data["workspace"]["runs"][RUN_ID]["pathway"] == "lite_credit_assessment"
+    assert data["workspace"]["models"] == []
+    index = tmp_path / "library/index.html"
+    shown = {}
+    for name, route in {
+        "Overview": f"#W-Overview/overview?c={RUN_ID}",
+        "Changes": f"#W-Changes/changes?c={RUN_ID}",
+        "Modules": f"#CP-2A?c={RUN_ID}",
+        "Forecast": f"#W-Forecast/none?c={RUN_ID}",
+        "Evidence": f"#W-Evidence/sources?c={RUN_ID}",
+    }.items():
+        dom, console = visit(index, route)
+        shown[name] = " ".join(re.sub(r"(?s)<(script|style)\b.*?</\1>|<[^>]+>", " ", dom).split())
+        assert console == [], (name, console)
+        assert UNFILLED.search(shown[name]) is None, (name, UNFILLED.findall(shown[name]))
+        assert ISSUER in shown[name] and "Lite credit assessment" in shown[name], name
+    dom, _ = visit(index, f"#W-Overview/overview?c={RUN_ID}")
+    # The lead is written by CP-2; the Overview no longer links its writer, so the trace
+    # controls of the lead's key findings (the handoff file each was read from) are the evidence.
+    lead = re.search(
+        r'(?s)<section class="overview-part" id="overview-lead"[^>]*>.*?</section>', dom
+    )
+    why = re.search(
+        r'(?s)<section class="overview-part[^"]*" id="overview-why"[^>]*>.*?</section>', dom
+    )
+    assert lead is not None and why is not None
+    sources = re.findall(r'data-paragraph="([^"]*)"', why[0])
+    assert sources and all("/CP-2.md:" in source for source in sources), sources
+    assert "First run of this pathway" in shown["Changes"]
+    assert "No forecast model was published from this run\u2019s files" in shown["Forecast"]
 
 
 def test_a_delivery_without_a_forecast_has_no_forecast_key_in_its_receipt(
@@ -5345,9 +6055,11 @@ def test_both_forecast_instructions_ask_for_the_scale():
     ):
         for words in (
             (
-                f"`scale` is `1` when {tables} statement tables print USD millions and `1000` "
-                "when they print USD thousands"
+                "`currency` is the three-letter code of the currency "
+                f"{tables} statement tables are printed in (`USD`, `GBP`, `EUR`), and `scale` is "
+                "`1` when they print millions of it and `1000` when they print thousands"
             ),
+            "so every published figure is millions of that currency",
             "Python divides by `scale`",
             "Do not convert an amount yourself",
             'a cell printing 2,620,995 is `"2620995"`',
@@ -5365,10 +6077,10 @@ def test_both_forecast_instructions_ask_for_the_scale():
 def test_both_forecast_instructions_state_what_the_unit_check_enforces():
     for block in (cpos_launch.FORECAST_BLOCK, cpos_launch.LAYER1_FORECAST_BLOCK):
         assert (
-            "State `scale` in every block, as the statements print it (`1000` for thousands, `1` "
-            "for millions), and state every amount in the block in that one unit exactly as "
-            "printed; an amount printed in the other unit is stated as missing, with the reason, "
-            "not converted." in block
+            "State `currency` and `scale` in every block, as the statements print them (`1000` for "
+            "thousands, `1` for millions), and state every amount in the block in that one unit "
+            "exactly as printed; an amount printed in the other unit is stated as missing, with "
+            "the reason, not converted." in block
         )
         assert "or absent" not in block
 
@@ -5388,6 +6100,7 @@ NET_DEBT_HEADER = (
     [
         *("credit_snapshot", "earnings_update", "relative_value", "covenant_refinancing"),
         *("distressed_restructuring", "portfolio_decision", "short_snapshot"),
+        "lite_credit_assessment",
     ],
 )
 def test_every_pathway_asks_cp1_for_the_net_debt_table_and_states_every_rule_the_checker_holds(
@@ -5464,6 +6177,7 @@ POST_BS_SENTENCE = "state the pro forma figure beside it"
     [
         *("credit_snapshot", "earnings_update", "relative_value", "covenant_refinancing"),
         *("distressed_restructuring", "portfolio_decision", "short_snapshot"),
+        "lite_credit_assessment",
     ],
 )
 def test_cp1_is_asked_for_the_post_balance_sheet_table_and_others_for_the_pro_forma_sentence(
@@ -5715,10 +6429,14 @@ def test_the_shared_text_names_no_confidence_script_and_separates_the_score_from
 
 
 # --- Task E4 (2026-11-12 findings 1, 2, 4): the sent texts name `column` and `interest`
-COLUMN_SENTENCE = (
-    "`row` and `column`, the row being the period exactly as printed and the column the "
-    'measure\'s exact header (`{"amount": "<decimal>", "reason": null, "row": "FY2024", '
-    '"column": "Cash"}`); leave out `period` there.'
+S5_SENTENCE = (
+    "Name the cell of every operand that has an amount by `row` and `period` and nothing else. "
+    "Take a balance from a row under a period column (`FY2024`, `H1 2025`), never from a column "
+    "headed `LTM …` and never from a table with one row per period"
+)
+S5_TAIL = "where CP-1 prints the balance only there, state the operand as missing with that reason."
+S5_TAIL_LAYER1 = (
+    "where you print the balance only there, state the operand as missing with that reason."
 )
 INTEREST_SENTENCE = (
     "`interest` is interest paid in cash in the base period; where CP-1 prints only interest "
@@ -5726,9 +6444,11 @@ INTEREST_SENTENCE = (
     "expense, not cash paid."
 )
 BALANCE_SENTENCE = (
-    "Print a balance (debt, cash, undrawn facilities) at a period's end under that period's "
-    "column as a plain number: the `H1 2025` column holds the 30 June 2025 balance. Put the date "
-    "in the row label or the Source, not in the cell."
+    "Print every balance the forecast needs (total debt, cash, undrawn committed facilities) as "
+    "a row of a table whose columns are those period headers, each a plain number at that "
+    "period's end: the `H1 2025` column holds the 30 June 2025 balance. Put the date in the row "
+    "label or the Source, not in the cell. A column headed `LTM …` holds flows only, never a "
+    "balance."
 )
 
 
@@ -5744,16 +6464,18 @@ def _built_instruction(tmp_path, module, modules):
     return (tmp_path / "out" / prepared.plan.instructions[module].path).read_text()
 
 
-def test_the_cp2g_instruction_sent_states_the_column_key_and_what_interest_is(tmp_path):
+def test_the_cp2g_instruction_sent_states_row_and_period_only_and_what_interest_is(tmp_path):
     text = _built_instruction(tmp_path, "CP-2G", ("CP-1", "CP-2G"))
-    assert COLUMN_SENTENCE in text and INTEREST_SENTENCE in text
+    assert S5_SENTENCE in text and S5_TAIL in text and INTEREST_SENTENCE in text
+    assert '`"column": "Cash"' not in text and "leave out `period` there" not in text
 
 
-def test_the_layer1_forecast_instruction_sent_states_the_column_key_and_what_interest_is(
+def test_the_layer1_forecast_instruction_sent_states_row_and_period_only_and_what_interest_is(
     tmp_path,
 ):
     text = _built_instruction(tmp_path, "CP-1", ("CP-1", "CP-MODEL"))
-    assert COLUMN_SENTENCE in text and INTEREST_SENTENCE in text
+    assert S5_SENTENCE in text and S5_TAIL_LAYER1 in text and INTEREST_SENTENCE in text
+    assert '`"column": "Cash"' not in text and "leave out `period` there" not in text
 
 
 def test_the_period_table_instruction_sent_says_how_to_print_a_balance(tmp_path):
@@ -5796,12 +6518,189 @@ def test_several_operands_naming_both_period_and_column_are_all_named_in_the_rep
 
 def test_the_forecast_instruction_sentences_say_what_python_does():  # whole-branch review L3, L4
     table = cpos_launch.PERIOD_TABLE_BLOCK
-    assert "to date a balance printed under an `LTM Qn YYYY` label; add no figure to it." in table
-    assert "give that exact label a row in this table with its Start and End dates." in table
+    assert "check that the last twelve months are twelve months; add no figure to it." in table
+    assert "LTM Qn YYYY" not in table and "to date a balance" not in table
     assert "only to check" not in table and "change no other table" not in table
-    shown = "history only for a line named under such a header, or in a row labelled with one."
+    shown = "history only for a line named under such a header."
     for block in (cpos_launch.FORECAST_BLOCK, cpos_launch.LAYER1_FORECAST_BLOCK):
         assert shown in block
-        assert "Those tables are in US$ million: at `scale` 1000 do not name them" in block
+        assert "Those tables are in US$ million" not in block
+        assert "`row` and `column`" not in block
     assert "(your `Chart data:` tables and `Net debt data`)" in cpos_launch.LAYER1_FORECAST_BLOCK
     assert "(CP-1's `Chart data:` tables" in cpos_launch.FORECAST_BLOCK
+
+
+APPENDIX_RULE = (
+    "Place all complete canonical registers below\n"
+    "`### Analytical appendix — complete canonical registers` inside\n"
+    "`## Analysis`."
+)
+
+
+def test_prose_modules_are_sent_the_canon_analytical_appendix_rule_data_modules_not(tmp_path):
+    """The reader-layer canon section stops at the next `####` heading, so the appendix rule that
+    PROSE_PASSAGES says "still applies" was cut off and never sent (Task 6, item 1)."""
+    for module, text in all_texts(tmp_path).items():
+        method = text.partition(cpos_launch.METHOD_MARK)[2]
+        assert (APPENDIX_RULE in method) == (module not in DATA_MODULE_IDS), module
+        if module not in DATA_MODULE_IDS:
+            assert "#### Analytical appendix\n" in method, module
+
+
+APPENDIX_HEADING_NOTE = (
+    "Where the canon's Analytical appendix section says `## Analysis`, this handoff's section is "
+    "`## Findings`: write the appendix heading as a `###` heading there, after `### Limitations`; "
+    "the other required `###` headings stay `###` and are not nested under it.\n\n"
+)
+
+
+def test_the_appendix_heading_note_goes_with_the_appendix_section_only(tmp_path):
+    for module, text in all_texts(tmp_path).items():
+        head = text.partition(cpos_launch.METHOD_MARK)[0]
+        sent = CANON_APPENDIX_SECTION in METHODS[module]
+        assert (APPENDIX_HEADING_NOTE in head) == sent == (module not in DATA_MODULE_IDS), module
+        assert APPENDIX_HEADING_NOTE not in text.partition(cpos_launch.METHOD_MARK)[2], module
+
+
+TABLE_ID = r"T2[A-Z]*\.[0-9]+"
+OLD_CP2A_STALE = ("no r14 CP-2A text exists in the repo", "computed in Python")
+
+
+def cp2a_table_definitions(tmp_path) -> list[str]:
+    """Each table ID the sent CP-2A texts define: a bold `**ID Name:**` heading (the step files)
+    or an `ID name` item of a `## Tables` list line (the short stress text)."""
+    # "/cp2a.md" is the structured runtime's copy, whose T2B.n collide with the step file's: it
+    # must not come back.
+    sections = {
+        name: text
+        for name, text in cpos_launch.method_sections("CP-2A")
+        if name.endswith(".md") and ("downside-pathway" in name or name.endswith("/cp2a.md"))
+    }
+    defined = []
+    for text in sections.values():
+        defined += re.findall(rf"^\*\*({TABLE_ID}) ", text, re.MULTILINE)
+        for line in re.findall(r"^## Tables\n(.*)$", text, re.MULTILINE):
+            defined += re.findall(rf"(?:^|, )({TABLE_ID}) [a-z]", line)
+    return defined
+
+
+def test_the_cp2a_instruction_defines_each_table_id_once(tmp_path):
+    defined = cp2a_table_definitions(tmp_path)
+    assert [i for i, n in Counter(defined).items() if n > 1] == []
+    assert {f"T2B.{n}" for n in range(1, 10)} <= set(defined)  # the step file's nine
+    assert {f"T2DS.{n}" for n in range(1, 10)} <= set(defined)  # the short text's nine
+
+
+def test_the_cp2a_instruction_no_longer_carries_the_short_texts_stale_statements():
+    assert "cp2a.md" not in [n.rsplit("/", 1)[-1] for n, _ in cpos_launch.method_sections("CP-2A")]
+    text = cpos_launch.method_text("CP-2A")
+    for stale in OLD_CP2A_STALE:
+        assert stale not in text
+
+
+def _appendix_handoff_issues(tmp_path, as_h2: bool):
+    """The answer with a register under the canon's appendix heading: as a `###` heading after
+    `### Limitations` (what the note tells the model), or as the `## Analysis` H2 the canon says."""
+    prepared, task, context = good_task(tmp_path, "CP-2")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    findings, calc = raw.split("\n## Calculations", 1)
+    calc = "\n## Calculations" + calc
+    register = (
+        "### Analytical appendix — complete canonical registers\n\n"
+        "| Register row | Value | Source |\n| --- | --- | --- |\n| Observed | 1 | annual.txt |\n\n"
+    )
+    if as_h2:
+        raw = findings + "\n## Analysis\n\n" + register + calc
+    else:
+        head, rest = findings.split("### Limitations", 1)
+        limitations, sep, tail = rest.partition("\n### ")
+        raw = head + "### Limitations" + limitations + "\n" + register + (sep + tail).lstrip("\n")
+        raw += calc
+    return _checked_handoff(task, raw.encode(), checker(prepared.layout))
+
+
+def test_the_appendix_as_a_findings_h3_is_accepted_and_as_an_analysis_h2_is_refused(tmp_path):
+    """Review probe t6a: the note's reading of the canon passes CP-OS's checks; the canon's own
+    `## Analysis` does not (no earlier test exercised either)."""
+    (tmp_path / "h3").mkdir()
+    (tmp_path / "h2").mkdir()
+    assert _appendix_handoff_issues(tmp_path / "h3", as_h2=False) == ()
+    issues = _appendix_handoff_issues(tmp_path / "h2", as_h2=True)
+    assert issues and "exactly these six H2 headings" in issues[0]
+
+
+NET_DEBT_PERIOD_SENTENCE = (
+    "`Period` is `FY2024 / 2024-09-30` for a fiscal year end (fiscal year, space, slash, space, "
+    "the year-end date) and the date alone (`2025-06-30`) for an interim balance sheet: one form "
+    "for every row of the table, each period once, and no other word in the cell"
+)
+UNIT_FORM_SENTENCE = (
+    "Where a table states its unit, write it as the three-letter currency code and `millions` or "
+    "`thousands` (`USD millions`), the same in every statement table; the `Chart data:` tables "
+    "and `Net debt data` keep the unit their own rule gives."
+)
+
+
+def test_the_sent_instructions_prescribe_one_net_debt_period_form_and_the_unit_exemption(tmp_path):
+    text = _built_instruction(tmp_path, "CP-1", ("CP-1", "CP-MODEL"))
+    assert NET_DEBT_PERIOD_SENTENCE in text and UNIT_FORM_SENTENCE in text
+    assert "the balance-sheet date `2024-09-30`, or both as" not in text
+    assert "the same in every statement table. Python uses" not in text
+
+
+def test_the_sent_forecast_instructions_offer_history_only_under_a_period_header_and_say_you(
+    tmp_path,
+):
+    for module, modules in (("CP-2G", ("CP-1", "CP-2G")), ("CP-1", ("CP-1", "CP-MODEL"))):
+        (tmp_path / module).mkdir(exist_ok=True)
+        text = _built_instruction(tmp_path / module, module, modules)
+        assert "history only for a line named under such a header." in text
+        assert "labelled with one" not in text
+    assert "where you print the balance only there" in text
+    assert "where CP-1 prints the balance only there" not in text
+
+
+def test_cp1_is_told_the_net_debt_period_forms_and_to_print_each_line_once():
+    assert NET_DEBT_PERIOD_SENTENCE in cpos_launch.NET_DEBT.rules
+    assert "and no other word in the cell (say `pro forma` or `reported` in the Basis" in (
+        cpos_launch.NET_DEBT.rules
+    )
+    text = cpos_launch.PERIOD_TABLE_BLOCK
+    assert "Print each statement line once, in one table that has a column for every period" in text
+    assert "a line split across two tables cannot be combined" in text
+    assert UNIT_FORM_SENTENCE in text
+
+
+# --- the Net debt data Period is one the pack can order (F1, defect D2.1) -----------------------
+def _net_debt_text(*periods):
+    rows = "\n".join(f"| {p} | 1400 | 275 | 1125 | US$m | Synthetic. |" for p in periods)
+    return (
+        "### Net debt data\n\n"
+        "| Period | Gross debt | Cash | Net debt | Reporting unit | Basis and limitation |\n"
+        "| --- | --- | --- | --- | --- | --- |\n" + rows + "\n"
+    )
+
+
+@pytest.mark.parametrize("period", ["FY2024", "2024-09-30", "FY2024 / 2024-09-30"])
+def test_each_stated_form_of_the_net_debt_period_is_accepted(period):
+    assert cpos_launch._net_debt_issues(_net_debt_text(period)) == ()
+
+
+@pytest.mark.parametrize(
+    ("periods", "cell"),
+    [
+        (("2024-09-30 reported",), "2024-09-30 reported"),
+        (("FY2024 (2024-09-30)",), "FY2024 (2024-09-30)"),
+        (("2024-02-31",), "2024-02-31"),
+        (("FY2024", "2025-06-30"), "2025-06-30"),
+        (("FY2024", "FY2024"), "FY2024"),
+    ],
+)
+def test_a_net_debt_period_the_pack_cannot_order_is_refused_with_the_form_to_write(periods, cell):
+    (issue,) = cpos_launch._net_debt_issues(_net_debt_text(*periods))
+    assert issue == (
+        f"`### Net debt data` Period `{cell}` cannot be ordered: write "
+        "`FY2024 / 2024-09-30` for a fiscal year end or the date alone (`2025-06-30`) for an "
+        "interim balance sheet, one form for the whole table and each period once; put any "
+        "other word in the Basis and limitation cell."
+    )

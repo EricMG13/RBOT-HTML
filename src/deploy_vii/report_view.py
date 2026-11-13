@@ -506,7 +506,7 @@ class Pathway(Contract):
 _PRESETS: tuple[tuple[PathwayId, str, str, tuple[str, ...]], ...] = (
     (
         "credit_snapshot",
-        "Credit Snapshot",
+        "Full credit assessment",
         "Should we own this issuer, in which instrument, and why?",
         (
             "key-findings",
@@ -521,6 +521,22 @@ _PRESETS: tuple[tuple[PathwayId, str, str, tuple[str, ...]], ...] = (
             "portfolio-fit",
             "committee-challenge",
             "what-changed",
+        ),
+    ),
+    (
+        "lite_credit_assessment",
+        "Lite credit assessment",
+        "What is the issuer's credit profile and how does it hold up under stress?",
+        (
+            "key-findings",
+            "company-operating-model",
+            "model-chart-strip",
+            "financials-credit-metrics",
+            "strengths-weaknesses",
+            "company-profile",
+            "transaction-summary",
+            "downside-stress",
+            "break-points",
         ),
     ),
     (
@@ -626,7 +642,7 @@ _PRESETS: tuple[tuple[PathwayId, str, str, tuple[str, ...]], ...] = (
 
 
 def pathways() -> tuple[Pathway, ...]:
-    """The Pathway presets in Front Page order (FP 01 to FP 06, then the Short Credit Snapshot)."""
+    """The Pathway presets: Full and Lite credit assessments, FP 02 to FP 06, then the Short one."""
     return tuple(
         Pathway(
             id=pathway_id,
@@ -2642,12 +2658,13 @@ def call_state(report: ReportView) -> tuple[str, tuple[str, str] | None]:
 # --- Stage 3 figure producer registrations -------------------------------------------------------
 # One block per W2 group; the integration pass merges the groups by appending.
 
-# W2 group a: S.5 beside the financials period grid (Credit Snapshot only; the approved FP 02 page
-# shows no S.5 in this block). The maturity wall (S.4) draws through the CP1 strip, not here.
+# W2 group a: S.5 beside the financials period grid (the credit assessments only; the approved
+# FP 02 page shows no S.5 in this block). The maturity wall (S.4) draws through the CP1 strip,
+# not here.
 register_figure_producer(
     "financials-credit-metrics",
     _cp1_period_figures,
-    pathways=frozenset({"credit_snapshot"}),
+    pathways=frozenset({"credit_snapshot", "lite_credit_assessment"}),
 )
 
 # --- Stage 3 chart wiring W2, group b: RV.3 (CP-1C) and CR.1 (CP-4) -------------------------------

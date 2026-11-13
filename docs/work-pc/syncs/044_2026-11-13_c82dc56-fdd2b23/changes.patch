@@ -1,0 +1,1923 @@
+diff --git a/VERIFICATION.md b/VERIFICATION.md
+index 82755f3..f4057f6 100644
+--- a/VERIFICATION.md
++++ b/VERIFICATION.md
+@@ -4,6 +4,35 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
+ engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
+ `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
+ 
++## 2026-11-13 — Prompt-first redesign of CP-8, forecast inputs and prose check 6 (PRs 84-91)
++Scope: synthetic tests and retained-data comparisons only. No provider was called. No live model has been sent any instruction changed here.
++
++What changed
++- Prose check 6 (PR 85): an ID is a cell of a column headed `ID` or ending ` ID` (ruling E7); 27 lines deleted. Retained: 974 files, 1 wrong refusal removed, 0 added, no ID-shaped value lost.
++- CP-8 (PRs 86, 87, 89): a pack measure with no row is refused; a row may print its own difference; a fact row is read in every cell; value cells must equal the pack's value (no grouping comma), unit and period; Basis items are `Run comparison` or a module handoff of a run in which the module ran; `Method change` is required only when both runs record `preset` (E1). Deleted: the trend word list (E11), the reading of numbers in words, list tolerance and cross-line joining (E3), the Basis file-name blacklist, the phrase ban. `methods/cp8.md` rewritten once (R1-R10), so runs holding a CP-8 handoff show "Earlier methods" (E10).
++- Forecast (PRs 88, 90, 91): the block states `currency`; delivered units read `<currency> millions`; the stated currency must be named in the Financial foundation handoff; a block with `scale` and no `currency` is refused or withheld; a block with neither reads USD millions as before; Net debt data Period is checked at acceptance; the `LTM Qn YYYY` balance path is deleted (397 lines); the instruction names operands by `row` and `period` only.
++
++Evidence (retained data)
++- CP-8: the one retained handoff with a pack (tdg-proof-snapshot-opus-002) gives the same 6 issues throughout (two reworded); page verdicts byte-identical across 974 files; digit reading unchanged across 280,974 lines and a 111,692-case comparison.
++- Forecast: every retained block re-derives byte-identically apart from reworded withheld reasons in one calculation file; all 23 retained Financial foundation handoffs name USD.
++- LTH run 20261112-164724-01: untouched; a relaunch re-derives a calculation file that differs from the delivered one in 25 cells (24 reworded reasons, 1 earlier limit text), so its delivery id would change.
++
++Not demonstrated
++- Any model's first attempt under the new CP-8 forms, the `currency` key, the Net debt Period forms, or balances printed as rows under period columns.
++- A non-USD issuer end to end: Financial foundation's chart tables are captioned `US$m`, so USD may always count as named.
++- 2 of 4 retained Financial foundation handoffs print cash or undrawn only in one-row-per-period tables; under the new instruction those are stated missing unless Financial foundation prints them as rows.
++
++Recorded limits
++- CP-8: a withheld size written in words is refused only when a listed unit word directly follows it; a `Not comparable` row can state a movement as a rate; a row allowed its own difference also passes another withheld difference of the same size; another module's name beside the right code passes in Basis; a fact-row cell such as `30/09/2024` is refused when its number equals a withheld size.
++- Forecast: a handoff naming the stated currency anywhere passes; one row in another currency passes.
++- Deferred: deletion of the `column` path and per-row unit reader, until a proof run shows how balances are printed (E9).
++
++Superseded reviewer probes (E6 and controller rulings of 2026-11-13): `swarm/probe_cp8.py` P3, `g70/p2_gbp_caption.py`, `g50/probe_split_tables.py`, `gaps4_ordinal_neighbour_leak.py`, `gaps4_spelled_fuzz.py`, the `thirty` lines of `counts_change_noun_leak.py`, `c1-review-precise/probe_empty_register_hint.py`, `f1-rereview/p7_token_rule_table.py` (lower-case rows), and the probes pinning the deleted per-cell currency comparison.
++
++Open for the owner (predate this work): billions unit cells read as millions; `£000`/`€000`/`GBP000`/`USD 000` not read as thousands; the pack reads the unit of `Free cash flow (CFO less capex)` as `CFO less capex`; a forecast block naming debt under an `LTM` column is accepted; digits split by markup pass the withheld-size check; with an explicit selection the checker requires no cause though the method text says `Unresolved`.
++
++Ledger: P1 agent=mx-scaffold fix-rounds=0 gates-first-pass=y; C1 agent=mx-feature fix-rounds=0 gates-first-pass=y; C2 agent=mx-feature fix-rounds=1 gates-first-pass=y; C3 agent=mx-feature fix-rounds=1 gates-first-pass=y; F1 agent=mx-feature fix-rounds=1 gates-first-pass=y; F2 agent=mx-feature fix-rounds=1 gates-first-pass=y; F3 agent=mx-feature fix-rounds=0 gates-first-pass=y; Z0 agent=mx-scaffold fix-rounds=0 gates-first-pass=n/a.
++
+ ## 2026-11-13 — Brand colours and component look in the issuer library, run start page and HTML Model; Run activity redesigned, spend off the page (branch `claude/brand-application`)
+ Scope: presentation only, offline, no provider or model call. Fonts unchanged. Brand values were read from the owner's screenshots. Design record: `docs/design/2026-11-13-brand-application.md`.
+ Reviews: task reviews of the four build tasks (fix rounds 1, 1, 0, 1), all approved; the whole-branch review returned "changes needed (small)": one Medium defect (the empty-state button's label unreadable on hover, 1.5:1) and Lows, fixed in 23a1a3f, re-review approved.
+@@ -924,40 +953,3 @@ name or other." Display only (`apps/issuer-library/credit_os/web/`); routes, hre
+ - Not verified: Windows and Edge, phone widths, a screen reader; live Run activity data; a Forecast
+   model with step ids; runbook names on a rendered page (string-level test only); any issuer other
+   than TDG.
+-
+-## 2026-11-10 — Context form adopted (branch `claude/optimistic-johnson-bmnwip`, after main `4ce88c2`)
+-
+-Owner: "Approved". The proposal below replaced `docs/templates/context-form.html` and follows main's
+-ruling that CP-1C takes its peers from CP-DR by default (`pathway_modules`). Design note section 7
+-has the detail. Checks are offline (headless Chromium 1.63, the Python reader, the inbox's own
+-functions); no provider call and no analytical run.
+-
+-- **Same output as before.** The original form (`483a555`) and the adopted one give byte-identical
+-  `context.json` for the three fixture contexts. `cp_dr_public` is the default in both.
+-- **The research module joins.** With the default peer source, Relative Value and Distressed list
+-  CP-DR in the launcher's order. "Not available" for the peers' files makes CP-1C a Gap, and choosing
+-  your own figures drops CP-DR.
+-- **End to end again.** Three downloads load in `load_context` and pass `inbox.drops.check`, and
+-  round-trip byte for byte. Every stage advanced by click and by tap at 390 px, and Start over is
+-  clean.
+-- **Inbox copies.** Copies written by `write_templates` as `context-form.html` lock the pathway,
+-  load the built library's fonts and log nothing.
+-- **Tests.**
+-  - `tests/test_library_page_browser.py` `FORM_PROBE`: the old probe was seen failing on the adopted
+-    form (`#s1-pathway` is gone). Rewritten, the file passes: 20 passed.
+-  - New `tests/test_context_form.py`: 22 passed. Each of nine one-line changes to the form's copied
+-    tables made its test fail, among them the Distressed order main had already changed.
+-  - `test_issuer_library_packaging.py`: 9 passed. The watcher's form tests: 2 passed.
+-  - `test_inbox_drops.py`: 55 passed, 3 failed. The three are permission tests that fail here
+-    because this sandbox runs as root, and they fail the same without this change.
+-  - Quality gate exit 0 (176 changed lines in scope, after one long line in the probe was split).
+-- **Research cutoff written (owner: "Your recommendation").**
+-  - New browser test `test_the_research_cutoff_follows_the_as_of_date_and_is_written`, seen
+-    failing on the form before the change: the cutoff came out blank.
+-  - Against the original form, the three fixture contexts differ only in `run.cutoff`. A blank one
+-    becomes the as-of date (`2026-10-31`); an explicit `2025-12-31` is kept.
+-  - The new downloads load and are accepted by the inbox. Each has
+-    `effective_cutoff(as_of, cutoff) == effective_cutoff(as_of, "")`, so the code reads them as it
+-    read a blank cutoff.
+-- **Not verified:** Firefox, Safari and real issuer folders. Whether CP-DR finds peers in a folder's
+-  filings: no live run. Whether the readiness forecast matches live outcomes.
+diff --git a/docs/VERIFICATION-ARCHIVE.md b/docs/VERIFICATION-ARCHIVE.md
+index 457a86d..25a5a78 100644
+--- a/docs/VERIFICATION-ARCHIVE.md
++++ b/docs/VERIFICATION-ARCHIVE.md
+@@ -416,6 +416,43 @@ sub-agents, no provider call. Record and dispositions: `docs/design/2026-11-10-s
+   accepted report (fixture only); a live run's activity view; the delivered report's own layout
+   inside the frame, which belongs to the delivery renderer; no independent review of this pass.
+ 
++## 2026-11-10 — Context form adopted (branch `claude/optimistic-johnson-bmnwip`, after main `4ce88c2`)
++
++Owner: "Approved". The proposal below replaced `docs/templates/context-form.html` and follows main's
++ruling that CP-1C takes its peers from CP-DR by default (`pathway_modules`). Design note section 7
++has the detail. Checks are offline (headless Chromium 1.63, the Python reader, the inbox's own
++functions); no provider call and no analytical run.
++
++- **Same output as before.** The original form (`483a555`) and the adopted one give byte-identical
++  `context.json` for the three fixture contexts. `cp_dr_public` is the default in both.
++- **The research module joins.** With the default peer source, Relative Value and Distressed list
++  CP-DR in the launcher's order. "Not available" for the peers' files makes CP-1C a Gap, and choosing
++  your own figures drops CP-DR.
++- **End to end again.** Three downloads load in `load_context` and pass `inbox.drops.check`, and
++  round-trip byte for byte. Every stage advanced by click and by tap at 390 px, and Start over is
++  clean.
++- **Inbox copies.** Copies written by `write_templates` as `context-form.html` lock the pathway,
++  load the built library's fonts and log nothing.
++- **Tests.**
++  - `tests/test_library_page_browser.py` `FORM_PROBE`: the old probe was seen failing on the adopted
++    form (`#s1-pathway` is gone). Rewritten, the file passes: 20 passed.
++  - New `tests/test_context_form.py`: 22 passed. Each of nine one-line changes to the form's copied
++    tables made its test fail, among them the Distressed order main had already changed.
++  - `test_issuer_library_packaging.py`: 9 passed. The watcher's form tests: 2 passed.
++  - `test_inbox_drops.py`: 55 passed, 3 failed. The three are permission tests that fail here
++    because this sandbox runs as root, and they fail the same without this change.
++  - Quality gate exit 0 (176 changed lines in scope, after one long line in the probe was split).
++- **Research cutoff written (owner: "Your recommendation").**
++  - New browser test `test_the_research_cutoff_follows_the_as_of_date_and_is_written`, seen
++    failing on the form before the change: the cutoff came out blank.
++  - Against the original form, the three fixture contexts differ only in `run.cutoff`. A blank one
++    becomes the as-of date (`2026-10-31`); an explicit `2025-12-31` is kept.
++  - The new downloads load and are accepted by the inbox. Each has
++    `effective_cutoff(as_of, cutoff) == effective_cutoff(as_of, "")`, so the code reads them as it
++    read a blank cutoff.
++- **Not verified:** Firefox, Safari and real issuer folders. Whether CP-DR finds peers in a folder's
++  filings: no live run. Whether the readiness forecast matches live outcomes.
++
+ ## 2026-11-10 — Context form proposal (branch `claude/optimistic-johnson-bmnwip`)
+ 
+ Proposal only: `docs/templates/context-form-proposal.html` is new, and
+diff --git a/src/deploy_workflow/owners/cpos_forecast.py b/src/deploy_workflow/owners/cpos_forecast.py
+index d6a5944..af03733 100644
+--- a/src/deploy_workflow/owners/cpos_forecast.py
++++ b/src/deploy_workflow/owners/cpos_forecast.py
+@@ -40,12 +40,24 @@ LAYER1_LIMIT = (
+     "the arithmetic, are unreviewed. Not analytical review."
+ )
+ SOURCES = ("CP-2G", "CP-1")
+-UNITS = "USD millions"
+-SCALE_LIMIT = (
+-    "The forecast inputs state base amounts, amount drivers and facility amounts in USD thousands, "
+-    "as CP-1 prints them (scale 1000); Python divided each by 1,000 before any calculation. "
+-    "Every figure here is USD millions."
+-)
++# A block that predates `currency` states none and is read as USD, the only currency the field's
++# absence ever meant. A block that states `scale` without `currency` is refused at acceptance when
++# CP-2G writes it (`cpos_launch._unstated_currency`) and withheld in `parse` when it is a layer-1
++# block; a retained CP-2G block that skipped acceptance still reads USD millions.
++UNSTATED_CURRENCY = "USD"
++CURRENCY_CODE = re.compile(r"[A-Z]{3}")
++
++
++def scale_limit(currency: str | None = None) -> str:
++    code = currency or UNSTATED_CURRENCY
++    return (
++        f"The forecast inputs state base amounts, amount drivers and facility amounts in {code} "
++        "thousands, as CP-1 prints them (scale 1000); Python divided each by 1,000 before any "
++        f"calculation. Every figure here is {code} millions."
++    )
++
++
++SCALE_LIMIT = scale_limit()
+ Signed = Annotated[str, Field(pattern=r"^-?[0-9]{1,6}(\.[0-9]{1,4})?$")]
+ 
+ 
+@@ -121,6 +133,7 @@ class ForecastInputs(Contract):
+     years: tuple[Span, Span, Span]
+     facilities: Annotated[tuple[Facility, ...], Field(min_length=1, max_length=40)] | None = None
+     scale: Literal[1, 1000] | None = None
++    currency: Annotated[str, Field(pattern=r"^[A-Z]{3}$")] | None = None
+     scope_limits: tuple[str, ...]
+ 
+     @model_validator(mode="after")
+@@ -141,6 +154,8 @@ class ForecastInputs(Contract):
+             self.facilities
+         ):
+             raise ValueError("facility names must be unique")
++        if self.currency is not None and self.scale is None:
++            raise ValueError("`currency` is stated with `scale`: state both or neither")
+         return self
+ 
+ 
+@@ -312,7 +327,29 @@ _NAMES_THOUSANDS = re.compile(rf"\bthousands?\b|[$'\u2019]000s?\b|{_CURRENCY}\s?
+ _NAMES_MILLIONS = re.compile(
+     rf"\b(?:millions?|billions?)\b|{_CURRENCY}\s?(?:m|mm|mn|bn)\b", re.IGNORECASE
+ )
+-_UNIT_OF = {1: "USD millions, scale 1", 1000: "USD thousands, scale 1000"}
++# The sign of each currency that has one. `US$` after a letter is not the dollar (`AUS$`); a euro or
++# pound sign is, whatever precedes it (`M\u20ac`, `120m\u00a3`).
++_CURRENCY_SIGN = {"USD": r"(?i:(?<![A-Za-z])US\$)", "EUR": "\u20ac", "GBP": "\u00a3"}
++
++
++def _names_currency(text: str, currency: str) -> bool:
++    """Whether CP-1 names `currency` anywhere, headings included: its code, in capitals, as a whole
++    token or glued to a scale suffix (`GBPm`, `GBPk`, `GBP000`), or, for the three that have one,
++    its sign (`US$`, a euro or pound sign). A bare `$` names no currency; the code is not matched
++    in lower case, so `all` and `net debt` name neither `ALL` nor `NET`.
++    ponytail: presence only. A handoff that names the stated currency anywhere (a USD issuer that
++    mentions a EUR tranche, block wrongly `EUR`) passes, and so does one row in another currency;
++    reading each cell's own currency refused real handoffs."""
++    forms = [rf"(?<![A-Za-z]){currency}(?i:mm|mn|bn|m|k|000s?)?(?![A-Za-z0-9])"]
++    if currency in _CURRENCY_SIGN:
++        forms.append(_CURRENCY_SIGN[currency])
++    return re.search("|".join(forms), text) is not None
++
++
++def _unit_of(scale: int, currency: str | None) -> str:
++    """The block's unit in a refusal text; with no stated currency it names none."""
++    code = f"{currency} " if currency else ""
++    return f"{code}millions, scale 1" if scale == 1 else f"{code}thousands, scale 1000"
+ 
+ 
+ def _units_named(text: str) -> frozenset[str]:
+@@ -351,10 +388,12 @@ def _unit_cells(
+     return groups
+ 
+ 
+-def _unit_problem(text: str, key: str, operand: Operand, scale: int) -> str | None:
++def _unit_problem(
++    text: str, key: str, operand: Operand, scale: int, currency: str | None = None
++) -> str | None:
+     """Why the named operand's row is in the other unit than the block's, or None. A row is
+     refused when a cell that may state its unit (`_unit_cells`) names the other unit and none of
+-    them names the block's."""
++    them names the block's. `currency` only words the message."""
+     block, other = ("thousands", "millions") if scale == 1000 else ("millions", "thousands")
+     issues = []
+     kind = "column" if operand.column is not None else "period"
+@@ -367,8 +406,8 @@ def _unit_problem(text: str, key: str, operand: Operand, scale: int) -> str | No
+     what, cell = min(issues)
+     return (
+         f"base {key}: row `{_cut(_plain(operand.row or ''), 60)}` states its {_cut(what, 40)} as "
+-        f"`{_cut(_plain(cell), 40)}`, not the block's unit ({_UNIT_OF[scale]}); state a reason "
+-        "instead of an amount"
++        f"`{_cut(_plain(cell), 40)}`, not the block's unit ({_unit_of(scale, currency)}); state a "
++        "reason instead of an amount"
+     )
+ 
+ 
+@@ -396,7 +435,12 @@ def _declined(document: dict[str, object], source: str) -> None:
+ 
+ _AMOUNT_DRIVERS = ("dividends", "debt_repayment")
+ _THOUSANDS = re.compile(r"-?[0-9]{1,9}(\.[0-9])?")
+-_SCALE_REFUSAL = "`scale` must be 1 (CP-1 prints USD millions) or 1000 (USD thousands)"
++
++
++def _scale_refusal(document: dict[str, Any]) -> str:
++    stated = document.get("currency")
++    code = f"{stated} " if isinstance(stated, str) and CURRENCY_CODE.fullmatch(stated) else ""
++    return f"`scale` must be 1 (CP-1 prints {code}millions) or 1000 ({code}thousands)"
+ 
+ 
+ def _slots(document: dict[str, Any]) -> Iterator[tuple[str, Any, Any]]:
+@@ -426,15 +470,15 @@ def _slots(document: dict[str, Any]) -> Iterator[tuple[str, Any, Any]]:
+ 
+ 
+ def _to_millions(document: dict[str, Any], source: str) -> dict[str, str]:
+-    """At `scale` 1000 the block states USD thousands as CP-1 prints them: each amount text is
+-    replaced, in place, by its exact USD millions value, and the stated texts are returned by
++    """At `scale` 1000 the block states thousands of its currency as CP-1 prints them: each amount
++    text is replaced, in place, by its exact millions value, and the stated texts are returned by
+     slot name. Anything else changes nothing. A scale that is not 1 or 1000, and an amount that is
+     not at most nine digits and one decimal place, are refused, never rounded."""
+     scale = document.get("scale")
+     if scale is None:
+         return {}
+     if scale not in (1, 1000):
+-        raise ValueError(f"{source}: {_SCALE_REFUSAL}")
++        raise ValueError(f"{source}: {_scale_refusal(document)}")
+     stated: dict[str, str] = {}
+     if scale == 1:
+         return stated
+@@ -478,7 +522,7 @@ def _check_base(inputs: ForecastInputs, cp1_text: str, source: str, stated: dict
+         if named:
+             problem = _layer1_problem(cp1_text, key, operand, amount)
+             if problem is None and amount is not None and inputs.scale is not None:
+-                problem = _unit_problem(cp1_text, key, operand, inputs.scale)
++                problem = _unit_problem(cp1_text, key, operand, inputs.scale, inputs.currency)
+             if problem is not None:
+                 raise ValueError(f"{source}: {problem}")
+         elif amount is not None and not _printed(cp1_text, amount):
+@@ -514,6 +558,19 @@ def parse(source_text: str, cp1_text: str, source: str = "CP-2G") -> ForecastInp
+     _check_base(inputs, cp1_text, source, stated)
+     if inputs.facilities:
+         _check_facilities(inputs, inputs.facilities, cp1_text, stated)
++    # A layer-1 handoff holds its own block: its `currency` key must not name itself.
++    named_in = cp1_text.replace("\r\n", "\n")
++    if source == "CP-1":
++        named_in = named_in.replace(_block(source_text, source), "")
++    if inputs.currency is not None and not _names_currency(named_in, inputs.currency):
++        raise ValueError(
++            f"CP-1 nowhere names `{inputs.currency}`: state `currency` as the three-letter code "
++            "of the currency CP-1 reports its figures in."
++        )
++    if source == "CP-1" and inputs.scale is not None and inputs.currency is None:
++        # CP-2G's own block is refused at acceptance (`_unstated_currency`); a layer-1 block is
++        # never checked there, so it is withheld here rather than labelled USD.
++        raise ValueError("the forecast inputs state `scale` but not `currency`")
+     return inputs
+ 
+ 
+@@ -535,7 +592,8 @@ def _check_facilities(
+                     f"CP-2G: facility {facility.name} {field} {value}% is not printed in CP-1"
+                 )
+     debt = inputs.base["debt"].amount
+-    divided = ", in USD millions after dividing by scale 1000" if inputs.scale == 1000 else ""
++    code = inputs.currency or UNSTATED_CURRENCY
++    divided = f", in {code} millions after dividing by scale 1000" if inputs.scale == 1000 else ""
+     if debt is not None:
+         with localcontext(cp2g._EXACT):
+             total = sum((Decimal(f.balance) for f in facilities), Decimal(0))
+@@ -746,10 +804,17 @@ def model_files(
+             **detail,
+             # Written only when the block states `scale`, so a block without it is byte for byte
+             # what it was.
+-            **({} if inputs.scale is None else {"scale": inputs.scale, "units": UNITS}),
++            **(
++                {}
++                if inputs.scale is None
++                else {
++                    "scale": inputs.scale,
++                    "units": f"{inputs.currency or UNSTATED_CURRENCY} millions",
++                }
++            ),
+             "scope_limits": [
+                 LIMIT if source == "CP-2G" else LAYER1_LIMIT,
+-                *([SCALE_LIMIT] if inputs.scale == 1000 else []),
++                *([scale_limit(inputs.currency)] if inputs.scale == 1000 else []),
+                 *inputs.scope_limits,
+                 *limits,
+             ],
+diff --git a/src/deploy_workflow/owners/cpos_launch.py b/src/deploy_workflow/owners/cpos_launch.py
+index ff82e22..3ae02fc 100644
+--- a/src/deploy_workflow/owners/cpos_launch.py
++++ b/src/deploy_workflow/owners/cpos_launch.py
+@@ -47,6 +47,7 @@ from deploy_workflow.changes import (
+ )
+ from deploy_workflow.changes_check import cp8_issues
+ from deploy_workflow.context import CONTEXT_SOURCE_ID, RunContext, load_context
++from deploy_workflow.credit_os_catalogue import chart_row, period_order
+ from deploy_workflow.credit_os_chips import MODULE_NAMES
+ from deploy_workflow.docx_text import docx_text
+ from deploy_workflow.handoff_delivery import (
+@@ -622,7 +623,12 @@ NET_DEBT = OwnerTable(
+         "leases). Cash is the same figure as the Cash column of the `Chart data: liquidity` table "
+         "for that period. Net debt is gross debt less cash, worked with `calculate` and listed in "
+         "`## Calculations`. Write one row per period you state, at least the latest balance-sheet "
+-        "date. A row whose three figures are all stated is refused if net debt differs from gross "
++        "date. `Period` is `FY2024 / 2024-09-30` for a fiscal year end (fiscal year, space, "
++        "slash, space, the year-end date) and the date alone (`2025-06-30`) for an interim "
++        "balance sheet: one form for every row of the table, each "
++        "period once, and no other word in the cell (say `pro forma` or `reported` in the Basis "
++        "and limitation cell). A row whose three figures are all stated is refused if net debt "
++        "differs from gross "
+         "debt less cash by any amount, and a row is refused if its cash differs from the "
+         "liquidity table's for the same period; a figure you cannot state is "
+         "`Not supplied: <reason>`."
+@@ -634,10 +640,34 @@ def _decimal(cell: str) -> Decimal | None:
+     return Decimal(cell.replace(",", "")) if PLAIN_NUMBER.fullmatch(cell) else None
+ 
+ 
++def _unorderable_period(lines: list[str], rows: list[list[str]]) -> str | None:
++    """The Period cell that keeps the pack from ordering the net debt table, or None when the
++    table orders. The pack's own reader (`chart_row`) decides; only its ValueError is caught. The
++    cell named is the first the reader's `period_order` rejects, else the first whose form differs
++    from the first row's or that repeats an earlier one; a row of the wrong width is
++    `chart_issues`'s, not this check's."""
++    try:
++        chart_row(lines, NET_DEBT_HEADING, prefix="")
++    except ValueError:
++        pass
++    else:
++        return None
++    ordered: list[tuple[str, tuple[int, ...]]] = []
++    for row in (r for r in rows[2:] if len(r) == len(rows[0])):
++        key = period_order(row[0])
++        if key is None:
++            return row[0]
++        ordered.append((row[0], key))
++    for number, (period, key) in enumerate(ordered):
++        if key[0] != ordered[0][1][0] or any(key == earlier for _, earlier in ordered[:number]):
++            return period
++    return None
++
++
+ def _net_debt_issues(text: str) -> tuple[str, ...]:
+     """Each stated row of the net debt table holds net debt = gross debt - cash exactly, and its
+-    cash is the liquidity table's for the same period. A figure that is not stated is not checked;
+-    the table's own shape is `chart_issues`'s."""
++    cash is the liquidity table's for the same period; its Period cells are ones the pack can
++    order. A figure that is not stated is not checked; the table's own shape is `chart_issues`'s."""
+     heading, liquidity = f"### {NET_DEBT_HEADING}", "### Chart data: liquidity"
+     lines = text.splitlines()
+     rows = _stated_rows(text, heading) if heading in lines else []
+@@ -646,6 +676,14 @@ def _net_debt_issues(text: str) -> tuple[str, ...]:
+     liquid = _stated_rows(text, liquidity) if liquidity in lines else []
+     cash_of = [(row[0], row[1]) for row in liquid[2:] if len(row) == 5 and liquid[0][1] == "Cash"]
+     issues = []
++    unordered = _unorderable_period(lines, rows)
++    if unordered is not None:
++        issues.append(
++            f"`{heading}` Period `{unordered}` cannot be ordered: write "
++            "`FY2024 / 2024-09-30` for a fiscal year end or the date alone (`2025-06-30`) for an "
++            "interim balance sheet, one form for the whole table and each period once; put any "
++            "other word in the Basis and limitation cell."
++        )
+     for row in rows[2:]:
+         if len(row) != len(rows[0]):
+             continue
+@@ -1714,18 +1752,20 @@ PEER_READER_BLOCK = (
+ )
+ # Goes into CP-2G's instructions before METHOD_MARK, never into the method block.
+ UNIT_RULE = (
+-    "State `scale` in every block, as the statements print it (`1000` for thousands, `1` for "
+-    "millions), and state every amount in the block in that one unit exactly as printed; an "
+-    "amount printed in the other unit is stated as missing, with the reason, not converted. "
++    "State `currency` and `scale` in every block, as the statements print them (`1000` for "
++    "thousands, `1` for millions), and state every amount in the block in that one unit "
++    "exactly as printed; an amount printed in the other unit is stated as missing, with the "
++    "reason, not converted. "
+ )
+ FORECAST_BLOCK = (
+     f"Forecast inputs: write `{cpos_forecast.HEADING}` inside `## Findings`, holding exactly "
+     "one fenced json block and no other fence. You state "
+     "inputs only; Python computes every forecast figure, so put no forecast figure in the block. "
+-    "`scale` is `1` when CP-1's statement tables print USD millions and `1000` when they print "
+-    "USD thousands; every amount in this block is stated in that one unit, exactly as CP-1 "
+-    "prints it, and Python divides by `scale`, so every published figure is USD millions. Do not "
+-    "convert an amount yourself. "
++    "`currency` is the three-letter code of the currency CP-1's statement tables are printed in "
++    "(`USD`, `GBP`, `EUR`), and `scale` is `1` when they print millions of it and `1000` when "
++    "they print thousands; every amount in this block is stated in that one currency and unit, "
++    "exactly as CP-1 prints it, and Python divides by `scale`, so every published figure is "
++    "millions of that currency. Do not convert an amount yourself. "
+     + UNIT_RULE
+     + '`base` holds exactly these ten operands, each `{"amount": "<decimal>", '
+     '"reason": null, "row": "<label>", "period": "<header>"}` or '
+@@ -1734,12 +1774,10 @@ FORECAST_BLOCK = (
+     "`row` is the exact first-cell text of the row of one of the CP-1 handoff's tables that you "
+     "read the amount from, and `period` the exact header text of that table's column (for "
+     'example `"row": "Net sales", "period": "FY2024"`). Name the cell of every operand that has '
+-    "an amount: `row` and `period`, or in a table with one row per period (CP-1's `Chart data:` "
+-    "tables and `Net debt data`) `row` and `column`, the row being the period exactly as printed "
+-    'and the column the measure\'s exact header (`{"amount": "<decimal>", "reason": null, '
+-    '"row": "FY2024", "column": "Cash"}`); leave out `period` there. '
+-    "Those tables are in US$ million: at `scale` 1000 do not name them; state that operand as "
+-    "missing with the reason. "
++    "an amount by `row` and `period` and nothing else. Take a balance from a row under a "
++    "period column (`FY2024`, `H1 2025`), never from a column headed `LTM …` and never from a "
++    "table with one row per period (CP-1's `Chart data:` tables and `Net debt data`); where "
++    "CP-1 prints the balance only there, state the operand as missing with that reason. "
+     "`interest` is interest paid in cash in the base period; where CP-1 prints only interest "
+     "expense you may name that cell and must say in `scope_limits` that interest is interest "
+     "expense, not cash paid. "
+@@ -1751,18 +1789,17 @@ FORECAST_BLOCK = (
+     "printing 45 or +45, a release, is -45). A figure in CP-1's prose, a basis line or its "
+     "sources is not a cell: an amount CP-1 prints in no table cell is stated as missing, with "
+     "the reason. An amount CP-1 prints only in the other unit (for example revolver availability "
+-    "in USD millions where the statements are in thousands) is stated as missing, with the "
++    "in millions where the statements are in thousands) is stated as missing, with the "
+     "reason; do not rescale it. Where CP-1 prints the amount under more than one column, name "
+     "a column headed by a reporting period (`FY2024`, `Q3 2025`, `H1 2025` or `9M 2025`): the "
+-    "Forecast page shows history only for a line named under such a header, or in a row "
+-    "labelled with one. `base_drivers` is "
++    "Forecast page shows history only for a line named under such a header. `base_drivers` is "
+     "the method's base-case driver "
+     "submission (revenue_growth, ebitda_margin, capex_pct_revenue, tax_wc_pct_revenue, "
+     "interest_rate, dividends, debt_repayment; each with `values` for the three forecast years, "
+     "`category`, `rationale` and `limitation`). Each driver's `values` are three decimal strings, "
+     'one per forecast year (for example ["0.05", "0.04", "0.03"]), each rounded to at most four '
+     'decimal places (a ratio of 0.48022670 is written "0.4802"); the `dividends` and '
+-    '`debt_repayment` values are amounts in the block\'s unit (with `"scale": 1000`, USD 20 '
++    '`debt_repayment` values are amounts in the block\'s unit (with `"scale": 1000`, 20 '
+     'million is `"20000"`, at most one decimal place) and every other driver is a ratio and is '
+     "never scaled; `category` is exactly one of "
+     f"{', '.join(f'`{c}`' for c in get_args(Category))}. When the method gives no forecast "
+@@ -1826,13 +1863,17 @@ PERIOD_TABLE_BLOCK = (
+     "financial tables. `Period` is that header's text exactly as you print it (for example "
+     "`9M 2025` or `FY2024`); `Start` and `End` are the period's first and last day as "
+     "YYYY-MM-DD. Head period columns as `FY2024`, `Q3 2025`, `H1 2025` or `9M 2025`, the year "
+-    "being the fiscal year the period belongs to. Python uses this table to check that the "
+-    "last twelve months are twelve months and to date a balance printed under an `LTM Qn YYYY` "
+-    "label; add no figure to it. Where another table labels a row or column `LTM Qn YYYY`, give "
+-    "that exact label a row in this table with its Start and End dates. "
+-    "Print a balance (debt, cash, undrawn facilities) at a period's end under that period's "
+-    "column as a plain number: the `H1 2025` column holds the 30 June 2025 balance. Put the date "
+-    "in the row label or the Source, not in the cell.\n\n"
++    "being the fiscal year the period belongs to. Print each statement line once, in one table "
++    "that has a column for every period you state for it; a line split across two tables "
++    "cannot be combined. Where a table states its unit, write it as the three-letter currency "
++    "code and `millions` or `thousands` (`USD millions`), the same in every statement table; "
++    "the `Chart data:` tables and `Net debt data` keep the unit their own rule gives. "
++    "Python uses this table to check that the last twelve months are twelve months; add no "
++    "figure to it. Print every balance the forecast needs (total debt, cash, undrawn committed "
++    "facilities) as a row of a table whose columns are those period headers, each a plain "
++    "number at that period's end: the `H1 2025` column holds the 30 June 2025 balance. Put the "
++    "date in the row label or the Source, not in the cell. A column headed `LTM …` holds flows "
++    "only, never a balance.\n\n"
+ )
+ # Goes into CP-1's instructions when the forecast is published without CP-2G (owner, 2026-11-11:
+ # "allow forecast to function with just relevant layer 1 modules"). Same JSON shape as
+@@ -1840,11 +1881,12 @@ PERIOD_TABLE_BLOCK = (
+ LAYER1_FORECAST_BLOCK = (
+     f"Forecast inputs: write `{cpos_forecast.HEADING}` inside `## Findings`, holding exactly "
+     "one fenced json block and no other fence, after your tables. You state inputs only; Python "
+-    "computes every forecast figure, so put no forecast figure in the block. `scale` is `1` when "
+-    "your statement tables print USD millions and `1000` when they print USD thousands; every "
+-    "amount in this block is stated in that one unit, exactly as your tables print it, and "
+-    "Python divides by `scale`, so every published figure is USD millions. Do not convert an "
+-    "amount yourself. "
++    "computes every forecast figure, so put no forecast figure in the block. `currency` is the "
++    "three-letter code of the currency your statement tables are printed in (`USD`, `GBP`, "
++    "`EUR`), and `scale` is `1` when they print millions of it and `1000` when they print "
++    "thousands; every amount in this block is stated in that one currency and unit, exactly as "
++    "your tables print it, and Python divides by `scale`, so every published figure is millions "
++    "of that currency. Do not convert an amount yourself. "
+     + UNIT_RULE
+     + '`base` holds exactly these ten operands, each `{"amount": "<decimal>", "reason": null, '
+     '"row": "<label>", "period": "<header>"}` or '
+@@ -1852,13 +1894,11 @@ LAYER1_FORECAST_BLOCK = (
+     f"{', '.join(cp2g.OPERAND_METRIC)}. `row` is the exact first-cell text of the row of one of "
+     "your own tables that you read the amount from, and `period` the exact header text of that "
+     'table\'s column (for example `"row": "Net sales", "period": "FY2024"`). '
+-    "Name the cell of every operand that has an amount: `row` and `period`, or in a table with "
+-    "one row per period (your `Chart data:` tables and `Net debt data`) `row` and `column`, "
+-    "the row being the period exactly as printed and the column the measure's exact header "
+-    '(`{"amount": "<decimal>", "reason": null, "row": "FY2024", "column": "Cash"}`); leave out '
+-    "`period` there. "
+-    "Those tables are in US$ million: at `scale` 1000 do not name them; state that operand as "
+-    "missing with the reason. "
++    "Name the cell of every operand that has an amount by `row` and `period` and nothing else. "
++    "Take a balance from a row under a period column (`FY2024`, `H1 2025`), never from a column "
++    "headed `LTM …` and never from a table with one row per period (your `Chart data:` tables "
++    "and `Net debt data`); where you print the balance only there, state the operand as "
++    "missing with that reason. "
+     "`interest` is interest paid in cash in the base period; where CP-1 prints only interest "
+     "expense you may name that cell and must say in `scope_limits` that interest is interest "
+     "expense, not cash paid. "
+@@ -1871,8 +1911,7 @@ LAYER1_FORECAST_BLOCK = (
+     "sources is not a cell. An amount your tables print only in the other unit is stated as "
+     "missing, with the reason. Where your tables print the amount under more than one column, "
+     "name a column headed by a reporting period (`FY2024`, `Q3 2025`, `H1 2025` or `9M 2025`): "
+-    "the Forecast page shows history only for a line named under such a header, or in a row "
+-    "labelled with one. "
++    "the Forecast page shows history only for a line named under such a header. "
+     "`base_drivers` is a run-rate base case and nothing more "
+     "(revenue_growth, ebitda_margin, capex_pct_revenue, tax_wc_pct_revenue, interest_rate, "
+     "dividends, debt_repayment; each with `values` for the three forecast years, `category`, "
+@@ -1881,7 +1920,7 @@ LAYER1_FORECAST_BLOCK = (
+     "in `rationale`. Add no analyst judgement beyond that run-rate. Each driver's `values` are "
+     'three decimal strings, one per forecast year (for example ["0.05", "0.04", "0.03"]), each '
+     "rounded to at most four decimal places; the `dividends` and `debt_repayment` values are "
+-    'amounts in the block\'s unit (with `"scale": 1000`, USD 20 million is `"20000"`, at '
++    'amounts in the block\'s unit (with `"scale": 1000`, 20 million is `"20000"`, at '
+     "most one decimal place) and every other driver is a ratio and is never scaled; `category` "
+     "is exactly one of "
+     f"{', '.join(f'`{c}`' for c in get_args(Category))}. Leave a driver's values null, as "
+@@ -2662,16 +2701,17 @@ def _forecast_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
+     if task.module_id != "CP-2G" or "CP-1" not in task.handoffs:
+         return ()
+     try:
+-        cpos_forecast.parse(text, task.handoffs["CP-1"].decode("utf-8"))
++        inputs = cpos_forecast.parse(text, task.handoffs["CP-1"].decode("utf-8"))
+     except ValueError as error:
+         message = str(error)
++        stem = message.removesuffix(".")  # the sentences below add their own full stop
+         operand = re.search(r"^[\w-]+: base (\w+)\b", message)
+         if operand:  # a wrong row label should not cost the forecast
+             name = operand.group(1)
+             fix = f"Correct the row, period, column or amount of {name}; "
+             fix += f"if you cannot, state {name} "
+             missing = "as missing: amount null, no row, period or column, and the reason."
+-            return (f"Forecast inputs: {error}. {fix}{missing}",)
++            return (f"Forecast inputs: {stem}. {fix}{missing}",)
+         if re.match(r"^[\w-]+: the handoff gives no forecast drivers", message):
+             return ()  # declining stays the method's call
+         both = _BOTH_KEYS.match(message)
+@@ -2679,7 +2719,7 @@ def _forecast_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
+             names = list(dict.fromkeys(_BOTH_KEY_OPERAND.findall(message)))
+             who = names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
+             advice = f"State either `period` or `column` for {who}, not both."
+-            return (f"Forecast inputs: {error}. {advice}",)
++            return (f"Forecast inputs: {stem}. {advice}",)
+         if _UNNAMED_AT_SCALE.match(message):
+             fix = "Name the row and the period or column of each base operand; if you cannot, "
+             advice = (
+@@ -2691,8 +2731,17 @@ def _forecast_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
+         else:
+             fix = "Correct the block; if you cannot, set every driver's values to "
+             advice = f"{fix}[null, null, null] and say why in scope_limits."
+-        return (f"Forecast inputs: {error}. {advice}",)
+-    return ()
++        return (f"Forecast inputs: {stem}. {advice}",)
++    return _unstated_currency(inputs)
++
++
++def _unstated_currency(inputs: cpos_forecast.ForecastInputs) -> tuple[str, ...]:
++    """Reading a block without `currency` stays USD (blocks that predate the field); a block
++    written now that states `scale` says which currency its statements are printed in."""
++    if inputs.scale is None or inputs.currency is not None:
++        return ()
++    asked = "state `currency`: the three-letter code of the currency CP-1 reports its figures in"
++    return (f"Forecast inputs: {asked}.",)
+ 
+ 
+ def _cap(text: str) -> Decimal:
+diff --git a/src/deploy_workflow/owners/cpos_periods.py b/src/deploy_workflow/owners/cpos_periods.py
+index 4e46778..fa0b131 100644
+--- a/src/deploy_workflow/owners/cpos_periods.py
++++ b/src/deploy_workflow/owners/cpos_periods.py
+@@ -56,7 +56,6 @@ _ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}", re.ASCII)
+ DATED_TWICE = (
+     "CP-1's period table dates {label} more than once, differently; it is treated as undated."
+ )
+-DATED_TWICE_CELL = "CP-1's period table dates {label} more than once, differently"
+ 
+ 
+ def _date(cell: str) -> date | None:
+@@ -95,24 +94,7 @@ def period_dates(tables: list[list[list[str]]]) -> tuple[Dates, tuple[str, ...]]
+     return dates, twice
+ 
+ 
+-_LTM_LABEL = re.compile(r"LTM Q[1-4] \d{4}", re.ASCII)
+-LtmDates = dict[str, set[Span]]
+-
+-
+-def ltm_dates(tables: list[list[list[str]]]) -> LtmDates:
+-    """The spans CP-1's period tables state for rows labelled `LTM Qn YYYY` (a label that is not a
+-    period; read only as a stock's balance date)."""
+-    seen: LtmDates = {}
+-    for table in tables:
+-        if not table or [_plain(cell) for cell in table[0][:3]] != ["Period", "Start", "End"]:
+-            continue
+-        for row in table[1:]:
+-            if len(row) < 3 or _LTM_LABEL.fullmatch(_plain(row[0])) is None:
+-                continue
+-            start, end = _date(row[1]), _date(row[2])
+-            if start is not None and end is not None and start <= end:
+-                seen.setdefault(_plain(row[0]), set()).add((start, end))
+-    return seen
++_LTM_HEADER = re.compile(r"LTM\b", re.ASCII)
+ 
+ 
+ NOT_A_CELL = "the base amount is not a table cell of CP-1"
+@@ -121,12 +103,15 @@ NO_REASON = "no reason was stated"
+ NO_SIGN = "the base cell is zero, so the sign of this row's figures is not known"
+ DIFFERENT = "CP-1 prints different figures for this line in {period}"
+ NOT_PRINTED = "CP-1 does not print this line for {period}"
+-LABEL_NOT_DATED = "CP-1's period table does not date {label}"
+-LABEL_OTHER_DAY = "CP-1 dates {label} to {end}, not the {anchor} the {what} ends"
+ _STOCKS = frozenset({"debt", "cash", "undrawn"})
+ NOT_UNDER_A_PERIOD = (
+     "CP-1 prints the base amount only under a column header that is not a period ({header})"
+ )
++LTM_HOLDS_FLOWS = (
++    "CP-1 prints the base amount only under the column {header}, and an `LTM` column holds "
++    "flows only; name the balance by its row under a period column (`FY2024`, `H1 2025`), or "
++    "state it as missing with the reason"
++)
+ NOT_A_PERIOD_ROW = (
+     "the forecast inputs name {column} as a column, and the row {row} is not a period"
+ )
+@@ -148,17 +133,13 @@ class ByColumn(NamedTuple):
+ class Line:
+     """One base operand's history. `reason` set: no history for the line. `unread`: the
+     year-bearing headers of its tables that are not periods (`unread_rows`: the row labels of a
+-    table read by column). `balances`: for a stock, the figures under each `LTM Qn YYYY` label."""
++    table read by column)."""
+ 
+     values: dict[Period, Decimal] = field(default_factory=dict)
+     gaps: dict[Period, str] = field(default_factory=dict)
+     reason: str | None = None
+     unread: tuple[str, ...] = ()
+     unread_rows: tuple[str, ...] = ()
+-    balances: dict[str, set[Decimal]] = field(default_factory=dict)
+-    balance_gaps: dict[str, str] = field(
+-        default_factory=dict
+-    )  # an `LTM Qn YYYY` row in another unit
+ 
+ 
+ @dataclass(frozen=True)
+@@ -167,7 +148,6 @@ class _Row:
+     figures: dict[Period, set[Decimal]]
+     columns: set[Period]
+     signless: bool = False  # an unsigned zero base cell and no common sign in the row
+-    balances: dict[str, set[Decimal]] = field(default_factory=dict)
+ 
+ 
+ @dataclass(frozen=True)
+@@ -245,20 +225,15 @@ def _row(hit: _Hit, key: str, base_column: int) -> _Row:
+     sign = _row_sign(hit, base_column) if key in _BASE_SIGNED else False
+     figures: dict[Period, set[Decimal]] = {}
+     columns: set[Period] = set()
+-    balances: dict[str, set[Decimal]] = {}
+     for column, name in enumerate(hit.header):
+         period = period_of(name) if column else None
+         if period is None:
+-            if column and key in _STOCKS and _LTM_LABEL.fullmatch(_plain(name)):
+-                number = _number(hit.row[column]) if column < len(hit.row) else None
+-                if number is not None:
+-                    balances.setdefault(_plain(name), set()).add(number)
+             continue
+         columns.add(period)
+         number = _number(hit.row[column]) if column < len(hit.row) else None
+         if number is not None:
+             figures.setdefault(period, set()).add(_published(key, number, bool(sign)))
+-    return _Row(hit.table, figures, columns, sign is None, balances)
++    return _Row(hit.table, figures, columns, sign is None)
+ 
+ 
+ def _rows_under(hits: list[_Hit], key: str, target: Period) -> list[_Row]:
+@@ -308,11 +283,7 @@ def _line(
+         else:
+             template = DIFFERENT if found else NOT_PRINTED
+             gaps[period] = template.format(period=period_label(period))
+-    balances: dict[str, set[Decimal]] = {}
+-    for row in rows:
+-        for name, found in row.balances.items():
+-            balances.setdefault(name, set()).update(found)
+-    return Line(values=values, gaps=gaps, balances=balances, unread=unread)
++    return Line(values=values, gaps=gaps, unread=unread)
+ 
+ 
+ def lines(
+@@ -347,11 +318,7 @@ def _locate(
+                 found[key] = _named_line(tables, key, operand.amount, named.get(key))
+             else:
+                 line = _named_line(tables, key, operand.amount * scale, named.get(key))
+-                found[key] = replace(
+-                    line,
+-                    values={p: v / scale for p, v in line.values.items()},
+-                    balances={n: {v / scale for v in vs} for n, vs in line.balances.items()},
+-                )
++                found[key] = replace(line, values={p: v / scale for p, v in line.values.items()})
+     return found, _named_base(named)
+ 
+ 
+@@ -453,11 +420,13 @@ def _named_line(
+             unread=(),
+             unread_rows=line.unread,
+             gaps={**line.gaps, **gaps},
+-            balance_gaps={n: r for n, r in other.items() if period_of(n) is None},
+         )
+     target = period_of(name[1])
+     if target is None:
+-        return Line(reason=NOT_UNDER_A_PERIOD.format(header=_cut(_plain(name[1]))))
++        header = _cut(_plain(name[1]))
++        if key in _STOCKS and _LTM_HEADER.match(header):
++            return Line(reason=LTM_HOLDS_FLOWS.format(header=header))
++        return Line(reason=NOT_UNDER_A_PERIOD.format(header=header))
+     return _line(tables, key, amount, _plain(name[0]), target)
+ 
+ 
+@@ -468,11 +437,11 @@ NOT_DATED = (
+     "them, so the last twelve months are not checked for a short or changed fiscal year."
+ )
+ NO_YTD = "the latest reported period is fiscal year {label}; there is no year to date"
+-NEEDS = "needs {labels}, which CP-1 does not print"
++NEEDS = "needs {labels}, which the table holding the named row does not print"
+ NO_PF = "no handoff states pro forma adjustments"
+ NOT_EXACT = "the figures cannot be added exactly"
+ PART_YEAR = "a ratio to part-year earnings is not shown"
+-NO_COLUMN = "CP-1 prints no {group} column Python can read"
++NO_COLUMN = "the tables holding the named rows print no {group} column Python can read"
+ NO_ANCHOR = "no base line was found under a period header of CP-1"
+ DATED = "The last twelve months were checked against CP-1's period dates ({days} days)."
+ NOT_CONTINUOUS = (
+@@ -483,10 +452,6 @@ NOT_BUILT = (
+     "nothing to check against its period dates."
+ )
+ NOT_TWELVE = "{fy} is not twelve months by CP-1's period dates ({days} days)"
+-OWN_BALANCES = (
+-    "CP-1's own {label} figures for revenue, earnings and cash flow are not read; its balances "
+-    "are read as of {end}."
+-)
+ OWN_LTM = (
+     "CP-1's own {label} figures for revenue, earnings and cash flow are not read; the LTM column "
+     "is built from {fy} + {ytd} - {pytd}."
+@@ -543,8 +508,6 @@ class _Context:
+     printed: frozenset[Period]
+     dates: Dates
+     no_anchor: str = NO_ANCHOR
+-    labels: LtmDates = field(default_factory=dict)
+-    twice: tuple[str, ...] = ()
+ 
+ 
+ def _anchor_of(found: dict[str, Line]) -> _Anchor | None:
+@@ -733,75 +696,6 @@ def _placeholder(ctx: _Context, kind: str, group: str) -> Column:
+     return _why(_column(group, kind, group, None, values), reason)
+ 
+ 
+-def _label_problem(ctx: _Context, label: str, period: Period) -> str | None:
+-    """Why the `LTM Qn YYYY` label is not the balance date of the column (its End is the End of
+-    the dates of `period`, the year to date or the fiscal year), or None."""
+-    spans = ctx.labels.get(label)
+-    if not spans or len(spans) > 1:
+-        return (DATED_TWICE_CELL if spans else LABEL_NOT_DATED).format(label=label)
+-    span = ctx.dates.get(period)
+-    if span is None:
+-        twice = period_label(period) in ctx.twice
+-        return (DATED_TWICE_CELL if twice else LABEL_NOT_DATED).format(label=period_label(period))
+-    ((_, end),) = spans
+-    if end != span[1]:
+-        return LABEL_OTHER_DAY.format(
+-            label=label,
+-            end=end.isoformat(),
+-            anchor=span[1].isoformat(),
+-            what="fiscal year" if period[0] == "FY" else "year to date",
+-        )
+-    return None
+-
+-
+-def _balance(ctx: _Context, line: Line, real: cp2g.Val, period: Period) -> cp2g.Val:
+-    """A stock's balance at the column's date: the figure of the column's own period when CP-1
+-    prints one, else the one printed under the `LTM Qn YYYY` label, read only when CP-1 dates that
+-    label to the day the column's period ends. Two figures that differ give no balance."""
+-    label = f"LTM Q{period[2]} {period[1]}"
+-    printed = line.balances.get(label)
+-    if line.reason is not None or not printed:
+-        gap = None if line.reason is not None else line.balance_gaps.get(label)
+-        return cp2g.Val(None, gap) if gap and real.amount is None else real
+-    different = cp2g.Val(None, DIFFERENT.format(period=period_label(period)))
+-    if real == different:
+-        return real
+-    problem = _label_problem(ctx, label, period)
+-    if problem is not None:
+-        return real if real.amount is not None else cp2g.Val(None, problem)
+-    if len(printed) > 1:
+-        return cp2g.Val(None, DIFFERENT.format(period=label))
+-    (figure,) = printed
+-    if real.amount is None:
+-        return cp2g._known(figure)
+-    return real if real.amount == figure else different
+-
+-
+-def _balances(ctx: _Context, reads: Reads, period: Period) -> Reads:
+-    """The reads with each stock replaced by its `_balance`."""
+-    return {
+-        key: _balance(ctx, ctx.found[key], value, period) if key in _STOCKS else value
+-        for key, value in reads.items()
+-    }
+-
+-
+-def _label_read(
+-    ctx: _Context, before: Reads, after: Reads, period: Period
+-) -> tuple[str, str] | None:
+-    """The `LTM Qn YYYY` label and its limit line, when a stock of the column of `period` was read
+-    from the figure printed under that label (it had no figure of the period's own)."""
+-    label = f"LTM Q{period[2]} {period[1]}"
+-    spans = ctx.labels.get(label)
+-    if not spans or not any(
+-        after[key].amount is not None and before[key].amount is None
+-        for key in _STOCKS
+-        if key in after
+-    ):
+-        return None
+-    ((_, end),) = spans
+-    return label, OWN_BALANCES.format(label=label, end=end.isoformat())
+-
+-
+ def _ytd_reads(ctx: _Context, period: Period) -> Reads:
+     """A year-to-date column's values: its period's cells, or NEEDS when no located line prints
+     the period (a quarter is never summed into it)."""
+@@ -909,8 +803,6 @@ def _interim(
+     n, k = anchor.year, anchor.quarters
+     ytd_p, pytd_p, older_p = _ytd_period(n, k), _ytd_period(n - 1, k), _ytd_period(n - 2, k)
+     ytd, pytd = _ytd_reads(ctx, ytd_p), _ytd_reads(ctx, pytd_p)
+-    ytd_read = ytd
+-    ytd = _balances(ctx, ytd, ytd_p)
+     ltm, prior = dict(ytd), dict(pytd)
+     for key in _FLOWS:
+         line = ctx.found[key]
+@@ -940,9 +832,7 @@ def _interim(
+     return (
+         [*columns, *_twelve_months(label, ltm_values, ltm_check, prior_values, prior_check)],
+         _first_limits(ltm_check, ltm_built, prior_built and prior_check is None),
+-        (label, own)
+-        if ltm_built and (ltm_check is None or ltm_check.reason is None)
+-        else _label_read(ctx, ytd_read, ytd, ytd_p),
++        (label, own) if ltm_built and (ltm_check is None or ltm_check.reason is None) else None,
+     )
+ 
+ 
+@@ -953,8 +843,6 @@ def _fiscal(
+     n = anchor.year
+     reason = NO_YTD.format(label=period_label(("FY", n, 4)))
+     ltm = {key: _needs(ctx.found[key], ("FY", n, 4)) for key in _READ}
+-    ltm_read = ltm
+-    ltm = _balances(ctx, ltm, ("FY", n, 4))
+     prior = {key: _needs(ctx.found[key], ("FY", n - 1, 4)) for key in _READ}
+     ltm_values = _derived(ltm, False)
+     ltm_built = _built(ltm_values)
+@@ -969,7 +857,7 @@ def _fiscal(
+             *_twelve_months(f"LTM FY{n}", ltm_values, ltm_check, prior_values, prior_check),
+         ],
+         _first_limits(ltm_check, ltm_built, prior_built and prior_check is None),
+-        _label_read(ctx, ltm_read, ltm, ("FY", n, 4)),
++        None,
+     )
+ 
+ 
+@@ -1084,7 +972,6 @@ def history(
+     located = [line for line in found.values() if line.reason is None]
+     printed = frozenset(p for line in located for p in (*line.values, *line.gaps))
+     dates, twice = period_dates(tables)
+-    labels = ltm_dates(tables)
+     anchor = _anchor_of(found)
+     nothing_named = not any(key in (named or {}) for key in ("revenue", "ebitda"))
+     unnamed = (
+@@ -1092,9 +979,7 @@ def history(
+         and nothing_named
+         and NOT_NAMED in (found["revenue"].reason, found["ebitda"].reason)
+     )
+-    ctx = _Context(
+-        found, located, anchor, printed, dates, NOT_NAMED if unnamed else NO_ANCHOR, labels, twice
+-    )
++    ctx = _Context(found, located, anchor, printed, dates, NOT_NAMED if unnamed else NO_ANCHOR)
+     (ytd, pytd, ltm, prior), first, own = _four(ctx)
+     pf = _why(_column("PF", "PF", "PF LTM", None, _blanket(NO_PF)), NO_PF)
+     quarters, quarter_cut = _group(ctx, "QUARTER", "Quarter", _MAX_QUARTERS)
+diff --git a/tests/test_cpos_launch.py b/tests/test_cpos_launch.py
+index 7503afb..dfc0182 100644
+--- a/tests/test_cpos_launch.py
++++ b/tests/test_cpos_launch.py
+@@ -3477,10 +3477,7 @@ def test_the_cp2g_instruction_asks_for_the_row_and_period_of_every_base_operand(
+         "exact first-cell text",
+         "exact header text",
+         "of one of the CP-1 handoff's tables",
+-        (
+-            "Name the cell of every operand that has an amount: `row` and `period`, or in a table "
+-            "with one row per period"
+-        ),
++        "Name the cell of every operand that has an amount by `row` and `period` and nothing else.",
+         "positive magnitude",
+         "with its sign reversed",
+         "is not a cell",
+@@ -5333,9 +5330,11 @@ def test_both_forecast_instructions_ask_for_the_scale():
+     ):
+         for words in (
+             (
+-                f"`scale` is `1` when {tables} statement tables print USD millions and `1000` "
+-                "when they print USD thousands"
++                "`currency` is the three-letter code of the currency "
++                f"{tables} statement tables are printed in (`USD`, `GBP`, `EUR`), and `scale` is "
++                "`1` when they print millions of it and `1000` when they print thousands"
+             ),
++            "so every published figure is millions of that currency",
+             "Python divides by `scale`",
+             "Do not convert an amount yourself",
+             'a cell printing 2,620,995 is `"2620995"`',
+@@ -5353,10 +5352,10 @@ def test_both_forecast_instructions_ask_for_the_scale():
+ def test_both_forecast_instructions_state_what_the_unit_check_enforces():
+     for block in (cpos_launch.FORECAST_BLOCK, cpos_launch.LAYER1_FORECAST_BLOCK):
+         assert (
+-            "State `scale` in every block, as the statements print it (`1000` for thousands, `1` "
+-            "for millions), and state every amount in the block in that one unit exactly as "
+-            "printed; an amount printed in the other unit is stated as missing, with the reason, "
+-            "not converted." in block
++            "State `currency` and `scale` in every block, as the statements print them (`1000` for "
++            "thousands, `1` for millions), and state every amount in the block in that one unit "
++            "exactly as printed; an amount printed in the other unit is stated as missing, with "
++            "the reason, not converted." in block
+         )
+         assert "or absent" not in block
+ 
+@@ -5703,10 +5702,14 @@ def test_the_shared_text_names_no_confidence_script_and_separates_the_score_from
+ 
+ 
+ # --- Task E4 (2026-11-12 findings 1, 2, 4): the sent texts name `column` and `interest`
+-COLUMN_SENTENCE = (
+-    "`row` and `column`, the row being the period exactly as printed and the column the "
+-    'measure\'s exact header (`{"amount": "<decimal>", "reason": null, "row": "FY2024", '
+-    '"column": "Cash"}`); leave out `period` there.'
++S5_SENTENCE = (
++    "Name the cell of every operand that has an amount by `row` and `period` and nothing else. "
++    "Take a balance from a row under a period column (`FY2024`, `H1 2025`), never from a column "
++    "headed `LTM …` and never from a table with one row per period"
++)
++S5_TAIL = "where CP-1 prints the balance only there, state the operand as missing with that reason."
++S5_TAIL_LAYER1 = (
++    "where you print the balance only there, state the operand as missing with that reason."
+ )
+ INTEREST_SENTENCE = (
+     "`interest` is interest paid in cash in the base period; where CP-1 prints only interest "
+@@ -5714,9 +5717,11 @@ INTEREST_SENTENCE = (
+     "expense, not cash paid."
+ )
+ BALANCE_SENTENCE = (
+-    "Print a balance (debt, cash, undrawn facilities) at a period's end under that period's "
+-    "column as a plain number: the `H1 2025` column holds the 30 June 2025 balance. Put the date "
+-    "in the row label or the Source, not in the cell."
++    "Print every balance the forecast needs (total debt, cash, undrawn committed facilities) as "
++    "a row of a table whose columns are those period headers, each a plain number at that "
++    "period's end: the `H1 2025` column holds the 30 June 2025 balance. Put the date in the row "
++    "label or the Source, not in the cell. A column headed `LTM …` holds flows only, never a "
++    "balance."
+ )
+ 
+ 
+@@ -5732,16 +5737,18 @@ def _built_instruction(tmp_path, module, modules):
+     return (tmp_path / "out" / prepared.plan.instructions[module].path).read_text()
+ 
+ 
+-def test_the_cp2g_instruction_sent_states_the_column_key_and_what_interest_is(tmp_path):
++def test_the_cp2g_instruction_sent_states_row_and_period_only_and_what_interest_is(tmp_path):
+     text = _built_instruction(tmp_path, "CP-2G", ("CP-1", "CP-2G"))
+-    assert COLUMN_SENTENCE in text and INTEREST_SENTENCE in text
++    assert S5_SENTENCE in text and S5_TAIL in text and INTEREST_SENTENCE in text
++    assert '`"column": "Cash"' not in text and "leave out `period` there" not in text
+ 
+ 
+-def test_the_layer1_forecast_instruction_sent_states_the_column_key_and_what_interest_is(
++def test_the_layer1_forecast_instruction_sent_states_row_and_period_only_and_what_interest_is(
+     tmp_path,
+ ):
+     text = _built_instruction(tmp_path, "CP-1", ("CP-1", "CP-MODEL"))
+-    assert COLUMN_SENTENCE in text and INTEREST_SENTENCE in text
++    assert S5_SENTENCE in text and S5_TAIL_LAYER1 in text and INTEREST_SENTENCE in text
++    assert '`"column": "Cash"' not in text and "leave out `period` there" not in text
+ 
+ 
+ def test_the_period_table_instruction_sent_says_how_to_print_a_balance(tmp_path):
+@@ -5784,12 +5791,90 @@ def test_several_operands_naming_both_period_and_column_are_all_named_in_the_rep
+ 
+ def test_the_forecast_instruction_sentences_say_what_python_does():  # whole-branch review L3, L4
+     table = cpos_launch.PERIOD_TABLE_BLOCK
+-    assert "to date a balance printed under an `LTM Qn YYYY` label; add no figure to it." in table
+-    assert "give that exact label a row in this table with its Start and End dates." in table
++    assert "check that the last twelve months are twelve months; add no figure to it." in table
++    assert "LTM Qn YYYY" not in table and "to date a balance" not in table
+     assert "only to check" not in table and "change no other table" not in table
+-    shown = "history only for a line named under such a header, or in a row labelled with one."
++    shown = "history only for a line named under such a header."
+     for block in (cpos_launch.FORECAST_BLOCK, cpos_launch.LAYER1_FORECAST_BLOCK):
+         assert shown in block
+-        assert "Those tables are in US$ million: at `scale` 1000 do not name them" in block
++        assert "Those tables are in US$ million" not in block
++        assert "`row` and `column`" not in block
+     assert "(your `Chart data:` tables and `Net debt data`)" in cpos_launch.LAYER1_FORECAST_BLOCK
+     assert "(CP-1's `Chart data:` tables" in cpos_launch.FORECAST_BLOCK
++
++
++NET_DEBT_PERIOD_SENTENCE = (
++    "`Period` is `FY2024 / 2024-09-30` for a fiscal year end (fiscal year, space, slash, space, "
++    "the year-end date) and the date alone (`2025-06-30`) for an interim balance sheet: one form "
++    "for every row of the table, each period once, and no other word in the cell"
++)
++UNIT_FORM_SENTENCE = (
++    "Where a table states its unit, write it as the three-letter currency code and `millions` or "
++    "`thousands` (`USD millions`), the same in every statement table; the `Chart data:` tables "
++    "and `Net debt data` keep the unit their own rule gives."
++)
++
++
++def test_the_sent_instructions_prescribe_one_net_debt_period_form_and_the_unit_exemption(tmp_path):
++    text = _built_instruction(tmp_path, "CP-1", ("CP-1", "CP-MODEL"))
++    assert NET_DEBT_PERIOD_SENTENCE in text and UNIT_FORM_SENTENCE in text
++    assert "the balance-sheet date `2024-09-30`, or both as" not in text
++    assert "the same in every statement table. Python uses" not in text
++
++
++def test_the_sent_forecast_instructions_offer_history_only_under_a_period_header_and_say_you(
++    tmp_path,
++):
++    for module, modules in (("CP-2G", ("CP-1", "CP-2G")), ("CP-1", ("CP-1", "CP-MODEL"))):
++        (tmp_path / module).mkdir(exist_ok=True)
++        text = _built_instruction(tmp_path / module, module, modules)
++        assert "history only for a line named under such a header." in text
++        assert "labelled with one" not in text
++    assert "where you print the balance only there" in text
++    assert "where CP-1 prints the balance only there" not in text
++
++
++def test_cp1_is_told_the_net_debt_period_forms_and_to_print_each_line_once():
++    assert NET_DEBT_PERIOD_SENTENCE in cpos_launch.NET_DEBT.rules
++    assert "and no other word in the cell (say `pro forma` or `reported` in the Basis" in (
++        cpos_launch.NET_DEBT.rules
++    )
++    text = cpos_launch.PERIOD_TABLE_BLOCK
++    assert "Print each statement line once, in one table that has a column for every period" in text
++    assert "a line split across two tables cannot be combined" in text
++    assert UNIT_FORM_SENTENCE in text
++
++
++# --- the Net debt data Period is one the pack can order (F1, defect D2.1) -----------------------
++def _net_debt_text(*periods):
++    rows = "\n".join(f"| {p} | 1400 | 275 | 1125 | US$m | Synthetic. |" for p in periods)
++    return (
++        "### Net debt data\n\n"
++        "| Period | Gross debt | Cash | Net debt | Reporting unit | Basis and limitation |\n"
++        "| --- | --- | --- | --- | --- | --- |\n" + rows + "\n"
++    )
++
++
++@pytest.mark.parametrize("period", ["FY2024", "2024-09-30", "FY2024 / 2024-09-30"])
++def test_each_stated_form_of_the_net_debt_period_is_accepted(period):
++    assert cpos_launch._net_debt_issues(_net_debt_text(period)) == ()
++
++
++@pytest.mark.parametrize(
++    ("periods", "cell"),
++    [
++        (("2024-09-30 reported",), "2024-09-30 reported"),
++        (("FY2024 (2024-09-30)",), "FY2024 (2024-09-30)"),
++        (("2024-02-31",), "2024-02-31"),
++        (("FY2024", "2025-06-30"), "2025-06-30"),
++        (("FY2024", "FY2024"), "FY2024"),
++    ],
++)
++def test_a_net_debt_period_the_pack_cannot_order_is_refused_with_the_form_to_write(periods, cell):
++    (issue,) = cpos_launch._net_debt_issues(_net_debt_text(*periods))
++    assert issue == (
++        f"`### Net debt data` Period `{cell}` cannot be ordered: write "
++        "`FY2024 / 2024-09-30` for a fiscal year end or the date alone (`2025-06-30`) for an "
++        "interim balance sheet, one form for the whole table and each period once; put any "
++        "other word in the Basis and limitation cell."
++    )
+diff --git a/tests/test_cpos_periods.py b/tests/test_cpos_periods.py
+index 5feebc7..627b630 100644
+--- a/tests/test_cpos_periods.py
++++ b/tests/test_cpos_periods.py
+@@ -338,11 +338,11 @@ def test_prior_ltm_names_the_period_cp1_does_not_print():
+     record = history(TABLES, OPERANDS)
+     assert cell(record, "PRIOR_LTM", "revenue") == {
+         "amount": None,
+-        "reason": "needs 9M 2023, which CP-1 does not print",
++        "reason": "needs 9M 2023, which the table holding the named row does not print",
+     }
+     assert (
+         cell(record, "PRIOR_LTM", "interest")["reason"]
+-        == "needs FY2023, 9M 2023, which CP-1 does not print"
++        == "needs FY2023, 9M 2023, which the table holding the named row does not print"
+     )
+     assert cell(record, "PRIOR_LTM", "closing_debt")["amount"] == "620"
+ 
+@@ -400,12 +400,14 @@ def test_a_fiscal_year_anchor_has_no_year_to_date():  # Review Focus 4
+     assert D(cell(record, "LTM", "revenue")["amount"]) == D("1000")
+     assert D(cell(record, "PRIOR_LTM", "revenue")["amount"]) == D("940")
+     assert cell(record, "PRIOR_LTM", "interest")["reason"] == (
+-        "needs FY2023, which CP-1 does not print"
++        "needs FY2023, which the table holding the named row does not print"
+     )
+     labels = [c["label"] for c in record["columns"]]
+     assert labels[:1] == ["Quarter"] and "LTM FY2024" in labels
+     placeholder = record["columns"][0]
+-    assert placeholder["reason"] == "CP-1 prints no quarter column Python can read"
++    assert placeholder["reason"] == (
++        "the tables holding the named rows print no quarter column Python can read"
++    )
+ 
+ 
+ def test_a_missing_quarter_cell_keeps_its_reason():
+@@ -426,7 +428,9 @@ def test_a_quarter_without_its_year_to_date_period_is_not_summed():
+         "| Adjusted EBITDA | 84 | 300 |\n"
+     )
+     record = history(cpos_forecast._tables(cp1), OPERANDS)
+-    assert cell(record, "YTD", "revenue")["reason"] == "needs 9M 2025, which CP-1 does not print"
++    assert cell(record, "YTD", "revenue")["reason"] == (
++        "needs 9M 2025, which the table holding the named row does not print"
++    )
+     assert cell(record, "LTM", "revenue")["reason"].startswith("needs ")
+     assert cell(record, "Q3 2025", "revenue")["amount"] == "270"
+ 
+@@ -523,7 +527,7 @@ def test_a_fourth_quarter_is_a_fiscal_year_anchor():
+     assert cell(record, "YTD", "revenue")["reason"] == no_ytd
+     assert cell(record, "LTM", "revenue") == {
+         "amount": None,
+-        "reason": "needs FY2025, which CP-1 does not print",
++        "reason": "needs FY2025, which the table holding the named row does not print",
+     }
+     assert D(cell(record, "PRIOR_LTM", "revenue")["amount"]) == D("1000")
+     assert D(cell(record, "Q4 2025", "revenue")["amount"]) == D("260")
+@@ -895,7 +899,7 @@ def test_an_ltm_that_cannot_be_built_is_not_called_checked():
+     assert record["limits"][0] == NOT_BUILT and (ltm["start"], ltm["end"]) == (None, None)
+     assert ltm["values"]["revenue"] == {
+         "amount": None,
+-        "reason": "needs FY2024, which CP-1 does not print",
++        "reason": "needs FY2024, which the table holding the named row does not print",
+     }
+ 
+ 
+@@ -1377,7 +1381,9 @@ def test_the_unread_headers_limit_lists_the_headers_of_located_lines_only():
+ # --- Task E1: `column` names a cell of a period-row table ---------------------------------------
+ PINNED_FILES = {  # sha256 of the files before `column` existed: a block without it is unchanged
+     "annual.md": "6b2a22771cdc76eb8735645c457db14eea4db57c0ecea10552cabd571bd63ca9",
+-    "calculation.json": "c3691af45dd03b055f5a70b512ba359e409c96477b53ea0043b1fb9df825ace4",
++    # F1 reworded the NEEDS reason (11 cells of this file, nothing else): the pin before it was
++    # c3691af45dd03b055f5a70b512ba359e409c96477b53ea0043b1fb9df825ace4.
++    "calculation.json": "7c4c73bc4084a4e68473b8ae5e348c50b9833073a75dc5fa9256dda5596e02ad",
+     "forecast.md": "fb1471c434a81a15af24362b963077f77c88f83f54cdac2648395a067bea43ea",
+     "forecast_exact.json": "0e27b0a291c29ad6c8e72713190adfaf7b955fc9b178db9aea27a1c9cc831303",
+     "quarter.md": "2ebd4cd19a8d654820261be9ed74bfecc81da5ebf89b39fbc2d963434a49e74f",
+@@ -1582,50 +1588,7 @@ def test_at_scale_1000_the_unit_guard_reads_the_named_cells_row():  # (g)
+     assert scaled == millions
+ 
+ 
+-# --- Task E2: an `LTM Qn YYYY` label is a balance date for stocks -------------------------------
+-def _near(record, column, key, want):
+-    return abs(Fraction(cell(record, column, key)["amount"]) - want) < Fraction(1, 10**12)
+-
+-
+-def test_a_dated_ltm_label_gives_the_stocks_to_the_ytd_and_ltm_columns():  # hand key, after E2
+-    _, record = _e1_record()
+-    for column in ("YTD", "LTM"):
+-        for key, figure in {
+-            "closing_cash": "120",
+-            "undrawn": "60",
+-            "liquidity": "180",
+-            "closing_debt": "590",
+-            "net_debt": "470",
+-        }.items():
+-            assert D(cell(record, column, key)["amount"]) == D(figure), (column, key)
+-    for key in ("closing_cash", "undrawn", "liquidity", "closing_debt", "net_debt"):
+-        assert cell(record, "PYTD", key)["amount"] is None
+-    assert _near(record, "LTM", "total_leverage", Fraction(590, 320))
+-    assert _near(record, "LTM", "net_leverage", Fraction(470, 320))
+-    assert cell(record, "YTD", "total_leverage") == {"amount": None, "reason": PART_YEAR}
+-    assert D(cell(record, "FY2024", "closing_cash")["amount"]) == D(100)
+-
+-
+-def test_an_ltm_label_dated_to_another_day_gives_no_stock_and_says_both_dates():  # RF3
+-    cp1 = E1_CP1.replace(
+-        "| LTM Q2 2025 | 2024-07-01 | 2025-06-30 |", "| LTM Q2 2025 | 2024-06-01 | 2025-05-31 |"
+-    )
+-    _, record = _e1_record(cp1)
+-    reason = "CP-1 dates LTM Q2 2025 to 2025-05-31, not the 2025-06-30 the year to date ends"
+-    for column in ("YTD", "LTM"):
+-        for key in ("closing_cash", "undrawn", "closing_debt"):
+-            assert cell(record, column, key) == {"amount": None, "reason": reason}, (column, key)
+-
+-
+-def test_an_ltm_label_the_period_table_does_not_date_gives_no_stock():
+-    cp1 = E1_CP1.replace("| LTM Q2 2025 | 2024-07-01 | 2025-06-30 |\n", "")
+-    _, record = _e1_record(cp1)
+-    reason = "CP-1's period table does not date LTM Q2 2025"
+-    for column in ("YTD", "LTM"):
+-        for key in ("closing_cash", "undrawn", "closing_debt"):
+-            assert cell(record, column, key) == {"amount": None, "reason": reason}, (column, key)
+-
+-
++# --- an `LTM Qn YYYY` column holds flows only: it is never a balance's date or source (F2) -----
+ def test_a_flow_under_an_ltm_label_is_never_read():
+     cp1 = E1_CP1.replace("| 1040 |", "| 9999 |").replace("| 35 |", "| 9999 |")
+     _, record = _e1_record(cp1)
+@@ -1633,63 +1596,6 @@ def test_a_flow_under_an_ltm_label_is_never_read():
+     assert D(cell(record, "LTM", "interest")["amount"]) == D(35)
+ 
+ 
+-def test_a_real_period_header_balance_stands_and_a_different_label_figure_makes_it_n_a():
+-    agree = E1_CP1.replace(
+-        "Not applicable (balance date) | Not applicable (balance date)", "590 | 580"
+-    )
+-    _, record = _e1_record(agree)
+-    assert D(cell(record, "YTD", "closing_debt")["amount"]) == D(590)
+-    assert D(cell(record, "LTM", "closing_debt")["amount"]) == D(590)
+-    differ = E1_CP1.replace(
+-        "Not applicable (balance date) | Not applicable (balance date)", "585 | 580"
+-    )
+-    _, record = _e1_record(differ)
+-    reason = "CP-1 prints different figures for this line in H1 2025"
+-    for column in ("YTD", "LTM"):
+-        assert cell(record, column, "closing_debt") == {"amount": None, "reason": reason}
+-
+-
+-def test_a_real_period_balance_stands_when_the_label_is_dated_elsewhere():
+-    cp1 = E1_CP1.replace(
+-        "Not applicable (balance date) | Not applicable (balance date)", "590 | 580"
+-    ).replace(
+-        "| LTM Q2 2025 | 2024-07-01 | 2025-06-30 |", "| LTM Q2 2025 | 2024-06-01 | 2025-05-31 |"
+-    )
+-    _, record = _e1_record(cp1)
+-    assert D(cell(record, "YTD", "closing_debt")["amount"]) == D(590)
+-
+-
+-FISCAL_CP1 = """### Periods
+-| Period | Start | End |
+-| --- | --- | --- |
+-| FY2024 | 2024-01-01 | 2024-12-31 |
+-| LTM Q4 2024 | 2024-01-01 | {end} |
+-
+-| Line, USD million | FY2023 | FY2024 | LTM Q4 2024 |
+-| --- | --- | --- | --- |
+-| Total revenue | 900 | 1000 | 1000 |
+-| Total debt | 550 | n.a. | 600 |
+-"""
+-
+-
+-def _fiscal_record(end):
+-    tables = cpos_forecast._tables(FISCAL_CP1.format(end=end))
+-    ops = replace(OPERANDS, revenue=cp2g.Val(D(1000), None), debt=cp2g.Val(D(550), None))
+-    named = {"revenue": ("Total revenue", "FY2024"), "debt": ("Total debt", "FY2023")}
+-    return history(tables, ops, named=named)
+-
+-
+-def test_a_fiscal_year_anchor_reads_the_label_only_at_the_fiscal_years_end():
+-    record = _fiscal_record("2024-12-31")
+-    assert D(cell(record, "LTM", "closing_debt")["amount"]) == D(600)
+-    assert cell(record, "YTD", "closing_debt")["amount"] is None
+-    record = _fiscal_record("2025-01-31")
+-    assert cell(record, "LTM", "closing_debt") == {
+-        "amount": None,
+-        "reason": "CP-1 dates LTM Q4 2024 to 2025-01-31, not the 2024-12-31 the fiscal year ends",
+-    }
+-
+-
+ def test_row_labels_of_a_table_read_by_column_are_listed_apart_from_column_headers():
+     cp1 = E1_CP1.replace(
+         "| LTM Q2 2025 | 120 | 60 | US$m | 30 June 2025. |",
+@@ -1758,13 +1664,6 @@ def test_an_ltm_that_was_not_built_keeps_the_old_line():
+ 
+ 
+ # --- fix round 1: a period row printed in another unit is never published as the named row's ----
+-_LTM_IN_THOUSANDS = E1_CP1.replace(
+-    "| LTM Q2 2025 | 120 | 60 | US$m | 30 June 2025. |",
+-    "| LTM Q2 2025 | 120000 | 60000 | US$ thousands | 30 June 2025. |",
+-).replace(
+-    "| LTM Q2 2025 | 590 | 120 | 470 | US$m |",
+-    "| LTM Q2 2025 | 590000 | 120000 | 470000 | US$ thousands |",
+-)
+ _H1_IN_THOUSANDS = E1_CP1.replace(
+     "| LTM Q2 2025 | 120 | 60 | US$m | 30 June 2025. |",
+     "| H1 2025 | 120000 | 60000 | US$ thousands | 30 June 2025. |",
+@@ -1777,15 +1676,6 @@ _UNIT_DEBT = _e1_base(
+ )
+ 
+ 
+-def test_an_ltm_label_row_in_another_unit_gives_no_stock_and_says_so():
+-    _, record = _e1_record(_LTM_IN_THOUSANDS, _e1_block(base=_UNIT_DEBT))
+-    reason = "CP-1 states LTM Q2 2025 in another unit (US$ thousands)"
+-    for column in ("YTD", "LTM"):
+-        for key in ("closing_cash", "undrawn", "closing_debt"):
+-            assert cell(record, column, key) == {"amount": None, "reason": reason}, (column, key)
+-    assert D(cell(record, "FY2024", "closing_cash")["amount"]) == D(100)
+-
+-
+ def test_a_period_row_in_another_unit_gives_no_figure_for_that_period():
+     _, record = _e1_record(_H1_IN_THOUSANDS, _e1_block(base=_UNIT_DEBT))
+     reason = "CP-1 states H1 2025 in another unit (US$ thousands)"
+@@ -1793,150 +1683,21 @@ def test_a_period_row_in_another_unit_gives_no_figure_for_that_period():
+         assert cell(record, "YTD", key) == {"amount": None, "reason": reason}, key
+ 
+ 
+-def test_period_rows_in_the_same_unit_are_read_as_before():
+-    _, record = _e1_record(E1_CP1, _e1_block(base=_UNIT_DEBT))
+-    for column in ("YTD", "LTM"):
+-        assert D(cell(record, column, "closing_cash")["amount"]) == D(120)
+-        assert D(cell(record, column, "undrawn")["amount"]) == D(60)
+-        assert D(cell(record, column, "closing_debt")["amount"]) == D(590)
+-
+-
+-def test_an_ltm_label_with_two_figures_names_the_label_in_the_reason():
+-    cp1 = E1_CP1.replace("| LTM Q2 2025 | 590 | 120 | 470 |", "| LTM Q2 2025 | 590 | 121 | 469 |")
+-    _, record = _e1_record(cp1)
+-    reason = "CP-1 prints different figures for this line in LTM Q2 2025"
+-    for column in ("YTD", "LTM"):
+-        assert cell(record, column, "closing_cash") == {"amount": None, "reason": reason}
+-
+-
+-def test_a_ytd_period_dated_twice_gives_a_cell_reason_without_a_full_stop():
+-    cp1 = E1_CP1.replace(
+-        "| H1 2025 | 2025-01-01 | 2025-06-30 |",
+-        "| H1 2025 | 2025-01-01 | 2025-06-30 |\n| H1 2025 | 2025-01-01 | 2025-06-29 |",
+-    )
+-    _, record = _e1_record(cp1)
+-    reason = "CP-1's period table dates H1 2025 more than once, differently"
+-    for key in ("closing_cash", "undrawn", "closing_debt"):
+-        assert cell(record, "YTD", key) == {"amount": None, "reason": reason}, key
+-
+-
+-def test_an_ltm_label_dated_twice_gives_a_cell_reason_without_a_full_stop():
+-    cp1 = E1_CP1.replace(
+-        "| LTM Q2 2025 | 2024-07-01 | 2025-06-30 |",
+-        "| LTM Q2 2025 | 2024-07-01 | 2025-06-30 |\n| LTM Q2 2025 | 2024-07-01 | 2025-06-29 |",
+-    )
+-    _, record = _e1_record(cp1)
+-    reason = "CP-1's period table dates LTM Q2 2025 more than once, differently"
+-    assert cell(record, "LTM", "closing_cash") == {"amount": None, "reason": reason}
+-
+-
+ def test_an_ltm_whose_date_check_failed_does_not_say_it_is_built():
+     cp1 = E1_CP1.replace("| H1 2025 | 2025-01-01 |", "| H1 2025 | 2025-02-01 |")
+     _, record = _e1_record(cp1)
+     assert not any("is built from" in x for x in record["limits"])
+-    # the balances are read from the label (L2), so the label is not listed as unread
+-    assert any(x.startswith("CP-1's own LTM Q2 2025 figures") for x in record["limits"])
+-    assert not any("LTM Q2 2025" in x and "not read as periods" in x for x in record["limits"])
++    # no balance is read from the label any more, so it is listed as an unread header
++    assert "CP-1 column headers not read as periods: LTM Q2 2025." in record["limits"]
++    assert not any(x.startswith("CP-1's own LTM Q2 2025 figures") for x in record["limits"])
+ 
+ 
+ # --- Whole-branch review, fix round 2 ------------------------------------------------------------
+-LIQ_FY = "| FY2024 | 100 | 50 | US$m | Year end. |"
+-LIQ_LTM = "| LTM Q2 2025 | 120 | 60 | US$m | 30 June 2025. |"
+-NO_UNIT_HEAD = (
+-    "| Period | Cash | Undrawn | Reporting unit | Basis and limitation |\n"
+-    "| --- | --- | --- | --- | --- |"
+-)
+-
+-
+-def _undrawn_at_ytd_and_ltm(cp1, **changes):
+-    _, record = _e1_record(cp1, _e1_block(base=_e1_base(**changes)))
+-    return [cell(record, column, "undrawn") for column in ("YTD", "LTM")]
+-
+-
+-def test_a_basis_cell_naming_a_thousands_amount_does_not_blank_a_row_in_the_named_unit():  # M1 U1
+-    note = "| LTM Q2 2025 | 120 | 60 | US$m | 30 June 2025; excludes USD 740 thousand of cash. |"
+-    for got in _undrawn_at_ytd_and_ltm(E1_CP1.replace(LIQ_LTM, note)):
+-        assert got == {"amount": "60", "reason": None}
+-
+-
+-def test_a_row_in_another_reporting_unit_is_n_a_when_the_named_rows_basis_names_thousands():  # U2
+-    cp1 = E1_CP1.replace(
+-        LIQ_FY, "| FY2024 | 100 | 50 | US$m | Year end; excludes USD 740 thousand of cash. |"
+-    ).replace(LIQ_LTM, "| LTM Q2 2025 | 120000 | 60000 | US$ thousands | 30 June 2025. |")
+-    for got in _undrawn_at_ytd_and_ltm(cp1):
+-        assert got == {
+-            "amount": None,
+-            "reason": "CP-1 states LTM Q2 2025 in another unit (US$ thousands)",
+-        }
+-
+-
+-def test_a_row_in_another_unit_is_n_a_when_the_unit_is_in_the_headers_only():  # U3
+-    cp1 = (
+-        E1_CP1.replace(
+-            NO_UNIT_HEAD,
+-            "| Period | Cash, US$m | Undrawn, US$m | Basis and limitation |\n"
+-            "| --- | --- | --- | --- |",
+-        )
+-        .replace(LIQ_FY, "| FY2024 | 100 | 50 | Year end. |")
+-        .replace(LIQ_LTM, "| LTM Q2 2025 | 120000 | 60000 | 30 June 2025; in US$ thousands. |")
+-    )
+-    undrawn = {"amount": "50", "reason": None, **_by_column("FY2024", "Undrawn, US$m")}
+-    for got in _undrawn_at_ytd_and_ltm(cp1, undrawn=undrawn):
+-        assert got["amount"] is None
+-        assert got["reason"].startswith("CP-1 states LTM Q2 2025 in another unit (")
+-
+-
+-def test_a_row_in_thousands_is_n_a_when_the_named_row_and_headers_name_no_unit():  # U4
+-    cp1 = (
+-        E1_CP1.replace(
+-            NO_UNIT_HEAD,
+-            "| Period | Cash | Undrawn | Basis and limitation |\n| --- | --- | --- | --- |",
+-        )
+-        .replace(LIQ_FY, "| FY2024 | 100 | 50 | Year end. |")
+-        .replace(LIQ_LTM, "| LTM Q2 2025 | 120000 | 60000 | 30 June 2025; in US$ thousands. |")
+-    )
+-    for got in _undrawn_at_ytd_and_ltm(cp1):
+-        assert got["amount"] is None and "in another unit" in got["reason"]
+-
+-
+-def test_a_row_naming_no_unit_is_read_beside_a_named_row_with_a_unit():
+-    cp1 = E1_CP1.replace(LIQ_LTM, "| LTM Q2 2025 | 120 | 60 |  | 30 June 2025. |")
+-    for got in _undrawn_at_ytd_and_ltm(cp1):
+-        assert got == {"amount": "60", "reason": None}
+-
+-
+-def test_stocks_read_from_the_label_are_not_listed_as_unread_when_the_ltm_is_not_built():  # L2
+-    cp1 = E1_CP1.replace("| H1 2024 | 2024-01-01 | 2024-06-30 |\n", "")
+-    cp1 = cp1.replace(
+-        "| Line, USD million | FY2024 | H1 2025 | H1 2024 | LTM Q2 2025 |\n"
+-        "| --- | --- | --- | --- | --- |",
+-        "| Line, USD million | FY2024 | H1 2025 | LTM Q2 2025 |\n| --- | --- | --- | --- |",
+-    )
+-    for old, new in (
+-        ("| 1000 | 540 | 500 | 1040 |", "| 1000 | 540 | 1040 |"),
+-        ("| 300 | 170 | 150 | 320 |", "| 300 | 170 | 320 |"),
+-        ("| 36 | 17 | 18 | 35 |", "| 36 | 17 | 35 |"),
+-        (
+-            "| 600 | Not applicable (balance date) | Not applicable (balance date) | 590 |",
+-            "| 600 | Not applicable (balance date) | 590 |",
+-        ),
+-    ):
+-        assert old in cp1, old
+-        cp1 = cp1.replace(old, new)
+-    debt = {"amount": "600", "reason": None, "row": "Total debt", "period": "FY2024"}
+-    _, record = _e1_record(cp1, _e1_block(base=_e1_base(debt=debt)))
+-    assert D(cell(record, "YTD", "closing_cash")["amount"]) == D(120)
+-    assert not any("not read as periods" in x and "LTM Q2 2025" in x for x in record["limits"])
+-    assert (
+-        "CP-1's own LTM Q2 2025 figures for revenue, earnings and cash flow are not read; "
+-        "its balances are read as of 2025-06-30."
+-    ) in record["limits"]
+-
+-
+-def test_two_different_figures_for_the_ytd_period_stop_the_label_figure():  # M19
++def test_two_different_figures_for_the_ytd_period_are_withheld():  # M19
++    year_end = "| FY2024 | 100 | 50 | US$m | Year end. |"
+     cp1 = E1_CP1.replace(
+-        LIQ_LTM,
+-        LIQ_LTM + "\n| H1 2025 | 130 | 55 | US$m | One. |\n| H1 2025 | 140 | 56 | US$m | Two. |",
++        year_end,
++        year_end + "\n| H1 2025 | 130 | 55 | US$m | One. |\n| H1 2025 | 140 | 56 | US$m | Two. |",
+     )
+     _, record = _e1_record(cp1)
+     assert cell(record, "YTD", "closing_cash") == {
+@@ -1984,3 +1745,102 @@ def test_a_block_whose_only_naming_key_is_column_is_judged_as_named():  # M06
+             _e1_cp1(1000, unit="n.a.", first="USD thousands").encode(),
+             _e1_block(1000, base=base).encode(),
+         )
++
++
++# --- the reason for a withheld amount names what is true (F1, defect D7.0) ----------------------
++SPLIT_TABLES = """| Reported label | Q3 2025 | 9M 2025 | 9M 2024 revised | Locator |
++| --- | --- | --- | --- | --- |
++| Total revenue | 1,121 | 3,202 | 3,197 | p.2 |
++
++| Reported label | FY2024 | Locator |
++| --- | --- | --- |
++| Total revenue | 4,305 | p.135 |
++"""
++
++
++def test_a_line_printed_in_two_tables_is_withheld_for_the_reason_that_is_true():
++    """CP-1 prints the 9M 2025 and 9M 2024 revenue in one table and FY2024 revenue in another, so
++    the last twelve months cannot be built from the table holding the named row. The reason says
++    that; it does not say CP-1 prints nothing, because CP-1 does print the amount."""
++    tables = cpos_forecast._tables(SPLIT_TABLES)
++    ops = cp2g.Operands(
++        revenue=cp2g.Val(D("3202"), None),
++        **{k: cp2g.Val(None, "not used") for k in BASE if k != "revenue"},
++    )
++    record = history(
++        tables, ops, named={"revenue": ("Total revenue", "9M 2025")}, forecast_year=2026
++    )
++    ltm = cell(record, "LTM", "revenue")
++    assert ltm["amount"] is None
++    assert ltm["reason"] == "needs FY2024, which the table holding the named row does not print"
++    assert "CP-1 does not print" not in json.dumps(record)
++
++
++# --- the `LTM Qn YYYY` balance path is deleted (F2): hand-written keys --------------------------
++F2_CP1 = """### Periods
++| Period | Start | End |
++| --- | --- | --- |
++| FY2024 | 2024-01-01 | 2024-12-31 |
++| H1 2025 | 2025-01-01 | 2025-06-30 |
++| H1 2024 | 2024-01-01 | 2024-06-30 |
++| LTM Q2 2025 | 2024-07-01 | 2025-06-30 |
++
++| Line, USD million | FY2024 | H1 2025 | H1 2024 | LTM Q2 2025 |
++| --- | --- | --- | --- | --- |
++| Total revenue | 1000 | 540 | 500 | 1040 |
++| Cash | 100 | 110 | 90 | 120 |
++"""
++
++
++def _f2_record(cash_name, cash_amount):
++    ops = replace(OPERANDS, revenue=cp2g.Val(D(1000), None), cash=cp2g.Val(D(cash_amount), None))
++    named = {"revenue": ("Total revenue", "FY2024"), "cash": cash_name}
++    return history(cpos_forecast._tables(F2_CP1), ops, named=named)
++
++
++def test_a_balance_named_under_an_ltm_column_is_missing_because_an_ltm_column_holds_flows():
++    record = _f2_record(("Cash", "LTM Q2 2025"), 120)
++    for column in ("YTD", "LTM", "FY2024"):
++        got = cell(record, column, "closing_cash")
++        assert got["amount"] is None, column
++        assert "an `LTM` column holds flows only" in got["reason"], column
++
++
++def test_a_balance_named_under_a_period_column_is_read_as_printed_and_dated_by_the_period_table():
++    record = _f2_record(("Cash", "H1 2025"), 110)
++    ytd = next(c for c in record["columns"] if c["id"] == "YTD")
++    assert ytd["values"]["closing_cash"] == {"amount": "110", "reason": None}
++    assert (ytd["start"], ytd["end"]) == ("2025-01-01", "2025-06-30")
++    assert D(cell(record, "LTM", "revenue")["amount"]) == D(1040)  # the LTM flows are unchanged
++
++
++# --- per-row unit guard on a row under a real period column (restores the removed U4 / no-unit) --
++_LIQ_FY = "| FY2024 | 100 | 50 | US$m | Year end. |"
++_LIQ_LTM = "| LTM Q2 2025 | 120 | 60 | US$m | 30 June 2025. |"
++_UNIT_HEAD = (
++    "| Period | Cash | Undrawn | Reporting unit | Basis and limitation |\n"
++    "| --- | --- | --- | --- | --- |"
++)
++
++
++def _undrawn_at_ytd(cp1):
++    _, record = _e1_record(cp1)
++    return cell(record, "YTD", "undrawn")
++
++
++def test_a_row_in_thousands_is_n_a_when_the_named_row_and_headers_name_no_unit():  # U4
++    cp1 = (
++        E1_CP1.replace(
++            _UNIT_HEAD,
++            "| Period | Cash | Undrawn | Basis and limitation |\n| --- | --- | --- | --- |",
++        )
++        .replace(_LIQ_FY, "| FY2024 | 100 | 50 | Year end. |")
++        .replace(_LIQ_LTM, "| H1 2025 | 120000 | 60000 | 30 June 2025; in US$ thousands. |")
++    )
++    got = _undrawn_at_ytd(cp1)
++    assert got["amount"] is None and "in another unit" in got["reason"]
++
++
++def test_a_row_naming_no_unit_is_read_beside_a_named_row_with_a_unit():
++    cp1 = E1_CP1.replace(_LIQ_LTM, "| H1 2025 | 120 | 60 |  | 30 June 2025. |")
++    assert _undrawn_at_ytd(cp1) == {"amount": "60", "reason": None}
+diff --git a/tests/test_cpos_scale.py b/tests/test_cpos_scale.py
+index 12d40cf..d70817a 100644
+--- a/tests/test_cpos_scale.py
++++ b/tests/test_cpos_scale.py
+@@ -208,8 +208,7 @@ def test_a_scale_that_is_not_1_or_1000_is_refused(scale):
+     with pytest.raises(ValueError) as caught:
+         parse(block_k(scale=scale), CP1_K)
+     assert (
+-        str(caught.value)
+-        == "CP-2G: `scale` must be 1 (CP-1 prints USD millions) or 1000 (USD thousands)"
++        str(caught.value) == "CP-2G: `scale` must be 1 (CP-1 prints millions) or 1000 (thousands)"
+     )
+ 
+ 
+@@ -429,7 +428,9 @@ def test_a_block_with_scale_one_is_the_block_without_it_plus_the_units():
+ def test_layer_one_at_scale_1000():
+     block = json.loads(block_k().split("```json\n")[1].split("\n```")[0])
+     block["downside_shock"] = None
+-    text = CP1_K + "\n### Forecast inputs (machine-readable)\n\n```json\n"
++    block["currency"] = "USD"  # F1: a layer-1 block that states `scale` states `currency`
++    text = "### Canonical statement data (USD thousands)\n\n" + CP1_K
++    text += "\n### Forecast inputs (machine-readable)\n\n```json\n"
+     text += json.dumps(block) + "\n```\n"
+     files = model_files(text.encode(), text.encode(), "CP-1", history=True)
+     exact = json.loads(files["forecast_exact.json"])
+@@ -454,7 +455,7 @@ def test_a_millions_chart_row_in_a_thousands_block_is_refused():  # AK-6
+         parse(block_k2(base={**K2_BASE, "undrawn": CHART_ROW}), CP1_K2)
+     assert str(caught.value) == (
+         "CP-2G: base undrawn: row `H1 2025` states its Reporting unit as `US$m`, not the "
+-        "block's unit (USD thousands, scale 1000); state a reason instead of an amount"
++        "block's unit (thousands, scale 1000); state a reason instead of an amount"
+     )
+ 
+ 
+@@ -466,7 +467,7 @@ def test_the_same_row_is_read_by_a_millions_block():
+ def test_a_thousands_unit_cell_refuses_a_millions_block():
+     cp1 = CP1_K2.replace("| US$m |", "| US$ thousands |")
+     base = NO_BASE | {"undrawn": CHART_ROW}
+-    with pytest.raises(ValueError, match="not the block's unit \\(USD millions, scale 1\\)"):
++    with pytest.raises(ValueError, match="not the block's unit \\(millions, scale 1\\)"):
+         parse(forecast_block(scale=1, base=base), cp1)
+ 
+ 
+@@ -488,7 +489,7 @@ def test_another_cell_of_the_row_naming_the_other_unit_is_refused():  # widened
+         parse(_revolver("Revolver availability", "H1 2025"), CP1_K2)
+     assert str(caught.value) == (
+         "CP-2G: base undrawn: row `Revolver availability` states its Unit and terms / evidence "
+-        "as `US$ million`, not the block's unit (USD thousands, scale 1000); "
++        "as `US$ million`, not the block's unit (thousands, scale 1000); "
+         "state a reason instead of an amount"
+     )
+ 
+@@ -813,12 +814,12 @@ def _layer_one(**changes):
+             {"base": {**K2_BASE, "undrawn": CHART_ROW}},
+             (
+                 "CP-1: base undrawn: row `H1 2025` states its Reporting unit as `US$m`, not the "
+-                "block's unit (USD thousands, scale 1000); state a reason instead of an amount"
++                "block's unit (thousands, scale 1000); state a reason instead of an amount"
+             ),
+         ),
+         (
+             {"scale": 7},
+-            "CP-1: `scale` must be 1 (CP-1 prints USD millions) or 1000 (USD thousands)",
++            "CP-1: `scale` must be 1 (CP-1 prints millions) or 1000 (thousands)",
+         ),
+         (
+             {"base": {**K2_BASE, "cash": {**K2_BASE["cash"], "amount": "175,509.5"}}},
+@@ -834,3 +835,257 @@ def test_a_layer_one_block_at_scale_1000_is_refused_in_cp1s_name(changes, messag
+     with pytest.raises(ValueError) as caught:
+         parse(text, text, "CP-1")
+     assert str(caught.value) == message
++
++
++# --- `currency`: the block's one currency, stated once (F1, defect D6.0) ------------------------
++def _with_unit_column(table_text, unit):
++    """The fixture's tables with a final `Unit` column whose every row cell is `unit`."""
++    lines = table_text.splitlines()
++    out = []
++    for number, line in enumerate(lines):
++        if not line.startswith("|"):
++            out.append(line)
++        elif line.startswith("| ---"):
++            out.append(line + " --- |")
++        elif number + 1 < len(lines) and lines[number + 1].startswith("| ---"):
++            out.append(line + " Unit |")
++        else:
++            out.append(f"{line} {unit} |")
++    return "\n".join(out) + "\n"
++
++
++NAMED_BASE = {
++    k: {"amount": v, "reason": None, "row": NAMED[k][0], "period": NAMED[k][1]}
++    for k, v in BASE.items()
++}
++
++
++def _delivered_units(cp1, block):
++    files = model_files(cp1.encode(), block.encode(), "CP-2G", history=True)
++    return json.loads(files["forecast_exact.json"])["units"]
++
++
++def test_a_gbp_millions_block_is_delivered_as_gbp_millions():
++    cp1 = _with_unit_column(CP1, "GBP millions")
++    block = forecast_block(base=NAMED_BASE, scale=1, currency="GBP")
++    assert _delivered_units(cp1, block) == "GBP millions"
++
++
++def test_a_block_that_predates_currency_is_read_as_usd_millions():
++    """The documented reading of every retained block: no `currency` key means USD."""
++    block = forecast_block(base=NAMED_BASE, scale=1)
++    assert _delivered_units(_with_unit_column(CP1, "US$m"), block) == "USD millions"
++
++
++def test_a_block_with_scale_and_no_currency_is_sent_back_at_acceptance():
++    task = types.SimpleNamespace(module_id="CP-2G", handoffs={"CP-1": CP1_K2.encode()})
++    (issue,) = cpos_launch._forecast_issues(task, block_k2())
++    assert issue == (
++        "Forecast inputs: state `currency`: the three-letter code of the currency CP-1 reports "
++        "its figures in."
++    )
++    assert not re.search(r"USD|GBP|EUR|US\$", issue)
++    assert cpos_launch._forecast_issues(task, block_k2(currency="USD")) == ()
++
++
++@pytest.mark.parametrize("currency", ["gbp", "£", "GB", "GBPS", "", 1])
++def test_a_currency_that_is_not_a_three_letter_capital_code_is_refused(currency):
++    assert parse(block_k2(currency="USD"), CP1_K2).currency == "USD"  # the key itself is read
++    with pytest.raises(ValueError, match="currency"):
++        parse(block_k2(currency=currency), CP1_K2)
++
++
++def test_a_currency_without_a_scale_is_refused():
++    with pytest.raises(ValueError, match="`currency` is stated with `scale`"):
++        parse(forecast_block(base=NAMED_BASE, currency="GBP"), CP1)
++
++
++def test_a_currency_the_handoff_never_names_is_refused_and_the_one_it_names_is_read():
++    cp1 = CP1_K2.replace("US$ million", "GBP million").replace("US$ thousands", "GBP thousands")
++    cp1 = cp1.replace("US$m", "GBPm")
++    with pytest.raises(ValueError) as caught:
++        parse(block_k2(currency="USD"), cp1)
++    assert str(caught.value) == (
++        "CP-1 nowhere names `USD`: state `currency` as the three-letter code of the currency "
++        "CP-1 reports its figures in."
++    )
++    assert parse(block_k2(currency="GBP"), cp1).currency == "GBP"
++
++
++def test_the_unit_refusals_name_the_blocks_currency():
++    cp1 = CP1_K2.replace("US$ thousands", "GBP thousands").replace("US$m", "GBP m")
++    with pytest.raises(ValueError, match=re.escape("(GBP thousands, scale 1000)")):
++        parse(block_k2(currency="GBP", base={**K2_BASE, "undrawn": CHART_ROW}), cp1)
++
++
++# --- `currency` is named by CP-1 itself (F1 fix round 1) ----------------------------------------
++NOWHERE = (
++    "CP-1 nowhere names `{}`: state `currency` as the three-letter code of the currency CP-1 "
++    "reports its figures in."
++)
++
++
++def _headed(unit):
++    """CP-1 as it is really written: the unit is in a `###` heading, no table cell states it."""
++    return f"### Canonical statement data ({unit})\n\n{CP1}"
++
++
++def _currency_block(currency):
++    return forecast_block(base=NAMED_BASE, scale=1, currency=currency)
++
++
++def _layer_one_text(cp1, **changes):
++    return cp1 + "\n" + forecast_block(base=NAMED_BASE, downside_shock=None, **changes)
++
++
++def _task(cp1):
++    return types.SimpleNamespace(module_id="CP-2G", handoffs={"CP-1": cp1.encode()})
++
++
++def test_a_usd_block_over_a_sterling_handoff_is_refused_on_both_paths():  # (a)
++    cp1 = _headed("GBP millions")
++    block = _currency_block("USD")
++    (issue,) = cpos_launch._forecast_issues(_task(cp1), block)
++    assert issue.startswith(f"Forecast inputs: {NOWHERE.format('USD')}")
++    with pytest.raises(ValueError) as caught:
++        model_files(cp1.encode(), block.encode(), "CP-2G", history=True)
++    assert str(caught.value) == NOWHERE.format("USD")
++    layer_one = _layer_one_text(cp1, scale=1, currency="USD")
++    with pytest.raises(ValueError) as caught:  # the layer-1 handoff holds its own block
++        model_files(layer_one.encode(), layer_one.encode(), "CP-1", history=True)
++    assert str(caught.value) == NOWHERE.format("USD")
++
++
++def test_a_gbp_block_over_the_same_sterling_handoff_is_delivered_as_gbp_millions():  # (b)
++    cp1 = _headed("GBP millions")
++    assert cpos_launch._forecast_issues(_task(cp1), _currency_block("GBP")) == ()
++    assert _delivered_units(cp1, _currency_block("GBP")) == "GBP millions"
++    layer_one = _layer_one_text(cp1, scale=1, currency="GBP")
++    files = model_files(layer_one.encode(), layer_one.encode(), "CP-1", history=True)
++    assert json.loads(files["forecast_exact.json"])["units"] == "GBP millions"
++
++
++def test_a_gbp_block_over_a_usd_handoff_is_refused():  # (c)
++    (issue,) = cpos_launch._forecast_issues(_task(_headed("USD millions")), _currency_block("GBP"))
++    assert issue.startswith(f"Forecast inputs: {NOWHERE.format('GBP')}")
++
++
++def test_a_gbp_block_over_a_handoff_stating_only_usd_millions_is_refused():  # (h) plan test 4
++    cp1 = _with_unit_column(CP1, "USD millions")
++    with pytest.raises(ValueError) as caught:
++        parse(_currency_block("GBP"), cp1)
++    assert str(caught.value) == NOWHERE.format("GBP")
++
++
++def test_a_usd_row_whose_source_cell_mentions_a_eur_tranche_is_accepted():  # (d)
++    head = "| Metric | FY2024 | 9M 2025 | 9M 2024 |\n| --- | --- | --- | --- |"
++    cp1 = _headed("USD millions").replace(head, head.replace(" |\n", " | Source |\n") + " --- |")
++    for label, source in (
++        ("Total debt | 600 | 590 | 620", "EUR 500 million term loan"),
++        ("Cash and cash equivalents | 100 | 120 | 90", "p.5"),
++        ("Undrawn revolver | 50 | 50 | 50", "p.5"),
++    ):
++        cp1 = cp1.replace(f"| {label} |", f"| {label} | {source} |")
++    assert "| EUR 500 million term loan |" in cp1
++    block = _currency_block("USD")
++    assert cpos_launch._forecast_issues(_task(cp1), block) == ()
++    files = model_files(cp1.encode(), block.encode(), "CP-2G", history=True)
++    exact = json.loads(files["forecast_exact.json"])
++    assert exact["units"] == "USD millions"
++    assert exact["base"]["debt"]["amount"] == "600"
++
++
++def test_a_layer_one_block_with_scale_and_no_currency_is_withheld_never_usd_millions():  # (e)
++    text = _layer_one_text(_headed("US$m"), scale=1)
++    with pytest.raises(ValueError) as caught:
++        model_files(text.encode(), text.encode(), "CP-1", history=True)
++    assert str(caught.value) == "the forecast inputs state `scale` but not `currency`"
++
++
++def test_a_block_with_neither_key_still_reads_as_usd_millions():  # R3: retained blocks
++    text = _layer_one_text(_headed("US$m"))
++    files = model_files(text.encode(), text.encode(), "CP-1", history=True)
++    assert "units" not in json.loads(files["forecast_exact.json"])
++
++
++@pytest.mark.parametrize(
++    ("text", "currency", "named"),
++    [
++        ("### Statements (EURm)", "EUR", True),
++        ("| Cash | 9 | GBPk |", "GBP", True),
++        ("amounts in GBP000", "GBP", True),
++        ("GBPmn and GBPbn", "GBP", True),
++        ("sterling, GBP", "GBP", True),
++        ("revenue of £120m", "GBP", True),
++        ("revenue of €120m", "EUR", True),
++        ("revenue of US$120m", "USD", True),
++        ("usd millions", "USD", False),
++        ("CAD millions", "CAD", True),
++        ("revenue of $120m", "USD", False),
++        ("revenue of C$120m", "CAD", False),
++        ("USDA and GBPS", "USD", False),
++        ("revenue of £120m", "USD", False),
++        ("US$m", "GBP", False),
++        ("no unit stated", "EUR", False),
++    ],
++)
++def test_a_handoff_names_a_currency_by_code_or_sign_and_a_bare_dollar_sign_names_none(
++    text, currency, named
++):  # (f)
++    assert cpos_forecast._names_currency(text, currency) is named
++
++
++def test_the_forecast_instructions_suggest_no_currency_as_the_default():  # (g)
++    for block in (cpos_launch.FORECAST_BLOCK, cpos_launch.LAYER1_FORECAST_BLOCK):
++        assert "USD 20 million" not in block and "in USD millions where" not in block
++
++
++@pytest.mark.parametrize(
++    ("text", "currency", "named"),
++    [
++        ("all of net debt", "ALL", False),
++        ("net debt", "NET", False),
++        ("try again", "TRY", False),
++        ("ALL millions", "ALL", True),
++        ("us$m", "USD", True),
++        ("EURM", "EUR", True),
++    ],
++)
++def test_the_currency_code_is_matched_in_capitals_only(text, currency, named):  # F1 low L1
++    assert cpos_forecast._names_currency(text, currency) is named
++
++
++@pytest.mark.parametrize(
++    ("text", "currency", "named"),
++    [
++        ("Revenue (M€)", "EUR", True),
++        ("en m€", "EUR", True),
++        ("Statements (k€)", "EUR", True),
++        ("revenue 120m£", "GBP", True),
++        ("AUS$ 5m", "USD", False),
++        ("revenue of $120m", "USD", False),
++    ],
++)
++def test_a_euro_or_pound_sign_after_a_letter_names_its_currency(text, currency, named):  # L2
++    assert cpos_forecast._names_currency(text, currency) is named
++
++
++def test_a_refusal_text_does_not_fill_an_unstated_currency_with_usd():  # L4
++    assert cpos_forecast._unit_of(1000, None) == "thousands, scale 1000"
++    assert cpos_forecast._unit_of(1, None) == "millions, scale 1"
++    assert cpos_forecast._unit_of(1000, "GBP") == "GBP thousands, scale 1000"
++    assert cpos_forecast._scale_refusal({"scale": 10}) == (
++        "`scale` must be 1 (CP-1 prints millions) or 1000 (thousands)"
++    )
++    assert cpos_forecast._scale_refusal({"scale": 10, "currency": "GBP"}) == (
++        "`scale` must be 1 (CP-1 prints GBP millions) or 1000 (GBP thousands)"
++    )
++
++
++def test_the_acceptance_hint_ends_one_sentence_with_one_full_stop():  # L5
++    (issue,) = cpos_launch._forecast_issues(_task(_headed("GBP millions")), _currency_block("USD"))
++    assert issue == (
++        "Forecast inputs: CP-1 nowhere names `USD`: state `currency` as the three-letter code of "
++        "the currency CP-1 reports its figures in. Correct the block; if you cannot, set every "
++        "driver's values to [null, null, null] and say why in scope_limits."
++    )

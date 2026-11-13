@@ -25,14 +25,14 @@ def cp8_answer(context: dict, out: Path) -> str:
     that read the pack would write them. The checker stays the real one."""
     pack = json.loads((out / "inputs" / context["sources"]["changes.json"]).read_text())
 
-    def shown(side: dict, unit: str) -> str:
+    def shown(side: dict | None, unit: str) -> str:
+        if side is None or side["value"] is None:
+            return "Not stated"
         joined = f"{side['value']}{unit}" if unit in ("x", "%") else f"{side['value']} {unit}"
         return f"{joined} ({side['period']})"
 
     issuer = []
-    for m in pack["measures"]:
-        if m["difference"] is None:
-            continue
+    for m in pack["measures"]:  # one row for every pack measure, a missing value `Not stated`
         effect = (
             f"The pack's difference is {m['difference']}."
             if m["comparable"] == "yes"

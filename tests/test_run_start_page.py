@@ -236,7 +236,7 @@ def test_the_steps_each_pathway_shows_at_each_level(page):
     const out = {};
     for (const pathway of ['credit_snapshot', 'earnings_update', 'relative_value',
         'covenant_refinancing', 'distressed_restructuring', 'portfolio_decision',
-        'short_snapshot']) {
+        'lite_credit_assessment']) {
       pick('data-k="pathway"', pathway);
       out[pathway] = {};
       for (const l of ['basic', 'standard', 'advanced']) {
@@ -258,7 +258,7 @@ def test_the_steps_each_pathway_shows_at_each_level(page):
         "covenant_refinancing": {"basic": four, "standard": five, "advanced": five},
         "distressed_restructuring": {"basic": four, "standard": five, "advanced": five},
         "portfolio_decision": {"basic": four, "standard": five, "advanced": five},
-        "short_snapshot": {"basic": four, "standard": four, "advanced": four},
+        "lite_credit_assessment": {"basic": four, "standard": four, "advanced": five},
     }
     for pathway, levels in expected.items():
         assert {k: v for k, v in seen[pathway].items() if "Groups" not in k} == levels, pathway
@@ -370,7 +370,10 @@ def test_the_first_screen_is_documents_with_the_pill_and_purpose_shows_the_panel
     assert seen["documents"]["pillText"] == "Run readiness · appears once a purpose is chosen"
     assert seen["documents"]["scope"] == "" and seen["read"]["scope"] == ""
     assert seen["purpose"]["panel"] is True and seen["purpose"]["pill"] is False
-    assert "Credit Snapshot" in seen["purpose"]["scope"] and "modules" in seen["purpose"]["scope"]
+    assert (
+        "Full credit assessment" in seen["purpose"]["scope"]
+        and "modules" in seen["purpose"]["scope"]
+    )
     assert seen["start"]["panel"] is False and seen["start"]["pill"] is False
 
 
@@ -844,28 +847,91 @@ def test_the_review_shows_the_services_forecast_per_module(page):
     assert "confirmed when the summary is made" not in seen["ready"]
 
 
-def test_the_page_offers_the_short_snapshot_and_the_service_reviews_its_three_modules(page):
-    """Owner, 2026-11-11 ("3. approved"): its own pathway of CP-0, CP-1 and one CP-L10 page."""
+def test_the_page_offers_the_lite_credit_assessment_and_the_service_reviews_its_five_modules(page):
+    """The lite credit assessment (CP-0, CP-1, CP-1A, CP-2, CP-2A) is the second pathway offered.
+    The deactivated short credit snapshot is not offered at all."""
     seen = page.run(f"""
     const cards = [...document.querySelectorAll('#pathcards input[data-k="pathway"]')].map(e => ({{
-      value: e.value, text: e.closest('label').textContent}}));
-    await issuer('short_snapshot', [file('annual.txt', {json.dumps(REPORT)})]);
+      value: e.value, checked: e.checked, text: e.closest('label').textContent}}));
+    await issuer('lite_credit_assessment', [file('annual.txt', {json.dumps(REPORT)})]);
     const S = await review();
     return {{cards, S, shown: [...document.querySelectorAll('#rv-ready [data-module]')]
       .map(r => r.dataset.module).filter(id => id !== 'run'),
       facts: document.getElementById('rv-facts').textContent}};
     """)
-    card = next(c for c in seen["cards"] if c["value"] == "short_snapshot")
-    assert "Short Credit Snapshot" in card["text"]
-    names = "Source readiness, Financial foundation, Short credit snapshot"
-    assert f"3 modules: {names}" in card["text"]
-    assert len(seen["cards"]) == 7
+    values = [c["value"] for c in seen["cards"]]
+    assert values == [
+        "credit_snapshot",
+        "lite_credit_assessment",
+        "earnings_update",
+        "relative_value",
+        "covenant_refinancing",
+        "distressed_restructuring",
+        "portfolio_decision",
+    ]
+    assert "short_snapshot" not in values
+    assert not any("hort" in c["text"] for c in seen["cards"])
+    assert [c["value"] for c in seen["cards"] if c["checked"]] == ["credit_snapshot"]
+    card = next(c for c in seen["cards"] if c["value"] == "lite_credit_assessment")
+    assert "Lite credit assessment" in card["text"]
+    names = (
+        "Source readiness, Financial foundation, Business & governance, "
+        "Fundamental credit, Downside"
+    )
+    assert f"5 modules: {names}" in card["text"]
+    # The card agrees with the readiness rule (downside is Limited without legal documents).
+    assert (
+        "Filings with financial statements; the executed credit agreement if you have it "
+        "(the downside module is limited without it). No quotes."
+    ) in card["text"]
+    assert "No legal documents" not in card["text"]
+    assert (
+        "Full credit assessment"
+        in next(c for c in seen["cards"] if c["value"] == "credit_snapshot")["text"]
+    )
     summary = seen["S"]
     assert summary["error"] == "" and summary["digest"]
-    assert summary["modules"] == ["CP-0", "CP-1", "CP-L10"]
-    assert seen["shown"] == ["CP-0", "CP-1", "CP-L10"]
-    assert "Short Credit Snapshot" in seen["facts"]
+    assert summary["modules"] == ["CP-0", "CP-1", "CP-1A", "CP-2", "CP-2A"]
+    assert seen["shown"] == ["CP-0", "CP-1", "CP-1A", "CP-2", "CP-2A"]
+    assert "Lite credit assessment" in seen["facts"]
     assert "CP-DR" not in summary["modules"] and "CP-2E" not in summary["modules"]
+
+
+def test_the_page_default_is_the_full_credit_assessment_and_the_choices_are_one_labelled_group(
+    page,
+):
+    seen = page.run("""
+    const radios = [...document.querySelectorAll('#pathcards input[data-k="pathway"]')];
+    return {checked: radios.filter(e => e.checked).map(e => e.value),
+      names: [...new Set(radios.map(e => e.name))],
+      labelled: radios.every(e => document.querySelector(`label[for="${e.id}"]`)),
+      short: document.querySelectorAll('[value="short_snapshot"]').length};
+    """)
+    assert seen["checked"] == ["credit_snapshot"]
+    assert seen["names"] == ["pathway"]
+    assert seen["labelled"] is True
+    assert seen["short"] == 0
+
+
+def test_a_summary_for_the_deactivated_short_snapshot_is_refused_with_the_services_message(page):
+    """No card offers it. A summary asked for it anyway (a saved answers file, a script) is
+    refused by the service with its own message and carries no digest."""
+    seen = page.run(f"""
+    await issuer('lite_credit_assessment', [file('annual.txt', {json.dumps(REPORT)})]);
+    const sent = answers();
+    sent.context.run.pathway = 'short_snapshot';
+    let refusal = '', digest = null;
+    try {{
+      const got = await call('POST', `/api/submissions/${{SUB}}/summary`, JSON.stringify(sent));
+      refusal = got.error; digest = got.digest || null;
+    }} catch (err) {{ refusal = err.message; }}
+    return {{refusal, digest}};
+    """)
+    assert (
+        seen["refusal"]
+        == "The short credit snapshot is deactivated. Use the lite credit assessment."
+    )
+    assert seen["digest"] is None
 
 
 def test_the_services_outcome_replaces_the_confirmed_when_the_summary_is_made_check(page):
@@ -1530,7 +1596,7 @@ def test_a_finished_runs_report_and_submitter_show_when_the_library_is_served(
     assert '<ol class="tl tl-v">' in dom and '<li class="tl-i" aria-current="true">' in dom
     assert f'href="#W-Overview/overview?c={record.id}"' in dom
     assert (
-        '<p class="tl-t">Credit snapshot</p>' in dom
+        '<p class="tl-t">Full credit assessment</p>' in dom
         and '<div class="tl-d">31 March 2025</div>' in dom
     )
     assert f">{record.id}<" not in dom
@@ -2027,6 +2093,57 @@ def test_a_reload_keeps_the_lock_and_does_not_carry_twice(page_from):
     )
     assert (third["rows"], third["run"]) == (1, run_id)
     assert "was not used" not in third["msg"] and "Your earlier answers are back." in third["msg"]
+
+
+def test_starting_from_an_offered_pathway_run_with_an_executed_agreement_shows_the_plain_message(
+    page_from_executed,
+):
+    """Before the lite branch (f628136) startFrom discarded fill's warnings: this carry showed the
+    plain, non-error message below. The reset of an executed agreement with no chosen file is by
+    design and stays silent there."""
+    page, run_id = page_from_executed
+    seen = page.run(
+        "return {msg: $('loadmsg').textContent, tone: $('loadmsg').dataset.tone || '',"
+        " carried: CARRIED.fields.has('|pathway')};",
+        path=f"/?from={run_id}",
+    )
+    assert seen["msg"] == (
+        f"Started from run {run_id}: 1 document and its answers carried over. "
+        "The dates and the submitter are not."
+    )
+    assert seen["tone"] == "" and seen["carried"] is True
+
+
+def test_starting_from_an_earlier_short_snapshot_run_keeps_the_default_pathway_and_says_so(
+    root, tmp_path, monkeypatch, fake_env
+):
+    """The short credit snapshot is no longer offered: the Full credit assessment stays selected,
+    the pathway is not marked as carried from the earlier run, and the message says why."""
+    from dataclasses import replace
+
+    def edit(folder: Path) -> None:
+        stored = json.loads((folder / "context.json").read_text("utf-8"))
+        stored["run"]["pathway"] = "short_snapshot"
+        (folder / "context.json").write_text(json.dumps(stored), encoding="utf-8")
+        lay = layout(root)
+        record = next(r for r in runs.load_all(lay) if r.id == folder.name)
+        runs.save(lay, replace(record, pathway="short_snapshot"))
+
+    with _earlier_run(root, tmp_path, monkeypatch, fake_env, edit) as (served, run_id):
+        seen = served.run(
+            """
+            return {pathway: build().run.pathway, run: CARRIED.run,
+              carriedPathway: CARRIED.fields.has('|pathway'),
+              msg: $('loadmsg').textContent};
+            """,
+            path=f"/?from={run_id}",
+        )
+    assert seen["run"] == run_id
+    assert seen["pathway"] == "credit_snapshot"
+    assert seen["carriedPathway"] is False
+    assert "short credit snapshot is no longer offered" in seen["msg"]
+    assert "Full credit assessment" in seen["msg"]
+    assert "not applied" not in seen["msg"] and "attachments." not in seen["msg"]
 
 
 def test_from_a_run_without_stored_documents_locks_identity_only(page_from_bare):
@@ -2728,7 +2845,7 @@ def test_a_refused_listing_is_shown_and_carries_nothing(root, tmp_path, monkeypa
         "covenant_refinancing",
         "distressed_restructuring",
         "portfolio_decision",
-        "short_snapshot",
+        "lite_credit_assessment",
     ],
 )
 def test_no_module_code_is_shown_on_any_stage_at_any_level_of_a_pathway(page, pathway):
@@ -2819,36 +2936,6 @@ def test_a_service_refusal_naming_a_module_code_is_shown_with_the_modules_name(p
     )
     assert "--modules Source readiness: fills no" in seen["summary"]
     assert "delivery_scope: Research questions is outside the named scope" in seen["submit"]
-    assert not re.search(r"\bCP-[A-Z0-9]+\b", seen["summary"] + seen["submit"])
-
-
-def test_a_short_snapshot_refusal_naming_module_codes_is_shown_with_the_modules_names(page):
-    """The Short Credit Snapshot's service refusals (a missing CP-1, a CP-L10 table) name modules by
-    code; the analyst reads the names, in the summary error and in the submit error."""
-    seen = page.run(
-        """
-    await issuer('short_snapshot', [file('annual.txt', REPORT_TEXT)]);
-    const real = window.fetch;
-    const refuse = text => new Response(JSON.stringify({error: text}),
-      {status: 400, headers: {'Content-Type': 'application/json'}});
-    window.fetch = async (path, init) => String(path).endsWith('/summary')
-      ? refuse('CP-L10 needs CP-1 in the run: missing CP-1') : real(path, init);
-    await review();
-    const summary = $('rv-state').textContent;
-    window.fetch = real;
-    SUMMARY = null; RENDERED = null;
-    await review();
-    tickAll(); approve();
-    window.fetch = async (path, init) => String(path).endsWith('/submit')
-      ? refuse('CP-L10: no Key figures table; CP-1 handoff missing') : real(path, init);
-    document.getElementById('submit').click();
-    for (let i = 0; i < 100 && !$('rv-submit-error').textContent; i++) await settle(50);
-    return {summary, submit: $('rv-submit-error').textContent};
-    """.replace("REPORT_TEXT", json.dumps(REPORT))
-    )
-    assert "Short credit snapshot needs Financial foundation in the run" in seen["summary"]
-    assert "missing Financial foundation" in seen["summary"]
-    assert "no Key figures table" in seen["submit"] and "Short credit snapshot" in seen["submit"]
     assert not re.search(r"\bCP-[A-Z0-9]+\b", seen["summary"] + seen["submit"])
 
 
@@ -3649,7 +3736,7 @@ def test_the_scope_line_shows_after_a_reload_on_any_step_but_documents(page):
     """)
     assert (
         seen["documents"] == ""
-        and "Credit Snapshot" in seen["confirm"]
+        and "Full credit assessment" in seen["confirm"]
         and "modules" in seen["confirm"]
     )
 

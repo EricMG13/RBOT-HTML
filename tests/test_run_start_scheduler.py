@@ -83,6 +83,56 @@ def test_a_submission_becomes_one_running_run_with_its_context(root, fake_env):
     w.close()
 
 
+SHORT_DEACTIVATED = "The short credit snapshot is deactivated. Use the lite credit assessment."
+
+
+def short_answers() -> Answers:
+    answers = answers_for()
+    answers["context"]["run"]["pathway"] = "short_snapshot"
+    return answers
+
+
+def test_a_short_snapshot_summary_is_refused_with_the_deactivation_message(root):
+    sid = upload(root)
+    got = submissions.summary(layout(root), sid, short_answers(), cap=settings(root).cap)
+    assert got["error"] == SHORT_DEACTIVATED
+    assert "digest" not in got or got["digest"] == ""
+
+
+def test_a_short_snapshot_submission_is_refused_and_nothing_starts(root, fake_env):
+    fake_env({"sleep": 30})
+    sid = upload(root)
+    w = Scheduler(settings(root))
+    with pytest.raises(Refused, match="short credit snapshot is deactivated"):
+        w.submit(sid, short_answers(), "no-digest-can-exist-for-it")
+    assert load_all(layout(root)) == []
+    assert list(layout(root).drops.iterdir()) == []
+    w.close()
+
+
+def test_a_recorded_short_snapshot_submission_returns_its_record_and_a_new_one_is_refused(
+    root, fake_env
+):
+    fake_env({"sleep": 30})
+    sid = upload(root)
+    w = Scheduler(settings(root))
+    record = Record("20261109-000001-01", "short_snapshot", "Acme Corp", "queued", "t")
+    w._put(replace(record, submission=sid))
+    assert w.submit(sid, short_answers(), "any").id == record.id  # idempotent, as documented
+    with pytest.raises(Refused, match="short credit snapshot is deactivated"):
+        w.submit(upload(root), short_answers(), "any")
+    w.close()
+
+
+def test_a_lite_credit_assessment_summary_is_accepted(root):
+    answers = answers_for()
+    answers["context"]["run"]["pathway"] = "lite_credit_assessment"
+    sid = upload(root)
+    got = submissions.summary(layout(root), sid, answers, cap=settings(root).cap)
+    assert got["error"] == "", got["error"]
+    assert got["modules"] == ["CP-0", "CP-1", "CP-1A", "CP-2", "CP-2A"]
+
+
 def test_submit_twice_and_from_two_threads_gives_one_run(root, fake_env):
     fake_env({"sleep": 30})
     answers = answers_for()

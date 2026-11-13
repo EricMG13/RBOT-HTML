@@ -11,8 +11,11 @@
     {
       "consumed_path": "skills/cp-2g-forward-credit-model/references/REF_CP-2G_STEPS.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-2g-forward-credit-model/references/REF_CP-2G_STEPS.md",
-      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-2g-forward-credit-model/references/REF_CP-2G_STEPS.md",
-      "sha256": "b59d94f04dd2b7d4f243856433bdc46896be3765faf9d20acd77e0f56cf57536"
+      "exact_copy_found_at": null,
+      "edited_copy_of": "/Users/ericguei/Documents/cp-os/skills/cp-2g-forward-credit-model/references/REF_CP-2G_STEPS.md",
+      "sha256": "7db9c915f31c6d9722da13551053c7c4830c2e183097df4c33c92a674fd7ff13",
+      "source_sha256": "b59d94f04dd2b7d4f243856433bdc46896be3765faf9d20acd77e0f56cf57536",
+      "edit": "named edit: assumption-register rule sentence added: each T2H.3 row's `case` is base, upside or downside and the register carries rows for both `base` and `downside` (caos line 19); no other caos hunk ported (not the `cp2g.requires_base_and_downside_cases` checker id, `match: leading_word`, or the column splits); wording from caos-databricks vendor/deploy-v (last changed 592ee83a, repo HEAD dfff264); sha256 is this edited file, source_sha256 the previously archived file"
     },
     {
       "consumed_path": "skills/cp-2e-macro-fx-hedging-sensitivity/SKILL.md",
@@ -35,20 +38,28 @@
     {
       "consumed_path": "skills/cp-dr-deep-research/SKILL.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-dr-deep-research/SKILL.md",
-      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-dr-deep-research/SKILL.md",
-      "sha256": "bcf7836d45abd34e15188ed8f580c69079bad62012cb1921fabbdc4bc9372fc3"
+      "exact_copy_found_at": null,
+      "note": "not a copy of the live cp-os file: this file is the live cp-os file (b57a344, sha256 0cc76aea..., which is source_sha256) plus the named edits in `edit`",
+      "sha256": "97580b90453a39ad8132f3efd87e46785645be1a476ac1d1901bd7b3aaa079e5",
+      "source_sha256": "0cc76aea6e227ff923ca466fc000a80b1f2f6ef3b1fb74b78203e8601d507207",
+      "edit": "Replaced 2026-11-13 by cp-os version 2.0 (cp-os HEAD b57a344, file last changed in 5a78f93), byte-for-byte, then named edits 2a and 2b: (2a) the open-web limits in RESEARCH ITEMS, ANSWER RULES (LOCAL limitation) and CAPABILITY GATE, and (2a-4, fix round 1) the pack-tools-only reading and TDR.6 quote clauses, made conditional on the project's web-search rules, with section C of the step bundle governing web use when granted; (2b) the UNRESOLVED gap row's claim_type is `gap` and missing evidence is Complete with Gaps, never Blocked (wording from caos-databricks vendor/deploy-v c746ad67); sha256 is this edited file, source_sha256 the byte-for-byte copy of cp-os"
     },
     {
       "consumed_path": "skills/cp-dr-deep-research/references/REF_CP-DR_STEPS.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-dr-deep-research/references/REF_CP-DR_STEPS.md",
-      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-dr-deep-research/references/REF_CP-DR_STEPS.md",
-      "sha256": "a75bd020e039a67e37063b0475718aebac4a9fc3107819b9d2987b4e1f30643c"
+      "exact_copy_found_at": null,
+      "edited_copy_of": "/Users/ericguei/Documents/cp-os/skills/cp-dr-deep-research/references/REF_CP-DR_STEPS.md",
+      "sha256": "fb9994d3ca4fc765e208e2f63cb88c1d7f00cda426ae4f95cfae19b9860c6a40",
+      "source_sha256": "a75bd020e039a67e37063b0475718aebac4a9fc3107819b9d2987b4e1f30643c",
+      "edit": "Named edit 2b: gap row takes claim_type `gap` (step D) and missing evidence is Complete with Gaps, never Blocked (step F); wording from caos-databricks vendor/deploy-v c746ad67; sha256 is this edited file, source_sha256 the byte-for-byte copy of cp-os b57a344"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-2h-ratings-migration-trigger/SKILL.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-2h-ratings-migration-trigger/SKILL.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-2h-ratings-migration-trigger/SKILL.md",
-      "sha256": "acf25aaea52bee5da74069fdfe3013c511b4cb2f3e1cb9d3c99fc950a27a62bb"
+      "sha256": "19c0a304a1dc3b9a6fa8e94f7256582da0ad22b83de8cd21b5e3a770827e2ad9",
+      "source_sha256": "acf25aaea52bee5da74069fdfe3013c511b4cb2f3e1cb9d3c99fc950a27a62bb",
+      "edit": "named edit: `unknown` dropped from the critical_cell_values_casefold blocklist (cp-os 115f664, skills/cp-2h-ratings-migration-trigger/SKILL.md); wording from cp-os 115f664; sha256 is this edited file, source_sha256 the previously archived file"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-2h-ratings-migration-trigger/references/REF_CP-2H_STEPS.md",
@@ -80,9 +91,10 @@
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-5-evidence-trace-validator/references/CP-5_RUNBOOK.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-5-evidence-trace-validator/references/CP-5_RUNBOOK.md",
-      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-5-evidence-trace-validator/references/CP-5_RUNBOOK.md",
-      "sha256": "c053b622c63b242364a8e53c1b2e676f6f02c1ce6a4f7e87728c885e9fd68434",
-      "use": "unchanged selected methodology; historical source is evidence, not inherited authority"
+      "exact_copy_found_at": "/Users/ericguei/Documents/caos-databricks/vendor/deploy-v/skills/cp-5-evidence-trace-validator/references/CP-5_RUNBOOK.md",
+      "sha256": "b313093b43fc2f8ca6c32c2afc478f082f815a5e7f97caa91c8fbe83a659fb06",
+      "use": "byte-for-byte copy of caos-databricks vendor/deploy-v (last changed c746ad67, repo HEAD dfff264); the only change from the previously archived text is the CP-5 ordering: CP-6 and CP-6A run after CP-5 and are not its input: the six ordering hunks of the caos copy (Upstream lines, UP/DOWN lines, the `Downstream (QA gate)` line); the caos copy differs from the archived file in nothing else; historical evidence, not inherited authority",
+      "source_sha256": "c053b622c63b242364a8e53c1b2e676f6f02c1ce6a4f7e87728c885e9fd68434"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-5-evidence-trace-validator/references/REF_CP-5_STEPS.md",
@@ -94,9 +106,10 @@
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-5-evidence-trace-validator/references/REF_CP-5A_STEPS.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-5-evidence-trace-validator/references/REF_CP-5A_STEPS.md",
-      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-5-evidence-trace-validator/references/REF_CP-5A_STEPS.md",
-      "sha256": "e93781b8055e0c33e744b06fb0706161885400d6f8c7ef07a743497d4a865e8d",
-      "use": "unchanged selected methodology; historical source is evidence, not inherited authority"
+      "exact_copy_found_at": "/Users/ericguei/Documents/caos-databricks/vendor/deploy-v/skills/cp-5-evidence-trace-validator/references/REF_CP-5A_STEPS.md",
+      "sha256": "4940a15162bb1f3a2063603cab8637573b5fd2da8c4e64b10759d75a8f207a16",
+      "use": "byte-for-byte copy of caos-databricks vendor/deploy-v (last changed c746ad67, repo HEAD dfff264); the only change from the previously archived text is the CP-5 ordering: step 4 input line: `CP-6 and CP-6A run after CP-5 and are not its input`; the caos copy differs from the archived file in nothing else; historical evidence, not inherited authority",
+      "source_sha256": "e93781b8055e0c33e744b06fb0706161885400d6f8c7ef07a743497d4a865e8d"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-5-evidence-trace-validator/scripts/confidence_score.py",
@@ -108,9 +121,12 @@
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-6-ic-debate-challenge/SKILL.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-6-ic-debate-challenge/SKILL.md",
-      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-6-ic-debate-challenge/SKILL.md",
-      "sha256": "0ae74db02dd569fe7805e62a661f22cd436494183ba5cb928f8be37aa549a96b",
-      "use": "unchanged selected methodology; historical source is evidence, not inherited authority"
+      "exact_copy_found_at": null,
+      "note": "not a copy of the live cp-os file (sha256 57e995fc...): this file is the cp-os initial-commit text (a31f3f5, sha256 0ae74db0...) plus the named edits in `edit`",
+      "sha256": "31a9286b6fc23f7c683f8c9a746db9bc9ce7bdcc45d7598ef7f789b28e7cfac8",
+      "use": "selected methodology with named CP-5/CP-6 ordering edits (see `edit`); historical source is evidence, not inherited authority",
+      "source_sha256": "0ae74db02dd569fe7805e62a661f22cd436494183ba5cb928f8be37aa549a96b",
+      "edit": "named edits (CP-5 is CP-6's upstream QA gate, never its consumer), all from caos-databricks vendor/deploy-v (last changed 99069f83, repo HEAD dfff264): Dependencies sentence `Its QA gate is CP-5: CP-6 runs only after CP-5's handoff is accepted (Passed or Restricted), so CP-5 is upstream of CP-6 and never its consumer.` (caos line 8); in both header blocks `**Downstream (QA):** CP-5, CP-5A` replaced by `**Upstream (QA gate):** CP-5, CP-5A (accepted before this module runs; CP-5 is never its consumer)` placed before `**Downstream (Analytical):**` (caos 175, 339); in both UP/DOWN lines `| DOWN (QA): CP-5, CP-5A` replaced by `| UP (QA gate): CP-5, CP-5A` before `| DOWN (Analytical)` (caos 260, 422); no other caos hunk ported; sha256 is this edited file, source_sha256 the previously archived file"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-6-ic-debate-challenge/references/REF_CP-6_STEPS.md",
@@ -150,37 +166,40 @@
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-4-legal-covenant-interpreter/SKILL.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-4-legal-covenant-interpreter/SKILL.md",
-      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-4-legal-covenant-interpreter/SKILL.md",
-      "sha256": "8a3b12f3f37359463434177759febac1ffcf0f8c484aa0508eb7119f7b6548b2",
-      "use": "unchanged selected legal interpretation methodology; historical evidence, not inherited authority"
+      "exact_copy_found_at": null,
+      "edited_copy_of": "/Users/ericguei/Documents/caos-databricks/vendor/deploy-v/skills/cp-4-legal-covenant-interpreter/SKILL.md",
+      "sha256": "f9387cf2e5afc0f934f3fa909de7e46c2ea5cb85b94972f2d86535d6204c4025",
+      "use": "selected legal interpretation methodology with a named edit (see `edit`); historical evidence, not inherited authority",
+      "source_sha256": "40ebb2613562b4fc36d7880aa5ed04a88bbc4648ee9bc157f41f61d77150f6f7",
+      "edit": "qa_status map sentence removed from common rule 10 (host overrides qa_status; canon D1 map not supplied here); wording from caos-databricks vendor/deploy-v (last changed 2975872f, repo HEAD dfff264); sha256 is this edited file, source_sha256 the byte-for-byte copy"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-4-legal-covenant-interpreter/references/CP-4_RUNBOOK.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-4-legal-covenant-interpreter/references/CP-4_RUNBOOK.md",
-      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-4-legal-covenant-interpreter/references/CP-4_RUNBOOK.md",
-      "sha256": "abe96a72629686818d5697fbf7a9ccedaf90c3f6d80ca8c46fa3dd27b461ad57",
-      "use": "unchanged selected legal interpretation methodology; historical evidence, not inherited authority"
+      "exact_copy_found_at": "/Users/ericguei/Documents/caos-databricks/vendor/deploy-v/skills/cp-4-legal-covenant-interpreter/references/CP-4_RUNBOOK.md",
+      "sha256": "48b376e145791de99190be245973d6f05c730ed1a6573461b55ea2ce51298b0f",
+      "use": "byte-for-byte copy of caos-databricks vendor/deploy-v (last changed 592ee83a, repo HEAD dfff264); historical evidence, not inherited authority"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-4-legal-covenant-interpreter/references/REF_CP-4_STEPS.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-4-legal-covenant-interpreter/references/REF_CP-4_STEPS.md",
-      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-4-legal-covenant-interpreter/references/REF_CP-4_STEPS.md",
-      "sha256": "ef5eb569be59ec30dd3a66c1bcc81c5cc0bcc2e9d2ac3909b04caa23339b6b94",
-      "use": "unchanged selected legal interpretation methodology; historical evidence, not inherited authority"
+      "exact_copy_found_at": "/Users/ericguei/Documents/caos-databricks/vendor/deploy-v/skills/cp-4-legal-covenant-interpreter/references/REF_CP-4_STEPS.md",
+      "sha256": "536165daad72db3cc8541163db77c89b64b797f22374f84c69772bcaa3efc358",
+      "use": "byte-for-byte copy of caos-databricks vendor/deploy-v (last changed 1aeaa27f, repo HEAD dfff264); historical evidence, not inherited authority"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-4-legal-covenant-interpreter/references/CP-4B_RUNBOOK.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-4-legal-covenant-interpreter/references/CP-4B_RUNBOOK.md",
-      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-4-legal-covenant-interpreter/references/CP-4B_RUNBOOK.md",
-      "sha256": "31ed040b5604c63dac454a87206036f9b9a17f160843232d755cff4e48a019c1",
-      "use": "unchanged selected historical methodology; current project transport/authority governs"
+      "exact_copy_found_at": "/Users/ericguei/Documents/caos-databricks/vendor/deploy-v/skills/cp-4-legal-covenant-interpreter/references/CP-4B_RUNBOOK.md",
+      "sha256": "3569763fb8504b08b8cce6d2ffb15ca247f43d44f77d3339de2777bdd0e0344f",
+      "use": "byte-for-byte copy of caos-databricks vendor/deploy-v (last changed 592ee83a, repo HEAD dfff264); historical evidence, not inherited authority"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-4-legal-covenant-interpreter/references/REF_CP-4B_STEPS.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-4-legal-covenant-interpreter/references/REF_CP-4B_STEPS.md",
-      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-4-legal-covenant-interpreter/references/REF_CP-4B_STEPS.md",
-      "sha256": "62c3fc234a4eeab776af3233d5013eb45ce2eebe53d8c612948b00b97cad284e",
-      "use": "unchanged selected historical methodology; current project transport/authority governs"
+      "exact_copy_found_at": "/Users/ericguei/Documents/caos-databricks/vendor/deploy-v/skills/cp-4-legal-covenant-interpreter/references/REF_CP-4B_STEPS.md",
+      "sha256": "8a0cf2ed16693efa1a22b5c9bfbb7d3f697ac0cfe23319bdb784029094d02b64",
+      "use": "byte-for-byte copy of caos-databricks vendor/deploy-v (last changed 592ee83a, repo HEAD dfff264); historical evidence, not inherited authority"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-4-legal-covenant-interpreter/references/CP-4D_SCHEMA_REFERENCE.md",
@@ -192,23 +211,26 @@
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-4-legal-covenant-interpreter/references/CP-4A_RUNBOOK.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-4-legal-covenant-interpreter/references/CP-4A_RUNBOOK.md",
-      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-4-legal-covenant-interpreter/references/CP-4A_RUNBOOK.md",
-      "sha256": "1ca9d2d86d40772d6c4a1df3052af174ab10ee80a27460dfcee0de93a227e5bc",
-      "use": "unchanged selected historical methodology; current project transport/authority governs"
+      "exact_copy_found_at": "/Users/ericguei/Documents/caos-databricks/vendor/deploy-v/skills/cp-4-legal-covenant-interpreter/references/CP-4A_RUNBOOK.md",
+      "sha256": "478017a8aeaa47588a5bcc20ca8820054b7140fa28e41ed194f571040366f385",
+      "use": "byte-for-byte copy of caos-databricks vendor/deploy-v (last changed 1aeaa27f, repo HEAD dfff264); historical evidence, not inherited authority"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-4-legal-covenant-interpreter/references/REF_CP-4A_STEPS.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-4-legal-covenant-interpreter/references/REF_CP-4A_STEPS.md",
-      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-4-legal-covenant-interpreter/references/REF_CP-4A_STEPS.md",
-      "sha256": "30cf03f343a9153aa85d6492e6bad519ab5d639395dae2b686de4b8276764e98",
-      "use": "unchanged selected historical methodology; current project transport/authority governs"
+      "exact_copy_found_at": "/Users/ericguei/Documents/caos-databricks/vendor/deploy-v/skills/cp-4-legal-covenant-interpreter/references/REF_CP-4A_STEPS.md",
+      "sha256": "00763966ffa099f598558a9539ebb094b16d32d669cc9d81e9e7bd0fda2211e2",
+      "use": "byte-for-byte copy of caos-databricks vendor/deploy-v (last changed 1aeaa27f, repo HEAD dfff264); historical evidence, not inherited authority"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-4c-restructuring-fulcrum/SKILL.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-4c-restructuring-fulcrum/SKILL.md",
-      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-4c-restructuring-fulcrum/SKILL.md",
-      "sha256": "9e1a16330a06e98cd22ef7aa97be526c131d962ec3d3ff1ef9a3e42ca9bb311c",
-      "use": "Unchanged historical restructuring method/helper; current project instructions govern scope and transport"
+      "exact_copy_found_at": null,
+      "edited_copy_of": "/Users/ericguei/Documents/caos-databricks/vendor/deploy-v/skills/cp-4c-restructuring-fulcrum/SKILL.md",
+      "sha256": "7c18e46a9eb9b2de9e3e1e708f6b1eadcc70411035d9b850cd81c27c2b645856",
+      "use": "selected historical restructuring method with named edits (see `edit`); current project instructions govern scope and transport",
+      "source_sha256": "dc1666f10022fc121dd2db19440e8e00cc5e91f5791cef5fbdd83c4c6a856da2",
+      "edit": "qa_status map sentence removed from common rule 10 (host overrides qa_status; canon D1 map not supplied here); LITE-profile sentence removed from Dependencies and the whole `## LITE profile compatibility` section removed (no LITE route, no UPGRADE, no CP-L10 screen substitute here); named edit E4: the two words left pointing at the removed profile distinction cut, `In FULL_CREDIT_32, requires` -> `Requires` (Dependencies, line 8) and `requires CP-2A in both profiles;` -> `requires CP-2A;` (line 12); source text is caos-databricks vendor/deploy-v (last changed 592ee83a, repo HEAD dfff264); the E4 cut is a CP-OS edit (caos has the words E4 removes); sha256 is this edited file, source_sha256 the byte-for-byte copy"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-4c-restructuring-fulcrum/references/REF_CP-4C_STEPS.md",
@@ -451,16 +473,19 @@
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-2d-liquidity-cash-flow-bridge/SKILL.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-2d-liquidity-cash-flow-bridge/SKILL.md",
-      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-2d-liquidity-cash-flow-bridge/SKILL.md",
-      "sha256": "5009ee06f28d739d7ba921299c7d14465b28177ab3fa61372c173028f9c6fd67",
-      "use": "Selected analytical breadth/labels; current project instructions govern transport, no inherited export/approval/completeness rulings."
+      "exact_copy_found_at": null,
+      "edited_copy_of": "/Users/ericguei/Documents/caos-databricks/vendor/deploy-v/skills/cp-2d-liquidity-cash-flow-bridge/SKILL.md",
+      "sha256": "8a2e0c15b24c7fabe4068c5f6f79ca2951b43129c96c8967901ccf95c5aea111",
+      "use": "Selected analytical breadth/labels; current project instructions govern transport, no inherited export/approval/completeness rulings.",
+      "source_sha256": "38ef402cc68f0844e3832def74a123229aa30132058cd1b4ad6a3439523f53d8",
+      "edit": "qa_status map sentence removed from common rule 10 (host overrides qa_status; canon D1 map not supplied here); wording from caos-databricks vendor/deploy-v (last changed 592ee83a, repo HEAD dfff264); sha256 is this edited file, source_sha256 the byte-for-byte copy"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-2d-liquidity-cash-flow-bridge/references/REF_CP-2D_STEPS.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-2d-liquidity-cash-flow-bridge/references/REF_CP-2D_STEPS.md",
-      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-2d-liquidity-cash-flow-bridge/references/REF_CP-2D_STEPS.md",
-      "sha256": "84bdff527a5575b900fc94d2bf94eb433a508f8c2883ee84f40ca9dcf94ce595",
-      "use": "Selected analytical breadth/labels; current project instructions govern transport, no inherited export/approval/completeness rulings."
+      "exact_copy_found_at": "/Users/ericguei/Documents/caos-databricks/vendor/deploy-v/skills/cp-2d-liquidity-cash-flow-bridge/references/REF_CP-2D_STEPS.md",
+      "sha256": "2e03ebd53839b0744912cc07368ca498b24ffacffd55ee0c31000257c4de7e1b",
+      "use": "byte-for-byte copy of caos-databricks vendor/deploy-v (last changed 592ee83a, repo HEAD dfff264); historical evidence, not inherited authority"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-2d-liquidity-cash-flow-bridge/references/CP-2D_SCHEMA_REFERENCE.md",
@@ -509,6 +534,7 @@
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-0-source-readiness/SKILL.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-0-source-readiness/SKILL.md",
       "sha256": "20a3634526648cd4983fcfd412ba68162b9e832781abd7c90b5caa7a236a3e1d",
+      "deploy_v_check": "byte-identical to Deploy V c4d2e35611151a7f5b45dbb759d92e968c5478b7 skills/cp-0-source-readiness/SKILL.md (checked 2026-11-13, git blob hash equal); sent to CP-OS CP-0 from Task 3 of the Deploy V methods plan",
       "source_revision": "cp-os e67bf0cda2dc80d7a744bee371c4fb3c7b8b8df7 (selected files clean)",
       "use": "Preparation/readiness analytical duties and P1-P8 packaging evidence. Current project rules govern transport, Excel input only and no agents; historical approval/export/role machinery is not inherited authority."
     },
@@ -553,10 +579,13 @@
     {
       "consumed_path": "skills/cp-1d-earnings-quality/SKILL.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-1d-earnings-quality/SKILL.md",
-      "sha256": "9682b2da83fe7fd3288cae31fc5d1cf7f6d2daa3de2fac297637fe13d5e8e2ae",
-      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-1d-earnings-quality/SKILL.md",
+      "sha256": "56b74b7274a9f0130419efd52e4b9dfe0b8820cff8749bee762e3266980ec344",
+      "exact_copy_found_at": null,
+      "edited_copy_of": "/Users/ericguei/Documents/cp-os/skills/cp-1d-earnings-quality/SKILL.md",
       "source_revision": "cp-os e67bf0cda2dc80d7a744bee371c4fb3c7b8b8df7 (selected files clean)",
-      "use": "Selected CP-1D/absorbed CP-1E analytical duties; current project transport, orchestration, delivery and Excel-input-only rules govern."
+      "use": "Selected CP-1D/absorbed CP-1E analytical duties; current project transport, orchestration, delivery and Excel-input-only rules govern.",
+      "source_sha256": "9682b2da83fe7fd3288cae31fc5d1cf7f6d2daa3de2fac297637fe13d5e8e2ae",
+      "edit": "named edit: hard rule 7 added: an empty CP-1 bridge gives T1D.1-T1D.4 one `NONE` row each and Steps 5-7 still run (caos line 165), and the completion check `(one `NONE` row when the bridge is empty)` (caos line 183); no other caos hunk ported; wording from caos-databricks vendor/deploy-v (last changed 99069f83, repo HEAD dfff264); sha256 is this edited file, source_sha256 the previously archived file"
     },
     {
       "consumed_path": "skills/cp-1d-earnings-quality/references/CP-1D_SCHEMA_REFERENCE.md",
@@ -644,7 +673,8 @@
       "consumed_path": "skills/cp-0-source-readiness/references/REF_CP-0_STEPS.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-0-source-readiness/references/REF_CP-0_STEPS.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-0-source-readiness/references/REF_CP-0_STEPS.md",
-      "sha256": "d367c334f529a33e371b6c9568b5dce8d487e0f0d1bee3e8c15830555e46e78a"
+      "sha256": "d367c334f529a33e371b6c9568b5dce8d487e0f0d1bee3e8c15830555e46e78a",
+      "deploy_v_check": "byte-identical to Deploy V c4d2e35611151a7f5b45dbb759d92e968c5478b7 skills/cp-0-source-readiness/references/REF_CP-0_STEPS.md (checked 2026-11-13, git blob hash equal); sent to CP-OS CP-0 from Task 3 of the Deploy V methods plan"
     },
     {
       "consumed_path": "skills/cp-1b-earnings-delta/SKILL.md",
@@ -799,9 +829,11 @@
     {
       "consumed_path": "skills/cp-3-relative-value-security-selection/SKILL.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-3-relative-value-security-selection/SKILL.md",
-      "exact_copy_found_at": null,
-      "sha256": "7e85b2f545fffcb3ad17f4997e5c577ae9620d279f1ffe8e12aefa8ce38abcd1",
-      "note": "archived before 2026-11-10; cp-os at b57a344 holds a later revision"
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-3-relative-value-security-selection/SKILL.md",
+      "sha256": "9e4ad1c1f383323f93d5f7d49865621af7d599df32c64b989f8d8fe7ea53dbe4",
+      "note": "archived before 2026-11-10 as the cp-os initial-commit text (a31f3f5); after the named edit below it is identical to the live cp-os file (cp-os b57a344, file last changed in 115f664)",
+      "source_sha256": "7e85b2f545fffcb3ad17f4997e5c577ae9620d279f1ffe8e12aefa8ce38abcd1",
+      "edit": "named edit: `not assessable` dropped from the critical_cell_values_casefold blocklist in all three places: CP-3 and its CP-3A and CP-3B copies (cp-os 115f664, skills/cp-3-relative-value-security-selection/SKILL.md); wording from cp-os 115f664; sha256 is this edited file, source_sha256 the previously archived file"
     },
     {
       "consumed_path": "skills/cp-3-relative-value-security-selection/references/CP-3A_SCHEMA_REFERENCE.md",
@@ -982,7 +1014,77 @@
       "archive_path": "docs/reuse/selected-methods/skills/cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md",
       "sha256": "5028a6476cdff812a457bdb994e614b15b73f7c663eaa96b533b64cfd758fbf0"
+    },
+    {
+      "consumed_path": "skills/cp-2-fundamental-credit-synthesizer/SKILL.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-2-fundamental-credit-synthesizer/SKILL.md",
+      "exact_copy_found_at": null,
+      "edited_copy_of": "/Users/ericguei/Documents/cp-os/skills/cp-2-fundamental-credit-synthesizer/SKILL.md",
+      "sha256": "0b419cb292a5325c6a89398bf802fa605f9b9c6b5e0197e585171e91d784ec6f",
+      "source_sha256": "2419ccb707e0bce8659d79b077175f21e43b3ca95ad92968936da7d86da95135",
+      "edit": "named edit: T2.10 `Mixed` removed from the Direction values (caos line 144) and the step 10 index line gains the `None supported` row and split-never-Mixed rule (caos line 283); no other caos hunk ported; wording from caos-databricks vendor/deploy-v (last changed 99069f83, repo HEAD dfff264); sha256 is this edited file, source_sha256 the previously archived file"
+    },
+    {
+      "consumed_path": "skills/cp-2-fundamental-credit-synthesizer/references/REF_CP-2_STEPS.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-2-fundamental-credit-synthesizer/references/REF_CP-2_STEPS.md",
+      "exact_copy_found_at": null,
+      "edited_copy_of": "/Users/ericguei/Documents/cp-os/skills/cp-2-fundamental-credit-synthesizer/references/REF_CP-2_STEPS.md",
+      "sha256": "9200f6b0ab977c454176d7f78f6c55d39e41cfcccfa04a1b772f8c4c18f08bfe",
+      "source_sha256": "292f114bc456c5924712d692408550b058ed4424d146719fe42579b092a94a92",
+      "edit": "named edit: T2.10 Direction `Positive / Negative` with the split-never-Mixed rule (caos line 237) and the rule line `Rank at least one Positive and one Negative driver` with the one `None supported` row (caos line 239); no other caos hunk ported; wording from caos-databricks vendor/deploy-v (last changed 99069f83, repo HEAD dfff264); sha256 is this edited file, source_sha256 the previously archived file"
+    },
+    {
+      "consumed_path": "skills/cp-1a-business-transaction-fact-pack/SKILL.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-1a-business-transaction-fact-pack/SKILL.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-1a-business-transaction-fact-pack/SKILL.md",
+      "sha256": "3885bc51b9fa0f8a2e316fe8f3f503505ab5ce28729526c5c28bff18a96e1f9a"
+    },
+    {
+      "consumed_path": "skills/cp-1a-business-transaction-fact-pack/references/REF_CP-1A_STEPS.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-1a-business-transaction-fact-pack/references/REF_CP-1A_STEPS.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-1a-business-transaction-fact-pack/references/REF_CP-1A_STEPS.md",
+      "sha256": "57a22436167df8177363c648041c03ae6d89888523ef9f419b7536943d0d2e55"
+    },
+    {
+      "consumed_path": "skills/cp-1a-business-transaction-fact-pack/references/REF_CP-2C_STEPS.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-1a-business-transaction-fact-pack/references/REF_CP-2C_STEPS.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-1a-business-transaction-fact-pack/references/REF_CP-2C_STEPS.md",
+      "sha256": "8e738d43447219ab8cf7f46b4ca97cd32c67eb7831aaae683b365a9f3514ad45"
+    },
+    {
+      "consumed_path": "skills/cp-3c-refinancing-lme-risk/SKILL.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-3c-refinancing-lme-risk/SKILL.md",
+      "exact_copy_found_at": null,
+      "edited_copy_of": "/Users/ericguei/Documents/Deploy V/skills/cp-3c-refinancing-lme-risk/SKILL.md",
+      "sha256": "eac3b117d9e1c7227cdfe12a83f51476cf5d7eedeea02857fdef4e2518447189",
+      "source_sha256": "8c8c0534932f653288c68954406262c40e2fd6dcb6f23916220b5cec3e42d4bd",
+      "edit": "r17 Scale column added to register T3D.2; wording from caos-databricks vendor/deploy-v (dfff264); sha256 is this edited file, source_sha256 the byte-for-byte copy of Deploy V c4d2e35"
+    },
+    {
+      "consumed_path": "skills/cp-3c-refinancing-lme-risk/references/CP-3C_RUNBOOK.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-3c-refinancing-lme-risk/references/CP-3C_RUNBOOK.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/Deploy V/skills/cp-3c-refinancing-lme-risk/references/CP-3C_RUNBOOK.md",
+      "sha256": "13a2525bee2aae103114e7f5bd0ef7f7e6942c82e53041ea61e82aec4a498753"
+    },
+    {
+      "consumed_path": "skills/cp-3c-refinancing-lme-risk/references/REF_CP-3C_STEPS.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-3c-refinancing-lme-risk/references/REF_CP-3C_STEPS.md",
+      "exact_copy_found_at": null,
+      "edited_copy_of": "/Users/ericguei/Documents/Deploy V/skills/cp-3c-refinancing-lme-risk/references/REF_CP-3C_STEPS.md",
+      "sha256": "29b5949a9acfc98386bd1062474504fdc9fa6c632a43f2b8b87cf965e2188a74",
+      "source_sha256": "a0b1abe8f5ce28cf7d962aa26e72ae12326c102fba34f4d66f52b620dd40bf84",
+      "edit": "r17 Scale column added to register T3D.2; wording from caos-databricks vendor/deploy-v (dfff264); sha256 is this edited file, source_sha256 the byte-for-byte copy of Deploy V c4d2e35"
+    },
+    {
+      "consumed_path": "docs/reuse/selected-methods/skills/cp-2a-downside-pathway/references/CP-2A_STRESS_DESIGN_CPOS.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-2a-downside-pathway/references/CP-2A_STRESS_DESIGN_CPOS.md",
+      "exact_copy_found_at": null,
+      "edited_copy_of": "src/deploy_vii/methods/cp2a.md (this repo, HEAD 7c12a1c; last changed 5c6e61b)",
+      "sha256": "e353cea58c16a8c6811f5f98eed96448cd130d4155cdb2bd742b9d94cc8bf6c4",
+      "use": "CP-OS-only copy of the CP-2A short stress-design text; src/deploy_vii/methods/cp2a.md stays on disk unchanged for the structured runtime",
+      "source_sha256": "28be81bfb97a83e739e4a514612a2db3bf12b72480128f54c66c33fc2ab06236",
+      "edit": "named edits to the copy only: (1) every table ID T2B.n renamed T2DS.n (nine IDs, six prose mentions; T2B collides with REF_CP-2A_STEPS.md); (2) HTML-comment clause \"; no r14 CP-2A text exists in the repo\" removed; (3) \", computed in Python\" removed from the Purpose sentence (\"base period, computed in Python from settled CP-1 facts\" -> \"base period from settled CP-1 facts\"); (4) line-1 HTML comment now begins \"CP-OS copy of\" before the source path (it still named the file src/deploy_vii/methods/cp2a.md). sha256 is this edited file, source_sha256 the byte-for-byte copy of src/deploy_vii/methods/cp2a.md in this repo at 7c12a1c"
     }
   ],
-  "companions_note": "2026-11-10 (owner: keep a copy of the methodology in the repo): companion references, CANON_SHARED.md, the CP-DR research brief and the cp-1b-earnings-delta skill copied read-only from cp-os at commit b57a344. Four SKILL.md files archived earlier (cp-2h, cp-3, cp-6, cp-dr) differ from cp-os at that commit and are kept as archived. Not copied: scripts (not run in this transport) and the three .xlsx deployment placeholders (CP-3 Sector RV, CP-3B portfolio constraints, CP-6A debate inputs)."
+  "companions_note": "2026-11-10 (owner: keep a copy of the methodology in the repo): companion references, CANON_SHARED.md, the CP-DR research brief and the cp-1b-earnings-delta skill were first copied read-only from cp-os at commit b57a344. Each file's source is the one its own entry names: `exact_copy_found_at` (a path whose file is byte-equal to the archived file, checked 2026-11-13) or, for a file edited since the copy, `edited_copy_of` with the named `edit`. Not every companion is a cp-os copy: CP-4's six references, the CP-2D steps, the CP-5 runbook and the CP-5A steps are caos-databricks copies; the CP-2G and CP-DR steps are edited cp-os copies; CP-3C is a Deploy V copy; the CP-2A stress copy comes from this repo. Four SKILL.md files were archived earlier (cp-2h, cp-3, cp-6, cp-dr) as the cp-os initial-commit text (a31f3f5), which differs from cp-os at b57a344; as of 2026-11-13 each is stated by its own entry: cp-2h and cp-3 are the live cp-os (b57a344) files exactly, after one named edit each (the 115f664 blocklist change); cp-dr is the live cp-os v2.0 text (b57a344) plus named edits 2a and 2b; cp-6 is the initial-commit text plus named CP-5/CP-6 ordering edits and is not the live cp-os file. Not copied: scripts (not run in this transport) and the three .xlsx deployment placeholders (CP-3 Sector RV, CP-3B portfolio constraints, CP-6A debate inputs)."
 }

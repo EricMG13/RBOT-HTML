@@ -159,8 +159,12 @@ the run uses it, and a later step stays locked while an earlier one has an error
    is chosen, each kind the pathway uses and the folder lacks is listed from Purpose on, in the
    readiness column, as a limitation with the module it affects.
 2. **Purpose.** Pick one of `credit_snapshot`, `earnings_update`, `relative_value`,
-   `covenant_refinancing`, `distressed_restructuring`, `portfolio_decision` or `short_snapshot` (the
-   Short Credit Snapshot: CP-0, CP-1 and one CP-L10 page); each row lists its modules. Pick Basic,
+   `covenant_refinancing`, `distressed_restructuring`, `portfolio_decision` or
+   `lite_credit_assessment` (the Lite credit assessment: CP-0, CP-1, CP-1A, CP-2 and CP-2A; no
+   forecast is published). `credit_snapshot` is titled "Full credit assessment". The short credit
+   snapshot (`short_snapshot`, CP-0, CP-1 and one CP-L10 page) is deactivated: it is not offered and
+   a new run of it is refused; the lite credit assessment is the short option. Each row lists its
+   modules. Pick Basic,
    Standard or Advanced, and enter your name. At Advanced the module list and the turns per module
    are here too.
 3. **Confirm.** Issuer name and ID (at most 40 characters), as-of date, periods and currency. An
@@ -171,8 +175,10 @@ the run uses it, and a later step stays locked while an earlier one has an error
    or "Answer this now"): market and ratings; peers, valuation and module modes (the peer source,
    your own peers, the Relative value mode and Deep Debate for the Committee module); research
    questions at Standard; pinned assumptions at Advanced. What shows depends on the pathway: the
-   short snapshot has no More context step at any level, except that a primary run still shows
-   More context with its deal terms (Market) at every level.
+   lite credit assessment shows four steps at Basic and Standard (Documents, Purpose, Confirm and
+   Start) and five at Advanced, which adds More context; the other pathways show four at Basic and
+   five at Standard and Advanced. A primary run still shows More context with its deal terms (Market)
+   at every level.
 5. **Start.** The summary: the forecast for each module in run order (Ready, Check, Gap, Limited or
    Will refuse), with the reason and the step that fixes it, and each defaulted input with its
    default. The table joins the launcher's forecast and the page's own rules; where both speak of a
@@ -192,7 +198,7 @@ a submission starts at most one run however many times Submit is sent.
 | Level | Asked | Defaulted |
 |---|---|---|
 | Basic | Documents, Purpose, Confirm and Start | See below |
-| Standard | Basic, plus More context where the pathway has it (market inputs, peers and module settings, research questions); none for the short snapshot (a primary run still shows More context with its deal terms) | Pinned assumptions, valuation basis, own multiple |
+| Standard | Basic, plus More context where the pathway has it (market inputs, peers and module settings, research questions); none for the lite credit assessment (a primary run still shows More context with its deal terms) | Pinned assumptions, valuation basis, own multiple |
 | Advanced | Everything: also pinned assumptions, valuation basis and own multiple, deal terms, guarantors, aliases, sponsor, the module subset and turns per module | Nothing |
 
 Basic defaults: peer source `cp_dr_public` (the research module finds the peers from public

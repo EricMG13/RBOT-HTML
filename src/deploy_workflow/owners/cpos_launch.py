@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any, get_args
 
 from deploy_vii.business_context import Category
-from deploy_vii.contracts import PATHWAY_MODULES, Run
+from deploy_vii.contracts import DEACTIVATED_MESSAGE, DEACTIVATED_PATHWAYS, PATHWAY_MODULES, Run
 from deploy_vii.live.prompts import STEP_CONTRACTS
 from deploy_vii.registry import modules, plan
 from deploy_vii.report_view import _spec_of, pathways
@@ -47,6 +47,8 @@ from deploy_workflow.changes import (
 )
 from deploy_workflow.changes_check import cp8_issues
 from deploy_workflow.context import CONTEXT_SOURCE_ID, RunContext, load_context
+from deploy_workflow.credit_os_catalogue import chart_row, period_order
+from deploy_workflow.credit_os_chips import MODULE_NAMES
 from deploy_workflow.docx_text import docx_text
 from deploy_workflow.handoff_delivery import (
     DeliveryRequest,
@@ -142,15 +144,30 @@ _SCORE = "docs/reuse/selected-methods/CANON_SHARED.md § CP_CONFIDENCE_SCORE.md"
 # The method each module runs, per METHODOLOGY-REVIEW.md and what the 2026-11-05 live campaigns
 # consumed. prompts/CP-0.md and CP-1-intake.md are TDG case instructions, so they are left out.
 # Owner, 2026-11-10 ("Fix all"): each skill is sent every companion its SKILL.md calls mandatory
-# or binding (a runbook, a phase's method bundle), copied from cp-os at b57a344 and listed in
-# docs/reuse/selected-methods/manifest.json. Companions the SKILL opens only "to resolve an
-# ambiguity" (the schema and system references) are archived, not sent. CANON_SHARED.md is sent
-# only as the two reader-layer sections of READER_LAYER, to every prose module (ruling
-# 2026-11-11, decision 8); the rest of it is archived.
+# or binding (a runbook, a phase's method bundle). Each sent file's own entry in
+# docs/reuse/selected-methods/manifest.json records its source, any named edits and, where
+# recorded, its revision. Companions the SKILL opens only "to resolve an ambiguity" (the schema
+# and system references) are archived, not sent. CANON_SHARED.md is sent only as the reader-layer
+# sections of READER_LAYER, to every prose module (ruling
+# 2026-11-11, decision 8; the Analytical appendix section was added 2026-11-13, Deploy V methods
+# plan, Task 6, because the section above it ends at its heading); the rest of it is archived.
 _SELECTED: dict[str, tuple[str, ...]] = {
-    "CP-0": (_VII + "cp0.md",),
+    # Owner-directed, 2026-11-13 (Deploy V methods plan, Task 3): Deploy V's skill and step file,
+    # byte-identical to Deploy V c4d2e35 (the readiness part; CP-PARSE's own step file, the schema
+    # and system references are archived, not sent). CP0_BLOCK says what the launcher already did.
+    # The DEPLOY VII stand-in (cp0.md, a JSON ReadinessReview) is no longer sent.
+    "CP-0": (
+        _SKILLS + "cp-0-source-readiness/SKILL.md",
+        _SKILLS + "cp-0-source-readiness/references/REF_CP-0_STEPS.md",
+    ),
     "CP-1": ("prompts/CP-1.md",),  # Plus CP1_STEPS; no standalone CP-1 method file exists.
-    "CP-1A": (_VII + "cp1a.md",),
+    # Owner, 2026-11-13 ("Build rec. 1, then run"): Deploy V's skill from cp-os b57a344 with the
+    # bundle its SKILL binds on every run. The DEPLOY VII stand-in (cp1a.md) is no longer sent.
+    "CP-1A": (
+        _SKILLS + "cp-1a-business-transaction-fact-pack/SKILL.md",
+        _SKILLS + "cp-1a-business-transaction-fact-pack/references/REF_CP-1A_STEPS.md",
+        _SKILLS + "cp-1a-business-transaction-fact-pack/references/REF_CP-2C_STEPS.md",
+    ),
     # Deploy V's skill: earnings_delta.md needs the structured runtime's `read_inputs` view, which
     # CP-OS does not give, so it blocked on every CP-OS run (2026-11-09, 2026-11-10).
     "CP-1B": (
@@ -164,12 +181,20 @@ _SELECTED: dict[str, tuple[str, ...]] = {
     "CP-1D": (_SKILLS + "cp-1d-earnings-quality/SKILL.md",),
     # Owner, 2026-11-11: the Short Credit Snapshot's one page, read from CP-1's handoff alone.
     "CP-L10": (_VII + "cpl10.md",),
-    "CP-2": (_VII + "cp2.md",),
+    # Owner, 2026-11-13 ("Build rec. 1, then run"): Deploy V's skill from cp-os b57a344 with the
+    # bundle its SKILL binds on every run. The DEPLOY VII stand-in (cp2.md) is no longer sent.
+    "CP-2": (
+        _SKILLS + "cp-2-fundamental-credit-synthesizer/SKILL.md",
+        _SKILLS + "cp-2-fundamental-credit-synthesizer/references/REF_CP-2_STEPS.md",
+    ),
     "CP-2A": (
         _SKILLS + "cp-2a-downside-pathway/SKILL.md",
         _SKILLS + "cp-2a-downside-pathway/references/REF_CP-2A_STEPS.md",
         _SKILLS + "cp-2a-downside-pathway/references/REF_CP-2B_STEPS.md",
-        _VII + "cp2a.md",
+        # Owner, 2026-11-13 (Deploy V methods plan, Task 6): a CP-OS-only copy of cp2a.md whose
+        # tables are T2DS.n, since cp2a.md's T2B.n collide with the step file's. cp2a.md stays on
+        # disk, unchanged, for the structured runtime.
+        _SKILLS + "cp-2a-downside-pathway/references/CP-2A_STRESS_DESIGN_CPOS.md",
     ),
     "CP-2D": (
         _SKILLS + "cp-2d-liquidity-cash-flow-bridge/SKILL.md",
@@ -197,7 +222,14 @@ _SELECTED: dict[str, tuple[str, ...]] = {
         _SKILLS + "cp-3-relative-value-security-selection/references/CP-3B_RUNBOOK.md",
         _SKILLS + "cp-3-relative-value-security-selection/references/CP-3_SCHEMA_REFERENCE.md",
     ),
-    "CP-3C": (_VII + "cp3c.md",),
+    # Owner-directed, 2026-11-13 (Deploy V methods plan, Task 2): Deploy V's skill with the runbook
+    # and step file its SKILL binds, from Deploy V c4d2e35, plus the named r17 `Scale` edit to
+    # register T3D.2. The DEPLOY VII stand-in (cp3c.md) is no longer sent.
+    "CP-3C": (
+        _SKILLS + "cp-3c-refinancing-lme-risk/SKILL.md",
+        _SKILLS + "cp-3c-refinancing-lme-risk/references/REF_CP-3C_STEPS.md",
+        _SKILLS + "cp-3c-refinancing-lme-risk/references/CP-3C_RUNBOOK.md",
+    ),
     "CP-3D": (
         _SKILLS + "cp-3d-market-implied-risk/SKILL.md",
         _SKILLS + "cp-3d-market-implied-risk/references/REF_CP-3D_STEPS.md",
@@ -228,18 +260,26 @@ _SELECTED: dict[str, tuple[str, ...]] = {
     ),
     # Owner, 2026-11-11: what has changed since the last run (replaces the deliverable comparison).
     "CP-8": (_VII + "cp8.md",),
+    # Owner-directed, 2026-11-13 (Deploy V methods plan, Task 4): one CP-DR text, the cp-os
+    # version 2.0 skill (sha256 0cc76aea, cp-os 5a78f93) with two named edits (open-web limit
+    # conditional on the web-search rules; gap row typed `gap`, missing evidence never Blocked).
+    # `cpdr.md` stays on disk for another runtime; it is no longer sent: it told the model
+    # "Python composes the tables".
     "CP-DR": (
         _SKILLS + "cp-dr-deep-research/SKILL.md",
         _SKILLS + "cp-dr-deep-research/references/REF_CP-DR_STEPS.md",
         _SKILLS + "cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md",
-        _VII + "cpdr.md",
     ),
 }
 _CANON = "docs/reuse/selected-methods/CANON_SHARED.md"
 # The reader-facing layer every prose module is sent (not the data modules).
+_APPENDIX = f"{_CANON} § Analytical appendix"
 READER_LAYER = (
     f"{_CANON} § Reader-facing research layer",
     f"{_CANON} § Credit-research reading order",
+    # PROSE_PASSAGES says the canon's "table and appendix rules still apply"; the first section
+    # ends at the next `####` heading, so the appendix rule needs its own entry.
+    _APPENDIX,
 )
 METHODS: dict[str, tuple[str, ...]] = {
     module: (
@@ -321,6 +361,18 @@ PROSE_PASSAGES = (
     "report selectors' exact headings and table headers govern over the reader layer's table "
     "rules (6 columns and 8 body rows).\n\n"
 )
+# Sent to every module that is sent the canon's Analytical appendix section: that section says
+# `## Analysis` and an appendix heading, while a handoff has the fixed H2s and CP-OS refuses an
+# added `## Analysis`. There is no appendix-specific check. Demoting a report heading to `####`
+# under the appendix heading is refused for `Bottom line` (the first-`###` check) and for the
+# selector headings (`Map: ...`, `Confidence inputs`; the exact-heading checks), but is not
+# refused for `Key findings`, `Contrary evidence and what would change the view` or
+# `Limitations`. Adding `## Analysis` as an H2 is refused (the six-H2 check).
+APPENDIX_HEADING_NOTE = (
+    "Where the canon's Analytical appendix section says `## Analysis`, this handoff's section is "
+    "`## Findings`: write the appendix heading as a `###` heading there, after `### Limitations`; "
+    "the other required `###` headings stay `###` and are not nested under it.\n\n"
+)
 DATA_PASSAGE = (
     "Reader passage. The reader is a portfolio manager or credit committee member who has not "
     "read the source documents. Open `## Findings` with `### Bottom line`: one or two "
@@ -331,36 +383,6 @@ DATA_PASSAGE = (
     'is not blocked must not use the words "not assessable" in its Bottom line. Your tables '
     "follow as the main content, unchanged and exact.\n\n"
 )
-# Display names of the modules, the same pairs as `groups` in apps/issuer-library/credit_os/web/
-# screen.js (a test compares them). Decision 11 of 2026-11-12: a module is named in prose by this
-# name, never by its code, and the launcher sends the list so the model does not invent names.
-MODULE_NAMES = {
-    "CP-0": "Source readiness",
-    "CP-1A": "Business & governance",
-    "CP-DR": "Research questions",
-    "CP-1": "Financial foundation",
-    "CP-1B": "Earnings changes",
-    "CP-L10": "Short credit snapshot",
-    "CP-1D": "Earnings quality",
-    "CP-1C": "Peer benchmark",
-    "CP-2D": "Liquidity",
-    "CP-3C": "Refinancing & LME",
-    "CP-2": "Fundamental credit",
-    "CP-2A": "Downside",
-    "CP-2G": "Forward credit model",
-    "CP-2E": "Rates, FX & hedging",
-    "CP-2H": "Ratings & triggers",
-    "CP-4": "Legal & covenants",
-    "CP-4A": "Covenant capacity",
-    "CP-4B": "Structural priority",
-    "CP-4D": "Intercreditor control",
-    "CP-4C": "Recovery & fulcrum",
-    "CP-3": "Security selection",
-    "CP-3D": "Market-implied risk",
-    "CP-6": "Committee decision",
-    "CP-5": "Evidence validation",
-    "CP-8": "Changes since the last run",
-}
 VOICE_RULES = (
     "- Write evidence, risk mechanism and credit implication as ordinary sentences, never as "
     "labels (no `Evidence:`, `Mechanic:` or `Implication:` lead-ins). This overrides method "
@@ -440,6 +462,14 @@ CONFIDENCE_RULE = (
 
 class LaunchRefused(ValueError):
     """The request cannot start; the message says what to change."""
+
+
+def refuse_deactivated(pathway: str) -> None:
+    """Refuse a new run of a deactivated pathway. The one refusal every launch entry point calls
+    (the command line, the run-start summary and the inbox's submit); `prepare` and the readers of
+    past runs do not, so retained runs and the pathway's instructions keep working."""
+    if pathway in DEACTIVATED_PATHWAYS:
+        raise LaunchRefused(DEACTIVATED_MESSAGE)
 
 
 @dataclass(frozen=True)
@@ -651,7 +681,12 @@ NET_DEBT = OwnerTable(
         "leases). Cash is the same figure as the Cash column of the `Chart data: liquidity` table "
         "for that period. Net debt is gross debt less cash, worked with `calculate` and listed in "
         "`## Calculations`. Write one row per period you state, at least the latest balance-sheet "
-        "date. A row whose three figures are all stated is refused if net debt differs from gross "
+        "date. `Period` is `FY2024 / 2024-09-30` for a fiscal year end (fiscal year, space, "
+        "slash, space, the year-end date) and the date alone (`2025-06-30`) for an interim "
+        "balance sheet: one form for every row of the table, each "
+        "period once, and no other word in the cell (say `pro forma` or `reported` in the Basis "
+        "and limitation cell). A row whose three figures are all stated is refused if net debt "
+        "differs from gross "
         "debt less cash by any amount, and a row is refused if its cash differs from the "
         "liquidity table's for the same period; a figure you cannot state is "
         "`Not supplied: <reason>`."
@@ -663,10 +698,34 @@ def _decimal(cell: str) -> Decimal | None:
     return Decimal(cell.replace(",", "")) if PLAIN_NUMBER.fullmatch(cell) else None
 
 
+def _unorderable_period(lines: list[str], rows: list[list[str]]) -> str | None:
+    """The Period cell that keeps the pack from ordering the net debt table, or None when the
+    table orders. The pack's own reader (`chart_row`) decides; only its ValueError is caught. The
+    cell named is the first the reader's `period_order` rejects, else the first whose form differs
+    from the first row's or that repeats an earlier one; a row of the wrong width is
+    `chart_issues`'s, not this check's."""
+    try:
+        chart_row(lines, NET_DEBT_HEADING, prefix="")
+    except ValueError:
+        pass
+    else:
+        return None
+    ordered: list[tuple[str, tuple[int, ...]]] = []
+    for row in (r for r in rows[2:] if len(r) == len(rows[0])):
+        key = period_order(row[0])
+        if key is None:
+            return row[0]
+        ordered.append((row[0], key))
+    for number, (period, key) in enumerate(ordered):
+        if key[0] != ordered[0][1][0] or any(key == earlier for _, earlier in ordered[:number]):
+            return period
+    return None
+
+
 def _net_debt_issues(text: str) -> tuple[str, ...]:
     """Each stated row of the net debt table holds net debt = gross debt - cash exactly, and its
-    cash is the liquidity table's for the same period. A figure that is not stated is not checked;
-    the table's own shape is `chart_issues`'s."""
+    cash is the liquidity table's for the same period; its Period cells are ones the pack can
+    order. A figure that is not stated is not checked; the table's own shape is `chart_issues`'s."""
     heading, liquidity = f"### {NET_DEBT_HEADING}", "### Chart data: liquidity"
     lines = text.splitlines()
     rows = _stated_rows(text, heading) if heading in lines else []
@@ -675,6 +734,14 @@ def _net_debt_issues(text: str) -> tuple[str, ...]:
     liquid = _stated_rows(text, liquidity) if liquidity in lines else []
     cash_of = [(row[0], row[1]) for row in liquid[2:] if len(row) == 5 and liquid[0][1] == "Cash"]
     issues = []
+    unordered = _unorderable_period(lines, rows)
+    if unordered is not None:
+        issues.append(
+            f"`{heading}` Period `{unordered}` cannot be ordered: write "
+            "`FY2024 / 2024-09-30` for a fiscal year end or the date alone (`2025-06-30`) for an "
+            "interim balance sheet, one form for the whole table and each period once; put any "
+            "other word in the Basis and limitation cell."
+        )
     for row in rows[2:]:
         if len(row) != len(rows[0]):
             continue
@@ -1706,12 +1773,12 @@ TRANSPORT_RULES = (
     "it blocks.\n\n"
 )
 # CP-2A only. Its two methods disagree on who sets the stress sizes; run tdg-forecast-005 followed
-# the SKILL, gave no shock, and CP-2G had no stress case to compute. cp2a.md is the later
-# correction (LEAD adaptation, ruling Q2), and the owner allowed labelled judgment for CP-2G's
-# drivers on 2026-11-10 ("Yes, allow judgment").
+# the SKILL, gave no shock, and CP-2G had no stress case to compute. The stress design text is
+# the later correction (LEAD adaptation, ruling Q2), and the owner allowed labelled judgment for
+# CP-2G's drivers on 2026-11-10 ("Yes, allow judgment").
 STRESS_BLOCK = (
     "Stress design: where the method sections below differ on stress magnitudes, "
-    "`src/deploy_vii/methods/cp2a.md` governs. You choose the base period, the scenarios, the "
+    "`CP-2A_STRESS_DESIGN_CPOS.md` governs. You choose the base period, the scenarios, the "
     "shock sizes and the watch levels as labelled analyst assumptions (`Analyst Interpretation`, "
     "confidence never High), each anchored to a stated figure (a decline the sources report, a "
     "calculated break point, a disclosed rate exposure): name the anchor and what the assumption "
@@ -1719,6 +1786,23 @@ STRESS_BLOCK = (
     "magnitude the other sections forbid; an unlabelled or unanchored one still is. State at least "
     "one scenario as a pair, an EBITDA decline and a cash-interest rate increase, each a fraction "
     "from 0 to 1 with at most four decimal places, so a forward model can apply it.\n\n"
+)
+# CP-0 only. The skill's preparation phase assumes a runtime that lists and hashes the sources
+# itself; here the launcher did, before the call. The two rules after it are the later Deploy V
+# corrections in the caos-databricks copy of the skill (D31 V4, G1-18); the skill sent is older.
+CP0_BLOCK = (
+    "Source readiness here: the launcher has already listed, hashed and pinned the sources "
+    "before this call, so the preparation the method describes is done. Do not write the "
+    "registers P1, P2, P4, P6, P7 and P8. Write P3 and P5, the readiness tables (T1 input gate, "
+    "T2 source register, T3 source hierarchy, T4 content-to-module map, T5 gaps and conflicts, "
+    "T6 evidence trace, T7 master index state, T8 recommended run command sheet), the document "
+    "hierarchy and the minimum missing documents. A result is CONDITIONAL only for a source the "
+    "effective-source set does not carry. An upstream analytical handoff that has not been "
+    "produced yet is never a readiness ground and never a `CONDITIONAL` condition: modules are "
+    "put in order by navigation, not by readiness. The package, parse and hash checks were done "
+    "by the launcher: record no result for them. When no "
+    "objective is stated, the objective is the selected pathway's use case; record it in T1 and "
+    "assess readiness against it.\n\n"
 )
 # CP-DR and CP-1C, when the context's peer source is CP-DR and both run (cpdr.md, "The peer pack").
 # Owner, 2026-11-10: "Cp-1c is supposed to get that information from cp-dr by default".
@@ -1728,12 +1812,13 @@ PEER_PACK_BLOCK = (
     "write TDR.4 (candidate peers), TDR.5 (alignment observations: period, definition, currency, "
     "segment) and TDR.6 (located figures, one row per peer and operand: `revenue`, `ebitda`, "
     "`debt`, `interest`, `ffo`, each with unit, currency, period end, source locator and a "
-    "verbatim quote), as `src/deploy_vii/methods/cpdr.md` describes them. "
+    "verbatim quote), as your method's PEER PACK section describes them. "
     "Use every source this run holds "
     "that is not the issuer's own document, and any research or web tool this environment gives "
     "you. Name no peer and type no figure from memory. Where no peer evidence can be reached, "
-    "still write the three tables, each with one row saying what was searched and that nothing "
-    "was found.\n\n"
+    "still write the three tables, each holding one row whose `peer_id` is `none` (row header "
+    "`none.none`) and whose text cells say what was searched and that nothing was found; that row "
+    "cites its TDR.2 gap row.\n\n"
 )
 PEER_READER_BLOCK = (
     "Peer source: the context sets `valuation.peer_source` to `cp_dr_public`, so take the peer set "
@@ -1743,18 +1828,20 @@ PEER_READER_BLOCK = (
 )
 # Goes into CP-2G's instructions before METHOD_MARK, never into the method block.
 UNIT_RULE = (
-    "State `scale` in every block, as the statements print it (`1000` for thousands, `1` for "
-    "millions), and state every amount in the block in that one unit exactly as printed; an "
-    "amount printed in the other unit is stated as missing, with the reason, not converted. "
+    "State `currency` and `scale` in every block, as the statements print them (`1000` for "
+    "thousands, `1` for millions), and state every amount in the block in that one unit "
+    "exactly as printed; an amount printed in the other unit is stated as missing, with the "
+    "reason, not converted. "
 )
 FORECAST_BLOCK = (
     f"Forecast inputs: write `{cpos_forecast.HEADING}` inside `## Findings`, holding exactly "
     "one fenced json block and no other fence. You state "
     "inputs only; Python computes every forecast figure, so put no forecast figure in the block. "
-    "`scale` is `1` when CP-1's statement tables print USD millions and `1000` when they print "
-    "USD thousands; every amount in this block is stated in that one unit, exactly as CP-1 "
-    "prints it, and Python divides by `scale`, so every published figure is USD millions. Do not "
-    "convert an amount yourself. "
+    "`currency` is the three-letter code of the currency CP-1's statement tables are printed in "
+    "(`USD`, `GBP`, `EUR`), and `scale` is `1` when they print millions of it and `1000` when "
+    "they print thousands; every amount in this block is stated in that one currency and unit, "
+    "exactly as CP-1 prints it, and Python divides by `scale`, so every published figure is "
+    "millions of that currency. Do not convert an amount yourself. "
     + UNIT_RULE
     + '`base` holds exactly these ten operands, each `{"amount": "<decimal>", '
     '"reason": null, "row": "<label>", "period": "<header>"}` or '
@@ -1763,12 +1850,10 @@ FORECAST_BLOCK = (
     "`row` is the exact first-cell text of the row of one of the CP-1 handoff's tables that you "
     "read the amount from, and `period` the exact header text of that table's column (for "
     'example `"row": "Net sales", "period": "FY2024"`). Name the cell of every operand that has '
-    "an amount: `row` and `period`, or in a table with one row per period (CP-1's `Chart data:` "
-    "tables and `Net debt data`) `row` and `column`, the row being the period exactly as printed "
-    'and the column the measure\'s exact header (`{"amount": "<decimal>", "reason": null, '
-    '"row": "FY2024", "column": "Cash"}`); leave out `period` there. '
-    "Those tables are in US$ million: at `scale` 1000 do not name them; state that operand as "
-    "missing with the reason. "
+    "an amount by `row` and `period` and nothing else. Take a balance from a row under a "
+    "period column (`FY2024`, `H1 2025`), never from a column headed `LTM …` and never from a "
+    "table with one row per period (CP-1's `Chart data:` tables and `Net debt data`); where "
+    "CP-1 prints the balance only there, state the operand as missing with that reason. "
     "`interest` is interest paid in cash in the base period; where CP-1 prints only interest "
     "expense you may name that cell and must say in `scope_limits` that interest is interest "
     "expense, not cash paid. "
@@ -1780,18 +1865,17 @@ FORECAST_BLOCK = (
     "printing 45 or +45, a release, is -45). A figure in CP-1's prose, a basis line or its "
     "sources is not a cell: an amount CP-1 prints in no table cell is stated as missing, with "
     "the reason. An amount CP-1 prints only in the other unit (for example revolver availability "
-    "in USD millions where the statements are in thousands) is stated as missing, with the "
+    "in millions where the statements are in thousands) is stated as missing, with the "
     "reason; do not rescale it. Where CP-1 prints the amount under more than one column, name "
     "a column headed by a reporting period (`FY2024`, `Q3 2025`, `H1 2025` or `9M 2025`): the "
-    "Forecast page shows history only for a line named under such a header, or in a row "
-    "labelled with one. `base_drivers` is "
+    "Forecast page shows history only for a line named under such a header. `base_drivers` is "
     "the method's base-case driver "
     "submission (revenue_growth, ebitda_margin, capex_pct_revenue, tax_wc_pct_revenue, "
     "interest_rate, dividends, debt_repayment; each with `values` for the three forecast years, "
     "`category`, `rationale` and `limitation`). Each driver's `values` are three decimal strings, "
     'one per forecast year (for example ["0.05", "0.04", "0.03"]), each rounded to at most four '
     'decimal places (a ratio of 0.48022670 is written "0.4802"); the `dividends` and '
-    '`debt_repayment` values are amounts in the block\'s unit (with `"scale": 1000`, USD 20 '
+    '`debt_repayment` values are amounts in the block\'s unit (with `"scale": 1000`, 20 '
     'million is `"20000"`, at most one decimal place) and every other driver is a ratio and is '
     "never scaled; `category` is exactly one of "
     f"{', '.join(f'`{c}`' for c in get_args(Category))}. When the method gives no forecast "
@@ -1855,13 +1939,17 @@ PERIOD_TABLE_BLOCK = (
     "financial tables. `Period` is that header's text exactly as you print it (for example "
     "`9M 2025` or `FY2024`); `Start` and `End` are the period's first and last day as "
     "YYYY-MM-DD. Head period columns as `FY2024`, `Q3 2025`, `H1 2025` or `9M 2025`, the year "
-    "being the fiscal year the period belongs to. Python uses this table to check that the "
-    "last twelve months are twelve months and to date a balance printed under an `LTM Qn YYYY` "
-    "label; add no figure to it. Where another table labels a row or column `LTM Qn YYYY`, give "
-    "that exact label a row in this table with its Start and End dates. "
-    "Print a balance (debt, cash, undrawn facilities) at a period's end under that period's "
-    "column as a plain number: the `H1 2025` column holds the 30 June 2025 balance. Put the date "
-    "in the row label or the Source, not in the cell.\n\n"
+    "being the fiscal year the period belongs to. Print each statement line once, in one table "
+    "that has a column for every period you state for it; a line split across two tables "
+    "cannot be combined. Where a table states its unit, write it as the three-letter currency "
+    "code and `millions` or `thousands` (`USD millions`), the same in every statement table; "
+    "the `Chart data:` tables and `Net debt data` keep the unit their own rule gives. "
+    "Python uses this table to check that the last twelve months are twelve months; add no "
+    "figure to it. Print every balance the forecast needs (total debt, cash, undrawn committed "
+    "facilities) as a row of a table whose columns are those period headers, each a plain "
+    "number at that period's end: the `H1 2025` column holds the 30 June 2025 balance. Put the "
+    "date in the row label or the Source, not in the cell. A column headed `LTM …` holds flows "
+    "only, never a balance.\n\n"
 )
 # Goes into CP-1's instructions when the forecast is published without CP-2G (owner, 2026-11-11:
 # "allow forecast to function with just relevant layer 1 modules"). Same JSON shape as
@@ -1869,11 +1957,12 @@ PERIOD_TABLE_BLOCK = (
 LAYER1_FORECAST_BLOCK = (
     f"Forecast inputs: write `{cpos_forecast.HEADING}` inside `## Findings`, holding exactly "
     "one fenced json block and no other fence, after your tables. You state inputs only; Python "
-    "computes every forecast figure, so put no forecast figure in the block. `scale` is `1` when "
-    "your statement tables print USD millions and `1000` when they print USD thousands; every "
-    "amount in this block is stated in that one unit, exactly as your tables print it, and "
-    "Python divides by `scale`, so every published figure is USD millions. Do not convert an "
-    "amount yourself. "
+    "computes every forecast figure, so put no forecast figure in the block. `currency` is the "
+    "three-letter code of the currency your statement tables are printed in (`USD`, `GBP`, "
+    "`EUR`), and `scale` is `1` when they print millions of it and `1000` when they print "
+    "thousands; every amount in this block is stated in that one currency and unit, exactly as "
+    "your tables print it, and Python divides by `scale`, so every published figure is millions "
+    "of that currency. Do not convert an amount yourself. "
     + UNIT_RULE
     + '`base` holds exactly these ten operands, each `{"amount": "<decimal>", "reason": null, '
     '"row": "<label>", "period": "<header>"}` or '
@@ -1881,13 +1970,11 @@ LAYER1_FORECAST_BLOCK = (
     f"{', '.join(cp2g.OPERAND_METRIC)}. `row` is the exact first-cell text of the row of one of "
     "your own tables that you read the amount from, and `period` the exact header text of that "
     'table\'s column (for example `"row": "Net sales", "period": "FY2024"`). '
-    "Name the cell of every operand that has an amount: `row` and `period`, or in a table with "
-    "one row per period (your `Chart data:` tables and `Net debt data`) `row` and `column`, "
-    "the row being the period exactly as printed and the column the measure's exact header "
-    '(`{"amount": "<decimal>", "reason": null, "row": "FY2024", "column": "Cash"}`); leave out '
-    "`period` there. "
-    "Those tables are in US$ million: at `scale` 1000 do not name them; state that operand as "
-    "missing with the reason. "
+    "Name the cell of every operand that has an amount by `row` and `period` and nothing else. "
+    "Take a balance from a row under a period column (`FY2024`, `H1 2025`), never from a column "
+    "headed `LTM …` and never from a table with one row per period (your `Chart data:` tables "
+    "and `Net debt data`); where you print the balance only there, state the operand as "
+    "missing with that reason. "
     "`interest` is interest paid in cash in the base period; where CP-1 prints only interest "
     "expense you may name that cell and must say in `scope_limits` that interest is interest "
     "expense, not cash paid. "
@@ -1900,8 +1987,7 @@ LAYER1_FORECAST_BLOCK = (
     "sources is not a cell. An amount your tables print only in the other unit is stated as "
     "missing, with the reason. Where your tables print the amount under more than one column, "
     "name a column headed by a reporting period (`FY2024`, `Q3 2025`, `H1 2025` or `9M 2025`): "
-    "the Forecast page shows history only for a line named under such a header, or in a row "
-    "labelled with one. "
+    "the Forecast page shows history only for a line named under such a header. "
     "`base_drivers` is a run-rate base case and nothing more "
     "(revenue_growth, ebitda_margin, capex_pct_revenue, tax_wc_pct_revenue, interest_rate, "
     "dividends, debt_repayment; each with `values` for the three forecast years, `category`, "
@@ -1910,7 +1996,7 @@ LAYER1_FORECAST_BLOCK = (
     "in `rationale`. Add no analyst judgement beyond that run-rate. Each driver's `values` are "
     'three decimal strings, one per forecast year (for example ["0.05", "0.04", "0.03"]), each '
     "rounded to at most four decimal places; the `dividends` and `debt_repayment` values are "
-    'amounts in the block\'s unit (with `"scale": 1000`, USD 20 million is `"20000"`, at '
+    'amounts in the block\'s unit (with `"scale": 1000`, 20 million is `"20000"`, at '
     "most one decimal place) and every other driver is a ratio and is never scaled; `category` "
     "is exactly one of "
     f"{', '.join(f'`{c}`' for c in get_args(Category))}. Leave a driver's values null, as "
@@ -2145,6 +2231,7 @@ def _instructions(
         + SOURCES_RULES
         + READER_PERSONA
         + (DATA_PASSAGE if module in DATA_MODULES else PROSE_PASSAGES)
+        + (APPENDIX_HEADING_NOTE if _APPENDIX in METHODS[module] else "")
         + VOICE_RULES
         + (CHART_NOTE_RULE if "### Chart data:" in selectors else "")
         + (MAP_TEXT_RULE if "### Map:" in selectors else "")
@@ -2162,7 +2249,8 @@ def _instructions(
 
 def pathway_modules(settings: RunContext) -> tuple[str, ...]:
     """A pathway's analytical modules: its preset less the modules that have their own route.
-    Owner, 2026-11-11: CP-DR and CP-2E are in every preset (CP-1C needs CP-DR's peers), so the
+    Owner, 2026-11-11: CP-DR and CP-2E are in every preset except ``short_snapshot`` and
+    ``lite_credit_assessment``, which have neither (CP-1C needs CP-DR's peers), so the
     context's peer source no longer adds a module. Explicit --modules are run as given."""
     return tuple(m for m in PATHWAY_MODULES[settings.run.pathway] if m not in NOT_ANALYTICAL)
 
@@ -2456,6 +2544,7 @@ def _prepare(  # noqa: PLR0913, PLR0915 - `prepare`'s body: one keyword per sett
         ("CP-2G", FORECAST_BLOCK, forecast),
         ("CP-1", PERIOD_TABLE_BLOCK, forecast),
         ("CP-1", LAYER1_FORECAST_BLOCK, forecast and "CP-2G" not in ordered),
+        ("CP-0", CP0_BLOCK, True),
         ("CP-2A", STRESS_BLOCK, True),
         ("CP-DR", PEER_PACK_BLOCK, peer_pack),
         ("CP-1C", PEER_READER_BLOCK, peer_pack),
@@ -2691,16 +2780,17 @@ def _forecast_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
     if task.module_id != "CP-2G" or "CP-1" not in task.handoffs:
         return ()
     try:
-        cpos_forecast.parse(text, task.handoffs["CP-1"].decode("utf-8"))
+        inputs = cpos_forecast.parse(text, task.handoffs["CP-1"].decode("utf-8"))
     except ValueError as error:
         message = str(error)
+        stem = message.removesuffix(".")  # the sentences below add their own full stop
         operand = re.search(r"^[\w-]+: base (\w+)\b", message)
         if operand:  # a wrong row label should not cost the forecast
             name = operand.group(1)
             fix = f"Correct the row, period, column or amount of {name}; "
             fix += f"if you cannot, state {name} "
             missing = "as missing: amount null, no row, period or column, and the reason."
-            return (f"Forecast inputs: {error}. {fix}{missing}",)
+            return (f"Forecast inputs: {stem}. {fix}{missing}",)
         if re.match(r"^[\w-]+: the handoff gives no forecast drivers", message):
             return ()  # declining stays the method's call
         both = _BOTH_KEYS.match(message)
@@ -2708,7 +2798,7 @@ def _forecast_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
             names = list(dict.fromkeys(_BOTH_KEY_OPERAND.findall(message)))
             who = names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
             advice = f"State either `period` or `column` for {who}, not both."
-            return (f"Forecast inputs: {error}. {advice}",)
+            return (f"Forecast inputs: {stem}. {advice}",)
         if _UNNAMED_AT_SCALE.match(message):
             fix = "Name the row and the period or column of each base operand; if you cannot, "
             advice = (
@@ -2720,8 +2810,17 @@ def _forecast_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
         else:
             fix = "Correct the block; if you cannot, set every driver's values to "
             advice = f"{fix}[null, null, null] and say why in scope_limits."
-        return (f"Forecast inputs: {error}. {advice}",)
-    return ()
+        return (f"Forecast inputs: {stem}. {advice}",)
+    return _unstated_currency(inputs)
+
+
+def _unstated_currency(inputs: cpos_forecast.ForecastInputs) -> tuple[str, ...]:
+    """Reading a block without `currency` stays USD (blocks that predate the field); a block
+    written now that states `scale` says which currency its statements are printed in."""
+    if inputs.scale is None or inputs.currency is not None:
+        return ()
+    asked = "state `currency`: the three-letter code of the currency CP-1 reports its figures in"
+    return (f"Forecast inputs: {asked}.",)
 
 
 def _cap(text: str) -> Decimal:
@@ -2929,6 +3028,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.high_modules,
                 flag="--balanced" if args.balanced else "--high-modules",
             )
+        refuse_deactivated(load_context(Path(args.context).expanduser().read_bytes()).run.pathway)
         prepared = prepare(
             args.context,
             args.sources,

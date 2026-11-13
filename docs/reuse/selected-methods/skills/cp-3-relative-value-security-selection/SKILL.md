@@ -112,7 +112,7 @@ conclusions, never shorter reasoning or invented filler.
     - **CP-MODEL**: none
   - **full_run_disqualifiers**: structured below
     - **critical_cell_substrings_casefold**: retained cp-model integration sources do not supply; obtain the complete underwriting source pack; quantitative threshold not available in provided materials
-    - **critical_cell_values_casefold**: ; [insufficient information]; insufficient information; n/a; tbd; unknown; not calculable from provided materials; not assessable; unavailable
+    - **critical_cell_values_casefold**: ; [insufficient information]; insufficient information; n/a; tbd; unknown; not calculable from provided materials; unavailable
     - **document_substrings_casefold**: full-underwriting source set not retained; integration fixture; not a current analytical golden; retained cp-model integration source; source-limited; synthetic test input
     - **frontmatter_limitation_flags**: INTEGRATION_FIXTURE_ONLY; PRESENTATION_FIXTURE_NOT_CURRENT_GOLDEN; SOURCE_LIMITED_NOT_COMMITTEE_READY; SYNTHETIC_FORWARD_ASSUMPTIONS
     - **frontmatter_validation_warnings**: FULL_UNDERWRITING_SOURCE_SET_NOT_RETAINED; INTEGRATION_FIXTURE_ONLY; PRESENTATION_FIXTURE; TEST_ONLY_FORECAST_ASSUMPTIONS
@@ -514,7 +514,7 @@ CP-3A keeps its method in its companions rather than inline; they moved with thi
     - **critical_cell_substrings_casefold**: structured below
       - retained cp-model integration sources do not supply; obtain the complete underwriting source pack; quantitative threshold not available in provided materials
     - **critical_cell_values_casefold**: structured below
-      - ; [insufficient information]; insufficient information; n/a; tbd; unknown; not calculable from provided materials; not assessable; unavailable
+      - ; [insufficient information]; insufficient information; n/a; tbd; unknown; not calculable from provided materials; unavailable
     - **document_substrings_casefold**: structured below
       - full-underwriting source set not retained; integration fixture; not a current analytical golden; retained cp-model integration source; source-limited; synthetic test input
     - **frontmatter_limitation_flags**: structured below
@@ -579,7 +579,7 @@ CP-3B keeps its method in its companions rather than inline; they moved with thi
     - **critical_cell_substrings_casefold**: structured below
       - retained cp-model integration sources do not supply; obtain the complete underwriting source pack; quantitative threshold not available in provided materials
     - **critical_cell_values_casefold**: structured below
-      - ; [insufficient information]; insufficient information; n/a; tbd; unknown; not calculable from provided materials; not assessable; unavailable
+      - ; [insufficient information]; insufficient information; n/a; tbd; unknown; not calculable from provided materials; unavailable
     - **document_substrings_casefold**: structured below
       - full-underwriting source set not retained; integration fixture; not a current analytical golden; retained cp-model integration source; source-limited; synthetic test input
     - **frontmatter_limitation_flags**: structured below

@@ -223,9 +223,11 @@ def test_the_library_works_from_disk_without_any_request(tmp_path):
     assert len(re.findall(r'<article class="lib-card"', dom)) == 1
     assert "Northbridge Synthetic Group" in dom
     # A run is named by its period and pathway, never by its code: the row's cell and the card read
-    # "31 December 2024 · Credit snapshot" and the id only opens it (in the link, not in any text).
+    # "31 December 2024 · Full credit assessment" and the id only opens it (in the link, not in any
+    # text).
     assert re.search(
-        r'<a href="#W-Overview/overview\?c=run-a"[^>]*>31 December 2024 \u00b7 Credit snapshot</a>',
+        r'<a href="#W-Overview/overview\?c=run-a"[^>]*>'
+        r"31 December 2024 \u00b7 Full credit assessment</a>",
         dom,
     )
     assert '<p class="lc-when">31 December 2024</p>' in dom
@@ -1146,10 +1148,11 @@ def test_a_copy_of_the_page_marked_with_a_pathway_no_longer_fixes_it(tmp_path):
     probe = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
     # The page is served by the start service, not opened from a folder: the copy's
     # data-pathway mark is ignored, every pathway is offered and none is disabled.
-    assert len(probe["shown"]) == 7 and probe["disabled"] == 0  # the six and the short snapshot
+    # the six and the lite credit assessment
+    assert len(probe["shown"]) == 7 and probe["disabled"] == 0
     assert probe["built"]["run"]["pathway"] == "credit_snapshot"  # The probe's own choice held ...
     # The probe's event targets the form, not the radio, so the run type stays at the
-    # pathway's default (research for Credit Snapshot).
+    # pathway's default (research for the Full credit assessment).
     assert probe["built"]["run"]["run_type"] == "research"
     assert probe["warned"] == []  # A loaded context naming another pathway is not replaced.
     assert probe["same"] == []
@@ -1264,7 +1267,9 @@ def test_the_run_label_and_the_forecast_charts_keep_the_run_and_fit_the_page(tmp
         # One line under the tabs: the run named by its date and pathway (never by its code, however
         # long), and the way to the history.
         assert seen["shown"] is True
-        assert seen["text"].startswith("Showing run: 31 December 2025 \u00b7 Credit snapshot")
+        assert seen["text"].startswith(
+            "Showing run: 31 December 2025 \u00b7 Full credit assessment"
+        )
         assert long.upper() not in seen["text"].upper()
         assert seen["historyText"] == "All runs of this issuer" and seen["popovers"] == 0
         assert seen["tabs"] == ["Report", "Overview", "Changes", "Modules", "Forecast", "Evidence"]
@@ -1512,7 +1517,7 @@ def test_the_run_header_is_unchanged_from_a_file_and_as_of_stays_on_one_line(tmp
     seen = read_probe(tmp_path / "library/index.html", "#CP-1/head?c=run-a", width, SCOPE_PROBE)
     assert seen["sideCount"] == 0, seen
     # The run's scope is two chips on one row: the as-of date, then the pathway.
-    assert seen["chipsText"] == ["As of 31 December 2024", "Credit snapshot"], seen
+    assert seen["chipsText"] == ["As of 31 December 2024", "Full credit assessment"], seen
     assert seen["scopeHeight"] <= 24 and seen["chipsOnOneRow"] is True, seen
     assert abs(seen["headerHeight"] - HEADER_HEIGHT[width]) <= 0.5, seen
 
@@ -1596,7 +1601,7 @@ def test_the_run_chrome_navigator_and_columns_take_the_redesign_measures(tmp_pat
     # The strip: the run named by its period and pathway (no run code), and the link to every run
     # of the issuer at the right edge.
     assert seen["allText"] == "All runs of this issuer" and 0 <= seen["allGap"] <= 30
-    assert seen["barRun"].startswith("Showing run: 31 December 2024 \u00b7 Credit snapshot")
+    assert seen["barRun"].startswith("Showing run: 31 December 2024 \u00b7 Full credit assessment")
     assert seen["barCodes"] == 0 and "RUN-A" not in seen["barRun"].upper()
     assert seen["fits"] is True and seen["fitsOpen"] is True
     # The trace drawer is a fixed 420px panel over the page at both widths (screen.css line 833; it
