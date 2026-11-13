@@ -93,6 +93,14 @@ Status: **Done** (in a PR), **Needed** (the screen is wrong or incomplete withou
 | --- | --- | --- | --- | --- | --- |
 | 32 | The run-start service can show a Signal link | Run-start rail | Shown only when started with `--signal-url`; a change to the run-start page, so it needs the reader check | Check | Review of PR 109 |
 
+## From the Forecast label fixes (PR 112)
+
+| # | Cause | Screen | Change | Status | Source |
+| --- | --- | --- | --- | --- | --- |
+| 33 | A delivery with no `model.html` pins `annual.md` | Forecast | Link reads "Download published model (Markdown)" and no HTML frame is drawn | Done in PR 112; no VMO2 reader check | Review of PR 112 |
+| 34 | The Pro forma column said no handoff states pro forma adjustments | Forecast | New reason only when a CP-1 table header says "pro forma"; PR 111's CP-1 states pro forma in a body cell, so the old reason returns after it merges | Needed | Review of PRs 111 and 112 |
+| 35 | The page's Downside case differs from the forward credit model's own (coverage 2.41x against 1.68x on TDG) | Forecast, Overview | Decide which downside the page shows | Decide (owner) | PR 112 body; not checked here |
+
 ## Not verified
 
 - No row marked Check or Needed has been looked at on a rendered page for this record.
