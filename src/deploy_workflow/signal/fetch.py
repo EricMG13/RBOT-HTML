@@ -263,6 +263,10 @@ def _answer(
     return Fetched(body, _validator(response, "ETag"), _validator(response, "Last-Modified"))
 
 
+def _stored(value: str | None) -> str | None:
+    return value if value is not None and _VALIDATOR.fullmatch(value) else None
+
+
 def fetch(
     url: str,
     etag: str | None,
@@ -273,6 +277,8 @@ def fetch(
 ) -> Fetched:
     """Fetch url conditionally; raise FetchRefused for any broken rule, error or bad status."""
     wiring = wiring or Wiring()
+    etag = _stored(etag)  # a stored value is held to what a server may send
+    modified = _stored(modified)
     budget = _Budget(
         _resolve if resolve is None else resolve,  # looked up now, so tests can replace it
         webfetch.pinned_connection if wiring.connect is None else wiring.connect,

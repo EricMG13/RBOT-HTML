@@ -466,6 +466,33 @@ def test_a_304_with_one_clean_validator_mixes_it_with_the_one_sent():
     assert run(Wire(reply), etag='"abc"', modified="Fri") == Fetched(None, '"new"', "Fri")
 
 
+STORED_BAD = ['"a"\r\n X: y', "x" * 257, "\x00", ""]
+
+
+@pytest.mark.parametrize("bad", STORED_BAD, ids=["fold", "long", "nul", "empty"])
+def test_a_stored_etag_the_module_would_not_accept_is_not_sent_or_returned(bad):
+    wire = Wire(Reply(304))
+    got = run(wire, etag=bad, modified="Fri")
+    assert "If-None-Match" not in wire.requests[0][1]
+    assert got == Fetched(None, None, "Fri")
+
+
+@pytest.mark.parametrize("bad", STORED_BAD, ids=["fold", "long", "nul", "empty"])
+def test_a_stored_modified_the_module_would_not_accept_is_not_sent_or_returned(bad):
+    wire = Wire(Reply(304))
+    got = run(wire, etag='"abc"', modified=bad)
+    assert "If-Modified-Since" not in wire.requests[0][1]
+    assert got == Fetched(None, '"abc"', None)
+
+
+def test_valid_stored_validators_are_sent_and_returned():
+    wire = Wire(Reply(304))
+    got = run(wire, etag='"abc"', modified="Fri")
+    headers = wire.requests[0][1]
+    assert (headers["If-None-Match"], headers["If-Modified-Since"]) == ('"abc"', "Fri")
+    assert got == Fetched(None, '"abc"', "Fri")
+
+
 def test_200_returns_body_and_validators():
     got = run(Wire(Reply(200, b"<rss/>", {"ETag": '"v2"', "Last-Modified": "Sat"})))
     assert got == Fetched(b"<rss/>", '"v2"', "Sat")
