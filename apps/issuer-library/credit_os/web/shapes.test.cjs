@@ -241,3 +241,8 @@ test('LONG_HEX holds a hash (a letter a-f in a 32+ character hex run), never a 3
 test('sectionRole reads the top heading by own key: "constructor", "toString" and "__proto__" are ordinary unknown headings', () => {
   for (const heading of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) assert.equal(Shapes.sectionRole([heading]), 'registers', heading);
 });
+
+test('isEsgHeading: a heading that leads with a T2G.<digits> code is an ESG heading, at any heading level; nothing else is', () => {
+  for (const heading of ['T2G.1 — Environmental/social disclosure inventory', 'T2G.8 — environmental, social and transition gaps', 'T2G.5 Sustainability-linked mechanics', 'T2G.3']) assert.equal(Shapes.isEsgHeading(heading), true, heading);
+  for (const heading of ['T2F.9 — Macro gaps ledger', 'T2G — overview', 'T2G.x — a', 'T12G.1 — a', 'XT2G.1 — a', 'Credit implication', 'Note on T2G.1 — inventory', 'T2G.12b — a', '']) assert.equal(Shapes.isEsgHeading(heading), false, heading);
+});
