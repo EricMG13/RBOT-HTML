@@ -498,14 +498,14 @@
   "src/deploy_vii/table_markdown.py": "ea3e4ebab2ad30aae279204bab2c300685b95a12",
   "src/deploy_workflow/__init__.py": "148fdfe9e0fa16d57a7ecdbf1be97b32a27eb15a",
   "src/deploy_workflow/changes.py": "9f34c9ff89cd09b17dfb26456c224fa4ecd3b35b",
-  "src/deploy_workflow/changes_check.py": "8a798b4fb00d454d6127ee6f9587df2284c85f0e",
+  "src/deploy_workflow/changes_check.py": "cd03df93f1685ba00c5556c486dafddb96158260",
   "src/deploy_workflow/confidence.py": "9925b3fc6d25d9c44b0f5a9d7aed095e5c28c291",
   "src/deploy_workflow/context.py": "51517c348055ec6917aa51060c29f3faade67daa",
   "src/deploy_workflow/context_cites.py": "e73e671648029e4d7fb81af9be6af3a53521ea5b",
   "src/deploy_workflow/context_periods.py": "251ee25bedd3b202d07268180c98f5afd2994cdf",
   "src/deploy_workflow/cpos_status.py": "438e87c608b5b8875735d63f3634923263152d36",
   "src/deploy_workflow/credit_os_catalogue.py": "0d3ff9258d1e8dec25bf92cf2ff4fd080a4d382a",
-  "src/deploy_workflow/credit_os_chips.py": "31476285110f3ce1c68a42ccc6e4ed26f776d14c",
+  "src/deploy_workflow/credit_os_chips.py": "9874c77c6d12732c40186e7a7fe2d9bcffb6c58d",
   "src/deploy_workflow/docx_text.py": "668eba778908b11033859382037b71e647e461e3",
   "src/deploy_workflow/earnings.py": "45dcf7a7a70fb96a9b6c99065682af56430c2dd0",
   "src/deploy_workflow/earnings_workflow.py": "9180b772e462394e4c8624f1a444ee3ff58718ba",
@@ -583,7 +583,7 @@
   "src/deploy_workflow/owners/cpos.py": "0915aa9d5f2019460c4d029aba430d545cede501",
   "src/deploy_workflow/owners/cpos_facilities.py": "1021ab5d5159d455510e0b6e4f9176b955535213",
   "src/deploy_workflow/owners/cpos_forecast.py": "d6a594453bcddd5f0b3bbae522f4171d53d9dab1",
-  "src/deploy_workflow/owners/cpos_launch.py": "e17b35631954ce4476363d749b63dab40651af59",
+  "src/deploy_workflow/owners/cpos_launch.py": "ff82e2237790ce73929ee81b88080379ca51a009",
   "src/deploy_workflow/owners/cpos_periods.py": "4e46778fb66675e1678cf8d786fbc342910475e4",
   "src/deploy_workflow/owners/period_basis.py": "3ad044a082522a772b705df6e2bb6a4d6696245d",
   "src/deploy_workflow/owners/pins.py": "8f9159becf0a7590999338f4a09796fe63578007",
@@ -761,7 +761,7 @@
   "tests/model/test_transport.py": "129688c26c486ce7f3122bd87ba1d0203e4264fe",
   "tests/model/test_turn.py": "5b57cc4ff6219bc504aa66e733e979e31938fd04",
   "tests/test_brand_tokens.py": "b44f4d37f314a335f766240114a69e4fedda2ce5",
-  "tests/test_changes.py": "6b75353e55392ffedfc112ecd509f48e5ca7dce7",
+  "tests/test_changes.py": "5f771105d9942e95b786968faccc3c8dc7de7c6a",
   "tests/test_citation_markers.py": "f98b3ee15cebbc615d4b404c24c470db2f7b65f5",
   "tests/test_confidence.py": "e5e85a27f9eafc12d388c26cf45df95f554f3f83",
   "tests/test_context_form.py": "259697b74117491d362dd07e9c4d2abe0ba58209",
@@ -804,6 +804,6 @@
   "tools/work_pc_delta.py": "fa5e9e81c534657f593cb8752a94de10cba0eead",
   "uv.lock": "7a4f05aeff999e9284ec29f34acacdd2619d64b1"
  },
- "head": "bb7629de900f590ea9d55b7daae7f2a1210d678d",
- "head_date": "2026-11-13T04:16:51Z"
+ "head": "c82dc5605ab6d3ebccf12b35c64ee7915431df15",
+ "head_date": "2026-11-13T04:17:02Z"
 }
