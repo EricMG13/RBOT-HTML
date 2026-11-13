@@ -67,6 +67,7 @@ from deploy_workflow.model.turn import (
     turn_to_json,
 )
 from deploy_workflow.model_testing.configs import CONFIGS
+from deploy_workflow.prose_checks import lost_values
 from deploy_workflow.run_events import append_event
 from deploy_workflow.workflow import _put
 
@@ -384,6 +385,7 @@ class ModuleTools:
         self.writes = 0
         self.draft = task.draft
         self.accepted = False
+        self.rejected: tuple[str, list[str]] | None = None  # the last rejected write and its issues
 
     def call(self, name: str, args: dict[str, Any]) -> str:
         if name not in {t.name for t in TOOLS}:
@@ -531,7 +533,12 @@ class ModuleTools:
             *_checked_handoff(self.task, self.draft, self.check),
             *(web_source_issues(markdown) if self.strip_markers else ()),
         ]
-        _put(self.directory / f"{self.writes}.review.json", dump_json({"issues": issues}).encode())
+        review: dict[str, Any] = {"issues": issues}
+        dropped: list[dict[str, str | int]] | None = None
+        if self.rejected is not None:  # a repair: say what it removed that no issue named
+            dropped = lost_values(self.rejected[0], markdown, self.rejected[1])
+            review["dropped_values"] = dropped
+        _put(self.directory / f"{self.writes}.review.json", dump_json(review).encode())
         self.accepted = not issues
         note = (
             ""
@@ -540,13 +547,32 @@ class ModuleTools:
             "from your draft; the stored draft has none, so quote it without markers."
         )
         if self.accepted:
+            if dropped and self.events is not None:
+                append_event(
+                    self.events,
+                    "values_dropped_on_repair",
+                    module=self.task.module_id,
+                    count=len(dropped),
+                )
             return "ACCEPTED" + note
+        self.rejected = (markdown, issues)
         writes_left = MAX_WRITES - self.writes
         if self.events is not None:
             append_event(
                 self.events, "draft_rejected", module=self.task.module_id, writes_left=writes_left
             )
-        return f"REJECTED ({writes_left} writes left){note}\n" + "\n".join(issues)
+        asked = (
+            ""
+            if not dropped
+            else "\n\nThis draft no longer contains "
+            + "; ".join(
+                f"{d['value']} (line {d['previous_line']} of your previous draft)" for d in dropped
+            )
+            + ". No issue named "
+            + ("it" if len(dropped) == 1 else "them")
+            + ": restore each one, or say why it was removed."
+        )
+        return f"REJECTED ({writes_left} writes left){note}\n" + "\n".join(issues) + asked
 
 
 def _charge(

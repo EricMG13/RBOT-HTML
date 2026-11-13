@@ -810,3 +810,105 @@ def test_every_turn_of_a_module_carries_its_effort(tmp_path: Path) -> None:
         effort_by_module={"CP-2": "high"},
     )(task())
     assert [r.effort for r in adapter.requests] == ["high", "high"]
+
+
+# Fragments of the retained high CP-6 drafts (write 1 rejected for "canonical"; write 2 accepted,
+# having also replaced two sourced FY2023 figures with "Not supplied").
+CP6_FIRST = (
+    "## Request\nTDG\n## Sources\nS1\n## Findings\n"
+    "| Adjustments | USD 247 million | USD 360 million: acquisition 70; compensation 217 |"
+    " FY2023 |\n"
+    "| Reported revolving availability | USD 755 million | USD 843 million | FY2023 |\n"
+    "The canonical bridge is shown.\n"
+    "## Calculations\nNone\n## Gaps\nNone\n## Next module\ndelivery\n"
+)
+CP6_SECOND = (
+    "## Request\nTDG\n## Sources\nS1\n## Findings\n"
+    "| Adjustments | Not supplied: prior bridge not adopted for this debate | "
+    "USD 360 million: acquisition 70; compensation 217 | FY2023 |\n"
+    "| Reported revolving availability | Not supplied: prior availability not adopted for this "
+    "debate | USD 843 million | FY2023 |\n"
+    "The adopted bridge is shown.\n"
+    "## Calculations\nNone\n## Gaps\nNone\n## Next module\ndelivery\n"
+)
+
+
+def _writes(tmp_path: Path, *drafts: str, issues: tuple[str, ...] = ("line 3: canonical",)):
+    """A module whose checker rejects every draft containing a flag word, with `issues`."""
+
+    def verdict(_task: HandoffTask, raw: bytes) -> tuple[str, ...]:
+        return issues if b"canonical" in raw or b"Not accepted" in raw else ()
+
+    module = ModuleTools(task(), tmp_path, verdict, tmp_path / "run")
+    return module, [module.call("write_handoff", {"markdown": d}) for d in drafts]
+
+
+def _review(tmp_path: Path, n: int) -> dict[str, Any]:
+    return json.loads((tmp_path / f"{n}.review.json").read_text())
+
+
+def test_a_repair_that_drops_two_sourced_figures_is_recorded_and_accepted(tmp_path: Path) -> None:
+    from deploy_workflow.run_events import EVENTS, read_events
+
+    module, results = _writes(tmp_path, CP6_FIRST, CP6_SECOND)
+    assert module.accepted and results[1].startswith("ACCEPTED")
+    dropped = _review(tmp_path, 2)["dropped_values"]
+    assert [(d["value"], d["previous_line"]) for d in dropped] == [
+        ("247 million", 6),
+        ("755 million", 7),
+    ]
+    event = [e for e in read_events(tmp_path / "run" / EVENTS) if "dropped" in e["event"]]
+    assert [(e["event"], e["module"], e["count"]) for e in event] == [
+        ("values_dropped_on_repair", "CP-2", 2)
+    ]
+
+
+def test_a_rejected_repair_that_drops_values_asks_for_each_back(tmp_path: Path) -> None:
+    second = CP6_SECOND + "The canonical wording remains.\n"
+    module, results = _writes(tmp_path, CP6_FIRST, second)
+    assert not module.accepted and results[1].startswith("REJECTED")
+    assert "247 million" in results[1] and "755 million" in results[1]
+    assert "restore" in results[1]
+    assert [d["value"] for d in _review(tmp_path, 2)["dropped_values"]] == [
+        "247 million",
+        "755 million",
+    ]
+
+
+def test_a_repair_that_adds_a_figure_flags_nothing(tmp_path: Path) -> None:
+    second = CP6_FIRST.replace("canonical", "adopted") + "The margin was 9.8% in FY2023.\n"
+    module, _ = _writes(tmp_path, CP6_FIRST, second)
+    assert module.accepted and _review(tmp_path, 2)["dropped_values"] == []
+
+
+def test_a_figure_the_issue_named_may_be_removed(tmp_path: Path) -> None:
+    second = CP6_FIRST.replace("canonical", "adopted").replace("| USD 755 million ", "| n/a ")
+    named = ('line 3: "USD 755 million" is not in the handoff: remove it. canonical',)
+    module, _ = _writes(tmp_path, CP6_FIRST, second, issues=named)
+    assert module.accepted and _review(tmp_path, 2)["dropped_values"] == []
+
+
+def test_the_first_write_records_no_key(tmp_path: Path) -> None:
+    _, results = _writes(tmp_path, CP6_FIRST)
+    assert results[0].startswith("REJECTED")
+    assert "dropped_values" not in _review(tmp_path, 1)
+
+
+def test_a_figure_that_only_moved_to_another_line_is_not_flagged(tmp_path: Path) -> None:
+    second = (
+        "## Request\nTDG\n## Sources\nS1\n## Findings\n"
+        "Note: USD 247 million, USD 755 million, USD 360 million (acquisition 70; compensation 217)"
+        " and USD 843 million (FY2023).\nThe adopted bridge.\n"
+        "## Calculations\nNone\n## Gaps\nNone\n## Next module\ndelivery\n"
+    )
+    module, _ = _writes(tmp_path, CP6_FIRST, second)
+    assert module.accepted and _review(tmp_path, 2)["dropped_values"] == []
+
+
+def test_a_clean_accepted_repair_emits_no_event(tmp_path: Path) -> None:
+    from deploy_workflow.run_events import EVENTS, read_events
+
+    _writes(tmp_path, CP6_FIRST, CP6_FIRST.replace("canonical", "adopted"))
+    assert all(
+        e["event"] != "values_dropped_on_repair" for e in read_events(tmp_path / "run" / EVENTS)
+    )

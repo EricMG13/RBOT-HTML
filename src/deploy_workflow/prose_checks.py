@@ -34,7 +34,7 @@ comments, list markers removed. Decisions where the ruling is silent:
 """
 
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from decimal import ROUND_HALF_EVEN, ROUND_HALF_UP, Context, Decimal, localcontext
 from itertools import groupby
 from typing import NamedTuple
@@ -982,9 +982,10 @@ def _is_note_on(found: re.Match[str], before: re.Match[str]) -> bool:
         )
 
 
-def _figures(text: str, passage: bool = False) -> list[_Figure]:
+def _figures(text: str, passage: bool = False, amounts_only: bool = False) -> list[_Figure]:
     """Figures of `text`. On the passage side dates and period labels are not figures (as in
-    check 8); held text is read unmasked, so a year held only in a date still matches."""
+    check 8); held text is read unmasked, so a year held only in a date still matches.
+    `amounts_only` keeps just the figures `_is_real_figure` accepts."""
     base = CODE.sub(" ", text)
     spans = [m.span() for pattern in (DATE, PERIOD_WORD) for m in pattern.finditer(base)]
     masked = base
@@ -1006,6 +1007,8 @@ def _figures(text: str, passage: bool = False) -> list[_Figure]:
             and _is_note_on(found, before)
         )
         before = found
+        if amounts_only and not _is_real_figure(found, base, spans):
+            continue
         number = found["n"].replace(",", "")  # a comma in a figure is a thousands separator
         figures.append(
             _Figure(
@@ -1042,6 +1045,60 @@ def _fidelity_problem(figure: _Figure, held: list[_Figure]) -> str | None:
         f'"{figure.shown}" does not match the handoff, which writes it as {written}: keep the '
         "sign and unit as written."
     )
+
+
+def _figure_key(figure: _Figure) -> tuple[str, bool, str | None]:
+    return figure.number, figure.negative, figure.unit
+
+
+def _is_percent_of(figure: _Figure, held: list[_Figure]) -> bool:
+    """A bare fraction (0.1146) that the new draft writes as a percentage (11.46%)."""
+    return figure.unit is None and any(
+        h.unit == "%"
+        and h.negative == figure.negative
+        and Decimal(h.number) == Decimal(figure.number) * 100
+        for h in held
+    )
+
+
+def _date_key(date_text: str) -> str:
+    return " ".join(date_text.casefold().split())
+
+
+def _shape(line: str) -> str:
+    """A line with every number written as `#`, so an edit of a value in place compares equal."""
+    return NUMBER.sub("#", line.strip())
+
+
+def lost_values(previous: str, new: str, named: Sequence[str] = ()) -> list[dict[str, str | int]]:
+    """Amounts (number, sign and unit) and dates written in the `previous` draft and nowhere in
+    `new`, in the order they first appear, as {value, previous_line, context}. Left out: a figure
+    whose number an issue in `named` quotes (a fidelity repair may ask for it to go); a bare
+    fraction `new` writes as a percentage; a value on a line `new` keeps with only its numbers
+    changed (an edit in place, not a removal). An amount counts as present in `new` however it is
+    written there (a bracket, a date, a label number), so only a value that has gone is listed."""
+    held = _figures(new)
+    kept = {_figure_key(f) for f in held}
+    kept_dates = {_date_key(m[0]) for m in DATE.finditer(new)}
+    quoted = {f.number for issue in named for f in _figures(issue)}
+    shapes = {_shape(line) for line in new.splitlines()}
+    lost: list[dict[str, str | int]] = []
+    seen: set[object] = set()
+    for number, line in enumerate(previous.splitlines(), 1):
+        if _shape(line) in shapes:
+            continue
+        values = [
+            (_figure_key(f), f.shown, f.number in quoted or _is_percent_of(f, held))
+            for f in _figures(line, amounts_only=True)
+        ] + [(_date_key(m[0]), m[0], False) for m in DATE.finditer(line)]
+        for key, shown, excused in values:
+            absent = key not in (kept_dates if isinstance(key, str) else kept)
+            if absent and not excused and key not in seen:
+                seen.add(key)
+                lost.append(
+                    {"value": shown, "previous_line": number, "context": line.strip()[:200]}
+                )
+    return lost
 
 
 KEY_FIGURES_HEADING = "### Key figures"
