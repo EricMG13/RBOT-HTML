@@ -3,7 +3,8 @@
 tdg-full-copilot-sol-high-001-resume, Downside case, shock 0.3 (fixture cut from that run)."""
 
 import json
-from decimal import Decimal
+from dataclasses import replace
+from decimal import Decimal, localcontext
 
 from hypothesis import given, settings
 from hypothesis import strategies as st
@@ -29,8 +30,10 @@ def test_the_real_run_publishes_net_figures_only_for_the_year_with_cash():
     # FY2025: cash is positive, so the figures stay.
     assert Decimal(first["net_debt"]["amount"]) == Decimal("22746.4960")
     ratio = Decimal(first["net_leverage"]["amount"])
-    places = Decimal("0.0000000001")  # the module's quotient carries 38 digits; the key 28
-    assert ratio.quantize(places) == (Decimal("22746.4960") / Decimal("3338.6112")).quantize(places)
+    with localcontext() as context:
+        context.prec = 38  # the module's quotient carries 38 significant digits
+        key = Decimal("22746.4960") / Decimal("3338.6112")
+    assert ratio == key
     assert ratio.quantize(Decimal("0.01")) == Decimal("6.81")
     assert Decimal(first["liquidity"]["amount"]) == Decimal("2396.504")
     # FY2026 and FY2027: cash is an unfunded gap, so the three figures are missing with a reason.
@@ -41,7 +44,7 @@ def test_the_real_run_publishes_net_figures_only_for_the_year_with_cash():
     assert Decimal(second["closing_cash"]["amount"]) == Decimal("-309.7718")
     assert Decimal(third["closing_cash"]["amount"]) == Decimal("-2165.71612")
     assert Decimal(third["opening_cash"]["amount"]) == Decimal("-309.7718")
-    # Hand-written from the run before the change: these are untouched.
+    # Captured from the output at 01eee08 (the parent), not hand-written; unchanged by this change.
     assert amounts(first, "total_leverage", "coverage") == {
         "total_leverage": "7.2784755529484834891825678893067872054",
         "coverage": "1.6838819557618569384015794321968689766",
@@ -75,6 +78,65 @@ def test_the_forward_model_itself_still_computes_the_numbers():
     assert second.net_leverage.amount is not None
     assert second.liquidity.amount == Decimal("533.2282")
     assert third.liquidity.amount == Decimal("-1322.71612")
+
+
+def real_year():
+    """A real forecast year (FY2025: positive cash) to vary one field of."""
+    inputs = cpos_forecast.parse(block_with(downside_shock=shock()), CP1.decode("utf-8"))
+    operands = cp2g.Operands(
+        **{
+            key: cp2g.Val(None if o.amount is None else Decimal(o.amount), o.reason)
+            for key, o in inputs.base.items()
+        }
+    )
+    result = cp2g.forecast(
+        operands=operands,
+        drivers=cp2g.Drivers.from_submission(inputs.downside_drivers.over(inputs.base_drivers)),
+        shock=(Decimal("0.2"), Decimal("0.3")),
+    )
+    return result.years[0]
+
+
+def with_cash(amount):
+    return replace(real_year(), closing_cash=cp2g.Val(amount))
+
+
+def test_zero_cash_is_not_a_gap_and_keeps_the_three_figures():
+    for zero in (Decimal(0), Decimal("-0")):
+        published = cpos_forecast._published(with_cash(zero))
+        want = cpos_forecast._published(real_year())
+        for name in FIELDS:
+            assert published[name] == want[name]
+            assert published[name]["amount"] is not None
+            assert published[name]["reason"] is None
+        assert published["net_debt"]["amount"] == "22746.496"
+        assert published["liquidity"]["amount"] == "2396.504"
+
+
+def test_missing_cash_is_not_called_negative():
+    own = "net leverage: its own reason"
+    year = replace(
+        real_year(),
+        closing_cash=cp2g.Val(None, "closing cash: some reason"),
+        net_leverage=cp2g.Val(None, own),
+    )
+    published = cpos_forecast._published(year)
+    assert published["net_debt"] == {"amount": "22746.496", "reason": None}
+    assert published["net_leverage"] == {"amount": None, "reason": own}
+    assert published["liquidity"] == {"amount": "2396.504", "reason": None}
+    assert published["closing_cash"] == {"amount": None, "reason": "closing cash: some reason"}
+    assert "cash is negative" not in json.dumps(published)
+
+
+def test_the_smallest_negative_cash_hides_the_three_figures():
+    published = cpos_forecast._published(with_cash(Decimal("-0.0001")))
+    for name in FIELDS:
+        assert published[name] == {
+            "amount": None,
+            "reason": "Not calculable: cash is negative before funding",
+        }
+    assert published["closing_cash"] == {"amount": "-0.0001", "reason": None}
+    assert published["total_leverage"] == cpos_forecast._published(real_year())["total_leverage"]
 
 
 def test_a_block_that_never_reaches_negative_cash_publishes_the_bytes_it_did():
