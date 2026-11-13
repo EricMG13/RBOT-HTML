@@ -114,6 +114,20 @@ test('source and evidence columns hide only whole or with an audit qualifier', (
     assert.equal(['source', 'id', 'intermodule'].includes(Shapes.columnKind(h)), false, h);
 });
 
+test('A1: the five source-qualifier headers hide; a findings column that begins with Source stays', () => {
+  for (const h of ['Source Document Name', 'Source and basis', 'Source(s)', ' source row/section/quote ', 'sha256 hash'])
+    assert.equal(Shapes.columnKind(h), 'source', h);
+  for (const h of ['Sources of liquidity', 'Source of repayment', 'Source and use'])
+    assert.equal(Shapes.columnKind(h), 'text', h);
+});
+
+test('A2: casePairing matches ids written in bold in the pairing source', () => {
+  const t = (headers, rows) => ({type: 'table', headers, rows: rows.map((cells, i) => ({line: i + 1, cells}))});
+  const cases = t(['Measure', 'Base case', 'Severe scenario'], [['Leverage', '6.0x', '8.7x']]);
+  const defs = t(['Scenario ID', 'Decline'], [['**s00**', '0'], ['**SC1**', '0.15']]);
+  assert.deepEqual(Shapes.casePairing([cases, defs]).ids, ['s00', 'SC1']);
+});
+
 test('a plain Module header is not an inter-module column', () => {
   assert.deepEqual(Shapes.hiddenColumns(['Issue', 'Module', 'Severity', 'Evidence Status'], 'records'), []);
 });

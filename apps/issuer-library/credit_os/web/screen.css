@@ -1352,13 +1352,13 @@ td .basis-link{margin-left:4px}
 .ck-row .rec-fields{grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:8px 20px}
 @media(max-width:560px){.ck-head{grid-template-columns:minmax(0,1fr) auto}.ck-head .state{grid-column:1/-1;grid-row:2}.ck-list{padding:0 14px}}
 .sd-board{margin-top:12px;min-width:0;border:1px solid var(--rule);border-radius:12px;background:Canvas;padding:20px 24px}
-.sd-h,.sd-cols{display:grid;grid-template-columns:minmax(0,1fr) 24px minmax(0,1fr)}
-.sd-h{margin-bottom:12px;align-items:center}
+.sd-cols{display:grid;grid-template-columns:minmax(0,1fr) 24px minmax(0,1fr)}
 .sd-hs{display:flex;align-items:center;gap:8px;margin:0;font:700 15px 'Red Hat Display',sans-serif;color:var(--text-primary)}
 .sd-dot{flex:none;width:10px;height:10px;border-radius:50%;background:var(--series-1)}
 .sd-s1 .sd-dot{background:var(--navy)}
 .sd-n{min-width:24px;height:22px;padding:0 8px;border-radius:999px;display:inline-grid;place-items:center;background:var(--selection);color:var(--blue-700);font:600 12px 'Red Hat Text',sans-serif}
 .sd-col{display:flex;flex-direction:column;gap:10px;min-width:0;align-self:start}
+.sd-col>.sd-hs{margin-bottom:2px;min-height:22px}
 .sd-col.sd-s0{grid-column:1}.sd-col.sd-s1{grid-column:3}
 .sd-line.sd-s2{margin-top:10px}
 .sd-entry{min-width:0;padding:14px 16px;border:1px solid var(--rule);border-radius:12px;background:var(--quiet)}
@@ -1368,7 +1368,7 @@ td .basis-link{margin-left:4px}
 .q-tag{margin-top:0}
 .sd-fig{margin:6px 0 0;font:700 24px/1.15 'Red Hat Display',sans-serif;letter-spacing:-.015em;font-variant-numeric:tabular-nums;color:var(--text-primary);overflow-wrap:anywhere}
 .sd-name{margin:5px 0 0;font:600 13px/1.4 'Red Hat Text',sans-serif;color:var(--text-primary);overflow-wrap:anywhere}
-@media(max-width:767px){.sd-board{padding:16px}.sd-h{display:none}.sd-cols{display:flex;flex-direction:column;gap:10px}}
+@media(max-width:767px){.sd-board{padding:16px}.sd-col>.sd-hs{display:none}.sd-cols{display:flex;flex-direction:column;gap:10px}}
 .ms-tiles{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));align-items:start}
 .ms-tile{display:flex;flex-direction:column;align-items:flex-start;gap:8px;min-width:0;padding:14px 16px;border:1px solid var(--rule);border-radius:12px;background:Canvas}
 .ms-tile>*{max-width:100%}
@@ -1766,7 +1766,7 @@ div.chart-open{cursor:default}
 .mdot>[role=img]:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 .mdot.ok>[role=img]{color:var(--green)}.mdot.warn>[role=img]{color:var(--amber)}.mdot.bad>[role=img]{color:var(--red)}.mdot.new>[role=img]{color:var(--blue-700)}
 .mdot.done>[role=img]{color:var(--text-quaternary);border-color:var(--gray-300)}
-.mdot.info>[role=img]{color:var(--muted);border-color:var(--gray-300);background:var(--gray-50)}
+.mdot.neutral>[role=img]{color:var(--muted);border-color:var(--gray-300);background:var(--gray-50)}
 .mdot.none>[role=img]{border-style:dashed;color:var(--text-quaternary)}
 .lib-strip{margin:0 0 20px}
 .lib-strip .strip{grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr))}

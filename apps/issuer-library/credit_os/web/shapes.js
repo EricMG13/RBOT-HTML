@@ -30,7 +30,7 @@ const Shapes = (() => {
   const norm = header => String(header ?? '').trim().toLowerCase().replace(/_/g, ' ').replace(/\s+/g, ' ');
   const KIND_RULES = [
     ['id', /^id$|\bid$|^linked pathway row$/],                                  // before source: "Evidence ID" is an id
-    ['source', /^(?:(?:sources?|evidence)(?:\s*\/\s*clause|\s+(?:trace|locator|register|document|file|sha|hash|page|reference|ref|link)s?)?|sha256)$/],
+    ['source', /^(?:(?:sources?|evidence)(?:\s*\/\s*clause|\s+(?:trace|locator|register|document|file|sha|hash|page|reference|ref|link)s?)?|sha256|source document name|source and basis|source\(s\)|source row\/section\/quote|sha256 hash)$/],
     ['intermodule', /^(supplied handoff|use in this module|effect on this module|consumer|downstream module|receiving module|responsible module|command|required consumer action|escalation consequence)$|^consequence for cp-/],
     ['limitation', /limitation/],
     ['consequence', /creditor consequence|effect on the credit view/],
@@ -123,7 +123,7 @@ const Shapes = (() => {
     // The source: exactly one caseRows table with one row per case column whose FIRST column is an id column, and whose ids are all different and non-empty.
     const sources = typed.filter(entry => entry.shape === 'caseRows' && entry.block.rows.length === names.length && columnKind(entry.block.headers[0]) === 'id');
     if (!names.length || sources.length !== 1) return null;
-    const ids = sources[0].block.rows.map(row => String(row.cells[0] ?? '').trim());
+    const ids = sources[0].block.rows.map(row => String(row.cells[0] ?? '').replace(/^[*_`~\s]+|[*_`~\s]+$/g, ''));  // marks stripped, as the case title reads the cell
     if (ids.some(id => id === '') || new Set(ids).size !== ids.length) return null;
     return {names, ids, table: sources[0].block, index: sources[0].index, idColumn: 0};
   }
@@ -142,7 +142,7 @@ const Shapes = (() => {
     return tokenPatterns.get(tokens).test(text) ? 'registers' : null;
   }
 
-  return {sectionRole, tableShape, columnKind, hiddenColumns, blockRole, promoted, isLedger, idTokens, casePairing, methodNote, CALCULATION_ID, METHOD_CODE};
+  return {sectionRole, tableShape, columnKind, hiddenColumns, blockRole, promoted, isLedger, idTokens, casePairing, methodNote, CALCULATION_ID, PERIOD_LABEL, METHOD_CODE};
 })();
 
 if (typeof window !== 'undefined') window.Shapes = Shapes;

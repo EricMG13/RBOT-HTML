@@ -147,10 +147,17 @@
   }
   const paragraphs = (texts, figure) => texts.map(entry => ({entry, ...prose(entry, figure)})).filter(p => p.body.trim() !== '');
   const traceOf = (trace, entry) => (trace ? trace(entry.line) : '');
-  // A sentence ends at ". " before a capital letter or at the end of the text; the first one is whole, never cut.
+  // A sentence ends at ". " before a capital letter (its own opening ** or ` marks do not count) or at the end of the text; the first one is whole, never cut.
+  // A stop inside a `code span` is no boundary; a closing mark right after the full stop belongs to the sentence, so no stretch is left with an unbalanced mark.
   function firstSentence(body) {
-    const end = /\.(?:\*\*)?\s+(?=[A-Z])/.exec(body), close = end && end[0].startsWith('.**') ? 2 : 0;  // a closing ** right after the full stop belongs to the sentence
-    return end ? {lead: [0, end.index + 1 + close], rest: [end.index + end[0].length, body.length]} : {lead: [0, body.length], rest: [body.length, body.length]};
+    const stop = /\.(\*\*|`)?\s+(?=(?:\*\*|`)?[A-Z])/g;
+    for (let end = stop.exec(body); end; end = stop.exec(body)) {
+      const spans = (body.slice(0, end.index).match(/`/g) ?? []).length, closer = end[1] === '`' ? 1 : 0;
+      if ((spans + closer) % 2 === 1) continue;                                 // inside an open code span
+      const close = end[1] ? end[1].length : 0;                                  // a closing mark right after the full stop belongs to the sentence
+      return {lead: [0, end.index + 1 + close], rest: [end.index + end[0].length, body.length]};
+    }
+    return {lead: [0, body.length], rest: [body.length, body.length]};
   }
 
   const LONG_LEAD = 140;
@@ -229,14 +236,16 @@
   // The one cell rule. (a) only references (calculation IDs, file names, handoff names): omitted, reached by the row's trace control. (b) an identifier
   // of the module, or a calculation ID, inside other text: omitted, and the row links to Evidence. (c) anything else: drawn as rich text.
   const calculationId = () => shapes().CALCULATION_ID;  // the one pattern, owned by shapes.js
-  const STRONG_REFERENCE = [{test: part => new RegExp(`^(?:${calculationId().source})$`).test(part)}, /^[^\s;,]+\.(?:jsonl|htm|html|pdf|xlsx?|csv|md|json|txt)$/i, /\(CP-[0-9A-Z]+\)$/, /^CP-[0-9A-Z]+$/];
+  // The one list of file extensions an issuer document or handoff can carry (longest first), used by the plain rule and the strict one.
+  const FILE_EXTENSIONS = 'jsonl|json|xhtml|html|htm|xml|pdf|docx|doc|xlsx|xlsm|xls|csv|tsv|pptx|ppt|txt|md|zip';
+  const STRONG_REFERENCE = [{test: part => new RegExp(`^(?:${calculationId().source})$`).test(part)}, new RegExp(`^[^\\s;,]+\\.(?:${FILE_EXTENSIONS})$`, 'i'), /\(CP-[0-9A-Z]+\)$/, /^CP-[0-9A-Z]+$/];
   const WEAK_REFERENCE = [/^[A-Z]{1,2}\d{2}$/, /^pages?\s+\d+(?:\s*[-–]\s*\d+)?$/i];
   function referencesOnly(text) {
     const parts = text.split(/\s*[;,]\s*/).filter(part => part !== '');
     return parts.length > 0 && parts.every(part => [...STRONG_REFERENCE, ...WEAK_REFERENCE].some(rx => rx.test(part))) && parts.some(part => STRONG_REFERENCE.some(rx => rx.test(part)));
   }
-  const REFERENCE_IN_TEXT = [/[\w-]+\.[A-Za-z]{2,5}\b/, /\bCP-[A-Za-z0-9]+/, /\b[0-9a-f]{32,}\b/i];
-  const STRICT_REFERENCE = [/[\w-]+(?:\.[\w-]+)*\.(?:jsonl|json|xhtml|html|htm|xml|pdf|docx|doc|xlsx|xlsm|xls|csv|tsv|pptx|ppt|txt|md|zip)\b/i, /\b(?=[0-9]*[a-f])[0-9a-f]{16,}\b/i, /\bsc\d+\b/i, /\bCP-[0-9A-Z]+\s+[A-Z]{1,2}\d{2}\b/];
+  const REFERENCE_IN_TEXT = [/[\w-]+\.[A-Za-z]{2,5}\b/, /\bCP-[A-Za-z0-9]+/, /\b[0-9a-f]{16,}\b/i, /(?<![\w.-])(?!and\/or\b)[\w.-]+\/[\w.-]+/];  // a file name, a module code, a hex id of 16 or more, a slash path (dir/file; "and/or" is a phrase)
+  const STRICT_REFERENCE = [new RegExp(`[\\w-]+(?:\\.[\\w-]+)*\\.(?:${FILE_EXTENSIONS})\\b`, 'i'), /\b(?=[0-9]*[a-f])[0-9a-f]{16,}\b/i, /\bsc\d+\b/i, /\bCP-[0-9A-Z]+\s+[A-Z]{1,2}\d{2}\b/];
   const tokenPatterns = new WeakMap();
   function tokensIn(text, tokens) {
     if (!Array.isArray(tokens) || !tokens.length) return [];
@@ -289,7 +298,8 @@
     return out;
   }
   const traceFor = (ctx, row, label) => (ctx.trace ? ctx.trace(row, label) : ctx.key ? traceRow(ctx.key(row), label) : '');
-  const traceOfBlock = (ctx, block) => (block.rows.length ? traceFor(ctx, block.rows[0], `${ctx.caption || 'This table'}: where it comes from`) : '');
+  const traceOfBlock = (ctx, block) => (block.rows.length && !ctx.noTrace ?  // `noTrace`: the card already carries the table's one trace control
+    traceFor(ctx, block.rows[0], `${ctx.caption || 'This table'}: where it comes from`) : '');
 
   // ---- scales: only mark positions come from the figures
   const plainNumber = value => String(Number(value.toPrecision(12)));
@@ -438,7 +448,9 @@
     if (!(largest > 0) || !Number.isFinite(largest)) { const max = unit === '%' ? 100 : 1; return {step: max, max}; }
     const target = largest * 1.05;
     if (!Number.isFinite(target)) return null;  // levels at the top of the float range have no axis to draw
-    for (let exponent = Math.floor(Math.log10(target / 8)) - 1; ; exponent += 1) {
+    const first = Math.floor(Math.log10(target / 8)) - 1;
+    if (!Number.isFinite(first)) return null;  // a level so small that a step of it underflows to 0 has no axis to draw
+    for (let exponent = first; ; exponent += 1) {
       for (const m of [1, 2, 2.5, 5]) {
         const step = Number((m * 10 ** exponent).toPrecision(12));
         if (Math.ceil(target / step) <= 8) { const max = Number((step * Math.ceil(target / step)).toPrecision(12)); return Number.isFinite(max) ? {step, max} : null; }
@@ -588,7 +600,7 @@
   const plain = text => readerText().plainText(text);
   const labelNorm = col => col.label.trim().toLowerCase().replace(/_/g, ' ').replace(/\s+/g, ' ');
   // A trace control's name is drawn text (tooltip, accessible name): the title cell as the page shows it, and when findingCell held that cell back, its place in the table.
-  const rowLabelOf = (block, ctx, row, title) => `${findingCell(title, ctx).html !== undefined ? plain(title).trim() : `Row ${block.rows.indexOf(row) + 1}`}: where it comes from`;
+  const rowLabelOf = (block, ctx, row, title, subject = false) => `${findingCell(title, ctx).html !== undefined || (subject && isModuleName(title, ctx)) ? plain(title).trim() : `Row ${block.rows.indexOf(row) + 1}`}: where it comes from`;
   // The cells of a row beyond the table's headers have no label to stand under; each is drawn unlabelled, through findingCell, after the row's other fields.
   const extraList = (block, row, ctx) => extrasOf(block, row, ctx).map(html => `<p class="rec-x">${html}</p>`).join('');
   const levelColumn = (block, at) => { const cells = block.rows.map(row => cellText(row, at)).filter(text => text !== ''); return cells.length > 0 && cells.every(isLevel); };
@@ -662,7 +674,8 @@
     // The two columns: a recognised opposing pair when both its words are in the table (left is the pair's first), else the first two distinct words in written order.
     const pair = OPPOSING_SIDES.find(([a, b]) => tally.has(a) && tally.has(b)), sides = pair ? pair.map(key => tally.get(key)) : [...tally.values()].slice(0, 2);
     const place = entry => (sides[0]?.key === entry.key ? 0 : sides[1]?.key === entry.key ? 1 : 2);
-    const head = sides.length ? `<div class="sd-h">${sides.map((side, k) => `<p class="sd-hs sd-s${k}"><i class="sd-dot" aria-hidden="true"></i>${side.first.wordHtml}<b class="sd-n">${side.n}</b></p>`).join('<span></span>')}</div>` : '';
+    // Each side's heading is the first thing in its own column, so the page reads one side, then the other.
+    const heading = k => (sides[k] ? `<p class="sd-hs sd-s${k}"><i class="sd-dot" aria-hidden="true"></i>${sides[k].first.wordHtml}<b class="sd-n">${sides[k].n}</b></p>` : '');
     const line = entry => {
       const at = place(entry), title = cellText(entry.row, labelCol.at), figure = figCol ? fieldHtml(cellText(entry.row, figCol.at), ctx) : '';
       const side = entry.wordHtml === '' && entry.qualifier === '' ? '' : `<span class="sd-side"><i class="sd-dot" aria-hidden="true"></i>${entry.wordHtml}</span>${qualifierTag(entry.qualifier, ctx)}`;
@@ -670,23 +683,26 @@
       return `<div class="sd-line sd-s${at}">${card}</div>`;
     };
     // Each side is its own column, its entries from the top in the table's order; a row on neither side stands full width beneath.
-    const column = k => `<div class="sd-col sd-s${k}">${entries.filter(entry => place(entry) === k).map(line).join('')}</div>`;
+    const column = k => `<div class="sd-col sd-s${k}">${heading(k)}${entries.filter(entry => place(entry) === k).map(line).join('')}</div>`;
     const columns = sides.length ? `<div class="sd-cols">${column(0)}${column(1)}</div>` : '';
-    return `<div class="sd-board" data-block role="group"${ctx.caption ? ` aria-label="${escapeHtml(ctx.caption)}"` : ''}>${head}${columns}${entries.filter(entry => place(entry) === 2).map(line).join('')}</div>`;
+    return `<div class="sd-board" data-block role="group"${ctx.caption ? ` aria-label="${escapeHtml(ctx.caption)}"` : ''}>${columns}${entries.filter(entry => place(entry) === 2).map(line).join('')}</div>`;
   }
 
   // The module name of a row is the handoff's own text for what the row is about: "Source readiness (CP-0)" is drawn as written, though a lone "(CP-0)" would be a reference.
   // Only a cell that is one part (no `;` or `,`) of the form "<words> (CP-x)" and names no calculation or file; any other cell is read by findingCell like every cell.
-  const MODULE_NAME = /^[^;,]*\S\s*\(CP-[0-9A-Z]+\)$/, FILE_NAME = /\.(?:jsonl|htm|html|pdf|xlsx?|csv|md|json|txt)\b/i;
-  function subjectHtml(text, ctx) {
+  const MODULE_NAME = /^[^;,]*\S\s*\(CP-[0-9A-Z]+\)$/, FILE_NAME = new RegExp(`\\.(?:${FILE_EXTENSIONS})\\b`, 'i');
+  // True when the bypass applies: findingCell omitted the cell as a reference only, and it is a module name. A period label (FY24) among the words is not an identifier.
+  function isModuleName(text, ctx) {
     const cell = findingCell(text, ctx), raw = String(text).trim(), words = raw.slice(0, raw.lastIndexOf('('));
     // The words before the bracket hold no identifier of the module, no bare calculation-ID-shaped word and no file name, or the cell stays as findingCell read it.
-    const plainName = tokensIn(words, ctx.tokens).length === 0 && !/\b[A-Z]{1,2}\d{2}\b/.test(words) && !FILE_NAME.test(raw) && !calculationId().test(raw);
-    return cell.omitted && !cell.inEvidence && MODULE_NAME.test(raw) && plainName ? readerText().richText(raw) : fieldHtml(text, ctx);
+    const idShaped = (words.match(/\b[A-Z]{1,2}\d{2}\b/g) ?? []).some(word => !shapes().PERIOD_LABEL.test(word.toLowerCase()));
+    return cell.omitted && !cell.inEvidence && MODULE_NAME.test(raw) && tokensIn(words, ctx.tokens).length === 0 && !idShaped && !FILE_NAME.test(raw) && !calculationId().test(raw);
   }
+  const subjectHtml = (text, ctx) => (isModuleName(text, ctx) ? readerText().richText(String(text).trim()) : fieldHtml(text, ctx));
 
   // ---- moduleState: C20, tiles; a state that repeats collapses to one tile with the state, the count and the rows in a <details>.
   // `ctx.countNoun` (a fixed word the page supplies, "modules") is the caption after the count; without it the caption is the name column's header, as written.
+  const titleOf = (cls, html) => (html === '' ? '<span></span>' : `<p class="${cls}">${html}</p>`);  // a held-back title leaves a spacer, not an empty paragraph
   function moduleStateTiles(block, ctx) {
     const cols = visibleColumns(block, 'moduleState', ctx), stateCol = cols.find(col => labelNorm(col) === 'status'), nameCol = cols.find(col => col !== stateCol);
     if (!stateCol || !nameCol || !block.rows.length) return recordCards(block, ctx);
@@ -697,11 +713,11 @@
     for (const row of block.rows) {
       const key = stateKey(row), title = cellText(row, nameCol.at);
       if (!repeated(key)) {
-        tiles.push(`<article class="ms-tile"><div class="ms-head"><p class="ms-title">${subjectHtml(title, ctx)}</p>${traceFor(ctx, row, rowLabelOf(block, ctx, row, title))}</div>${stateBadge(cellText(row, stateCol.at), ctx)}${fieldList(row, rest, ctx)}${extraList(block, row, ctx)}</article>`);
+        tiles.push(`<article class="ms-tile"><div class="ms-head">${titleOf('ms-title', subjectHtml(title, ctx))}${traceFor(ctx, row, rowLabelOf(block, ctx, row, title, true))}</div>${stateBadge(cellText(row, stateCol.at), ctx)}${fieldList(row, rest, ctx)}${extraList(block, row, ctx)}</article>`);
       } else if (!done.has(key)) {
         done.add(key);
         const same = block.rows.filter(other => stateKey(other) === key);
-        const items = same.map(other => `<li><div class="ms-head"><p class="ms-name">${subjectHtml(cellText(other, nameCol.at), ctx)}</p>${traceFor(ctx, other, rowLabelOf(block, ctx, other, cellText(other, nameCol.at)))}</div>${fieldList(other, rest, ctx)}${extraList(block, other, ctx)}</li>`).join('');
+        const items = same.map(other => `<li><div class="ms-head">${titleOf('ms-name', subjectHtml(cellText(other, nameCol.at), ctx))}${traceFor(ctx, other, rowLabelOf(block, ctx, other, cellText(other, nameCol.at), true))}</div>${fieldList(other, rest, ctx)}${extraList(block, other, ctx)}</li>`).join('');
         tiles.push(`<article class="ms-tile ms-group"><div class="ms-head">${stateBadge(cellText(row, stateCol.at), ctx)}</div><details class="ms-list"><summary><b class="ms-n">${same.length}</b> ${ctx.countNoun ? '' : '· '}<span class="ms-nl">${escapeHtml(ctx.countNoun ?? nameCol.label)}</span><span class="ms-ch" aria-hidden="true">${icon('chevron-down')}</span></summary><ul>${items}</ul></details></article>`);
       }
     }
@@ -738,7 +754,9 @@
       // A module that ran has a glyph: its declared state's icon, the warning mark when not assessable, else the check of a completed module. Only unchosen saved outputs are a hollow ring.
       const mark = item.blocked ? {tone: 'warn', icon: 'triangle-alert'} : usable ? stateOf(item.state) : item.choose ? null : {tone: 'done', icon: 'check'};
       const word = item.blocked ? 'Not assessable' : usable ? plain(item.state).trim() : item.choose ? 'saved outputs, none chosen' : '';
-      return `<li class="mdot ${mark ? mark.tone : 'none'}"><span role="img" tabindex="0" ${tipAttributes(word ? `${item.title}: ${word}` : item.title)}>${mark ? icon(mark.icon) : ''}</span></li>`;
+      // The info tone is classed `neutral`: `.info` is the page's tooltip-button rule (raised, overlapping, hidden in print), which a dot must not meet.
+      const tone = mark ? (mark.tone === 'info' ? 'neutral' : mark.tone) : 'none';
+      return `<li class="mdot ${tone}"><span role="img" tabindex="0" ${tipAttributes(word ? `${item.title}: ${word}` : item.title)}>${mark ? icon(mark.icon) : ''}</span></li>`;
     };
     return `<ul class="mdots" aria-label="Modules in this run: ${items.length}">${items.map(dot).join('')}</ul>`;
   }

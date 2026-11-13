@@ -4193,6 +4193,41 @@ test('plain-page charts (fix round 1): a cell is drawn as written (no added % or
   assert.ok(early.includes('90%') && early.includes('title="Not supplied'), 'earlier format unchanged');
 });
 
+test('A8: a plain-page chart names its figures in attributes from the same text the visible label draws: no n.a., no raw "Not supplied" cell text', () => {
+  const attrs = html => [...html.matchAll(/(?:title|aria-label)="([^"]*)"/g)].map(m => m[1]).concat([...html.matchAll(/<title>(.*?)<\/title>/g)].map(m => m[1]));
+  for (const [maker, chart] of [[withStructure, BULLET], [withStructure, LIMITS], [withRecovery, RECOVERY]]) {
+    const html = plainChart(maker, chart);
+    for (const a of attrs(html)) assert.ok(!/Not supplied|\bn\.a\./.test(a), `${chart.kind}: ${a}`);
+  }
+  assert.ok(attrs(plainChart(withStructure, BULLET)).includes('Liquidity: threshold 100, Passes at or above'), 'a part with no stated figure is left out of the spoken statement');
+});
+
+test('A9: a plain-page chart cell the page holds back for a calculation ID draws the link to Evidence in its place, not nothing', () => {
+  const held = d => {
+    withStructure(d);
+    const block = d[outId('CP-1')].sections.flatMap(section => section.blocks).find(b => b.type === 'table' && b.rows.some(row => row.line === 103));
+    block.rows.find(row => row.line === 103).cells[2] = 'Calculation C01 result';
+    return d;
+  };
+  const html = plainChart(held, BULLET);
+  assert.ok(/<span class="structure-text">[^<]*Current <a class="in-ev" href="[^"]+">In Evidence<\/a>/.test(html) || html.includes('class="in-ev"'), html.slice(0, 0));
+  assert.ok(!html.includes('Calculation C01'), 'the calculation ID itself is not drawn');
+});
+
+test('A6: a chart-gap card carries one trace control, as a drawn chart card does', () => {
+  const page = h1Page([sec('Chart data: covenant headroom', 3, 35, 'consumed', [chartTable(37, [[38, 'FY2024', 'Not supplied: no covenant is stated', 'x (net debt to EBITDA)', 'not established for this run and not a compliance opinion']])])], {chartGaps: [{title: 'Covenant headroom', table: 37, gap: 'no covenant is stated'}]});
+  const html = page.moduleReport(a1Id);
+  const card = /<div class="panel-card" id="s-35">.*?(?=<div class="panel-card" id="s-40">)/s.exec(html)[0];
+  assert.equal((card.match(/class="basis-link trace-row"/g) || []).length, 1);
+});
+
+test('A7: a map card whose edge-table reason was held back draws one "In Evidence" link', () => {
+  const page = h1Page([sec('Map: legal entities', 3, 410, 'consumed', [table(412, MAP_HEAD, [[413, 'Not supplied: no edge is stated', 'Not supplied: x', 'Not supplied: x', 'Not supplied: x', 'Not supplied: see CP-0 source readiness register']]), text(414, 'Map caption.')])], {maps: [...a1Set.maps, {name: 'legal entities', table: 412, gap: 'no edge is stated'}]});
+  const card = /<div class="map-card" id="s-410">.*?Map caption\./s.exec(page.moduleReport(a1Id))[0];
+  assert.equal((card.match(/class="in-ev"/g) || []).length, 1);
+  assert.ok(!card.includes('CP-0 source'));
+});
+
 // ---- Changes (library redesign, task 9): views.js's changesView gathers the run's CP-8 handoff, its drawer-key output and the Overview link, and gives them to changes.js.
 test('changesView hands changes.js the CP-8 output (id, module, run, chip counts) and the Overview route, and draws the page from them', () => {
   const src = read('views.js');
@@ -5084,14 +5119,14 @@ test('L2 the Cards/List choice is library state: kept through an empty result, w
 test('L3 dots: every dot is the same size with a glyph; completed carries a check, a declared state its icon, not assessable its mark, an unchosen output a hollow ring; each can take focus', () => {
   const html = C0.moduleDots([{ title: 'A', state: null }, { title: 'B', state: 'Ready' }, { title: 'C', state: 'Blocked' }, { title: 'D', blocked: true }, { title: 'E', choose: true }, { title: 'F', state: 'Draft Only' }]);
   const dots = html.split('<li ').slice(1);
-  assert.deepEqual(dots.map(d => /class="mdot (\w+)"/.exec(d)[1]), ['done', 'ok', 'bad', 'warn', 'none', 'info']);
+  assert.deepEqual(dots.map(d => /class="mdot (\w+)"/.exec(d)[1]), ['done', 'ok', 'bad', 'warn', 'none', 'neutral']);  // the info tone is classed neutral: `.info` is the tooltip-button rule
   assert.ok(dots.slice(0, 4).concat(dots[5]).every(d => d.includes('<svg class="i"')), 'every module that ran has a glyph');
   assert.ok(dots[0].includes('M20 6 9 17l-5-5'), 'completed is a check');
   assert.ok(dots[3].includes('M12 9v4'), 'not assessable is the warning mark');
   assert.ok(!dots[4].includes('<svg'), 'an unchosen output is a hollow ring');
   assert.ok(dots.every(d => d.includes('role="img" tabindex="0"')), 'a dot takes focus so its tooltip shows from the keyboard');
   const css = read('screen.css');
-  assert.ok(css.includes('.mdot.info>[role=img]{') && css.includes('.mdot>[role=img]:focus-visible{outline:2px solid var(--blue)'));
+  assert.ok(css.includes('.mdot.neutral>[role=img]{') && !css.includes('.mdot.info') && css.includes('.mdot>[role=img]:focus-visible{outline:2px solid var(--blue)'));
   assert.ok(/\.mdot>\[role=img\]\{[^}]*box-sizing:border-box;[^}]*width:20px;height:20px|\.mdot>\[role=img\]\{[^}]*width:20px;height:20px;[^}]*box-sizing:border-box/.test(css), 'one size');
 });
 const C0 = require('./components.js');

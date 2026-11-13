@@ -353,7 +353,7 @@ function bulletChart(id,v,chips=false) {
     const track=`<span class="bullet-track">${pass}${threshold===null?'':`<i class="tick" style="left:${at(threshold)}%"></i>`}${current===null?'':`<i class="marker" style="left:${at(current)}%"></i>`}</span>`;
     const text=`<span class="structure-text">Threshold ${stated(id,v,cells[v.threshold])} · Current ${stated(id,v,cells[v.current])}${v.headroom===null?'':` · Headroom ${shown(id,v,cells[v.headroom])}`} · ${cardHtml(id,v,direction)}</span>`;
     const inner=`<span class="chart-label">${esc(label)}${unit?`<small>${cardHtml(id,v,unit)}</small>`:''}</span>${track}${text}`;
-    return `<div class="bullet-row" role="group" aria-label="${esc(label)}">${structureOpen(id,row,inner,`${label}: threshold ${cardPlain(id,v,cells[v.threshold])}, current ${cardPlain(id,v,cells[v.current])}, ${cardPlain(id,v,direction)}`,chips,v.plain)}</div>`;
+    return `<div class="bullet-row" role="group" aria-label="${esc(label)}">${structureOpen(id,row,inner,statement(label,part(id,v,'threshold',cells[v.threshold]),part(id,v,'current',cells[v.current]),part(id,v,'',direction)),chips,v.plain)}</div>`;
   }).join('')}</div>`;
 }
 function limitsChart(id,v,chips=false) {
@@ -364,7 +364,7 @@ function limitsChart(id,v,chips=false) {
     const track=`<span class="limit-track">${bar(current,0)}${bar(proposed,1)}${limit===null?'':`<i class="tick" style="left:${at(limit)}%"></i>`}</span>`;
     const text=`<span class="structure-text">Current ${stated(id,v,cells[v.current])} · Proposed ${stated(id,v,cells[v.proposed])} · Limit ${stated(id,v,cells[v.limit])}</span>`;
     const name=cardPlain(id,v,cells[v.label]),inner=`<span class="chart-label">${esc(name)}${v.unit?'':`<small>${cardHtml(id,v,cells[cells.length-2])}</small>`}</span>${track}${text}`;
-    return `<div class="limit-row" role="group" aria-label="${esc(name)}">${structureOpen(id,row,inner,`${name}: current ${cardPlain(id,v,cells[v.current])}, proposed ${cardPlain(id,v,cells[v.proposed])}, limit ${cardPlain(id,v,cells[v.limit])}`,chips,v.plain)}</div>`;
+    return `<div class="limit-row" role="group" aria-label="${esc(name)}">${structureOpen(id,row,inner,statement(name,part(id,v,'current',cells[v.current]),part(id,v,'proposed',cells[v.proposed]),part(id,v,'limit',cells[v.limit])),chips,v.plain)}</div>`;
   }).join('')}</div>`;
 }
 // ---- Comparison views: only stated numbers are placed. A change between two stated values is never worked out or written; the two points show it.
@@ -380,7 +380,7 @@ function dumbbellChart(id,v,chips=false) {
     const dot=(n,series)=>n===null?'':`<i class="dumbbell-dot series-${series}" style="left:${at(n)}%"></i>`;
     const text=`<span class="structure-text">Prior ${shown(id,v,cells[v.periods[0]])} ${stated(id,v,cells[v.prior])} · Current ${shown(id,v,cells[v.periods[1]])} ${stated(id,v,cells[v.current])} · ${cardHtml(id,v,unitOf(row))}</span>`;
     const inner=`<span class="chart-label">${esc(label)}</span><span class="dumbbell-track">${link}${dot(prior,0)}${dot(current,1)}</span>${text}`;
-    return `<div class="dumbbell-row" role="group" aria-label="${esc(label)}">${structureOpen(id,row,inner,`${label}: prior ${cardPlain(id,v,cells[v.prior])}, current ${cardPlain(id,v,cells[v.current])}`,chips,v.plain)}</div>`;
+    return `<div class="dumbbell-row" role="group" aria-label="${esc(label)}">${structureOpen(id,row,inner,statement(label,part(id,v,'prior',cells[v.prior]),part(id,v,'current',cells[v.current])),chips,v.plain)}</div>`;
   }).join('')}</div>`;
 }
 // A peer range strip per metric (each on its own scale: a metric has its own unit). The band is drawn only for a stated low that does not exceed the stated high.
@@ -392,7 +392,7 @@ function rangeChart(id,v,chips=false) {
     const band=low===null||high===null||low>high?'':`<i class="range-band" style="left:${at(low)}%;width:${roundPct(at(high)-at(low))}%"></i>`;
     const track=`<span class="range-track">${band}${median===null?'':`<i class="tick" style="left:${at(median)}%"></i>`}${issuer===null?'':`<i class="marker" style="left:${at(issuer)}%"></i>`}</span>`;
     const text=`<span class="structure-text">Issuer ${stated(id,v,cells[v.issuer])} · Peer low ${stated(id,v,cells[v.low])} · Peer median ${stated(id,v,cells[v.median])} · Peer high ${stated(id,v,cells[v.high])} · Peers ${shown(id,v,cells[v.count])} · ${cardHtml(id,v,unitOf(row))}</span>`;
-    return `<div class="range-row" role="group" aria-label="${esc(label)}">${structureOpen(id,row,`<span class="chart-label">${esc(label)}</span>${track}${text}`,`${label}: issuer ${cardPlain(id,v,cells[v.issuer])}, peer range ${cardPlain(id,v,cells[v.low])} to ${cardPlain(id,v,cells[v.high])}`,chips,v.plain)}</div>`;
+    return `<div class="range-row" role="group" aria-label="${esc(label)}">${structureOpen(id,row,`<span class="chart-label">${esc(label)}</span>${track}${text}`,statement(label,part(id,v,'issuer',cells[v.issuer]),cardPlain(id,v,cells[v.low])!==''&&cardPlain(id,v,cells[v.high])!==''?`peer range ${cardPlain(id,v,cells[v.low])} to ${cardPlain(id,v,cells[v.high])}`:''),chips,v.plain)}</div>`;
   }).join('')}</div>`;
 }
 // Yield against maturity: x is the stated maturity date (a real YYYY-MM-DD, first to last placed), y the stated yield on a panel per unit. An instrument with no such date or yield has no point and is still listed.
@@ -434,7 +434,8 @@ function recoveryChart(id,v,chips=false,note=true) {
     const cols=scenarios.map((scenario,i)=>{
       const row=rows.find(r=>r.cells[v.scenario]===scenario);
       if(!row)return `<span class="col missing" title="No row for ${esc(scenario)}"><strong style="bottom:${zero}%">not stated</strong></span>`;
-      const said=`${cardPlain(id,v,name)}, ${cardPlain(id,v,scenario)}: recovery ${chartNumber(row.cells[v.recovery])===null?'n.a.':row.cells[v.recovery]} ${cardPlain(id,v,unitOf(row))}`;
+      const recovered=v.plain?cardPlain(id,v,row.cells[v.recovery]):chartNumber(row.cells[v.recovery])===null?'n.a.':row.cells[v.recovery];  // a findings page leaves out a recovery that states no figure
+      const said=`${cardPlain(id,v,name)}, ${cardPlain(id,v,scenario)}${recovered===''?'':`: recovery ${recovered} ${cardPlain(id,v,unitOf(row))}`}`;
       // A findings page's column is not a link (the chart's one trace control opens the drawer).
       // A Forecast card marks a stated absence only when its sentence is drawn in the class's facts line beneath.
       if(v.plain){const own=statedReason(id,row.cells[v.recovery],v);return columnOf(row.cells[v.recovery],i%3,zero,pct,'span',` role="img" aria-label="${esc(said)}"`,own,v.headless&&own!=='');}
@@ -468,7 +469,7 @@ function readerChart(id,chart,chips=false,note=true,onPlainPage=false,card=false
       if(isStated)absent.push({period,series:cardHtml(id,chart,table.headers[c]),text:own!==''?own:`<a class="in-ev" href="${esc(window.Evidence.href('registers',data[id].module,data[id].run))}">In Evidence</a>`});
       return columnOf(row.cells[c],i,zero,pct,'span','',own,isStated);
     }).join('');
-    const said=series.map(c=>`${cardPlain(id,chart,table.headers[c])} ${chartNumber(row.cells[c])===null?'n.a.':cardPlain(id,chart,row.cells[c])}`).join(', ');
+    const said=chart.plain?series.map(c=>part(id,chart,cardPlain(id,chart,table.headers[c]),row.cells[c])).filter(Boolean).join(', '):series.map(c=>`${cardPlain(id,chart,table.headers[c])} ${chartNumber(row.cells[c])===null?'n.a.':cardPlain(id,chart,row.cells[c])}`).join(', ');
     const inner=`<span class="plot"><span class="zero-rule" style="bottom:${zero}%"></span>${cols}</span><span class="chart-label">${esc(period)}${chart.sub?`<small>${chart.sub.map(c=>shown(id,chart,row.cells[c])).join(' → ')}</small>`:''}</span>`;
     const label=`aria-label="${esc(`${period}: ${said}. View source`)}"`;
     // A findings page's period is a labelled group, not a button to a source: the chart's one trace control opens the drawer.
@@ -704,9 +705,20 @@ function runTokens(run) {
 // The page's one strict context: every text read as a findings page reads it, against the id values of the run.
 const strictContext=run=>({tokens:runTokens(run),strict:true});
 const readCtx=(id,v)=>v?.headless?{...moduleTableContext(id),...strictContext(data[id].run)}:moduleTableContext(id);
-const statedReason=(id,text,v)=>window.Components.findingCell(text,readCtx(id,v)).html??'';
-const cardPlain=(id,v,cell)=>{const text=String(cell??'');return !v?.headless||window.Components.findingCell(text,readCtx(id,v)).html!==undefined?plain(text):'';};
-const cardHtml=(id,v,cell)=>v?.headless?statedReason(id,String(cell??''),v):esc(cell);
+// A chart cell's text as the page reads it: html, or '' when findingCell holds it back (statedHtml: for a title, legend or unit, where a link would stand in a heading).
+const statedHtml=(id,text,v)=>window.Components.findingCell(text,readCtx(id,v)).html??'';
+// statedReason: a figure's own cell. A cell held back for an identifier or a calculation ID gives the one link to the place Evidence lists it, never nothing.
+function statedReason(id,text,v) {
+  const cell=window.Components.findingCell(text,readCtx(id,v));
+  return cell.html??(cell.inEvidence?`<a class="in-ev" href="${esc(window.Evidence.href('registers',data[id].module,data[id].run))}">In Evidence</a>`:'');
+}
+// The text a chart's attribute (aria-label, title) may carry: on a findings page (plain) what the visible label draws, through findingCell, and not a stated absence (the reason is drawn beside the figure, never n.a. or raw cell text).
+const STATED_ABSENCE=/^(?:not supplied:|none identified\b|n\.?a\.?$)/i;
+const cardPlain=(id,v,cell)=>{const text=String(cell??'');if(!v?.headless&&!v?.plain)return plain(text);return window.Components.findingCell(text,readCtx(id,v)).html!==undefined&&!STATED_ABSENCE.test(plain(text).trim())?plain(text):'';};
+// A spoken statement: its label, then the parts that have text (a part whose cell states no figure is left out, never worded as n.a.).
+const part=(id,v,key,cell)=>{const text=cardPlain(id,v,cell);return text===''?'':key?`${key} ${text}`:text;};
+const statement=(label,...parts)=>{const list=parts.filter(Boolean).join(', ');return list?`${label}: ${list}`:label;};
+const cardHtml=(id,v,cell)=>v?.headless?statedHtml(id,String(cell??''),v):esc(cell);
 // The module's own charts, one card each; the Key numbers part of an earlier-format page draws the same cards.
 const reportChartCards=id=>chartCards((data[id].charts||[]).map((c,at,all)=>readerChart(id,c,true,at===lastPeriodChart(all))));
 // A new-format page's cards: a chart with no numbers (store `chartGaps`) is a card saying why, in table-line order with the charts; each card has its section route and caption.
@@ -715,7 +727,7 @@ function newFormatChartCards(id) {
   const cards=[...charts.map((chart,at)=>({table:chart.table,html:readerChart(id,chart,false,at===last,true)})),...(data[id].chartGaps||[]).map(gap=>({table:gap.table,gap}))].sort((a,b)=>a.table-b.table);
   // A chart with no numbers is the empty state (C32) with its stated reason; its table as written, like a drawn chart's, is in Evidence.
   return cards.map(card=>{
-    const body=card.gap?`<div class="section-heading"><h4>${esc(card.gap.title)}</h4>${chartTrace(id,{...card.gap,plain:true})}</div>${window.Components.gapState(fixtureTable(id,card.table),tableCtx(id,drawingSection(id,card.table)))}`:cardTitle(card.html);
+    const body=card.gap?`<div class="section-heading"><h4>${esc(card.gap.title)}</h4>${chartTrace(id,{...card.gap,plain:true})}</div>${window.Components.gapState(fixtureTable(id,card.table),{...tableCtx(id,drawingSection(id,card.table)),noTrace:true})}`:cardTitle(card.html);
     return `<div class="panel-card"${drawingAnchor(id,card.table)}>${body}${drawingCaption(id,card.table)}</div>`;
   }).join('');
 }
@@ -953,8 +965,10 @@ function mapsView(id,tag='h2',keep=()=>true,own=false) {
     const anchor=own?drawingAnchor(id,map.table):'',caption=own?drawingCaption(id,map.table):'';
     // A new-format page draws the pathway component (C14), or the empty state (C32) with the module's stated reason, and one link to the edge table as written, which is Evidence's.
     if(isNewFormat(data[id].sections)){
-      const section=drawingSection(id,map.table),link=`<p class="map-ev"><a class="in-ev" href="${esc(window.Evidence.href('registers',data[id].module,data[id].run))}">In Evidence</a></p>`;
-      return `<div class="map-card"${anchor}>${title}${tableRenderer(id)(fixtureTable(id,map.table),section)}${link}${caption}</div>`;
+      const section=drawingSection(id,map.table),drawn=tableRenderer(id)(fixtureTable(id,map.table),section);
+      // The component's empty state already holds the link when it held a reason back: one link, not two.
+      const link=drawn.includes('class="in-ev"')?'':`<p class="map-ev"><a class="in-ev" href="${esc(window.Evidence.href('registers',data[id].module,data[id].run))}">In Evidence</a></p>`;
+      return `<div class="map-card"${anchor}>${title}${drawn}${link}${caption}</div>`;
     }
     if(map.gap!==null)return `<div class="map-card"${anchor}>${title}<p class="lane-gap">Not established for this run<small>${esc(map.gap)}</small></p>${caption}</div>`;
     const rows=fixtureTable(id,map.table).rows,link=row=>`<a class="event-link" href="${evidenceHref(id,row.line)}" data-evidence="${esc(`${id}:${row.line}`)}">${rich(row.cells[1])}</a>`;
@@ -1252,7 +1266,7 @@ function chartNote(block,ctx) {
 // The empty state a card shows for a chart that was not drawn: a stated reason, or (the build's own message held back) the fixed label and a link.
 const CARD_HELD_LABEL='Not established for this run';
 function chartCard(id,item,number) {
-  const out=data[id],chart=item.chart||item.gap||item.sent,T=text=>statedReason(id,text,CARD),name=cardPlain(id,CARD,chart.title)||`Chart ${number}`,title=T(chart.title)||esc(name),ctx=cardContext(id,name);
+  const out=data[id],chart=item.chart||item.gap||item.sent,T=text=>statedHtml(id,text,CARD),name=cardPlain(id,CARD,chart.title)||`Chart ${number}`,title=T(chart.title)||esc(name),ctx=cardContext(id,name);
   const owner=`<a class="text-action" href="${routeHref(out.module,tableForm(id,'chart'),null,out.run,out.source)}">${esc(moduleTitle(out.module))}${icon('arrow-right')}</a>`;
   const open=`<article class="fc-card" data-block data-view="chart" aria-label="${esc(name)}">`;
   const evLink=(tab,module=out.module)=>`<a class="in-ev" href="${esc(window.Evidence.href(tab,module,out.run))}">In Evidence</a>`;
@@ -1727,7 +1741,7 @@ function overviewModules(context) {
   return tiles?`<section class="overview-part" id="overview-modules" aria-labelledby="overview-modules-h">${ovHead('overview-modules-h','By module','<p class="ov-sub">Open one to read its whole bottom line</p>')}${tiles}</section>`:'';
 }
 // The lead's Limitations and, beside them, the number of gaps the run's handoffs record, with the way to them in Evidence (the count is of listed items).
-function overviewLimitations(lead,entries,context) {
+function overviewLimitations(lead,context) {
   const limits=leadPassage(lead,'limits'),gaps=gapSignal(context);
   const html=window.Components.limitationsBlock(limits.texts,gaps,window.Evidence.href('gaps',null,context),limits.trace,limits.figure);
   return html?`<section class="overview-part" id="overview-limitations" aria-labelledby="overview-limitations-h"><div class="rd-card"><h2 class="rd-h" id="overview-limitations-h">Limitations</h2>${html}</div></section>`:'';
@@ -1742,7 +1756,7 @@ function runReport(context) {
   const feed=window.Components.findingsFeed(key.texts,key.trace,key.figure),change=window.Components.callout('What would change the view',contrary.texts,contrary.trace,contrary.figure,'h2'),watch=overviewWatch(lead,tables);
   const side=change+watch,both=Boolean(feed&&side);
   const why=feed||side?`<section class="overview-part g24" id="overview-why" aria-label="Why, and what would change the view">${feed?`<div class="${both?'c14':'c24'}"><div class="rd-card"><h2 class="rd-h">Key findings</h2>${feed}</div></div>`:''}${side?`<div class="${both?'c10':'c24'} ov-side">${side}</div>`:''}</section>`:'';
-  return `<div class="overview-page">${html+overviewBoard(tables)+why+overviewModules(context)+overviewLimitations(lead,entries,context)}</div>`;
+  return `<div class="overview-page">${html+overviewBoard(tables)+why+overviewModules(context)+overviewLimitations(lead,context)}</div>`;
 }
 // Run activity (ruling decision 10): only what is in progress and the queue. A finished run is reached from the library, and a run that ends while the page
 // is open is announced once by a toast. The state comes first (counts, then the run cards), detail after. Spend, run folders, run codes and file names are not shown.

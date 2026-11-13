@@ -1349,3 +1349,64 @@ test('strict id words (L3): a bare id-shaped word is held only when it is an id 
   assert.deepEqual(C.findingCell('calculation C05 shows it', { strict: true }), { omitted: true, inEvidence: true });
   assert.deepEqual(C.findingCell('CP-1 C48 states it', { strict: true }), { omitted: true, inEvidence: true });
 });
+
+test('A10: the plain rule and the strict rule hold back the same file extensions', () => {
+  for (const ext of 'jsonl json htm html xhtml xml pdf doc docx xls xlsx xlsm csv tsv ppt pptx txt md zip'.split(' ')) {
+    assert.deepEqual(C.findingCell(`report.${ext}`, {}), {omitted: true}, `plain: report.${ext}`);
+    assert.deepEqual(C.findingCell(`See report.${ext} for it`, {strict: true}), {omitted: true, inEvidence: true}, `strict: report.${ext}`);
+  }
+});
+
+test('A4: a sentence is cut at a stop before an opening mark; a stop inside a code span is no boundary; no stretch keeps a lone mark', () => {
+  const strip = html => html.replace(/<[^>]+>/g, '');
+  const lead = text => strip(/<p class="verdict-lead[^"]*">(.*?)<\/p>/s.exec(C.verdictPanel([{text, line: 1}]))[1]);
+  assert.equal(lead('The cushion is thin. **Hold the line** now.'), 'The cushion is thin.');
+  assert.equal(lead('Cover is `x. Then y` at best. More follows.'), 'Cover is x. Then y at best.');
+  assert.equal(lead('The case is `weak.` Then it ends.'), 'The case is weak.');
+  const all = C.verdictPanel([{text: 'The cushion is thin. **Hold the line** now.', line: 1}]);
+  assert.ok(!all.includes('**') && !all.includes('`'));
+});
+
+test('A3: a denormal ladder level returns (no axis, so no ladder) instead of looping', () => {
+  const level = '0.' + '0'.repeat(323) + '5';  // 5e-324
+  const block = {headers: ['Rank', 'Break', 'Level'], rows: [{line: 1, cells: ['1', 'A', level]}]};
+  assert.equal(typeof C.rankedLadder(block, {key: () => 'k'}), 'string');
+});
+
+test('A5: a module name with a period label is drawn and names its trace; a held-back title leaves no empty paragraph', () => {
+  const block = {headers: ['Module', 'Status'], rows: [
+    {line: 1, cells: ['FY24 forecast (CP-2G)', 'Complete']},
+    {line: 2, cells: ['Source readiness (CP-0)', 'Complete']},
+    {line: 3, cells: ['(CP-9)', 'Partial']},
+  ]};
+  const html = C.moduleStateTiles(block, {key: row => `k${row.line}`, tokens: []});
+  assert.ok(html.includes('FY24 forecast (CP-2G)'), 'FY24 forecast (CP-2G) is drawn');
+  assert.ok(html.includes('FY24 forecast (CP-2G): where it comes from'), 'its trace carries the drawn name');
+  assert.ok(html.includes('Source readiness (CP-0): where it comes from'));
+  assert.ok(!html.includes('<p class="ms-title"></p>'), 'no empty title paragraph');
+  assert.ok(html.includes('Row 3: where it comes from'), 'a held-back tile keeps its row place');
+});
+
+test('A9: a reason in a hidden column holding a long hex id or a slash path is held back and the link to Evidence stands in', () => {
+  const ctx = {evidenceHref: '#e'};
+  for (const reason of ['Not supplied: see 0123456789abcdef0123', 'Not supplied: see run-a/deliveries/d1']) {
+    const block = {headers: ['Item', 'Value', 'Source'], rows: [{line: 1, cells: ['Revolver', 'Not supplied: nothing stated', reason]}]};
+    const html = C.gapState(block, ctx);
+    assert.ok(!html.includes(reason.slice(-12)) && html.includes('class="in-ev"'), reason);
+  }
+  const plainReason = {headers: ['Item', 'Value', 'Source'], rows: [{line: 1, cells: ['Revolver', 'Not supplied: nothing stated', 'Not supplied: lenders and nothing']}]};
+  assert.ok(C.gapState(plainReason, ctx).includes('lenders and nothing'));
+});
+
+test('A9: "and/or" in a hidden-column reason is a phrase, not a path', () => {
+  const block = {headers: ['Item', 'Value', 'Source'], rows: [{line: 1, cells: ['Revolver', 'Not supplied: nothing stated', 'Not supplied: lenders and/or agents']}]};
+  assert.ok(C.gapState(block, {evidenceHref: '#e'}).includes('lenders and/or agents'));
+});
+
+test('A11: sidedBoard reading order: each side heading stands first inside its own column, before that side\'s entries and before the other column', () => {
+  const html = C.sidedBoard({headers: ['Driver', 'Side'], rows: [{line: 1, cells: ['Margin', 'Bull']}, {line: 2, cells: ['Cost', 'Bear']}]}, {key: r => `k:${r.line}`});
+  const at = rx => html.search(rx);
+  assert.ok(at(/<div class="sd-col sd-s0"><p class="sd-hs sd-s0">/) >= 0 && at(/<div class="sd-col sd-s1"><p class="sd-hs sd-s1">/) >= 0);
+  assert.ok(at(/class="sd-hs sd-s0"/) < at(/Margin/) && at(/Margin/) < at(/class="sd-hs sd-s1"/) && at(/class="sd-hs sd-s1"/) < at(/Cost/));
+  assert.ok(!html.includes('class="sd-h"'));
+});
