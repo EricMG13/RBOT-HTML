@@ -85,8 +85,15 @@ written "to stop the model from self validation and calculation"; CP-OS runs non
   the six fixed metric rows passes when the charts are gaps.
 - Adjusted-only, the controller's defaults: periods are not mixed (if reported EBITDA is stated
   for any period, the reported headers are used and a period with only adjusted EBITDA is a gap
-  in the chart); adjusted leverage is not added to the library's leverage screening filters; a
-  reporting currency entered at run start that differs from the statements is not flagged.
+  in the chart); a reporting currency entered at run start that differs from the statements is
+  not flagged.
+- Library, as the code stands (corrected 2026-11-14; an earlier version of this record said
+  adjusted leverage was kept out of the screening filters, which was wrong). An adjusted-only
+  run's leverage, net leverage and interest cover are stored under the same metric keys as a
+  reported run's, with the adjusted name as `label`. The library's range filters and sort read
+  the number only, so an adjusted multiple is filtered and ranked beside reported ones. The run
+  card names the adjusted measure and the list view marks the figure `adj.` (full name on hover).
+  Open for the owner: whether adjusted figures stay in the leverage filters and sort.
 - On the Changes page a run on reported EBITDA against a run on adjusted EBITDA is "not
   comparable", with both labels in the reason; no difference is printed.
 - Instruction size. The method text CP-1 is sent was shortened by 5,851 characters (duplicate
@@ -133,8 +140,7 @@ written "to stop the model from self validation and calculation"; CP-OS runs non
   not read; a register header one letter off hides the register's other issues until the next
   write; an `LTM` statement column is refused and nothing says it belongs in the derived-period
   table; the Changes page cannot read free cash flow from the statement tables' `Unit` column;
-  a unit with a space inside a prefixed symbol (`C $m`) is told to restate under the money unit
-  with no gap option; a unit such as `US$m (thousands)` is told to move the note to Basis, which
+  a unit such as `US$m (thousands)` is told to move the note to Basis, which
   keeps a thousands figure under a millions unit (predates this change);
   two `calculate` tests are weaker than they should be (one accepts either an error or a null;
   one uses `sum` as its oracle); the money-unit pattern is written in both delivery and the
