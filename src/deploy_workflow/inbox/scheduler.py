@@ -30,6 +30,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import IO, Any
 
+from deploy_workflow.context import load_context
 from deploy_workflow.inbox import activity, filing, layout, runs, startup
 from deploy_workflow.inbox.runs import Record
 from deploy_workflow.inbox.startup import StartupRefused
@@ -245,7 +246,8 @@ class Scheduler:
     def submit(self, sid: str, answers: Answers, approved_digest: str) -> Record:
         """Start one run for an approved submission. Repeating a submission returns its record.
 
-        ``Refused`` if the answers are not valid, a module is unknown, or the approval is not the
+        ``Refused`` if the answers are not valid, the pathway is deactivated (the short credit
+        snapshot), a module is unknown, or the approval is not the
         digest this service issued for exactly the files and answers now held. The files are
         sealed first (no upload or removal lands after that), checked, then the record is saved
         and only then is the sealed folder renamed, so an interruption between them is finished
@@ -258,6 +260,11 @@ class Scheduler:
             for record in self._records.values():
                 if record.submission == sid:
                     return record
+            try:  # a context the launcher would refuse, or a deactivated pathway, is a 400
+                run = load_context(submissions.context_bytes(answers)).run
+                cpos_launch.refuse_deactivated(run.pathway)
+            except ValueError as refusal:
+                raise submissions.Refused(str(refusal)) from refusal
             for name in answers["modules"]:
                 if name not in cpos_launch.METHODS:
                     raise submissions.Refused(f"unknown module {name}")

@@ -4,6 +4,16 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-13 — Full and lite credit assessments; short credit snapshot deactivated (branch `claude/lite-full-credit-assessment`)
+Scope: offline only; no provider or model call. `credit_snapshot` is titled "Full credit assessment"; the new `lite_credit_assessment` (CP-0, CP-1, CP-1A, CP-2, CP-2A; no CP-MODEL, so no forecast) is offered on the run-start page; `short_snapshot` stays wired, is not offered, and a new run of it is refused at the launcher, the run-start summary and the inbox submit. Ruling: `docs/rulings/2026-11-13-full-and-lite-credit-assessments.md`.
+- Synthetic lite run, no model: `test_the_lite_pathway_runs_end_to_end_to_a_verified_delivery_with_a_synthetic_provider` reaches a verified delivery with all nine report blocks populated and no forecast published (`cp_forecast_published` false, no "Model not published" line, as nothing was requested). A second synthetic lite run plans CP-8 last against a lite prior and delivers the Changes pack, and the library renders a lite run with the Forecast page stating that no forecast was published. These prove the pipeline, not model output.
+- Prompt-size ceilings are tests per pathway; lite measures 392,429 characters (CP-1 5,717 fewer than with CP-MODEL) against 420,000 (table in the ruling).
+- Tests: `PYTHONPATH=src:. uv run pytest tests/test_cpos_launch.py tests/test_cpos_scale.py tests/test_context_form.py tests/test_run_start_page.py tests/test_run_start_scheduler.py tests/test_changes.py tests/test_credit_os_catalogue.py -q`: exit 0, 1807 passed, 1 skipped (the paid test); library, scheduler, service, packaging and update tests: exit 0, 500 passed, 1 skipped.
+- Page logic: `node --test` on reader, static, calendar and changes `.test.cjs`: exit 0, 394 pass, 0 fail (re-run after the final fix wave).
+- Final fix wave: starting a run from a past short-snapshot run keeps the default pathway, does not mark it carried and says the short credit snapshot is no longer offered (page test); a start from an offered-pathway run keeps its plain message (page test); the lite card names the credit agreement (page test); the README names the lite option.
+- `uv run python tools/quality_gate.py`: exit 0, 0 findings in 13 changed files (1,171 changed lines).
+- Not accepted: no reader check of a real lite run against the September VMO2 reference (AGENTS.md requires one for a presentation change), so the change is built, not accepted, until one real lite run is read. No lite run has been made; its cost (USD 5.07 baseline, measured before the 2026-11-13 method change) is an estimate. The page was not opened in a browser by hand; no lite case is in `model_testing/configs.py`.
+
 ## 2026-11-13 — Prompt-first redesign of CP-8, forecast inputs and prose check 6 (PRs 84-91)
 Scope: synthetic tests and retained-data comparisons only. No provider was called. No live model has been sent any instruction changed here.
 

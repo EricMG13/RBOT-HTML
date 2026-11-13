@@ -2967,7 +2967,7 @@ test('Report history: columns are Date, Pathway, Modules run, Status in a captio
   assert.deepEqual([...html.matchAll(/<th scope="col">(.*?)<\/th>/g)].map(m => m[1]), ['Date', 'Pathway', 'Modules run', 'Status']);
   assert.ok(html.includes('<caption>Runs of Synthetic Issuer, latest as-of date first</caption>'));
   const [a, b, d, c] = histRows(html);
-  assert.deepEqual([strip(a.cells[0]), strip(a.cells[1])], ['31 December 2025Run A Showing', 'Credit snapshot']);
+  assert.deepEqual([strip(a.cells[0]), strip(a.cells[1])], ['31 December 2025Run A Showing', 'Full credit assessment']);
   assert.deepEqual(strip(b.cells[0]), '31 March 2025Run B');
   assert.deepEqual(strip(d.cells[0]), '31 March 2025Run D');
   assert.deepEqual([strip(c.cells[0]), strip(c.cells[1]), strip(c.cells[2])], ['Not recordedRun C', 'Not recorded', 'Not recorded']);
@@ -2996,9 +2996,9 @@ test('Earlier methods: the badge sits beside Earlier format in the Report histor
     assert.equal(strip(b.cells[3]), 'Completed · 1 not assessable Earlier methods');
     assert.equal(strip(d.cells[3]), 'Completed', 'no list, no badge');
     assert.ok(b.cells[3].includes('<span class="badge badge-gray earlier-methods">Earlier methods</span>'));
-    assert.equal(strip(page.runLabel('W-Evidence', RUN).replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: 31 December 2025 · Credit snapshot · Run A Earlier format Earlier methods');
-    assert.equal(strip(page.runLabel('W-Forecast', 'run-b').replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: 31 March 2025 · Credit snapshot · Run B Earlier methods');
-    assert.equal(strip(page.runLabel('W-Forecast', 'run-d').replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: 31 March 2025 · Credit snapshot · Run D');
+    assert.equal(strip(page.runLabel('W-Evidence', RUN).replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: 31 December 2025 · Full credit assessment · Run A Earlier format Earlier methods');
+    assert.equal(strip(page.runLabel('W-Forecast', 'run-b').replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: 31 March 2025 · Full credit assessment · Run B Earlier methods');
+    assert.equal(strip(page.runLabel('W-Forecast', 'run-d').replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: 31 March 2025 · Full credit assessment · Run D');
   } finally {
     delete HIST.contexts['run-b'].methodChanges;
     delete HIST.runFields.methodChanges;
@@ -3010,15 +3010,15 @@ test('Report history: the selected run\'s row is marked aria-current and every r
   const rows = histRows(html);
   assert.deepEqual(rows.map(r => r.attrs.includes('aria-current="true"')), [false, true, false, false]);
   for (const row of rows) assert.ok(/<a href="#W-Overview\/overview\?c=run-[a-d]" aria-label="Open run: [^"]+">/.test(row.cells[0]), row.cells[0]);
-  assert.ok(rows[1].cells[0].includes('aria-label="Open run: 31 March 2025, Credit snapshot, Run B"'));
+  assert.ok(rows[1].cells[0].includes('aria-label="Open run: 31 March 2025, Full credit assessment, Run B"'));
 });
 
 test('run label: the run\'s date, pathway and code, the Earlier format badge only where H7 holds, and the link to the Report history', () => {
   const page = histPage();
   const earlier = page.runLabel('W-Evidence', RUN);
-  assert.equal(strip(earlier.replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: 31 December 2025 · Credit snapshot · Run A Earlier format');
+  assert.equal(strip(earlier.replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: 31 December 2025 · Full credit assessment · Run A Earlier format');
   assert.ok(earlier.includes('<a class="text-action" href="#W-Report/history?c=run-a">All runs of this issuer</a>'));
-  assert.equal(strip(page.runLabel('W-Forecast', 'run-b').replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: 31 March 2025 · Credit snapshot · Run B');
+  assert.equal(strip(page.runLabel('W-Forecast', 'run-b').replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: 31 March 2025 · Full credit assessment · Run B');
   assert.equal(strip(page.runLabel('W-Overview', 'run-c').replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: Not recorded · Not recorded · Run C');
   assert.ok(page.runLabel('CP-1', 'run-b').includes('href="#W-Report/history?c=run-b"'));
 });
@@ -3435,19 +3435,19 @@ const HASH_1 = 'a1b2c3d4'.repeat(8), HASH_2 = 'e5f6a7b8'.repeat(8);
 
 test('model picker: one delivery reads run date, pathway and run id, with no hash', () => {
   const models = [pickModel(HASH_1)];
-  assert.deepEqual(pickPage(models).modelOptionLabels(models), ['31 March 2025 · Credit snapshot · Run A']);
+  assert.deepEqual(pickPage(models).modelOptionLabels(models), ['31 March 2025 · Full credit assessment · Run A']);
 });
 
 test('model picker: two deliveries of one run differ by the first eight characters of the delivery id', () => {
   const models = [pickModel(HASH_1), pickModel(HASH_2)];
-  assert.deepEqual(pickPage(models).modelOptionLabels(models), ['31 March 2025 · Credit snapshot · Run A · a1b2c3d4', '31 March 2025 · Credit snapshot · Run A · e5f6a7b8']);
+  assert.deepEqual(pickPage(models).modelOptionLabels(models), ['31 March 2025 · Full credit assessment · Run A · a1b2c3d4', '31 March 2025 · Full credit assessment · Run A · e5f6a7b8']);
 });
 
 test('model picker: the relationship is appended only when recorded', () => {
   const models = [pickModel(HASH_1, { previous: HASH_2 }), pickModel(HASH_2)];
   const [first, second] = pickPage(models).modelOptionLabels(models);
-  assert.equal(first, `31 March 2025 · Credit snapshot · Run A · a1b2c3d4 · supersedes 31 March 2025 · Credit snapshot · Run A · e5f6a7b8`);
-  assert.equal(second, `31 March 2025 · Credit snapshot · Run A · e5f6a7b8 · superseded by 31 March 2025 · Credit snapshot · Run A · a1b2c3d4`);
+  assert.equal(first, `31 March 2025 · Full credit assessment · Run A · a1b2c3d4 · supersedes 31 March 2025 · Full credit assessment · Run A · e5f6a7b8`);
+  assert.equal(second, `31 March 2025 · Full credit assessment · Run A · e5f6a7b8 · superseded by 31 March 2025 · Full credit assessment · Run A · a1b2c3d4`);
   assert.ok(!pickPage([pickModel(HASH_1)]).modelOptionLabels([pickModel(HASH_1)])[0].includes('relationship'));
 });
 
@@ -3460,12 +3460,12 @@ test('model picker: with no run context the run folder is named, then the delive
 
 test('model picker: a relationship names a listed delivery by its label and an unlisted one by its id', () => {
   const models = [pickModel(HASH_1, { previous: HASH_2 })];
-  assert.equal(pickPage(models).modelOptionLabels(models)[0], `31 March 2025 · Credit snapshot · Run A · supersedes ${HASH_2}`);
+  assert.equal(pickPage(models).modelOptionLabels(models)[0], `31 March 2025 · Full credit assessment · Run A · supersedes ${HASH_2}`);
 });
 
 test('model picker: ids that share their first eight characters read with the whole id', () => {
   const models = [pickModel('tdg-forecast-005'), pickModel('tdg-forecast-006')];
-  assert.deepEqual(pickPage(models).modelOptionLabels(models), ['31 March 2025 · Credit snapshot · Run A · tdg-forecast-005', '31 March 2025 · Credit snapshot · Run A · tdg-forecast-006']);
+  assert.deepEqual(pickPage(models).modelOptionLabels(models), ['31 March 2025 · Full credit assessment · Run A · tdg-forecast-005', '31 March 2025 · Full credit assessment · Run A · tdg-forecast-006']);
 });
 
 test('model picker: a delivery for a run the library does not list is named by its own run folder, not the page run', () => {

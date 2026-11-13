@@ -731,6 +731,7 @@ const $ = id => document.getElementById(id);
 // Requested modules per pathway: src/deploy_vii/contracts.py PATHWAY_MODULES.
 const PATHWAYS = {
   credit_snapshot: ['CP-0','CP-1','CP-MODEL','CP-1A','CP-DR','CP-2','CP-2A','CP-2E','CP-2G','CP-4','CP-3','CP-5','CP-6'],
+  lite_credit_assessment: ['CP-0','CP-1','CP-1A','CP-2','CP-2A'],
   earnings_update: ['CP-0','CP-1','CP-MODEL','CP-1B','CP-1D','CP-DR','CP-2E','CP-5'],
   relative_value: ['CP-0','CP-1','CP-MODEL','CP-1C','CP-DR','CP-2','CP-2D','CP-2E','CP-3','CP-3C','CP-3D','CP-5'],
   covenant_refinancing: ['CP-0','CP-1','CP-MODEL','CP-1A','CP-DR','CP-2','CP-2A','CP-2D','CP-2E','CP-2G','CP-4','CP-3C','CP-5'],
@@ -744,6 +745,7 @@ const PATHWAYS = {
 // tests/test_context_form.py keeps both tables to the code.
 const RUN_ORDER = {
   credit_snapshot: ['CP-0','CP-1','CP-1A','CP-DR','CP-4','CP-2','CP-2A','CP-2E','CP-2G','CP-3','CP-5','CP-6'],
+  lite_credit_assessment: ['CP-0','CP-1','CP-1A','CP-2','CP-2A'],
   earnings_update: ['CP-0','CP-1','CP-1B','CP-DR','CP-2E','CP-1D','CP-5'],
   relative_value: ['CP-0','CP-1','CP-1A','CP-3D','CP-DR','CP-1C','CP-2','CP-2E','CP-2D','CP-3C','CP-3','CP-5'],
   covenant_refinancing: ['CP-0','CP-1','CP-1A','CP-DR','CP-4','CP-2','CP-2A','CP-2E','CP-2D','CP-2G','CP-3C','CP-5'],
@@ -784,13 +786,13 @@ const mname = m => (MODULES[m] || [m])[0];
 // Text from the rules or the service names a module by its code; the analyst reads its name (a code with no name here reads "a module").
 const named = t => String(t ?? '').replace(/\bCP-[A-Z0-9]+\b/g, c => MODULES[c] ? MODULES[c][0] : 'a module');
 const PATHS = {
-  credit_snapshot: {label:'Credit Snapshot', q:'A full first look at a credit', needs:'Filings, the governing legal documents, and quotes or price talk.'},
+  credit_snapshot: {label:'Full credit assessment', q:'A full first look at a credit', needs:'Filings, the governing legal documents, and quotes or price talk.'},
+  lite_credit_assessment: {label:'Lite credit assessment', q:'The credit profile and how it holds up under stress', needs:'Filings with financial statements; the executed credit agreement if you have it (the downside module is limited without it). No quotes.'},
   earnings_update: {label:'Earnings Update', q:'What changed since the last reporting period?', needs:'Filings for both periods and the management EBITDA bridge.'},
   relative_value: {label:'Relative Value', q:'Is this instrument cheap or rich?', needs:'Observed quotes.'},
   covenant_refinancing: {label:'Covenant & Refinancing', q:'What do the documents allow, and can it refinance?', needs:'The executed credit agreement or indenture.'},
   distressed_restructuring: {label:'Distressed & Restructuring', q:'How bad can it get, and who recovers what?', needs:'Executed documents, ratings and a fiscal-year base period.'},
-  portfolio_decision: {label:'Portfolio Decision', q:'Does it fit the fund?', needs:'The portfolio workbook and quotes.'},
-  short_snapshot: {label:'Short Credit Snapshot', q:'The credit view on one page', needs:'Filings with financial statements. No legal documents or quotes.'}
+  portfolio_decision: {label:'Portfolio Decision', q:'Does it fit the fund?', needs:'The portfolio workbook and quotes.'}
 };
 const RUN_LABEL = {primary:'New issue', secondary:'Trading', research:'No market view', earnings:'Earnings update'};
 // Fonts: the service's library route when the page is served; this repository's when it is opened
@@ -2421,19 +2423,24 @@ async function startFrom(runId) {
     resetAll();
   } else if (isObj(ctx)) problems.push('Its stored answers could not be read (' + bad + ').');
   const base = fieldValues(); // when the answers are unusable nothing the analyst typed is cleared: only the name and ID are set
+  let applied = false, pathNote = ''; // whether the earlier run's pathway is one this page offers and was selected
   if (usable) {
-    fill(ctx, {}, true);
+    fill(ctx, {}, true); // its other warnings stay unshown here, as before: only a refused pathway is told
     $('submitter').value = submitter;
+    applied = getV($('st-pathway'), 'pathway') === txt(ctx.run.pathway);
+    if (!applied) pathNote = (txt(ctx.run.pathway) === 'short_snapshot'
+      ? `The short credit snapshot is no longer offered, so the earlier run's pathway was not carried; the ${PATHS[getV($('st-pathway'), 'pathway')].label} is selected (the Lite credit assessment is the short option). Choose the pathway under Pathway.`
+      : `The earlier run's pathway "${txt(ctx.run.pathway)}" is not offered; the ${PATHS[getV($('st-pathway'), 'pathway')].label} is selected. Choose the pathway under Pathway.`);
   } else $('i-issuer_name').value = txt(got.issuer_name);
   $('i-issuer_id').value = txt(got.issuer_id);
   if (usable) $('d-as_of').value = today(); // the dates are the new run's own: they are never carried
   const now = fieldValues();
   CARRIED.fields = new Set([...now.keys()].filter(k => now.get(k) !== base.get(k) && k !== '|legal_documents'));
-  if (usable) CARRIED.fields.add('|pathway'); // the pathway is an answer carried from the run even when it is the default one
+  if (applied) CARRIED.fields.add('|pathway'); // the pathway is an answer carried from the run even when it is the default one; not when it was refused
   applyRowKeys();
   // The earlier run's module subset and turns: a subset run started again stays a subset.
   // A subset naming a module this pathway lacks is not applied at all (a partial subset would run other modules than the earlier run's).
-  const notes = [];
+  const notes = pathNote ? [pathNote] : []; // a note, not a problem: the message keeps its plain tone
   if (usable && Array.isArray(got.modules) && got.modules.length) {
     const inPathway = runOf(getV($('st-pathway'), 'pathway')), unknown = got.modules.filter(m => !inPathway.includes(m));
     if (unknown.length) notes.push(`The earlier run's module subset was not carried: ${unknown.map(mname).join(', ')} not in this pathway.`);
@@ -2577,7 +2584,7 @@ $('new-submission').addEventListener('click', () => {
 
 /* ======================================================================= Visibility */
 let rtTouched = false, basisTouched = false, idTouched = false, cutTouched = false;
-const PATH_DEFAULT_RUN = {credit_snapshot:'research', earnings_update:'earnings', relative_value:'secondary', covenant_refinancing:'research', distressed_restructuring:'research', portfolio_decision:'research', short_snapshot:'research'};
+const PATH_DEFAULT_RUN = {credit_snapshot:'research', earnings_update:'earnings', relative_value:'secondary', covenant_refinancing:'research', distressed_restructuring:'research', portfolio_decision:'research', lite_credit_assessment:'research'};
 function slug(s) {
   let x = s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   if (x.length > MAX_ISSUER_ID) { x = x.slice(0, MAX_ISSUER_ID); const cut = x.lastIndexOf('-'); if (cut > 10) x = x.slice(0, cut); }

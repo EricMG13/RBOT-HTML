@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any, get_args
 
 from deploy_vii.business_context import Category
-from deploy_vii.contracts import PATHWAY_MODULES, Run
+from deploy_vii.contracts import DEACTIVATED_MESSAGE, DEACTIVATED_PATHWAYS, PATHWAY_MODULES, Run
 from deploy_vii.live.prompts import STEP_CONTRACTS
 from deploy_vii.registry import modules, plan
 from deploy_vii.report_view import _spec_of, pathways
@@ -462,6 +462,14 @@ CONFIDENCE_RULE = (
 
 class LaunchRefused(ValueError):
     """The request cannot start; the message says what to change."""
+
+
+def refuse_deactivated(pathway: str) -> None:
+    """Refuse a new run of a deactivated pathway. The one refusal every launch entry point calls
+    (the command line, the run-start summary and the inbox's submit); `prepare` and the readers of
+    past runs do not, so retained runs and the pathway's instructions keep working."""
+    if pathway in DEACTIVATED_PATHWAYS:
+        raise LaunchRefused(DEACTIVATED_MESSAGE)
 
 
 @dataclass(frozen=True)
@@ -2241,7 +2249,8 @@ def _instructions(
 
 def pathway_modules(settings: RunContext) -> tuple[str, ...]:
     """A pathway's analytical modules: its preset less the modules that have their own route.
-    Owner, 2026-11-11: CP-DR and CP-2E are in every preset (CP-1C needs CP-DR's peers), so the
+    Owner, 2026-11-11: CP-DR and CP-2E are in every preset except ``short_snapshot`` and
+    ``lite_credit_assessment``, which have neither (CP-1C needs CP-DR's peers), so the
     context's peer source no longer adds a module. Explicit --modules are run as given."""
     return tuple(m for m in PATHWAY_MODULES[settings.run.pathway] if m not in NOT_ANALYTICAL)
 
@@ -3019,6 +3028,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.high_modules,
                 flag="--balanced" if args.balanced else "--high-modules",
             )
+        refuse_deactivated(load_context(Path(args.context).expanduser().read_bytes()).run.pathway)
         prepared = prepare(
             args.context,
             args.sources,

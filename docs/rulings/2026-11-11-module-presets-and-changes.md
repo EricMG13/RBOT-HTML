@@ -47,6 +47,8 @@ preset list; CP-8 leaves portfolio_decision).
 
 Decided, not yet built at the time of that change: M3 to M7; see the amendment of 2026-11-12 at the end.
 
+Superseded for new runs: the short-snapshot part (M6) by `2026-11-13-full-and-lite-credit-assessments.md`.
+
 ## Amendment 2026-11-12: M5, M7 and the CP-8 half of M8 built (engine and method; no paid call)
 
 Built on `claude/cp8-changes`. The old route that compares two delivered bundles

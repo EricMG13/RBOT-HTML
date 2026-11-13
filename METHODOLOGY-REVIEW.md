@@ -797,6 +797,19 @@ rows describe the Python screen owner, which CP-OS does not run and which is unc
 aliases are not produced. Selected source revision: this project's cpl10.md at the commit that records this
 note. Detail: `docs/rulings/2026-11-11-module-presets-and-changes.md`, amendment 2026-11-12 (M6).
 
+**Full and lite credit assessments, 2026-11-13 (owner: "create full credit snapshot (full credit
+assessment) and a shorter version (lite credit assessment) to replace L10"; "L10 - keep it wired but
+deactivated"; "add cp-2a to lite").** `credit_snapshot` is retitled "Full credit assessment" (id, modules
+and blocks unchanged). A new pathway `lite_credit_assessment`, "Lite credit assessment", has the preset
+CP-0, CP-1, CP-1A, CP-2, CP-2A (no CP-MODEL, so no forecast is published; the Model chart strip and
+credit metrics blocks are routed to CP-1 and still delivered, and the Forecast page states the gap, as for
+past short-snapshot runs). It has no CP-DR or CP-2E. The Short Credit Snapshot (`short_snapshot`,
+CP-L10) above stays wired but is deactivated: not offered on the run-start page, and a new run is refused
+with a message naming the lite assessment. `cpl10.md` is unchanged and still the selected CP-L10 method for
+past runs. No method text changed, so no run is marked "Earlier methods" by this change. Proven offline
+only; no model run and no reader check against the September VMO2 reference. Detail:
+`docs/rulings/2026-11-13-full-and-lite-credit-assessments.md`.
+
 **CP-DR source guidance, 2026-11-12 (owner: "focus primarily using reputable and relevant
 sources").** CP-DR's web-search instruction (`WEB_SEARCH_RULES` in `src/deploy_workflow/model/handoff.py`)
 now tells the module to rely primarily on the issuer's and peers' own filings and releases,
