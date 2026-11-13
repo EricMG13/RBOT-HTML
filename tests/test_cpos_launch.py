@@ -1161,6 +1161,81 @@ def test_a_short_snapshot_still_runs_end_to_end_through_the_lower_level_function
     assert "Short Credit Snapshot" in json.loads(delivered.read_text())["scope"]
 
 
+def short_snapshot_issues(
+    tmp_path, change, cp1=b"# upstream\nCover 3.1x; refinancing USD 1,250 million."
+):
+    prepared, task, context = good_task(tmp_path, "CP-L10", "short_snapshot")
+    task = dataclasses.replace(task, handoffs={"CP-1": cp1})
+    context["handoffs"] = {"CP-1": {"sha256": hashlib.sha256(cp1).hexdigest()}}
+    raw = change(short_snapshot_answer(context, list(prepared.plan.layout.routes)))
+    return _checked_handoff(task, raw.encode(), checker(prepared.layout))
+
+
+def test_the_checker_accepts_a_good_short_snapshot(tmp_path):
+    assert short_snapshot_issues(tmp_path, lambda raw: raw) == ()
+
+
+def test_a_key_figure_that_cp1_never_states_is_refused_naming_it(tmp_path):
+    """The figure is in the Key figures table and the Bottom line, so the fidelity check alone
+    accepts it; the Key figures check holds it to the CP-1 handoff the module was sent."""
+    issues = short_snapshot_issues(tmp_path, lambda raw: raw.replace("3.1x", "9.9x"))
+    assert any("Key figures" in i and "9.9" in i for i in issues), issues
+
+
+def test_the_good_short_snapshot_passes_the_key_figures_check(tmp_path):
+    assert short_snapshot_issues(tmp_path, lambda raw: raw) == ()
+
+
+def test_a_key_figure_that_drops_cp1s_sign_is_refused(tmp_path):
+    cp1 = b"# upstream\nChange -3.1x; refinancing USD 1,250 million."
+    issues = short_snapshot_issues(tmp_path, lambda raw: raw, cp1=cp1)
+    assert any("Key figures" in i and "3.1x" in i for i in issues), issues
+
+
+def test_a_second_key_figures_table_is_refused(tmp_path):
+    extra = "\n\n" + KEY_FIGURES.replace("3.1x", "9.9x")
+    issues = short_snapshot_issues(
+        tmp_path, lambda raw: raw.replace(KEY_FIGURES, KEY_FIGURES + extra)
+    )
+    assert any("Key figures" in i and "9.9x" in i for i in issues), issues
+    assert any("exactly one table" in i for i in issues), issues
+
+
+def test_no_cp1_handoff_means_the_key_figures_are_refused_not_skipped(tmp_path):
+    prepared, task, context = good_task(tmp_path, "CP-L10", "short_snapshot")
+    task = dataclasses.replace(task, handoffs={})
+    context["handoffs"] = {}
+    raw = short_snapshot_answer(context, list(prepared.plan.layout.routes))
+    issues = _checked_handoff(task, raw.encode(), checker(prepared.layout))
+    assert any("cannot be checked" in i for i in issues), issues
+
+
+def test_a_key_figures_table_with_other_columns_is_refused(tmp_path):
+    bad = "| Thing | Number |\n| --- | --- |\n| Interest cover | 3.1x |"
+    issues = short_snapshot_issues(tmp_path, lambda raw: raw.replace(KEY_FIGURES, bad))
+    assert any("Key figures" in i and "Measure | Value | Period | Source" in i for i in issues)
+
+
+@pytest.mark.parametrize(
+    ("change", "complaint"),
+    [
+        # Check 8 (figures in a reader passage are held in a table): 4.5x is in no table.
+        (lambda raw: raw.replace("cover is thin at 3.1x, so", "cover is thin at 4.5x, so"), "4.5"),
+        # Check 1: the Bottom line must lead.
+        (lambda raw: raw.replace("### Bottom line", "### Summary"), "Prose check 1"),
+        # Check 2: a module code in a sentence.
+        (lambda raw: raw.replace("little room", "little room per CP-1"), "Prose check 2"),
+        # The report selector: the Key figures table is required.
+        (lambda raw: raw.replace("### Key figures", "### Figures"), "Key figures"),
+    ],
+)
+def test_the_checker_refuses_a_short_snapshot_that_breaks_the_reader_checks(
+    tmp_path, change, complaint
+):
+    issues = short_snapshot_issues(tmp_path, change)
+    assert any(complaint in i for i in issues), issues
+
+
 # --- The lite and full credit assessments; the deactivated short snapshot ---------------
 
 
@@ -1168,7 +1243,7 @@ def test_the_lite_pathway_plans_exactly_cp0_cp1_cp1a_cp2_cp2a_in_order(tmp_path)
     prepared, _ = all_instructions(tmp_path, "lite_credit_assessment")
     assert tuple(prepared.plan.instructions) == LITE_MODULES
     assert prepared.ordered == LITE_MODULES
-    assert prepared.plan.run.requested_modules == (*LITE_MODULES[:2], *LITE_MODULES[2:])
+    assert prepared.plan.run.requested_modules == LITE_MODULES
     assert prepared.layout.title.endswith("Lite credit assessment")
 
 
@@ -1236,9 +1311,14 @@ def test_the_lite_pathway_runs_end_to_end_to_a_verified_delivery_with_a_syntheti
             cap="50",
         ).plan.layout.routes
     )
-    provider.answer = lambda context: answer(context, routes)
+    # CP-1 ends with a valid Layer-1 forecast-inputs block: there is no CP-2G in this pathway.
+    provider.answer = lambda context: forecast_answer(context, routes, None, layer1_block())
     assert main(argv) == 0
+    seen = capsys.readouterr()
+    assert "Model not published" not in seen.err
     out = tmp_path / "out"
+    completed = json.loads(next(out.glob("completed-*.json")).read_text())
+    assert completed["cp_forecast_published"] is True and completed["forecast_failure"] is None
     assert tuple(c[0] for c in provider.calls) == LITE_MODULES
     receipt = next((out / "deliveries").glob("*/delivery.json"))
     assert verify_delivery(next(out.glob("delivery-*.json")), receipt.parent) == receipt

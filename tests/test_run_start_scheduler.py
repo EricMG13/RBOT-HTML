@@ -110,6 +110,20 @@ def test_a_short_snapshot_submission_is_refused_and_nothing_starts(root, fake_en
     w.close()
 
 
+def test_a_recorded_short_snapshot_submission_returns_its_record_and_a_new_one_is_refused(
+    root, fake_env
+):
+    fake_env({"sleep": 30})
+    sid = upload(root)
+    w = Scheduler(settings(root))
+    record = Record("20261109-000001-01", "short_snapshot", "Acme Corp", "queued", "t")
+    w._put(replace(record, submission=sid))
+    assert w.submit(sid, short_answers(), "any").id == record.id  # idempotent, as documented
+    with pytest.raises(Refused, match="short credit snapshot is deactivated"):
+        w.submit(upload(root), short_answers(), "any")
+    w.close()
+
+
 def test_a_lite_credit_assessment_summary_is_accepted(root):
     answers = answers_for()
     answers["context"]["run"]["pathway"] = "lite_credit_assessment"

@@ -18,6 +18,7 @@ from library_fixtures import make_run, method
 from test_cpos_launch import (
     AS_OF,
     ISSUER,
+    LITE_MODULES,
     PATHWAY_MODULES,
     ROOT,
     RULING,
@@ -327,6 +328,17 @@ def test_the_offline_cap_check_holds_cp8s_call_when_it_is_planned(tmp_path):
     # sol-medium holds its whole 1,050,000-token context at USD 5/M plus 32,000 output tokens at
     # USD 15/M, however long the request: 5.25 + 0.48 (written from the price table by hand).
     assert prepared.hold == Decimal("5.73")
+
+
+def test_a_lite_run_with_an_earlier_lite_run_plans_cp8_last(tmp_path):
+    workspace = tmp_path / "ws"
+    make_run(workspace, PRIOR_ID, as_of="2024-12-31", pathway="lite_credit_assessment")
+    context, folder = snapshot_context(tmp_path, "lite_credit_assessment")
+    prepared = prepare(context, folder, workspace / "runs/cur", config="sol-medium", cap="50")
+    assert prepared.ordered == (*LITE_MODULES, "CP-8")
+    assert prepared.prior is not None and prepared.prior.pathway == "lite_credit_assessment"
+    first = prepare(context, folder, tmp_path / "ws2/runs/cur", config="sol-medium", cap="50")
+    assert first.ordered == LITE_MODULES
 
 
 def two_priors(tmp_path):
