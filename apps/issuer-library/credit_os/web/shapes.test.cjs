@@ -149,7 +149,9 @@ test('idTokens: the distinct values of every id column of the module, none that 
 
 test('casePairing: the CP-2A tables pair the three case columns with the three scenario rows; a count mismatch, two cases tables or none give null', () => {
   const blocks = keySections('CP-2A').flatMap(s => s.blocks);
-  assert.deepEqual(Shapes.casePairing(blocks), {names: ['Base FY2024 (control)', 'Moderate scenario', 'Severe scenario'], ids: ['s00', 'SC1', 'SC2']});
+  const pairing = Shapes.casePairing(blocks);
+  assert.deepEqual({names: pairing.names, ids: pairing.ids}, {names: ['Base FY2024 (control)', 'Moderate scenario', 'Severe scenario'], ids: ['s00', 'SC1', 'SC2']});
+  assert.equal(pairing.table, blocks.find(b => b.headers[0] === 'Scenario ID'), 'the paired table is the one with the id column');
   const cases = blocks.find(b => Shapes.tableShape(b) === 'cases');
   const rowsOf = blocks.filter(b => Shapes.tableShape(b) === 'caseRows');
   assert.equal(rowsOf.length, 2);
@@ -160,7 +162,7 @@ test('casePairing: the CP-2A tables pair the three case columns with the three s
   assert.equal(Shapes.casePairing([]), null);
   assert.equal(Shapes.casePairing(undefined), null);
   const plain = {headers: ['Scenario', 'Note'], rows: ['a', 'b', 'c'].map(x => ({cells: [x, 'n']}))};
-  assert.deepEqual(Shapes.casePairing([cases, plain]), {names: ['Base FY2024 (control)', 'Moderate scenario', 'Severe scenario'], ids: ['a', 'b', 'c']}, 'no id column: the first column');
+  assert.equal(Shapes.casePairing([cases, plain]), null, 'a caseRows table without an id column is never paired');
 });
 
 test('methodNote: a calculation name makes a Calculations note, an identifier of the module a Registers note, anything else is findings prose (whole words only)', () => {

@@ -1523,3 +1523,6 @@ details[open]>summary .ms-ch,details[open]>summary .qa-ch,details[open]>summary 
 }
 @media(forced-colors:active){.state,.ck-list,.sd-board,.sd-entry,.ms-tile,.qa-list,.wl-list,.fl-group,.rm-tbl td,.rm-chip{border:1px solid CanvasText}.sd-dot,.sd-node{forced-color-adjust:none;background:CanvasText}}
 @media print{.ck-row,.sd-entry,.ms-tile,.qa-item,.wl-item,.fl-group,.rm-chip{break-inside:avoid}.qa-d::details-content,.wl-d::details-content,.ms-list::details-content{content-visibility:visible}.rm-wrap{overflow:visible}}
+/* cells beyond a table's headers: drawn after the row's other fields, unlabelled */
+.cr-extra,.chg-x,.lp-x{margin:0;font:400 12px/1.45 'Red Hat Text',sans-serif;color:var(--text-secondary);overflow-wrap:anywhere}
+.ll-x{display:block;margin-top:2px;font-size:11px;color:var(--muted)}

@@ -199,8 +199,8 @@
 
   // The one cell rule. (a) only references (calculation IDs, file names, handoff names): omitted, reached by the row's trace control. (b) an identifier
   // of the module, or a calculation ID, inside other text: omitted, and the row links to Evidence. (c) anything else: drawn as rich text.
-  const CALC_IN_TEXT = /\bcalculations?\s+[A-Z]{1,2}\d{2}\b/i;
-  const STRONG_REFERENCE = [/^calculations?\s+[A-Z]{1,2}\d{2}$/i, /^[^\s;,]+\.(?:jsonl|htm|html|pdf|xlsx?|csv|md|json|txt)$/i, /\(CP-[0-9A-Z]+\)$/, /^CP-[0-9A-Z]+$/];
+  const calculationId = () => shapes().CALCULATION_ID;  // the one pattern, owned by shapes.js
+  const STRONG_REFERENCE = [/^[Cc]alculations? [A-Z]{1,2}\d{2}$/, /^[^\s;,]+\.(?:jsonl|htm|html|pdf|xlsx?|csv|md|json|txt)$/i, /\(CP-[0-9A-Z]+\)$/, /^CP-[0-9A-Z]+$/];
   const WEAK_REFERENCE = [/^[A-Z]{1,2}\d{2}$/, /^pages?\s+\d+(?:\s*[-–]\s*\d+)?$/i];
   function referencesOnly(text) {
     const parts = text.split(/\s*[;,]\s*/).filter(part => part !== '');
@@ -215,7 +215,10 @@
   function findingCell(text, ctx = {}) {
     const raw = String(text ?? '').trim();
     if (raw === '' || referencesOnly(raw)) return {omitted: true};
-    if (CALC_IN_TEXT.test(raw) || tokensIn(raw, ctx.tokens).length) return {omitted: true, inEvidence: true};
+    const found = tokensIn(raw, ctx.tokens);
+    // Only identifiers (an id cell such as "s00"): rule (a), plain omission. An identifier inside other text: rule (b), the link to Evidence.
+    if (found.length && /^[\s;,&]*$/.test(found.reduce((text, token) => text.split(token).join(''), raw))) return {omitted: true};
+    if (calculationId().test(raw) || found.length) return {omitted: true, inEvidence: true};
     return {html: readerText().richText(raw)};
   }
   const evidenceLink = ctx => (ctx.evidenceHref ? `<a class="in-ev" href="${escapeHtml(ctx.evidenceHref)}">In Evidence</a>` : '');
@@ -226,12 +229,16 @@
   }
   const MISSING = '<span class="na" title="Empty in the handoff">n.a.</span>';
   const valueHtml = (text, ctx) => (String(text).trim() === '' ? MISSING : fieldHtml(text, ctx));
+  // A row can hold more cells than the table has headers. Those cells have no label to draw under, but they are the handoff's: each goes through
+  // findingCell like any other and is drawn after the row's other fields.
+  const extrasOf = (block, row, ctx) => row.cells.slice(block.headers.length).map(cell => fieldHtml(String(cell ?? '').trim(), ctx)).filter(html => html !== '');
+  const extraWidth = block => Math.max(0, ...block.rows.map(row => row.cells.length - block.headers.length));
 
   // A column header that holds an identifier of the module is the name of that case when the module pairs its cases; "(0.15)" after it is dropped
   // when it is only a number. Any other remainder, or no pairing, has no name to give: null, and the column is not drawn on a findings page.
   function resolveHeader(header, ctx) {
     const text = String(header ?? '').trim(), found = tokensIn(text, ctx.tokens);
-    if (!found.length) return CALC_IN_TEXT.test(text) ? null : text;
+    if (!found.length) return calculationId().test(text) ? null : text;
     const at = found.length === 1 && ctx.pairing ? ctx.pairing.ids.indexOf(found[0]) : -1;
     if (at < 0 || !ctx.pairing.names[at]) return null;
     const rest = text.replace(new RegExp(escapeRegex(found[0])), '').trim();
@@ -272,11 +279,11 @@
   // A designed table: the block's columns as given, numbers right-aligned, the first column the row header.
   function designedTable(block, cols, ctx, className = 'dtbl') {
     const numeric = new Set(cols.filter((col, n) => n > 0 && numericLike(block, col.at)).map(col => col.at));
-    const head = cols.map((col, n) => `<th scope="col"${numeric.has(col.at) ? ' class="num"' : ''}>${escapeHtml(col.label)}</th>`).join('');
+    const head = cols.map((col, n) => `<th scope="col"${numeric.has(col.at) ? ' class="num"' : ''}>${escapeHtml(col.label)}</th>`).join('') + '<th scope="col"></th>'.repeat(extraWidth(block));
     const rows = block.rows.map(row => `<tr>${cols.map((col, n) => {
       const html = fieldHtml(cellText(row, col.at), ctx);
       return n === 0 ? `<th scope="row">${html}</th>` : `<td${numeric.has(col.at) ? ' class="num"' : ''} data-label="${escapeHtml(col.label)}">${html}</td>`;
-    }).join('')}</tr>`).join('');
+    }).join('')}${Array.from({length: extraWidth(block)}, (_, k) => `<td>${fieldHtml(cellText(row, block.headers.length + k), ctx)}</td>`).join('')}</tr>`).join('');
     return `<div class="dtbl-wrap" role="region" tabindex="0"${ctx.caption ? ` aria-label="${escapeHtml(ctx.caption)}"` : ''}><table class="${className}"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
   }
 
@@ -315,7 +322,7 @@
         const raw = cellText(row, caseCols[k].at), first = cellText(row, caseCols[0].at);
         return tile({label: fieldHtml(cellText(row, labelCol.at), ctx), value: valueHtml(raw, ctx), raw,
           below: k === 0 || first === '' ? '' : `${escapeHtml(names[0])}: ${fieldHtml(first, ctx)}`,
-          notes: extras.map(col => [col, fieldHtml(cellText(row, col.at), ctx)]).filter(([, html]) => html !== '').map(([col, html]) => `<span class="tag-k">${escapeHtml(col.label)}</span> ${html}`),
+          notes: extras.map(col => [col, fieldHtml(cellText(row, col.at), ctx)]).filter(([, html]) => html !== '').map(([col, html]) => `<span class="tag-k">${escapeHtml(col.label)}</span> ${html}`).concat(extrasOf(block, row, ctx)),
           caption: consequence ? fieldHtml(cellText(row, consequence.at), ctx) : ''});
       }).join('');
       return `<div class="tile-set" data-set="${k}"${k === selected ? '' : ' hidden'}><p class="tile-set-name">${escapeHtml(name)}</p><div class="tiles">${tiles}</div></div>`;
@@ -337,14 +344,18 @@
     return items.length >= 2 && text.length <= 220 && items.every(item => item.length <= 48 && !/[.;:]\s/.test(item)) ? items : null;
   }
   const chipList = (items, ctx) => `<ul class="cr-chips">${items.map((item, n) => `<li class="cr-chip">${fieldHtml(item, ctx)}${n < items.length - 1 ? '<span class="sr-only">, </span>' : ''}</li>`).join('')}</ul>`;
+  // Names apply to the one table the pairing is bound to (Shapes.casePairing: the caseRows table with the id column, one row per case column).
+  const isPaired = (block, ctx) => Boolean(ctx.pairing) && ctx.pairing.table === block && ctx.pairing.names.length === block.rows.length;
+  // A case's title: its paired name; else its first cell when that is text; else a number, with the link to Evidence when the cell held an identifier in a sentence.
   function caseTitle(row, n, block, ctx) {
-    const paired = ctx.pairing && ctx.pairing.names.length === block.rows.length ? ctx.pairing.names[n] : null;
-    if (paired) return {html: escapeHtml(paired), name: paired};
+    if (isPaired(block, ctx)) return {html: escapeHtml(ctx.pairing.names[n]), name: ctx.pairing.names[n], link: ''};
+    const numbered = link => ({html: '', name: '', badge: n + 1, link});
+    if (shapes().hiddenColumns(block.headers, 'caseRows').includes(0)) return numbered('');
     const own = cellText(row, 0), cell = findingCell(own, ctx);
-    return cell.html !== undefined && !shapes().hiddenColumns(block.headers, 'caseRows').includes(0) ? {html: cell.html, name: own} : {html: '', name: '', badge: n + 1};
+    return cell.html !== undefined ? {html: cell.html, name: own, link: ''} : numbered(cell.inEvidence ? evidenceLink(ctx) : '');
   }
   function caseRowsBlock(block, ctx) {
-    const cols = visibleColumns(block, 'caseRows', ctx).filter(col => col.at !== 0);
+    const cols = visibleColumns(block, 'caseRows', ctx).filter(col => col.at !== 0 || isPaired(block, ctx));
     if (!cols.length || !block.rows.length) return recordCards(block, ctx);
     const numericCols = cols.filter(col => numericLike(block, col.at));
     if (numericCols.length * 2 > cols.length) return caseRowsPanel(block, cols, ctx);
@@ -361,26 +372,28 @@
         const items = cell.html !== undefined ? chipItems(text) : null, body = items ? chipList(items, ctx) : fieldHtml(text, ctx);
         return body === '' ? '' : `<div><dt>${escapeHtml(col.label)}</dt><dd>${body}</dd></div>`;
       }).join('');
-      const head = `${title.badge ? `<span class="cr-badge">${title.badge}</span>` : `<h4 class="cr-title">${title.html}</h4>`}${traceFor(ctx, row, `${title.name || `Case ${n + 1}`}: where it comes from`)}`;
-      return `<article class="cr-card"><div class="cr-head">${head}</div>${pill ? `<div class="cr-pill">${pill}</div>` : ''}${figures ? `<div class="cr-figs">${figures}</div>` : ''}${fields ? `<dl class="rec-fields">${fields}</dl>` : ''}${foot ? `<div class="cr-foot">${foot}</div>` : ''}</article>`;
+      const head = `${title.badge ? `<span class="cr-badge">${title.badge}</span>${title.link}` : `<h4 class="cr-title">${title.html}</h4>`}${traceFor(ctx, row, `${title.name || `Case ${n + 1}`}: where it comes from`)}`;
+      return `<article class="cr-card"><div class="cr-head">${head}</div>${pill ? `<div class="cr-pill">${pill}</div>` : ''}${figures ? `<div class="cr-figs">${figures}</div>` : ''}${fields ? `<dl class="rec-fields">${fields}</dl>` : ''}${extrasOf(block, row, ctx).map(html => `<p class="cr-extra">${html}</p>`).join('')}${foot ? `<div class="cr-foot">${foot}</div>` : ''}</article>`;
     });
     return `<div class="cr-cards"${ctx.caption ? ` role="group" aria-label="${escapeHtml(ctx.caption)}"` : ''}>${cards.join('')}</div>`;
   }
   // Rows are cases and columns are measures: a compact panel, numbers right-aligned and the cell text as written. A phone reads each case as a card.
   function caseRowsPanel(block, cols, ctx) {
-    const head = `<th scope="col">${block.headers[0] !== undefined && visibleColumns(block, 'caseRows', ctx).some(col => col.at === 0) ? escapeHtml(block.headers[0]) : ''}</th>${cols.map(col => `<th scope="col"${numericLike(block, col.at) ? ' class="num"' : ''}>${escapeHtml(col.label)}</th>`).join('')}`;
+    const head = `<th scope="col">${block.headers[0] !== undefined && visibleColumns(block, 'caseRows', ctx).some(col => col.at === 0) ? escapeHtml(block.headers[0]) : ''}</th>${cols.map(col => `<th scope="col"${numericLike(block, col.at) ? ' class="num"' : ''}>${escapeHtml(col.label)}</th>`).join('')}${'<th scope="col"></th>'.repeat(extraWidth(block))}`;
     const rows = block.rows.map((row, n) => {
       const title = caseTitle(row, n, block, ctx);
-      const name = title.badge ? `<span class="cr-badge">${title.badge}</span>` : title.html;
-      return `<tr><th scope="row">${name}${traceFor(ctx, row, `${title.name || `Case ${n + 1}`}: where it comes from`)}</th>${cols.map(col => `<td${numericLike(block, col.at) ? ' class="num"' : ''} data-label="${escapeHtml(col.label)}">${fieldHtml(cellText(row, col.at), ctx)}</td>`).join('')}</tr>`;
+      const name = (title.badge ? `<span class="cr-badge">${title.badge}</span>` : title.html) + title.link;
+      return `<tr><th scope="row">${name}${traceFor(ctx, row, `${title.name || `Case ${n + 1}`}: where it comes from`)}</th>${cols.map(col => `<td${numericLike(block, col.at) ? ' class="num"' : ''} data-label="${escapeHtml(col.label)}">${fieldHtml(cellText(row, col.at), ctx)}</td>`).join('')}${Array.from({length: extraWidth(block)}, (_, k) => `<td>${fieldHtml(cellText(row, block.headers.length + k), ctx)}</td>`).join('')}</tr>`;
     }).join('');
     return `<div class="dtbl-wrap" role="region" tabindex="0"${ctx.caption ? ` aria-label="${escapeHtml(ctx.caption)}"` : ''}><table class="dtbl cr-panel"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
   }
 
   // ---- ranked: C11, the break-point ladder
   // The smallest round step that puts the axis in at most eight intervals, and the axis maximum above the largest level.
-  function ladderAxis(largest) {
-    const target = Math.max(largest, Number.MIN_VALUE) * 1.05;
+  // When no level is above 0 there is nothing to scale: a fixed axis of 0 to 100 for percentages and 0 to 1 for anything else, ticks at its two ends only.
+  function ladderAxis(largest, unit) {
+    if (!(largest > 0) || !Number.isFinite(largest)) { const max = unit === '%' ? 100 : 1; return {step: max, max}; }
+    const target = largest * 1.05;
     for (let exponent = Math.floor(Math.log10(target / 8)) - 1; ; exponent += 1) {
       for (const m of [1, 2, 2.5, 5]) {
         const step = Number((m * 10 ** exponent).toPrecision(12));
@@ -395,8 +408,8 @@
     const rankCol = cols.find(col => col.at === 0), labelCol = cols.filter(col => col !== rankCol)[0];
     const levelCol = cols.filter(col => col !== rankCol && col !== labelCol).find(col => block.rows.every(row => numberOf(cellText(row, col.at)) !== null));
     const levels = levelCol ? block.rows.map(row => numberOf(cellText(row, levelCol.at))) : [];
-    if (!rankCol || !labelCol || !levelCol || levels.some(n => n < 0) || new Set(block.rows.map(row => unitOf(cellText(row, levelCol.at)))).size !== 1) return recordCards(block, ctx);
-    const unit = unitOf(cellText(block.rows[0], levelCol.at)), axis = ladderAxis(Math.max(...levels));
+    if (!rankCol || !labelCol || !levelCol || levels.some(n => !Number.isFinite(n) || n < 0) || new Set(block.rows.map(row => unitOf(cellText(row, levelCol.at)))).size !== 1) return recordCards(block, ctx);
+    const unit = unitOf(cellText(block.rows[0], levelCol.at)), axis = ladderAxis(Math.max(...levels), unit);
     const states = cols.filter(col => col !== rankCol && col !== labelCol && col !== levelCol);
     const x = value => `${percent(value / axis.max * 100)}%`;
     const ticks = Array.from({length: Math.round(axis.max / axis.step) + 1}, (_, n) => Number((n * axis.step).toPrecision(12)));
@@ -404,11 +417,11 @@
     const marks = block.rows.map((row, n) => {
       const side = n % 2 === 0 ? 'up' : 'dn', tier = Math.floor(n / 2) % tiers, at = levels[n] / axis.max * 100;
       const edge = at < 14 ? ' lo' : at > 86 ? ' hi' : '', level = cellText(row, levelCol.at), rank = cellText(row, rankCol.at), label = cellText(row, labelCol.at);
-      return `<i class="ll-line ll-${side} t${tier}" style="left:${x(levels[n])}"></i><div class="ll ll-${side} t${tier}${edge}" style="left:${x(levels[n])}">${fieldHtml(label, ctx)}<b>${readerText().richText(level)}</b></div><div class="lm" tabindex="0" style="left:${x(levels[n])}" aria-label="${escapeHtml(`Break ${rank}, ${readerText().plainText(label)}, ${level}`)}"><span class="lm-n">${escapeHtml(rank)}</span></div>`;
+      return `<i class="ll-line ll-${side} t${tier}" style="left:${x(levels[n])}"></i><div class="ll ll-${side} t${tier}${edge}" style="left:${x(levels[n])}">${fieldHtml(label, ctx)}<b>${readerText().richText(level)}</b>${extrasOf(block, row, ctx).map(html => `<span class="ll-x">${html}</span>`).join('')}</div><div class="lm" role="img" style="left:${x(levels[n])}" aria-label="${escapeHtml(`Break ${rank}, ${readerText().plainText(label)}, ${level}`)}"><span class="lm-n">${escapeHtml(rank)}</span></div>`;
     }).join('');
     const axisHtml = `<div class="ladder t${tiers}" role="group" aria-label="${escapeHtml(`${labelCol.label} on an axis of ${levelCol.label}`)}"><div class="lax"></div>${ticks.map(v => `<i class="ltick" style="left:${x(v)}"></i><span class="ltick-l" data-tick style="left:${x(v)}">${plainNumber(v)}${unit}</span>`).join('')}<p class="lax-t">${escapeHtml(levelCol.label)}</p>${marks}</div>`;
     const legend = states.length ? `<div class="lead-leg" style="--c:${states.length}"><div class="leg-row hd"><span></span><span>${escapeHtml(labelCol.label)}</span><span class="p">${escapeHtml(levelCol.label)}</span>${states.map(col => `<span>${escapeHtml(col.label)}</span>`).join('')}</div>${block.rows.map(row => `<div class="leg-row"><span class="n">${escapeHtml(cellText(row, rankCol.at))}</span><span>${fieldHtml(cellText(row, labelCol.at), ctx)}</span><span class="p">${readerText().richText(cellText(row, levelCol.at))}</span>${states.map(col => stateMark(cellText(row, col.at), ctx)).join('')}</div>`).join('')}</div>` : '';
-    const phone = `<div class="lad-phone">${block.rows.map((row, n) => `<div class="lp-item"><span class="n">${escapeHtml(cellText(row, rankCol.at))}</span><div><p class="lp-l">${fieldHtml(cellText(row, labelCol.at), ctx)}</p><div class="lp-track"><i style="left:${x(levels[n])}"></i></div><div class="lp-ends"><span data-tick>0${unit}</span><b>${readerText().richText(cellText(row, levelCol.at))}</b><span data-tick>${plainNumber(axis.max)}${unit}</span></div>${states.length ? `<div class="lp-marks">${states.map(col => `<span><span class="lp-case">${escapeHtml(col.label)}</span> ${stateMark(cellText(row, col.at), ctx)}</span>`).join('')}</div>` : ''}</div></div>`).join('')}</div>`;
+    const phone = `<div class="lad-phone">${block.rows.map((row, n) => `<div class="lp-item"><span class="n">${escapeHtml(cellText(row, rankCol.at))}</span><div><p class="lp-l">${fieldHtml(cellText(row, labelCol.at), ctx)}</p>${extrasOf(block, row, ctx).map(html => `<p class="lp-x">${html}</p>`).join('')}<div class="lp-track"><i style="left:${x(levels[n])}"></i></div><div class="lp-ends"><span data-tick>0${unit}</span><b>${readerText().richText(cellText(row, levelCol.at))}</b><span data-tick>${plainNumber(axis.max)}${unit}</span></div>${states.length ? `<div class="lp-marks">${states.map(col => `<span><span class="lp-case">${escapeHtml(col.label)}</span> ${stateMark(cellText(row, col.at), ctx)}</span>`).join('')}</div>` : ''}</div></div>`).join('')}</div>`;
     return shapeBlock('shape-ranked', ctx, '', shapeBar('', traceOfBlock(ctx, block)) + axisHtml + legend + phone);
   }
 
@@ -428,7 +441,7 @@
         const width = percent(Math.abs(value) / span * 100), from = value < 0 ? `right:${percent(100 - Number(zero))}%` : `left:${zero}%`;
         return `<span class="st-bar ${SERIES[k % 3]}${value < 0 ? ' neg' : ''}" style="${from};width:${width}%"></span>`;
       }).join('');
-      const cap = captions.map(col => fieldHtml(cellText(row, col.at), ctx)).filter(html => html !== '').map(html => `<p class="st-cap">${html}</p>`).join('');
+      const cap = captions.map(col => fieldHtml(cellText(row, col.at), ctx)).concat(extrasOf(block, row, ctx)).filter(html => html !== '').map(html => `<p class="st-cap">${html}</p>`).join('');
       const values = periodCols.map((col, k) => `<span class="st-pv"><i class="sw ${SERIES[k % 3]}" aria-hidden="true"></i><span class="st-ph">${escapeHtml(col.label)}</span>${valueHtml(cellText(row, col.at), ctx)}</span>`).join('');
       return `<div class="st-row"><div class="st-l"><p class="st-name">${fieldHtml(cellText(row, labelCol.at), ctx)}</p>${cap}</div><div class="st-bars" style="height:${periodCols.length * 12 - 3}px">${bars ? `${low < 0 ? `<i class="st-zero" style="left:${zero}%"></i>` : ''}${bars}` : ''}</div><div class="st-v">${values}</div></div>`;
     }).join('');
@@ -457,8 +470,8 @@
         if (shown.below) below.push(shown.below); else if (shown.note) notes.push(shown.note);
       }
       const defText = definition ? cellText(row, definition.at) : '';
-      return tile({label: fieldHtml(cellText(row, labelCol.at), ctx), value: valueHtml(raw, ctx), raw, below: below.join(' · '), notes: notes.concat(others.map(col => [col, fieldHtml(cellText(row, col.at), ctx)]).filter(([, html]) => html !== '').map(([col, html]) => `${escapeHtml(col.label)} ${html}`)),
-        info: defText !== '' && findingCell(defText, ctx).html !== undefined ? infoTip(defText) : ''});
+      return tile({label: fieldHtml(cellText(row, labelCol.at), ctx), value: valueHtml(raw, ctx), raw, below: below.join(' · '), notes: notes.concat(others.map(col => [col, fieldHtml(cellText(row, col.at), ctx)]).filter(([, html]) => html !== '').map(([col, html]) => `${escapeHtml(col.label)} ${html}`)).concat(extrasOf(block, row, ctx)),
+        info: defText === '' ? '' : findingCell(defText, ctx).html !== undefined ? infoTip(defText) : fieldHtml(defText, ctx)});
     }).join('');
     const table = designedTable(block, cols, ctx);
     return shapeBlock('shape-metric', ctx, 'data-view="tiles"', shapeBar('', traceOfBlock(ctx, block) + viewToggle('Tiles or table', [['tiles', 'Tiles'], ['table', 'Table']])) + pane('tiles', `<div class="tiles tiles-dense">${tiles}</div>`, true) + pane('table', table, false));
@@ -475,7 +488,7 @@
         const text = cellText(row, col.at), shown = text === '' ? {} : earlierHtml(col, text, ctx);
         if (shown.below) below.push(shown.below); else if (shown.note) notes.push(shown.note);
       }
-      return tile({label: fieldHtml(cellText(row, labelCol.at), ctx), value: valueHtml(raw, ctx), raw, below: below.join(' · '), notes,
+      return tile({label: fieldHtml(cellText(row, labelCol.at), ctx), value: valueHtml(raw, ctx), raw, below: below.join(' · '), notes: notes.concat(extrasOf(block, row, ctx)),
         tags: tagCols.map(col => [col, fieldHtml(cellText(row, col.at), ctx)]).filter(([, html]) => html !== '').map(([col, html]) => tag(col.label, html)),
         caption: consequence ? fieldHtml(cellText(row, consequence.at), ctx) : ''});
     }).join('');
@@ -498,7 +511,7 @@
       }
       const fields = others.map(col => [col, fieldHtml(cellText(row, col.at), ctx)]).filter(([, html]) => html !== '').map(([col, html]) => `<div><dt>${escapeHtml(col.label)}</dt><dd>${html}</dd></div>`).join('');
       const side = (col, text) => `<div class="chg-side"><p class="chg-k">${escapeHtml(col.label)}</p><p class="chg-v">${valueHtml(text, ctx)}</p></div>`;
-      return `<article class="chg-card"><div class="chg-head"><p class="chg-title">${fieldHtml(title, ctx)}</p>${traceFor(ctx, row, `${readerText().plainText(title) || `Line ${row.line}`}: where it comes from`)}</div><div class="chg-pair">${side(before, a)}<span class="chg-arrow">${icon('arrow-right')}</span>${side(after, b)}</div>${dumb}${fields ? `<dl class="rec-fields">${fields}</dl>` : ''}</article>`;
+      return `<article class="chg-card"><div class="chg-head"><p class="chg-title">${fieldHtml(title, ctx)}</p>${traceFor(ctx, row, `${readerText().plainText(title) || `Line ${row.line}`}: where it comes from`)}</div><div class="chg-pair">${side(before, a)}<span class="chg-arrow">${icon('arrow-right')}</span>${side(after, b)}</div>${dumb}${fields ? `<dl class="rec-fields">${fields}</dl>` : ''}${extrasOf(block, row, ctx).map(html => `<p class="chg-x">${html}</p>`).join('')}</article>`;
     });
     return `<div class="chg-cards"${ctx.caption ? ` role="group" aria-label="${escapeHtml(ctx.caption)}"` : ''}>${cards.join('')}</div>`;
   }

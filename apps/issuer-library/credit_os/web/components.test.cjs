@@ -220,7 +220,9 @@ test('sectionRail: a labelled nav of links with optional counts; the current ite
 // ---- Numeric shape components (library redesign, task 5): the answer key's real tables are the inputs.
 const Shapes = require('./shapes.js');
 const KEY = require(path.join(__dirname, '..', '..', 'fixtures', 'shape-key.json'));
-const keyBlock = t => ({ headers: t.headers, rows: t.rows.map((cells, i) => ({ line: i + 1, cells })) });
+const keyBlocks = new Map();
+// One block object per key table: the pairing names a table by identity, so the page and the test must hand the component the same object.
+const keyBlock = t => { if (!keyBlocks.has(t)) keyBlocks.set(t, { headers: t.headers, rows: t.rows.map((cells, i) => ({ line: i + 1, cells })) }); return keyBlocks.get(t); };
 const keyTables = (module, shape) => KEY.tables.filter(t => t.module === module && (!shape || t.shape === shape));
 // What the module page gives a component: the module's id tokens and case pairing, one trace control per call, the Evidence link.
 function pageCtx(module, over = {}) {
@@ -290,7 +292,7 @@ test('no numeric component draws an identifier of the module, a calculation ID, 
 
 test('findingCell (a): a cell that is only references (calculation IDs, file names, handoff names) is omitted with no link', () => {
   const ctx = { tokens: ['SC1'], evidenceHref: '#e' };
-  for (const text of ['calculation D17', 'Calculations C21, C22', 'calculation c05', 'TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 121', 'Financial data foundation (CP-1)',
+  for (const text of ['calculation D17', 'Calculations C21, C22', 'Calculation C05', 'TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 121', 'Financial data foundation (CP-1)',
     'Financial data foundation (CP-1); Business and transaction fact pack (CP-1A)', 'Fundamental credit synthesis (CP-2), calculation D17', 'results.pdf; notes.xlsx']) {
     assert.deepEqual(C.findingCell(text, ctx), { omitted: true }, text);
   }
@@ -386,10 +388,12 @@ test('caseRows without a pairing: a numbered badge, no invented word; an id colu
   assert.ok(!/\bSC[12]\b|\bs00\b/.test(textOf(html)));
 });
 
-test('caseRows with numeric columns: a case-by-measure panel, numbers right-aligned, the cell text verbatim, titled by the paired name', () => {
+test('caseRows with numeric columns: a case-by-measure panel, numbers right-aligned, the cell text verbatim, numbered when its table is not the paired one', () => {
   const t = keyTables('CP-2A', 'caseRows')[1], ctx = pageCtx('CP-2A'), html = C.caseRowsBlock(keyBlock(t), ctx);
   assert.ok(html.includes('class="dtbl cr-panel"') && !html.includes('cr-card'));
-  for (const name of ['Base FY2024 (control)', 'Moderate scenario', 'Severe scenario']) assert.ok(html.includes(`<th scope="row">${name}`), name);
+  // Its first column ("Scenario") is not an id column, so this table is not the paired one: numbered badges, no names.
+  assert.deepEqual([...html.matchAll(/<th scope="row"><span class="cr-badge">(\d)<\/span>/g)].map(m => m[1]), ['1', '2', '3']);
+  assert.ok(!/Base FY2024|Moderate scenario|Severe scenario/.test(html));
   assert.ok(html.includes('<td class="num" data-label="Total debt / EBITDA">7.0672812619 (7.07x)</td>'), html);
   assert.ok(html.includes('<th scope="col" class="num">Stressed EBITDA (USD m)</th>'));
   assert.ok(!/\bSC[12]\b|\bs00\b/.test(textOf(html)));
@@ -772,4 +776,122 @@ test('print: the folds of these components are opened for the print and put back
 
 test('the state icons come from icon files: the two new ones are in the table', () => {
   for (const name of ['arrow-up-right', 'history']) assert.ok(Object.hasOwn(C.ICON_PATHS, name), name);
+});
+
+
+// ---- Fix round 1
+const { spawnSync } = require('node:child_process');
+const WEB = __dirname;
+function inChild(source) {
+  const run = spawnSync(process.execPath, ['-e', `const C=require(${JSON.stringify(path.join(WEB, 'components.js'))});${source}`], { timeout: 5000, encoding: 'utf8' });
+  return { returned: !run.error && run.status === 0, out: run.stdout, err: run.stderr };
+}
+const tb = (headers, rows) => ({ headers, rows: rows.map((cells, i) => ({ line: i + 1, cells })) });
+const plainCtx = over => ({ key: r => `k:${r.line}`, evidenceHref: '#e', caption: 'T', tokens: [], pairing: null, ...over });
+
+test('rankedLadder terminates when the largest level is 0 and still draws the ladder, on a fixed axis with ticks at its two ends only', () => {
+  for (const rows of [[['1', 'Already breached', '0%', 'Breached']], [['1', 'A', '0', 'Reached'], ['2', 'B', '0', 'Not reached']], [['1', 'A', '12%', 'Not reached']]]) {
+    const block = JSON.stringify(rows);
+    const run = inChild(`const b={headers:['Rank','Break','Decline at break','Base case'],rows:${block}.map((cells,i)=>({line:i+1,cells}))};const h=C.rankedLadder(b,{key:r=>'o:'+r.line});process.stdout.write(String(h.includes('class="ladder')));`);
+    assert.ok(run.returned, `did not return within 5 s for ${block}`);
+    assert.equal(run.out, 'true', block);
+  }
+  const zero = C.rankedLadder(tb(['Rank', 'Break', 'Decline at break', 'Base case'], [['1', 'Already breached', '0%', 'Breached']]), plainCtx());
+  for (const cell of ['Already breached', '0%', 'Breached']) assert.ok(textOf(zero).includes(cell), cell);
+  assert.deepEqual([...zero.matchAll(/<span class="ltick-l" data-tick[^>]*>([^<]*)</g)].map(m => m[1]), ['0%', '100%']);
+  assert.ok(zero.includes('class="lm" role="img" style="left:0%"'));
+  const plain = C.rankedLadder(tb(['Rank', 'Break', 'Level'], [['1', 'A', '0'], ['2', 'B', '0']]), plainCtx());
+  assert.deepEqual([...plain.matchAll(/<span class="ltick-l" data-tick[^>]*>([^<]*)</g)].map(m => m[1]), ['0', '1']);
+});
+
+test('rankedLadder: a level that is not a finite number falls back to record cards', () => {
+  const block = tb(['Rank', 'Break', 'Level'], [['1', 'A', '12%'], ['2', 'B', '1e999']]);
+  assert.equal(C.rankedLadder(block, plainCtx()), C.recordCards(block, plainCtx()));
+});
+
+test('ladder markers are images with a name, not focusable controls', () => {
+  const html = C.rankedLadder(keyBlock(keyTables('CP-2A', 'ranked')[0]), pageCtx('CP-2A'));
+  assert.equal((html.match(/<div class="lm" role="img" style="[^"]*" aria-label="Break \d, [^"]+"><span class="lm-n">/g) || []).length, 4, html.slice(0, 600));
+  assert.ok(!/class="lm"[^>]*tabindex/.test(html));
+});
+
+const casesT = tb(['Measure', 'Base case', 'Moderate scenario', 'Severe scenario'], [['Leverage', '6.0x', '7.0x', '8.7x']]);
+const defsT = tb(['Scenario ID', 'Decline', 'Anchor'], [['s00', '0', 'Control'], ['SC1', '0.15', 'Half share'], ['SC2', '0.31', 'Full share']]);
+const otherT = tb(['Scenario', 'Narrative', 'Trigger'], [['Severe: aftermarket collapse', 'Full share lost', 'Recession'], ['Base: steady state', 'Nothing changes', 'None'], ['Moderate: partial loss', 'Half share lost', 'Slowdown']]);
+
+test('casePairing names the one table it paired; names apply to that table only; a column 0 that is not the id column is drawn', () => {
+  const tables = [casesT, defsT, otherT];
+  const pairing = Shapes.casePairing(tables);
+  assert.deepEqual({ names: pairing.names, ids: pairing.ids }, { names: ['Base case', 'Moderate scenario', 'Severe scenario'], ids: ['s00', 'SC1', 'SC2'] });
+  assert.equal(pairing.table, defsT);
+  assert.equal(pairing.index, 1);
+  const ctx = plainCtx({ tokens: Shapes.idTokens([{ blocks: tables.map(b => ({ type: 'table', ...b })) }]), pairing });
+  const paired = C.caseRowsBlock(defsT, ctx);
+  assert.deepEqual([...paired.matchAll(/<h4 class="cr-title">([^<]*)<\/h4>/g)].map(m => m[1]), ['Base case', 'Moderate scenario', 'Severe scenario']);
+  const unpaired = C.caseRowsBlock(otherT, ctx);
+  assert.deepEqual([...unpaired.matchAll(/<h4 class="cr-title">([^<]*)<\/h4>/g)].map(m => m[1]), ['Severe: aftermarket collapse', 'Base: steady state', 'Moderate: partial loss']);
+  assert.ok(!/Base case|Moderate scenario|Severe scenario/.test(unpaired));
+  for (const cell of ['Full share lost', 'Recession', 'Nothing changes', 'Slowdown']) assert.ok(textOf(unpaired).includes(cell), cell);
+  // a caseRows table with no id-kind column is never paired
+  assert.equal(Shapes.casePairing([casesT, otherT]), null);
+  // paired by position, but its first column is not the id column: it is drawn
+  const mixed = tb(['Scenario', 'Scenario ID', 'Decline'], [['Control run', 's00', '0'], ['Half loss', 'SC1', '0.15'], ['Full loss', 'SC2', '0.31']]);
+  const mixedHtml = C.caseRowsBlock(mixed, plainCtx({ tokens: ['s00', 'SC1', 'SC2'], pairing: Shapes.casePairing([casesT, mixed]) }));
+  assert.ok(textOf(mixedHtml).includes('Control run') && mixedHtml.includes('<h4 class="cr-title">Moderate scenario</h4>'), 'paired by its id column; a column 0 that is not that column is drawn');
+});
+
+test('idTokens: a token holds a digit and is not a period label; word-only ids and periods are ordinary text', () => {
+  const sections = [{ blocks: [{ type: 'table', ...tb(['Case ID', 'Description'], [['Base', 'x'], ['High', 'x'], ['FY24', 'x'], ['FY2024A', 'x'], ['2024', 'x'], ['Q3 2024', 'x'], ['H1 24', 'x'], ['LTM', 'x'], ['SC1', 'x'], ['EV-01', 'x']]) }] }];
+  assert.deepEqual(Shapes.idTokens(sections), ['SC1', 'EV-01']);
+  const ctx = { tokens: Shapes.idTokens(sections) };
+  assert.equal(C.findingCell('Leverage is high in the Base view', ctx).html, 'Leverage is high in the Base view');
+  assert.equal(C.findingCell('Revenue in FY24 rose', ctx).html, 'Revenue in FY24 rose');
+  assert.equal(C.findingCell('Under SC1 leverage rises', ctx).inEvidence, true);
+});
+
+test('one calculation-ID pattern, shared by findingCell and methodNote: capital C, one space, plural allowed', () => {
+  assert.ok(Shapes.CALCULATION_ID instanceof RegExp && !Shapes.CALCULATION_ID.flags.includes('i'));
+  assert.deepEqual(C.findingCell('See calculation FY24 note', {}), { html: 'See calculation FY24 note' });
+  assert.deepEqual(C.findingCell('Per calculations D03 and D04, leverage rises', {}), { omitted: true, inEvidence: true });
+  assert.deepEqual(C.findingCell('Leverage (calculation D03).', {}), { omitted: true, inEvidence: true });
+  assert.equal(Shapes.methodNote('See calculation FY24 note', []), null);
+  assert.equal(Shapes.methodNote('Per calculations D03 and D04', []), 'calculations');
+  assert.equal(Shapes.methodNote('Per Calculation D03', []), 'calculations');
+});
+
+test('an omitted cell that holds an identifier in a sentence leaves the Evidence link; an id token alone is plain omission', () => {
+  assert.deepEqual(C.findingCell('s00', { tokens: ['s00', 'SC1'] }), { omitted: true });
+  assert.deepEqual(C.findingCell('SC1; s00', { tokens: ['s00', 'SC1'] }), { omitted: true });
+  const metric = tb(['Metric', 'FY2024', 'FY2023', 'Definition / identity'], [['FCF', '1,880', '1,236', 'House definition; calculations C15, C16'], ['Cash', '7,267', '6,000', 'Reported']]);
+  const tiles = C.metricTiles(metric, plainCtx());
+  assert.equal((tiles.slice(0, tiles.indexOf('data-pane="table"')).match(/class="in-ev"/g) || []).length, 1, 'the tile view links to Evidence for the omitted definition');
+  assert.ok(!textOf(tiles).includes('House definition'));
+  const rows = tb(['Scenario', 'Decline', 'Note', 'Basis'], [['As SC1; also more', '0.1', 'first note', 'text one'], ['SC2', '0.2', 'second note', 'text two'], ['Plain name', '0.3', 'third note', 'text three']]);
+  const html = C.caseRowsBlock(rows, plainCtx({ tokens: ['SC1', 'SC2'] }));
+  assert.deepEqual([...html.matchAll(/<span class="cr-badge">(\d)<\/span>/g)].map(m => m[1]), ['1', '2']);
+  assert.equal((html.match(/class="in-ev"/g) || []).length, 1, 'a sentence with an identifier links once; a bare id does not');
+  assert.ok(html.includes('<h4 class="cr-title">Plain name</h4>'));
+});
+
+test('a row with more cells than headers keeps the extra cells in every numeric component', () => {
+  const extra = 'EXTRA-CELL-BEYOND-HEADERS';
+  const rows = {
+    cases: tb(['Measure', 'Base case', 'Moderate scenario'], [['Leverage', '6.0x', '7.0x', extra]]),
+    caseRows: tb(['Scenario', 'Decline', 'Anchor'], [['Base', '0', 'Control', extra]]),
+    caseRowsNumeric: tb(['Scenario', 'EBITDA', 'Cover'], [['Base', '4,173', '3.60x', extra]]),
+    ranked: tb(['Rank', 'Break', 'Decline at break', 'Base case'], [['1', 'Leverage watch', '23.47%', 'Not reached', extra]]),
+    statement: tb(['Line', 'FY2024', 'FY2023'], [['Sales', '100', '90', extra]]),
+    metric: tb(['Metric', 'FY2024', 'FY2023', 'Definition'], [['Cover', '3.60x', '4.1x', 'EBITDA / interest', extra]]),
+    measure: tb(['Operating measure', 'FY2024', 'FY2023', 'Change', 'Creditor consequence'], [['Net sales', '100', '90', '+10', 'Growth', extra]]),
+    change: tb(['Measure', 'Earlier', 'Current', 'Cause'], [['Leverage', '6.01x', '7.1x', 'Debt', extra]]),
+  };
+  const shapeOf = { cases: 'cases', caseRows: 'caseRows', caseRowsNumeric: 'caseRows', ranked: 'ranked', statement: 'statement', metric: 'metric', measure: 'measure', change: 'change' };
+  for (const [name, block] of Object.entries(rows)) {
+    const shape = Shapes.tableShape(block);
+    assert.equal(shape, shapeOf[name], name);
+    const html = C.render(shape, block, plainCtx());
+    assert.ok(textOf(html).includes(extra), `${name}: the extra cell is drawn`);
+  }
+  const ctxTok = plainCtx({ tokens: ['SC1'] });
+  assert.ok(!textOf(C.render('cases', tb(['Measure', 'Base case', 'Moderate scenario'], [['Leverage', '6.0x', '7.0x', 'As SC1 only']]), ctxTok)).includes('As SC1'), 'an extra cell goes through findingCell');
 });

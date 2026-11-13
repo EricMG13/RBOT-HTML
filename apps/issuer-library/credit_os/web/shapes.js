@@ -85,8 +85,10 @@ const Shapes = (() => {
 
   // ---- identifiers of a module (Task 5) ----
   const tablesIn = sections => (sections ?? []).flatMap(section => (section.blocks ?? []).filter(block => block.type === 'table'));
-  // The distinct cell values of every column of kind `id` in the sections' tables, in first-seen order. A value of one character, or only digits
-  // (a running row number such as 0, 1, 2), is not an identifier a reader could meet inside a sentence, so it is not a token.
+  // The distinct cell values of every column of kind `id` in the sections' tables, in first-seen order, that a reader could meet inside a sentence as an
+  // identifier: a value holds a digit (so Base and High are words, not tokens) and is not a period label (FY24, FY2024A, 2024, Q3 2024, H1 24) or a bare number.
+  const PERIOD_LABEL = /^(?:(?:fy|cy|ltm|pf|[hq][1-4])\s*)?\d{2,4}[ae]?$|^(?:fy|cy|ltm|pf|[hq][1-4])\s*(?:fy|cy)?\s*\d{2,4}[ae]?$/;
+  const isToken = value => /\d/.test(value) && !/^\d+$/.test(value) && !PERIOD_LABEL.test(norm(value));
   function idTokens(sections) {
     const found = new Set();
     for (const block of tablesIn(sections)) {
@@ -94,7 +96,7 @@ const Shapes = (() => {
         if (columnKind(header) !== 'id') return;
         for (const row of block.rows) {
           const value = String(row.cells[at] ?? '').trim();
-          if (value.length > 1 && !/^\d+$/.test(value)) found.add(value);
+          if (isToken(value)) found.add(value);
         }
       });
     }
@@ -102,34 +104,35 @@ const Shapes = (() => {
   }
 
   // The case a table's row stands for. A module with exactly one `cases` table (named cases as columns) and a `caseRows` table with one row per case
-  // column: the i-th row and the i-th case column are the same case, and the case column's header is its name. `ids` are the rows' id cells, taken from
-  // the table's id column (its first column when it has none). Anything else is null: no pairing, no invented names.
+  // column and an id column: the i-th row and the i-th case column are the same case, and the case column's header is its name. `ids` are the rows' id
+  // cells. `table` is the paired table itself (the one object the names apply to) and `index` its place in `tables`. A `caseRows` table without an id
+  // column is never paired, and any other is not named. No match is null: no pairing, no invented names.
   function casePairing(tables) {
-    const typed = (tables ?? []).filter(block => block && Array.isArray(block.headers) && Array.isArray(block.rows)).map(block => ({block, shape: tableShape(block)}));
+    const typed = (tables ?? []).map((block, index) => ({block, index})).filter(({block}) => block && Array.isArray(block.headers) && Array.isArray(block.rows)).map(entry => ({...entry, shape: tableShape(entry.block)}));
     const cases = typed.filter(entry => entry.shape === 'cases');
     if (cases.length !== 1) return null;
     const names = cases[0].block.headers.filter(header => columnKind(header) === 'case').map(header => String(header).trim());
-    const candidates = typed.filter(entry => entry.shape === 'caseRows' && entry.block.rows.length === names.length).map(entry => entry.block);
-    if (!names.length || !candidates.length) return null;
-    const table = candidates.find(block => block.headers.some(header => columnKind(header) === 'id')) ?? candidates[0];
-    const at = Math.max(0, table.headers.findIndex(header => columnKind(header) === 'id'));
-    return {names, ids: table.rows.map(row => String(row.cells[at] ?? '').trim())};
+    const paired = typed.find(entry => entry.shape === 'caseRows' && entry.block.rows.length === names.length && entry.block.headers.some(header => columnKind(header) === 'id'));
+    if (!names.length || !paired) return null;
+    const at = paired.block.headers.findIndex(header => columnKind(header) === 'id');
+    return {names, ids: paired.block.rows.map(row => String(row.cells[at] ?? '').trim()), table: paired.block, index: paired.index, idColumn: at};
   }
 
   // A prose paragraph of a finding section that holds an identifier of the module (an `id` column's value), or that names a calculation, is a method note: the
   // Evidence page's, not the findings page's. `body` is the paragraph without its Basis line. 'calculations' when it names a calculation ID, 'registers' when it
   // holds another identifier, null when it is findings prose. Whole words only, as findingCell reads a cell.
-  const CALCULATION_NAME = /\bcalculations?\s+[A-Z]{1,2}\d{2}\b/i;
+  // The one pattern for a calculation named in text (findingCell reads cells with it too): capital C, a single space, the plural allowed.
+  const CALCULATION_ID = /\b[Cc]alculations? (?!(?:FY|CY|PF)\d)[A-Z]{1,2}\d{2}\b/;  // not a period label (calculation FY24 note)
   const tokenPatterns = new WeakMap();
   function methodNote(body, tokens) {
     const text = String(body ?? '');
-    if (CALCULATION_NAME.test(text)) return 'calculations';
+    if (CALCULATION_ID.test(text)) return 'calculations';
     if (!Array.isArray(tokens) || !tokens.length) return null;
     if (!tokenPatterns.has(tokens)) tokenPatterns.set(tokens, new RegExp(`(?<![A-Za-z0-9_])(?:${[...tokens].sort((a, b) => b.length - a.length).map(token => token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})(?![A-Za-z0-9_])`));
     return tokenPatterns.get(tokens).test(text) ? 'registers' : null;
   }
 
-  return {sectionRole, tableShape, columnKind, hiddenColumns, blockRole, promoted, idTokens, casePairing, methodNote};
+  return {sectionRole, tableShape, columnKind, hiddenColumns, blockRole, promoted, idTokens, casePairing, methodNote, CALCULATION_ID};
 })();
 
 if (typeof window !== 'undefined') window.Shapes = Shapes;
