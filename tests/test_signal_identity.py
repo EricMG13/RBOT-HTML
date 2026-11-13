@@ -77,6 +77,35 @@ def test_cookie_attributes() -> None:
     )
 
 
+def test_clean_name_drops_invisible_characters_before_composing() -> None:
+    raw = "e\u200b\u0301"
+    assert clean_name(raw) == "é"
+    assert clean_name(clean_name(raw)) == clean_name(raw)
+
+
+def test_lone_surrogate_is_dropped(db: sqlite3.Connection) -> None:
+    assert clean_name("Eve\ud800") == "Eve"
+    assert cookie_for(clean_name("Eve\ud800")).startswith("signal_name=Eve; ")
+    assert current_user(db, "signal_name=Eve\ud800") == User("Eve", "reader")
+
+
+def test_quoted_cookie_value_loses_one_pair_of_quotes(db: sqlite3.Connection) -> None:
+    assert current_user(db, 'signal_name="Al"') == User("Al", "reader")
+
+
+@settings(deadline=None, max_examples=100)
+@given(st.text(max_size=200))
+def test_clean_name_is_stable_through_the_cookie(raw: str) -> None:
+    try:
+        name = clean_name(raw)
+    except IdentityError:
+        return
+    assert clean_name(name) == name
+    with fresh_db() as db:
+        user = current_user(db, cookie_for(name).split(";")[0])
+    assert user is not None and user.name == name
+
+
 @settings(deadline=None, max_examples=50)
 @given(st.text(max_size=300))
 def test_any_cookie_header_is_safe(header: str) -> None:

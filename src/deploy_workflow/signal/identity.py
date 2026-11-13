@@ -32,12 +32,11 @@ class User:
 def _printable(ch: str) -> str:
     if ch in _WHITESPACE_CONTROLS:
         return " "
-    return "" if unicodedata.category(ch) in ("Cc", "Cf") else ch
+    return "" if unicodedata.category(ch) in ("Cc", "Cf", "Cs") else ch
 
 
 def _clean(raw: str) -> str:
-    text = unicodedata.normalize("NFC", raw)
-    text = "".join(_printable(ch) for ch in text)
+    text = unicodedata.normalize("NFC", "".join(_printable(ch) for ch in raw))
     return " ".join(text.split())[:MAX_NAME].strip()
 
 
@@ -54,7 +53,10 @@ def _cookie_value(header: str) -> str | None:
     for part in header.split(";"):
         key, sep, value = part.partition("=")
         if sep and key.strip() == COOKIE:
-            return value.strip()
+            value = value.strip()
+            if len(value) >= 2 and value[0] == value[-1] == '"':
+                value = value[1:-1]
+            return value
     return None
 
 
