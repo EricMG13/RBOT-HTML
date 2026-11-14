@@ -34,6 +34,7 @@ from deploy_workflow.model.adapter import (
 from deploy_workflow.model.handoff import _pages
 from deploy_workflow.model.providers import build
 from deploy_workflow.model.turn import Compaction, ToolCall, Turn, Usage, hosted_kind
+from deploy_workflow.owners import cpos_cp1_check as cp1_check
 from deploy_workflow.owners import cpos_forecast, cpos_launch
 from deploy_workflow.owners.cpos import (
     HandoffPlan,
@@ -169,12 +170,12 @@ READER_BOTTOM_LINE = "The synthetic issuer shows one observed item."
 CHART_TABLES = {
     "Chart data: leverage": """| Period | Total debt / EBITDA | Net debt / EBITDA | Reporting unit | Basis and limitation |
 | --- | --- | --- | --- | --- |
-| FY2023 | 4.20 | 3.85 | x | Synthetic. |
-| FY2024 | 3.60 | 3.25 | x | Synthetic. |""",
+| FY2023 | 3.75 | 3.00 | x | Synthetic. |
+| FY2024 | 2.80 | 2.25 | x | Synthetic. |""",
     "Chart data: interest cover": """| Period | EBITDA / cash interest | Reporting unit | Basis and limitation |
 | --- | --- | --- | --- |
-| FY2023 | 3.10 | x | Synthetic. |
-| FY2024 | 3.40 | x | Synthetic. |""",
+| FY2023 | 3.20 | x | Synthetic. |
+| FY2024 | 4.00 | x | Synthetic. |""",
     "Chart data: liquidity": """| Period | Cash | Undrawn committed facilities | Reporting unit | Basis and limitation |
 | --- | --- | --- | --- | --- |
 | FY2023 | 300 | 450 | US$m | Synthetic. |
@@ -222,6 +223,74 @@ def synthetic_table(header: str, *rows: str) -> str:
     return "\n".join([header, "| --- |" + " --- |" * (header.count("|") - 2), *rows])
 
 
+# CP-1's checked tables (the acceptance check of CP-1's figures). Synthetic and consistent with the
+# net debt table and the chart tables above: reported EBITDA 400 / 500, cash interest 125 / 125,
+# total debt and cash as the net debt table states them; every other line is a stated gap. The
+# register states each chart figure worked from those operands (two-sided ties, R1), the Period
+# cells are the net debt table's, and the reconciliation states only the carrying value.
+GAP = "Not supplied: synthetic"
+FIGURES = {
+    ("T4.4 Income statement", "EBITDA (Reported)"): ("400", "500"),
+    ("T4.5 Cash flow statement", "Cash Interest Paid"): ("125", "125"),
+    ("T4.6 Balance sheet", "Total Debt"): ("1500", "1400"),
+    ("T4.6 Balance sheet", "Cash & Equivalents"): ("300", "275"),
+}
+CP1_CHECKED = {
+    heading: synthetic_table(
+        "| Line item | FY2023 | FY2024 | Unit | Basis | Source |",
+        *(
+            f"| {row} | {' | '.join(FIGURES.get((heading, row), (GAP, GAP)))} "
+            "| USD millions | Synthetic. | annual.txt |"
+            for row in rows
+        ),
+    )
+    for heading, rows in {
+        "T4.4 Income statement": ("EBITDA (Reported)",),
+        "T4.5 Cash flow statement": (
+            "Net Cash from Operating Activities",
+            "Net Cash from Investing Activities",
+            "Net Cash from Financing Activities",
+            "Net Cash Change",
+            "Opening Cash",
+            "Closing Cash",
+            "Cash Interest Paid",
+        ),
+        "T4.6 Balance sheet": (
+            "Total Assets",
+            "Total Liabilities",
+            "Total Equity",
+            "Total Debt",
+            "Cash & Equivalents",
+        ),
+    }.items()
+}
+CP1_CHECKED["T4.9 Calculation register"] = synthetic_table(
+    "| Metric Name | Formula | Numerator Value | Numerator Source | Denominator Value "
+    "| Denominator Source | Period | Currency | Unit | Calculated Value | Calculation Status "
+    "| Evidence Quality Tier | Limitations |",
+    *(
+        f"| {name} | n / d | {num} | annual.txt | {den} | annual.txt | {period} | USD | US$m "
+        f"| {value} | Stated | Tier 3 | Synthetic. |"
+        for name, rows in (
+            ("Total debt / EBITDA", (("1500", "400", "3.75"), ("1400", "500", "2.80"))),
+            ("Net debt / EBITDA", (("1200", "400", "3.00"), ("1125", "500", "2.25"))),
+            ("EBITDA / cash interest", (("400", "125", "3.20"), ("500", "125", "4.00"))),
+        )
+        for period, (num, den, value) in zip(("FY2023", "FY2024"), rows, strict=True)
+    ),
+)
+CP1_CHECKED["Debt principal to carrying value"] = synthetic_table(
+    "| Period | Contractual principal | Reconciling items | Carrying value | Reporting unit "
+    "| Basis and limitation |",
+    f"| FY2024 | {GAP} | {GAP} | 1400 | US$m | Synthetic. |",
+)
+# The Period table the acceptance check needs (R11): the statement columns' dates, so a Net debt
+# row dated by the day is found to be a fiscal year (or not).
+CP1_CHECKED["Period table"] = synthetic_table(
+    "| Period | Start | End |",
+    "| FY2023 | 2022-10-01 | 2023-09-30 |",
+    "| FY2024 | 2023-10-01 | 2024-09-30 |",
+)
 PERIOD_HEAD = "| Period | {} | Reporting unit | Basis and limitation |"
 DEBT_STACK_HEAD = (
     "| Facility | Ranking | Secured | Amount | Cumulative leverage | Reporting unit "
@@ -454,6 +523,7 @@ for _heading, (_module, _types, _) in MAPS.items():
     )
 SCORED = (
     "CP-0",
+    "CP-1",
     "CP-1A",
     "CP-1B",
     "CP-1C",
@@ -468,7 +538,7 @@ SCORED = (
     "CP-3C",
 )
 SCORED += ("CP-3D", "CP-4", "CP-4C", "CP-5", "CP-6", "CP-DR")
-UNSCORED = ("CP-1", "CP-L10", "CP-8")
+UNSCORED = ("CP-L10", "CP-8")
 CONFIDENCE_ROWS = (
     "| Directly Sourced | 8 |\n| Calculated | 2 |\n| Assumption-Based | 2 |\n"
     "| Analyst Inference | 0 |\n| Weak Lineage | 0 |\n| Untraced | 0 |\n| Conflicting | 0 |\n"
@@ -560,6 +630,7 @@ def answer(context: dict, plan_routes: list) -> str:
                 lines += [f"### {heading}", "", table, ""]
     if context["module_id"] == "CP-1":  # ... and the net debt table (owner, 2026-11-12).
         lines += ["### Net debt data", "", NET_DEBT_TABLE, ""]
+        lines += [part for h, t in CP1_CHECKED.items() for part in (f"### {h}", "", t, "")]
         lines += ["### Post-balance-sheet adjustments", "", POST_BS_NONE, ""]
     for heading, table in OWNER_TABLES.get(context["module_id"], {}).items():
         lines += [f"### {heading}", "", table, ""]
@@ -1914,6 +1985,10 @@ SKILLS = "docs/reuse/selected-methods/skills/"
 # phase", "they bind every run", "Read ...; materialize its run-specific brief"), not from METHODS.
 BINDING_COMPANIONS = {
     "CP-0": ("cp-0-source-readiness/references/REF_CP-0_STEPS.md",),
+    "CP-1": (
+        "cp-1-canonical-data-foundation/references/REF_CP-1_STEPS.md",
+        "cp-1-canonical-data-foundation/references/CP-1_RUNBOOK.md",
+    ),
     "CP-1B": (
         "cp-1b-earnings-delta/SKILL.md",
         "cp-1b-earnings-delta/references/REF_CP-1B_STEPS.md",
@@ -1948,6 +2023,7 @@ BINDING_COMPANIONS = {
 SKILL_MODULES = [
     *(
         "CP-0",
+        "CP-1",
         "CP-1A",
         "CP-1B",
         "CP-1C",
@@ -2357,6 +2433,324 @@ def test_cp3_blocklists_no_longer_refuse_not_assessable(tmp_path):
         )
 
 
+CP1_DIR = ROOT / "docs/reuse/selected-methods/skills/cp-1-canonical-data-foundation"
+CP1_FILES = (
+    "SKILL.md",
+    "references/CP-1_RUNBOOK.md",
+    "references/REF_CP-1_STEPS.md",
+    "references/CP-1_SCHEMA_REFERENCE.md",
+    "references/CP-1_SYSTEM_REFERENCE.md",
+)
+# The byte-for-byte copies of caos-databricks vendor/deploy-v at dfff264 (the answer key for the
+# `source_sha256` of every edited entry); the schema and system references stay unedited.
+CP1_SOURCE_SHA256 = dict(
+    zip(
+        CP1_FILES,
+        (
+            "35b865705f9cb4a001c8a227767319bc3f34d274c3659164176ab2e70bf3a345",
+            "7934e8c562832b8320243cbf08e84b16575a0d2e4974fd918bf094b300fcd4ad",
+            "e9552f0d2b128cbe27ec58cdc2360e0e67c96a9f6ec21a140854f310de201bc1",
+            "356e87cb37a5ed86c96b15a913f42b8aafee544cd70e4f8f2fde01ce58cc7b72",
+            "7af64a9047ffa05e996dbb4cb1741b9a815744ecb7eb7bd3b134a4bccf9d2cd0",
+        ),
+        strict=True,
+    )
+)
+CP1_SENT = CP1_FILES[:3]
+
+
+def cp1_method() -> str:
+    return "\n".join((CP1_DIR / name).read_text(encoding="utf-8") for name in CP1_SENT)
+
+
+def test_cp1_runs_the_deploy_v_method_not_the_structured_runtime_stand_ins():
+    """Owner, 2026-11-13: CP-1 is sent caos dfff264's skill, runbook and step file (edited), not
+    the 26 KB of STEP_CONTRACTS written for the JSON runtime."""
+    text = cpos_launch.method_text("CP-1")
+    for heading in (
+        "# CP-1 Canonical Data Foundation",
+        "# CP-1 runbook",
+        *(f"## REF_CP-1_{n}" for n in ("01_", "02_", "03_", "04_", "05_", "06_", "07_")),
+        *(f"## REF_CP-1_{n}" for n in ("08_", "09_", "10_", "11_", "12_")),
+        "## Anti-patterns",
+        "## Discipline",
+        "## Calculation status (8 values)",
+        "## Evidence hierarchy",
+        "## Null and derived-period rules",
+        "## Event and liability discipline",
+        "## Metrics",
+    ):
+        assert heading in text, heading
+    for phrase in (
+        "Every `amount` is a JSON number",
+        "STEP_CONTRACTS",
+        "source_context",
+    ):
+        assert phrase not in text, phrase
+    assert [n for n, _ in cpos_launch.method_sections("CP-1")][: len(CP1_SENT) + 1] == [
+        *(SKILLS + "cp-1-canonical-data-foundation/" + name for name in CP1_SENT),
+        "prompts/CP-1.md",
+    ]
+
+
+def test_cp1_method_has_no_workbook_routing_script_or_front_matter_text():
+    text = cp1_method()
+    for phrase in (
+        "REF_CP-1_13",
+        "Model Workbook",
+        "orkbook",
+        "CP-MODEL",
+        "T4.14",
+        "T4.15",
+        "T4.19",
+        "table-id",
+        "cp1.",
+        "DEBT_TOTAL_EX_LEASES",
+        ".xlsx",
+        "Run CP-1",
+        "recommended next command",
+        "CREDIT_OS_V_MODULE_CATALOG",
+        "prepare_invocation",
+        "validate_handoff",
+        "completeness_check",
+        "confidence_score.py",
+        "credit_metrics.py",
+        "Automated QA validation",
+        "qa_status",
+        "Confidence Score",
+        "Microsoft 365",
+        "Feeds CP-1B",
+        "Downstream Module",
+        "CP-1B",
+        "CP-2G",
+        "CP-4A",
+        "CP-5A",
+        "cpdr.adoptions",
+        "CP_DR_RESEARCH_BRIEF",
+        "[SubjectKey]",
+        "Audit Summary",
+        "QA Validation",
+        "Gaps & Conflicts",
+        "Analytical appendix",
+    ):
+        assert phrase not in text, phrase
+    # The null spelling the host's system prompt bars (method wrote `null`, `—`, empty cells).
+    for phrase in ("write `null`", "Store **null**", "Store null", "explicit null", "null + gap"):
+        assert phrase not in text, phrase
+    # CP-OS, not the method, orders modules and writes the next-module section.
+    assert "Run command" not in text and "Dependencies" not in text
+
+
+def test_cp1_method_states_the_project_conventions_the_checks_hold():
+    text = cp1_method()
+    for phrase in (
+        "`Not supplied: <reason>`",
+        "`Not calculable: <reason>`",
+        "never `null`, an empty cell or a dash",
+        "no snake_case or capitalised underscore tokens, no register ids",
+        'not the words "canonical" or "handoff"',
+        "Each register below is a `###` heading inside `## Findings`; gaps go under `## Gaps`",
+        "CP-1 is a data module: `### Bottom line` opens `## Findings`",
+        "T4.7 is retired",
+        "This method does not rename, merge or drop any of them",
+    ):
+        assert phrase in text, phrase
+    for kept in (
+        "`Chart data:` tables",
+        "`Net debt data`",
+        "`Post-balance-sheet adjustments`",
+        "`### Financials and credit metrics`",
+        "the Period table",
+        "`### Confidence inputs`",
+    ):
+        assert kept in text, kept
+    # Every editing-out of the method's wording leaves the sentence rules to the sentences only.
+    assert "Debt principal to carrying value" not in text  # the launcher block names that table
+
+
+def test_cp1_method_names_the_operand_tables_the_check_reads():
+    text = cp1_method()
+    for heading in (
+        "### T4.4 Income statement",
+        "### T4.5 Cash flow statement",
+        "### T4.6 Balance sheet",
+        "### T4.9 Calculation register",
+    ):
+        assert f"`{heading}`" in text or f"Output `{heading}`" in text, heading
+    assert "The first column is headed `Line item`" in text
+    assert "`Unit` (the currency code and `millions` or `thousands`" in text
+    for row in (
+        "`EBITDA (Reported)`",
+        "`EBITDA (Adjusted)`",
+        "`Net Cash from Operating Activities`",
+        "`Net Cash from Investing Activities`",
+        "`Net Cash from Financing Activities`",
+        "`Net Cash Change`",
+        "`Opening Cash`",
+        "`Closing Cash`",
+        "`Cash Interest Paid`",
+        "`FX Effect on Cash`",
+        "`Total Assets`",
+        "`Total Liabilities`",
+        "`Total Equity`",
+        "`Total Debt`",
+        "`Cash & Equivalents`",
+        "`Temporary Equity`",
+    ):
+        assert row in text, row
+    assert (
+        "`Metric Name` | `Formula` | `Numerator Value` | `Numerator Source` | "
+        "`Denominator Value` | `Denominator Source` | `Period` | `Currency` | `Unit` | "
+        "`Calculated Value` | `Calculation Status` | `Evidence Quality Tier` | `Limitations`"
+    ) in text
+    for name in (
+        "`Total debt / EBITDA`",
+        "`Net debt / EBITDA`",
+        "`EBITDA / cash interest`",
+        "`Total debt / adjusted EBITDA`",
+        "`Net debt / adjusted EBITDA`",
+        "`Adjusted EBITDA / cash interest`",
+    ):
+        assert name in text, name
+    assert "`Unit` is the money unit" in text and "`Unit` is `US$m`" not in text
+    assert (
+        "`Net Cash Change` excludes nothing: it is operating plus investing plus financing" in text
+    )
+    assert "plus the FX effect" in text
+    # T4.7 stays retired: no table by that name is asked for.
+    assert "### T4.7" not in text
+
+
+def test_cp1_method_states_the_debt_and_ebitda_basis():
+    text = cp1_method()
+    for phrase in (
+        "debt totals use carrying values",
+        "Principal and commitment are kept separately and are not substitutes",
+        "Lease liabilities the issuer presents on their own balance-sheet lines are not added",
+        "A lease or other obligation the issuer carries inside its debt lines stays in",
+        "Reported EBITDA is the primary denominator",
+        "adjusted EBITDA beside it, labelled, when the issuer states it",
+        "gross principal is never the leverage denominator",
+        "The carrying-against-principal difference is always one row here",
+    ):
+        assert phrase.lower() in text.lower(), phrase
+    # The method no longer prefers or treats adjusted EBITDA as the primary denominator.
+    # Wording the source did contain (Canon Core debt basis, and its example with locators).
+    assert "Canonical debt basis" not in text
+    assert "Source: AR p.45" not in text
+    assert "A lease liability is not in total debt" not in text
+
+
+STEP13_RULES = (
+    # (rule, phrase the sent text must hold)
+    ("outflows negative", "Outflows are negative and inflows positive"),
+    ("cash interest and tax are cash paid", "cash paid, not accrued expense"),
+    ("lease and interest cash classification", "lease principal paid (financing activities"),
+    ("debt instruments table", "### T4.18 Debt instruments"),
+    ("carrying and principal separate", "carrying value and principal are separate columns"),
+    ("no inference from the name", "never inferred from the instrument name"),
+    ("not stated is not evidence of ranking", "it is not evidence of either"),
+    ("bullet amortisation is 0", "0 for a bullet"),
+    ("financing cost adjustment row", "`Financing cost adjustment` row"),
+    ("instruments reconcile to Total Debt", "plus that row reconcile to `Total Debt`"),
+    ("one row per add-back, issuer label", "one row per add-back with the issuer's own label"),
+    ("realisation never inferred", "that is never inferred from the classification"),
+    (
+        "add-backs never merged, no plug",
+        "Add-backs are never merged, and no plug or balancing line",
+    ),
+    ("bridge feeds the host table", "write no second bridge table"),
+    ("reported quarter first", "a reported discrete quarter comes first"),
+    ("Q3 from 9M less H1", "Q3 is 9M less H1 only when the quarters are absent"),
+    ("Q4 from FY less 9M, labelled", "Q4 is FY less 9M only when no Q4 is reported"),
+    ("reported year not replaced", "A reported fiscal year is never replaced by a sum of quarters"),
+    ("balance-sheet LTM is the latest end", "last-twelve-months figure is the latest period end"),
+    ("reconciliation list", "segment revenue to reported revenue, the EBITDA bridge"),
+    ("difference never forced to zero", "it is never forced to zero"),
+    (
+        "segment corporate and eliminations",
+        "Corporate and eliminations are one separate row per period",
+    ),
+    ("operating KPI series", "never join non-comparable series"),
+    ("pro forma only when a source states it", "never construct one the source does not state"),
+    ("pro forma out of period figures", "They stay out of period figures"),
+    ("evidence tier labels", "2a unaudited with auditor review"),
+    ("no independent recommendation", "No independent credit recommendation"),
+)
+
+
+def test_cp1_method_restates_step_13s_analytical_rules_without_its_tagged_tables():
+    text = cp1_method()
+    for rule, phrase in STEP13_RULES:
+        assert phrase in text, rule
+
+
+def test_cp1_example_sentences_carry_no_bracket_label_and_no_page_locator():
+    """The host prose checks 3 and 4 refuse both in a sentence; the method names where they go."""
+    text = cp1_method()
+    for label in ("[Normalized]", "[Calculated]", "[Analyst Judgement]"):
+        assert label not in text, label
+    assert not re.search(r"\bpp?\.\s*\d|\bpages?\s+\d", text, re.IGNORECASE)
+    assert "Page locators go in `Source` columns and Basis lines, never in a sentence" in text
+    assert "never inside a sentence: reported (with its source)" in text
+
+
+def test_the_step_file_gives_the_fixed_register_rows_the_money_unit_not_us_dollars():
+    """Owner ruling C1: the six rows' `Unit` is the money unit (`GBPm` for a GBP issuer)."""
+    text = (CP1_DIR / "references/REF_CP-1_STEPS.md").read_text()
+    fixed = next(line for line in text.splitlines() if line.startswith("- Fixed `Metric Name`"))
+    assert "`Unit` is the money unit" in fixed and "US$m" not in fixed
+    for name in CP1_SENT:
+        assert "US$m" not in (CP1_DIR / name).read_text(), name
+
+
+def test_cp1_method_files_are_archived_with_hashes_and_named_edits():
+    manifest = json.loads((ROOT / "docs/reuse/selected-methods/manifest.json").read_text())
+    entries = {e["archive_path"]: e for e in manifest["files"]}
+    for name in CP1_FILES:
+        entry = entries[f"docs/reuse/selected-methods/skills/cp-1-canonical-data-foundation/{name}"]
+        data = (CP1_DIR / name).read_bytes()
+        assert entry["sha256"] == hashlib.sha256(data).hexdigest(), name
+        if name in CP1_SENT:
+            assert entry["edited_copy_of"].endswith(
+                "caos-databricks/vendor/deploy-v/skills/cp-1-canonical-data-foundation/" + name
+            ), name
+            assert entry["exact_copy_found_at"] is None
+            assert entry["source_sha256"] == CP1_SOURCE_SHA256[name], name
+            assert entry["source_sha256"] != entry["sha256"], name
+            edit = entry["edit"]
+            assert "dfff264" in edit and "source_sha256" in edit, name
+        else:  # archived, not sent: byte-for-byte
+            assert entry["sha256"] == CP1_SOURCE_SHA256[name], name
+            assert entry["exact_copy_found_at"].endswith(name), name
+            assert "edited_copy_of" not in entry
+    edits = " ".join(entries[f"{CP1_DIR.relative_to(ROOT)}/{n}"]["edit"] for n in CP1_SENT)
+    for named in (
+        "(a) workbook",
+        "(b) routing",
+        "(c) runbook",
+        "(d) project conventions",
+        "(e) operand tables",
+        "(f) debt basis and EBITDA",
+        "(g) step 13's analytical rules restated without its tagged tables",
+        "expense-block reconciliation",
+        "compare to the precision",
+        "a balance sheet is an instant",
+        "never replace a directly reported period",
+        "prohibited conclusion, reader question and decision drivers",
+        "FFO/Debt trajectory",
+        "WC inclusion",
+    ):
+        assert named in edits, named
+
+
+def test_cp1_sent_method_fits_the_size_the_pathway_budgets_leave():
+    """The answer key: the sent skill files total at most 33,000 characters, so the launcher
+    block that follows (about 3,500) and the score section (2,172) keep every pathway inside its
+    ceiling (the pathway budget test itself is the size-budget test above)."""
+    assert len(cp1_method()) <= 33_000
+
+
 def test_cp1b_runs_the_deploy_v_method_not_the_structured_runtime_step():
     """Live runs 2026-11-09 and 2026-11-10: CP-1B blocked both times for want of a `read_inputs`
     view with `pairs`, which only the older structured runtime gives."""
@@ -2471,6 +2865,12 @@ def test_every_module_is_told_what_stands_for_acceptance_scripts_and_questions(t
 # CP-8 pin recomputed on 2026-11-13 (merge of origin/main into claude/deploy-v-methods): it is the
 # merge of main's CP-8 method change (cp8.md redesign) with this branch's appendix section. Every
 # other pin is this branch's value; main changed no other method text.
+# CP-1 changed on 2026-11-13 (CP-1 moves to the Deploy V method): it now sends the edited caos
+# dfff264 skill, runbook and step file, not the STEP_CONTRACTS sections, so runs made before it are
+# correctly marked "Earlier methods" for CP-1. The score section follows, as for every skill module.
+# Fix round 1 of that change (the acceptance check's rulings R2, R5, R9) edited the step file again.
+# Owner ruling C1 (own-currency money tables) edited it once more: the six fixed register rows'
+# `Unit` is the money unit, not `US$m`.
 # CP-DR pin recomputed on 2026-11-13 for named edit 2c (the lookup paragraph; t5-cpdr-lookup)
 # and again after the base merge that added the register-scope section.
 # Ten pins recomputed on 2026-11-13 and again the same day for the canon-rule clause, CP-5's and
@@ -2480,7 +2880,7 @@ def test_every_module_is_told_what_stands_for_acceptance_scripts_and_questions(t
 # section of CPOS_REGISTER_SCOPE.md; the added text is that section and nothing else.
 METHOD_TEXT_SHA256_AT_1B41E65 = {
     "CP-0": "307017934f4e8e75fc432e8b7ef100bba82ce84f1bb6910f37c7e715fe701e72",
-    "CP-1": "02477a91d582f6301b2dbfadd96572ea75f9845493de337d7160a55111b62170",
+    "CP-1": "f047d555dd9ae1284a8fbf42feb3b63096b00077c021a303357fa16ce933d493",
     "CP-1A": "9de9426a829625461dee6cf850965590c923f661ceaa57208ad9028da8796b03",
     "CP-1B": "38d9fa7b075d1ce5d0cd21bcc216f57f37369cd4db395b3f1fb65498697a509f",
     "CP-1C": "9353afdbce820f59c2dcabc951fc1ff3813174b3c84e79b47bc22bea97f3bbe8",
@@ -2625,9 +3025,23 @@ def test_cp1_is_asked_for_the_period_table_whenever_a_forecast_is_wanted(tmp_pat
         )
 
 
-def test_cp1_is_not_asked_for_the_period_table_when_no_forecast_is_wanted(tmp_path):
+def test_cp1_is_asked_for_the_period_table_in_one_sentence_when_no_forecast_is_wanted(tmp_path):
+    # R11: the acceptance check needs the table on every run; without a forecast the short
+    # sentence asks for it, and no other module is asked.
     _, texts = all_instructions(tmp_path, modules=("CP-0", "CP-1", "CP-2A"))
-    assert all("| Period | Start | End |" not in text for text in texts.values())
+    head = texts["CP-1"].partition(cpos_launch.METHOD_MARK)[0]
+    assert cpos_launch.PERIOD_REQUIRED_BLOCK in head
+    assert cpos_launch.PERIOD_TABLE_BLOCK not in head
+    assert head.count("| Period | Start | End |") == 1
+    assert all("| Period | Start | End |" not in t for n, t in texts.items() if n != "CP-1")
+
+
+def test_cp1_is_told_to_print_the_period_table_once_when_a_forecast_is_wanted(tmp_path):
+    _, texts = all_instructions(tmp_path, modules=("CP-0", "CP-1", "CP-2A", "CP-2G"))
+    head = texts["CP-1"].partition(cpos_launch.METHOD_MARK)[0]
+    assert cpos_launch.PERIOD_TABLE_BLOCK in head
+    assert cpos_launch.PERIOD_REQUIRED_BLOCK not in head
+    assert head.count("| Period | Start | End |") == 1
 
 
 def test_the_presets_are_the_owners_answer_key():
@@ -2736,10 +3150,10 @@ def test_cp1_chart_tables_become_the_report_chart_strip(tmp_path):
     figures = strip_of(prepared, raw, tmp_path, "model-chart-strip").figures
     assert [f.fig_id for f in figures] == ["S.1", "S.2", "S.3", "S.4"]
     assert [m.value for m in figures[0].chart.marks] == [
-        Decimal("4.20"),
-        Decimal("3.85"),
-        Decimal("3.60"),
-        Decimal("3.25"),
+        Decimal("3.75"),
+        Decimal("3.00"),
+        Decimal("2.80"),
+        Decimal("2.25"),
     ]
     assert [m.value for m in figures[3].chart.marks] == [Decimal(500), None, Decimal(1250)]
     assert figures[3].chart.marks[1].ref_id.startswith("G")
@@ -2762,9 +3176,9 @@ def test_an_all_gaps_non_usd_issuer_passes_with_no_chart_values(tmp_path, monkey
 @pytest.mark.parametrize(
     ("old", "new", "complaint"),
     [
-        ("| 3.85 |", "| 3.85x |", "3.85x"),
+        ("| 3.00 |", "| 3.00x |", "3.00x"),
         ("| 300 | 450 | US$m |", "| 300 | 450 | EUR m |", "EUR m"),
-        ("| FY2023 | 3.10 | x | Synthetic. |", "| FY2023 | 3.10 | x |  |", "Basis and limitation"),
+        ("| FY2023 | 3.20 | x | Synthetic. |", "| FY2023 | 3.20 | x |  |", "Basis and limitation"),
         ("### Chart data: liquidity", "### Liquidity data", "Chart data: liquidity"),
         ("| Period | Debt maturing |", "| Year | Debt maturing |", "Period"),
         ("| FY2026 | 500 |", "| FY2026 | Not supplied: |", "Not supplied: |"),
@@ -4952,9 +5366,9 @@ def test_checker_sends_back_each_malformed_credit_structure_table(
 
 def test_the_debt_stack_instruction_keeps_leverage_out_of_the_money_unit(tmp_path):
     text = instruction_text(tmp_path, "CP-1")
-    assert "(Amount) are plain numbers in US$m" in text
+    assert "(Amount) are plain numbers in the money unit" in text
     assert "Cumulative leverage is a plain number in the unit its rule states" in text
-    assert "(Amount, Cumulative leverage) are plain numbers in US$m" not in text
+    assert "(Amount, Cumulative leverage) are plain numbers in the money unit" not in text
 
 
 # ---- Package 3 (2026-11-10): the comparison tables. Every value is synthetic.
@@ -5354,15 +5768,17 @@ def test_a_period_table_unit_and_second_table_get_the_same_advice():
     row = "| FY2024 | 100 | 20 | {} | Basis. |"
     heading = f"### {spec.heading}\n\n"
     issues = cpos_launch.chart_issues(
-        heading + synthetic_table(head, row.format("US$m; per year")), spec
+        heading + synthetic_table(head, row.format("US$m; per year")), spec, money="US$m"
     )
     assert len(issues) == 2  # one per number cell, as before
     assert all("must be exactly `US$m`" in i and "Basis and limitation" in i for i in issues)
-    other = cpos_launch.chart_issues(heading + synthetic_table(head, row.format("EUR m")), spec)
+    other = cpos_launch.chart_issues(
+        heading + synthetic_table(head, row.format("EUR m")), spec, money="US$m"
+    )
     assert len(other) == 2 and all("write `Not supplied: reported in EUR m`" in i for i in other)
     second = "| Other | Date |\n| --- | --- |\n| x | 2024-10-18 |"
     text = heading + synthetic_table(head, row.format("US$m")) + "\n" + second
-    (two,) = cpos_launch.chart_issues(text, spec)
+    (two,) = cpos_launch.chart_issues(text, spec, money="US$m")
     assert "a second table under this heading: give it its own ### heading" in two
 
 
@@ -5485,7 +5901,7 @@ DEBT_UNIT_ROW = "| Term loan | 1 | Yes | 1871 | 4.72 | {} | Equal rank. |"
 def debt_stack_issues(*rows: str) -> tuple[str, ...]:
     spec = next(t for t in ROW_SPECS if t.heading == "Chart data: debt stack")
     text = "### Chart data: debt stack\n\n" + synthetic_table(DEBT_STACK_HEAD, *rows)
-    return cpos_launch.chart_issues(text, spec)
+    return cpos_launch.chart_issues(text, spec, money="US$m")
 
 
 def test_a_unit_that_starts_with_the_chart_unit_is_told_to_keep_only_the_unit():
@@ -5541,7 +5957,7 @@ def test_a_second_table_under_one_heading_is_named_not_reported_as_malformed_row
     text = (
         "### Chart data: debt stack\n\n" + synthetic_table(DEBT_STACK_HEAD, first) + "\n" + second
     )
-    (issue,) = cpos_launch.chart_issues(text, spec)
+    (issue,) = cpos_launch.chart_issues(text, spec, money="US$m")
     assert "a second table under this heading: give it its own ### heading" in issue
     assert "needs 7 cells" not in issue
 
@@ -5569,8 +5985,15 @@ def test_a_user_reminder_status_the_cp6_guard_names_is_accepted_and_a_lookalike_
 def test_the_currency_sentence_is_sent_only_with_a_unit_constraint():
     sentence = "reported in <unit>"
     for spec in ROW_SPECS:
-        assert (sentence in cpos_launch._selector(spec)) is bool(spec.chart_unit), spec.heading
-    bridge = next(t for ts in cpos_launch.OWNER_TABLES.values() for t in ts if t.steps)
+        # CP-1's money tables state the money unit in the check block instead (C1).
+        sent = bool(spec.chart_unit) and spec.chart_unit != cpos_launch.MONEY
+        assert (sentence in cpos_launch._selector(spec)) is sent, spec.heading
+    bridge = next(
+        t
+        for ts in cpos_launch.OWNER_TABLES.values()
+        for t in ts
+        if t.steps and t.chart_unit != cpos_launch.MONEY
+    )
     assert sentence in cpos_launch._selector(bridge)
 
 
@@ -6321,9 +6744,15 @@ def test_every_pathway_asks_cp1_for_the_net_debt_table_and_states_every_rule_the
     text = (tmp_path / "out" / prepared.plan.instructions["CP-1"].path).read_text()
     assert text.count("`### Net debt data`") == 1
     assert NET_DEBT_HEADER in text
+    assert "total debt principal as the issuer reports it" not in text
     for stated in (
-        "total debt principal as the issuer reports it",
-        "what gross debt includes",
+        "Gross debt is total debt at balance-sheet carrying value (current plus long-term",
+        "net of issuance costs and discounts), not principal",
+        (
+            "what gross debt includes (for example securitization and finance leases the issuer "
+            "carries within its debt lines) and states the principal total"
+        ),
+        "beside it. Cash is",
         "the same figure as the Cash column of the `Chart data: liquidity` table",
         "Net debt is gross debt less cash, worked with `calculate`",
         "is refused if net debt differs from gross debt less cash by any amount",
@@ -6369,9 +6798,19 @@ def test_a_net_debt_row_with_a_stated_gap_is_accepted_in_the_form_the_rule_allow
     prepared, task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
     raw = answer(context, list(prepared.plan.layout.routes))
     gap = "Not supplied: the debt note was not read"
+    reg = "| n / d | {} | annual.txt | {} | annual.txt | FY{} | USD | US$m | {} |"
+    # Ties are two-sided (R1): a gap in the net debt table needs its balance-sheet line, the
+    # register row worked from it and the chart figure beside it to be gaps too.
     for old, new in (
         ("| FY2023 | 1500 | 300 | 1200 |", f"| FY2023 | {gap} | 300 | {gap} |"),
         ("| FY2024 | 1400 | 275 | 1125 |", f"| FY2024 | 1400 | {gap} | {gap} |"),
+        ("| Total Debt | 1500 | 1400 |", f"| Total Debt | {gap} | 1400 |"),
+        ("| Cash & Equivalents | 300 | 275 |", f"| Cash & Equivalents | 300 | {gap} |"),
+        (reg.format(1500, 400, 2023, "3.75"), reg.format(gap, 400, 2023, gap)),
+        (reg.format(1200, 400, 2023, "3.00"), reg.format(gap, 400, 2023, gap)),
+        (reg.format(1125, 500, 2024, "2.25"), reg.format(gap, 500, 2024, gap)),
+        ("| FY2023 | 3.75 | 3.00 | x |", f"| FY2023 | {gap} | {gap} | x |"),
+        ("| FY2024 | 2.80 | 2.25 | x |", f"| FY2024 | 2.80 | {gap} | x |"),
     ):
         assert old in raw
         raw = raw.replace(old, new)
@@ -7716,6 +8155,258 @@ def test_attemptless_starts_are_matched_to_attemptless_ends_by_count(tmp_path):
     assert line.startswith("Charged excludes 1 context summary ")
 
 
+# ---- C1 (owner ruling, 2026-11-13): CP-1's money tables are in the issuer's own currency.
+def gbp(raw: str) -> str:
+    return (
+        raw.replace("| USD | US$m |", "| GBP | GBPm |")
+        .replace("USD millions", "GBP millions")
+        .replace("US$m", "GBPm")
+    )
+
+
+def test_a_gbp_issuers_cp1_handoff_is_accepted_and_its_strip_is_in_gbpm(tmp_path):
+    prepared, task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
+    raw = gbp(answer(context, list(prepared.plan.layout.routes)))
+    assert "US$" not in raw and "GBPm" in raw
+    assert _checked_handoff(task, raw.encode(), checker(prepared.layout)) == ()
+    block = strip_of(prepared, raw, tmp_path, "model-chart-strip")
+    liquidity, ladder = block.figures[2], block.figures[3]
+    assert liquidity.chart.unit == ladder.chart.unit == "GBPm"
+    assert [m.value for m in liquidity.chart.marks][:2] == [Decimal(300), Decimal(450)]
+    assert "US$" not in block.model_dump_json()
+
+
+def test_a_gbp_strip_fact_states_gbp_and_never_usd(tmp_path):
+    prepared, _task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
+    raw = gbp(answer(context, list(prepared.plan.layout.routes)))
+    routes = tuple(r for r in prepared.layout.routes if r.module_id == "CP-1")
+    own = prepared.layout.model_copy(
+        update={
+            "blocks": tuple(dict.fromkeys(r.block_id for r in routes)),
+            "routes": routes,
+            "front": (),
+        }
+    )
+    (tmp_path / "cp-1.md").write_text(raw)
+    handoff = HandoffInput(path="cp-1.md", sha256=hashlib.sha256(raw.encode()).hexdigest())
+    request = DeliveryRequest(run=prepared.plan.run, handoffs={"CP-1": handoff}, layout=own)
+    files = markdown_files(request, tmp_path)
+    view = json.loads(files["view.json"])
+    typed = [
+        f
+        for m in view["modules"]
+        for f in m["facts"]
+        if f["table_id"].startswith("chart-") and f["status"] == "known" and f["unit"] == "MILLIONS"
+    ]
+    assert typed and {f["currency"] for f in typed} == {"GBP"}
+    assert b"US$" not in files["report-view.json"]
+
+
+def gapped_gbp_strip(prepared, context, monkeypatch):
+    monkeypatch.setitem(
+        CHART_TABLES, "Chart data: liquidity", NON_USD_TABLES["Chart data: liquidity"]
+    )
+    monkeypatch.setitem(
+        CHART_TABLES, "Chart data: debt maturities", NON_USD_TABLES["Chart data: debt maturities"]
+    )
+    return gbp(answer(context, list(prepared.plan.layout.routes)))
+
+
+def test_an_all_gap_strip_figure_on_a_gbp_handoff_is_labelled_gbpm_not_us_dollars(
+    tmp_path, monkeypatch
+):
+    prepared, task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
+    raw = gapped_gbp_strip(prepared, context, monkeypatch)
+    assert _checked_handoff(task, raw.encode(), checker(prepared.layout)) == ()
+    block = strip_of(prepared, raw, tmp_path, "model-chart-strip")
+    liquidity, ladder = block.figures[2], block.figures[3]
+    assert all(m.value is None for f in (liquidity, ladder) for m in f.chart.marks)
+    assert liquidity.chart.unit == ladder.chart.unit == "GBPm"
+    assert "US$" not in block.model_dump_json()
+
+
+def test_an_all_gap_strip_figure_with_no_single_statement_currency_has_no_unit(
+    tmp_path, monkeypatch
+):
+    prepared, _task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
+    raw = gapped_gbp_strip(prepared, context, monkeypatch).replace(
+        "GBP millions", "Not supplied: no unit"
+    )
+    block = strip_of(prepared, raw, tmp_path, "model-chart-strip")
+    assert block.figures[2].chart.unit is block.figures[3].chart.unit is None
+    assert "US$" not in block.model_dump_json()
+
+
+def test_a_strip_figure_in_two_units_is_refused_by_the_adapter(tmp_path):
+    prepared, _task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
+    raw = gbp(answer(context, list(prepared.plan.layout.routes)))
+    mixed = raw.replace("| FY2024 | 275 | 400 | GBPm |", "| FY2024 | 275 | 400 | EURm |")
+    assert mixed != raw
+    with pytest.raises(ValueError, match="one unit"):
+        strip_of(prepared, mixed, tmp_path, "model-chart-strip")
+
+
+def test_gbp_tables_under_usd_statements_are_sent_back_naming_the_money_unit(tmp_path):
+    prepared, task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
+    raw = answer(context, list(prepared.plan.layout.routes)).replace("US$m", "GBPm")
+    issues = _checked_handoff(task, raw.encode(), checker(prepared.layout))
+    assert any("`US$m`" in i for i in issues), issues
+
+
+def test_gbp_statements_with_us_dollar_tables_are_sent_back_naming_the_money_unit(tmp_path):
+    prepared, task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
+    raw = answer(context, list(prepared.plan.layout.routes)).replace("USD millions", "GBP millions")
+    issues = _checked_handoff(task, raw.encode(), checker(prepared.layout))
+    assert any("`GBPm`" in i for i in issues), issues
+
+
+def test_another_modules_money_table_is_still_refused_in_gbpm(tmp_path):
+    prepared, task, context = good_task(tmp_path, "CP-2D")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    assert "| 120 | US$m |" in raw
+    issues = _checked_handoff(
+        task, raw.replace("| 120 | US$m |", "| 120 | GBPm |").encode(), checker(prepared.layout)
+    )
+    refused = (
+        "`### Chart data: liquidity bridge` Free cash flow: a number in GBPm cannot be charted "
+        "as US$m; write `Not supplied: reported in GBPm`."
+    )
+    assert refused in issues, issues
+
+
+def test_only_cp1s_money_tables_say_the_money_unit_and_every_other_selector_is_unchanged():
+    text = "\n".join(
+        cpos_launch._selector(t)
+        for module in sorted(cpos_launch.OWNER_TABLES)
+        if module != "CP-1"
+        for t in cpos_launch.OWNER_TABLES[module]
+    )
+    # sha256 of these selectors at HEAD c532bb3 (measured before the change, not by this code)
+    digest = "4d55db88a6eed14bb347da382d11b7f595a784faeec8466c1b50045b8712ba72"
+    assert hashlib.sha256(text.encode()).hexdigest() == digest
+    assert "the money unit" not in text
+    for table in cpos_launch.OWNER_TABLES["CP-1"]:
+        if table.chart_unit != cpos_launch.MONEY:
+            continue
+        selector = cpos_launch._selector(table)
+        assert "the money unit" in selector and "US$m" not in selector, table.heading
+        assert cpos_launch.CURRENCY_RULE not in selector
+    assert "The money unit is `US$m` when your statements are in USD" in cpos_launch.CP1_CHECK_BLOCK
+
+
+def test_a_non_usd_reporting_currency_no_longer_limits_the_chart_strip():
+    # The owner's C1 ruling reverses the expectation that the strip is US$m only.
+    assert "chart-strip-usd" not in {rule.key for rule in RULES}
+    key_text = (ROOT / "tests/fixtures/run-expectations/outcome-key.json").read_text()
+    assert "chart-strip-usd" not in key_text and "US$m only" not in key_text
+
+
+# ---- C2 (owner ruling, 2026-11-13): an issuer that states only an adjusted EBITDA heads the
+# leverage and interest-cover columns with the adjusted names, tied to the adjusted register rows.
+ADJ_LEVERAGE = ("Total debt / adjusted EBITDA", "Net debt / adjusted EBITDA")
+ADJ_COVER = "Adjusted EBITDA / cash interest"
+
+
+def adjusted_only_answer(raw: str, unit: str = "USD millions") -> str:
+    """The checked fixture as an issuer states it that gives only an adjusted EBITDA: reported
+    EBITDA a stated gap, the three register rows and both chart tables on the adjusted names."""
+    reported = f"| EBITDA (Reported) | 400 | 500 | {unit} | Synthetic. | annual.txt |"
+    adjusted = reported.replace("Reported", "Adjusted")
+    swaps = (
+        (reported, reported.replace("400 | 500", f"{GAP} | {GAP}") + "\n" + adjusted),
+        ("| Total debt / EBITDA | n / d |", f"| {ADJ_LEVERAGE[0]} | n / d |"),
+        ("| Net debt / EBITDA | n / d |", f"| {ADJ_LEVERAGE[1]} | n / d |"),
+        ("| EBITDA / cash interest | n / d |", f"| {ADJ_COVER} | n / d |"),
+        (
+            "| Period | Total debt / EBITDA | Net debt / EBITDA |",
+            f"| Period | {ADJ_LEVERAGE[0]} | {ADJ_LEVERAGE[1]} |",
+        ),
+        ("| Period | EBITDA / cash interest |", f"| Period | {ADJ_COVER} |"),
+    )
+    for old, new in swaps:
+        assert old in raw, old
+        raw = raw.replace(old, new)
+    return raw
+
+
+def test_chart_issues_accept_the_adjusted_names_for_the_two_ratio_tables_only():
+    lev = (
+        "### Chart data: leverage\n\n| Period | {} | {} | Reporting unit | Basis and limitation |\n"
+    )
+    lev += "| --- | --- | --- | --- | --- |\n| FY2024 | 5.96 | 4.46 | x | Synthetic. |\n"
+    cover = "### Chart data: interest cover\n\n"
+    cover += "| Period | {} | Reporting unit | Basis and limitation |\n"
+    cover += "| --- | --- | --- | --- |\n| FY2024 | 3.60 | x | Synthetic. |\n"
+    s1, s2 = (
+        cpos_launch._chart_route("model-chart-strip", "S.1"),
+        cpos_launch._chart_route("model-chart-strip", "S.2"),
+    )
+    assert cpos_launch.chart_issues(lev.format(*ADJ_LEVERAGE), s1) == ()
+    assert cpos_launch.chart_issues(cover.format(ADJ_COVER), s2) == ()
+    mixed = cpos_launch.chart_issues(lev.format("Total debt / EBITDA", ADJ_LEVERAGE[1]), s1)
+    assert mixed and "needs the table headed" in mixed[0]
+    # Any other table keeps its one header: liquidity has no adjusted twin.
+    liquidity = cpos_launch._chart_route("model-chart-strip", "S.3")
+    wrong = CHART_TABLES["Chart data: liquidity"].replace("| Cash |", "| Adjusted cash |")
+    assert cpos_launch.chart_issues(
+        f"### Chart data: liquidity\n\n{wrong}\n", liquidity, money="US$m"
+    )
+
+
+def test_the_check_block_says_when_the_adjusted_names_head_the_chart_columns():
+    words = (
+        "Where `EBITDA (Reported)` is `Not supplied:` in every period and `EBITDA (Adjusted)` is "
+        "stated, head the leverage and interest-cover columns with the adjusted names instead; "
+        "never mix the two."
+    )
+    block = cpos_launch.CP1_CHECK_BLOCK
+    assert words in block
+    adjusted = ", ".join(f"`{m.name}`" for m in cp1_check.METRICS[3:])
+    assert block.index(adjusted) < block.index(words) < block.index("`Period` is the Period cell")
+
+
+@pytest.mark.parametrize("currency", ["USD", "GBP"])
+def test_an_adjusted_only_handoff_is_accepted_and_its_strip_says_adjusted(tmp_path, currency):
+    prepared, task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    raw = adjusted_only_answer(*((gbp(raw), "GBP millions") if currency == "GBP" else (raw,)))
+    assert _checked_handoff(task, raw.encode(), checker(prepared.layout)) == ()
+    block = strip_of(prepared, raw, tmp_path, "model-chart-strip")
+    lead, cover = block.figures[0], block.figures[1]
+    assert lead.chart.series == ADJ_LEVERAGE and cover.chart.series == (ADJ_COVER,)
+    assert [m.value for m in lead.chart.marks] == [
+        Decimal("3.75"),
+        Decimal("3.00"),
+        Decimal("2.80"),
+        Decimal("2.25"),
+    ]
+    # The reported names label no adjusted figure anywhere in what delivery writes.
+    routes = tuple(r for r in prepared.layout.routes if r.module_id == "CP-1")
+    own = prepared.layout.model_copy(
+        update={
+            "blocks": tuple(dict.fromkeys(r.block_id for r in routes)),
+            "routes": routes,
+            "front": (),
+        }
+    )
+    handoff = HandoffInput(path="cp-1.md", sha256=hashlib.sha256(raw.encode()).hexdigest())
+    request = DeliveryRequest(run=prepared.plan.run, handoffs={"CP-1": handoff}, layout=own)
+    (tmp_path / "cp-1.md").write_text(raw)
+    for name, content in markdown_files(request, tmp_path).items():
+        text = content.decode() if isinstance(content, bytes) else content
+        assert "Total debt / EBITDA" not in text and "Net debt / EBITDA" not in text, name
+
+
+def test_adjusted_names_beside_stated_reported_ebitda_are_sent_back(tmp_path):
+    prepared, task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    swapped = adjusted_only_answer(raw).replace(
+        f"| EBITDA (Reported) | {GAP} | {GAP} |", "| EBITDA (Reported) | 400 | 500 |"
+    )
+    issues = _checked_handoff(task, swapped.encode(), checker(prepared.layout))
+    assert any("so the chart columns are the reported ones" in i for i in issues), issues
+
+
 @pytest.mark.parametrize(
     "unit",
     [
@@ -7737,3 +8428,45 @@ def test_the_chart_units_own_currency_or_a_capitalised_word_is_not_another_curre
 def test_a_cell_with_a_different_currency_in_a_currency_position_keeps_the_gap_advice(unit):
     (issue,) = debt_stack_issues(DEBT_UNIT_ROW.format(unit))
     assert f"write `Not supplied: reported in {unit}`" in issue
+
+
+# ---- fix round H (two reviews of the C1 and C2 changes)
+def test_a_non_cp1_us_dollar_strip_route_keeps_currency_usd(tmp_path):
+    """Only CP-1 states its own currency (C1); any other module's `US$m` route is in US dollars
+    and its facts say so, as they did before C1 made it None."""
+    prepared, _task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    routes = tuple(
+        r.model_copy(update={"module_id": "CP-2D"})
+        for r in prepared.layout.routes
+        if r.module_id == "CP-1" and r.kind == "chart"
+    )
+    assert {r.chart_unit for r in routes} == {"x", "US$m"}
+    own = prepared.layout.model_copy(
+        update={
+            "blocks": tuple(dict.fromkeys(r.block_id for r in routes)),
+            "routes": routes,
+            "front": (),
+        }
+    )
+    (tmp_path / "cp-2d.md").write_text(raw)
+    handoff = HandoffInput(path="cp-2d.md", sha256=hashlib.sha256(raw.encode()).hexdigest())
+    request = DeliveryRequest(run=prepared.plan.run, handoffs={"CP-2D": handoff}, layout=own)
+    view = json.loads(markdown_files(request, tmp_path)["view.json"])
+    typed = [
+        f
+        for m in view["modules"]
+        for f in m["facts"]
+        if f["table_id"].startswith("chart-") and f["status"] == "known" and f["unit"] == "MILLIONS"
+    ]
+    assert typed and {f["currency"] for f in typed} == {"USD"}
+
+
+def test_only_the_two_ratio_tables_say_the_adjusted_names_may_head_their_columns():
+    allowed = "adjusted names where `Checked tables` allows"
+    for figure in ("S.1", "S.2"):
+        route = cpos_launch._chart_route("model-chart-strip", figure)
+        assert allowed in cpos_launch._selector(route), figure
+    for figure in ("S.3", "S.4"):
+        route = cpos_launch._chart_route("model-chart-strip", figure)
+        assert "adjusted" not in cpos_launch._selector(route), figure

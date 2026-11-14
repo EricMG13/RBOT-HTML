@@ -82,13 +82,55 @@ def test_unparseable_feed_is_failing_with_the_parser_reason_with_recorded_feed(d
     assert health(db_a, 1, NOW).reason
 
 
-def test_an_unexpected_error_is_not_swallowed_with_recorded_feed(db_a):
-    def fn(url, e, m):
-        raise RuntimeError("bug")
+REASON = "unexpected error (RuntimeError); see the log"
 
-    with pytest.raises(RuntimeError):
-        run_due(db_a, NOW, fn)
-    assert health(db_a, 1, NOW).state == "never checked"
+
+def _two_sources_first_raises(db):
+    a = propose_source(db, "A", "news", "https://a.org/f", "x")
+    set_source_state(db, a, "approved")
+    b = propose_source(db, "B", "news", "https://b.org/f", "x")
+    set_source_state(db, b, "approved")
+    calls = []
+
+    def fn(url, e, m):
+        calls.append(url)
+        if "a.org" in url:
+            raise RuntimeError("boom 10.0.0.5")
+        return Fetched(RSS, None, None)
+
+    fn.calls = calls
+    return a, b, fn
+
+
+def test_an_unexpected_error_fails_that_source_and_the_rest_still_run_with_recorded_feed(
+    db, caplog
+):
+    a, b, fn = _two_sources_first_raises(db)
+    out = run_due(db, NOW, fn)
+    assert out == [(a, False, REASON), (b, True, "2 new")]
+    reasons = [row["reason"] for row in db.execute("SELECT reason FROM source_checks")]
+    assert reasons and not any("10.0.0.5" in reason for reason in reasons)
+    errors = [r for r in caplog.records if r.levelname == "ERROR"]
+    assert errors and errors[0].exc_info is not None
+    assert "Traceback" in caplog.text and "boom 10.0.0.5" in caplog.text
+    assert str(a) in errors[0].getMessage()
+
+
+def test_a_source_that_raised_is_not_retried_within_600_seconds_with_recorded_feed(db):
+    _a, _b, fn = _two_sources_first_raises(db)
+    run_due(db, NOW, fn)
+    fn.calls.clear()
+    assert run_due(db, NOW + timedelta(seconds=60), fn) == []
+    assert fn.calls == []
+    run_due(db, NOW + timedelta(seconds=601), fn)
+    assert sorted(fn.calls) == ["https://a.org/f", "https://b.org/f"]
+
+
+def test_health_reports_a_source_that_raised_as_failing_with_recorded_feed(db):
+    a, _b, fn = _two_sources_first_raises(db)
+    run_due(db, NOW, fn)
+    h = health(db, a, NOW)
+    assert (h.state, h.reason) == ("failing", REASON)
 
 
 def test_not_modified_is_ok_and_keeps_validators_with_recorded_feed(db_a):

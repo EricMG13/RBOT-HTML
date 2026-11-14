@@ -373,7 +373,11 @@ def test_every_owner_row_table_can_state_none_without_a_chart_or_problem():
             "yield against maturity",
             [["Notes", "2020-01-01", "7.5", "450 bp", "2025-01-01", "Dealer quote", "%", "S"]],
         ),
-        ("revenue and EBITDA", [["FY2024", "100", "20", "EURm", "S"]]),
+        # C1: EURm alone is now CP-1's money unit; two units in one table are still refused.
+        (
+            "revenue and EBITDA",
+            [["FY2024", "100", "20", "EURm", "S"], ["FY2025", "110", "25", "US$m", "S"]],
+        ),
     ],
 )
 def test_the_store_refuses_the_launchers_invalid_chart_tables(name, rows):
@@ -412,7 +416,7 @@ def test_launcher_and_store_accept_every_independently_written_owner_fixture():
     assert fixtures.keys() == specs.keys()
     for heading, body in fixtures.items():
         text = f"### {heading}\n\n{body}\n"
-        assert launcher.chart_issues(text, specs[heading]) == (), heading
+        assert launcher.chart_issues(text, specs[heading], money="US$m") == (), heading
         fields = synthetic_charts(text)
         assert fields["issue"] is None, heading
         # The confidence inputs table is read for a score, never drawn (decision 9, 2026-11-12).
@@ -433,7 +437,7 @@ def test_a_period_gap_in_another_currency_does_not_relabel_the_numeric_values():
         "| FY2024 | 100 | 20 | US$m | S |",
     )
     spec = launcher.OWNER_TABLES["CP-1"][0]
-    assert launcher.chart_issues(text, spec) == ()
+    assert launcher.chart_issues(text, spec, money="US$m") == ()
     fields = synthetic_charts(text)
     assert fields["issue"] is None and fields["charts"][0]["unit"] == "US$m"
 
@@ -2312,3 +2316,54 @@ def test_a_lane_or_map_of_only_not_supplied_lists_each_distinct_reason_once():
     assert lane["events"][0]["gap"] == "no legal event is settled here; undated triggers"
     edge = map_fields(f"| {first} |" + f" {first} |" * 3 + f" {second} |")
     assert edge["maps"][0]["gap"] == "no legal event is settled here; undated triggers"
+
+
+# C1 (owner ruling, 2026-11-13): CP-1's money tables are in the issuer's own currency.
+DEBT_STACK_ROWS = [
+    "| Term loan | 1 | Yes | 1,200 | 2.4 | {} | S. |",
+    "| Notes | 2 | No | 800 | 4.0 | {} | S. |",
+]
+
+
+def test_a_gbp_debt_stack_is_drawn_with_unit_gbpm():
+    fields = synthetic_charts(stack(*(r.format("GBPm") for r in DEBT_STACK_ROWS)))
+    (chart,) = fields["charts"]
+    assert fields["issue"] is None and chart["kind"] == "stack" and chart["unit"] == "GBPm"
+
+
+def test_a_debt_stack_in_two_units_or_a_lower_case_unit_is_not_drawn():
+    mixed = stack(DEBT_STACK_ROWS[0].format("GBPm"), DEBT_STACK_ROWS[1].format("US$m"))
+    assert not synthetic_charts(mixed)["charts"]
+    assert not synthetic_charts(stack(*(r.format("GBPM") for r in DEBT_STACK_ROWS)))["charts"]
+
+
+@pytest.mark.parametrize("heading", ["revenue and EBITDA", "EBITDA bridge"])
+def test_cp1s_period_and_step_tables_state_the_issuers_unit(heading):
+    if heading == "EBITDA bridge":
+        rows = [
+            f"| {step} | {n} | GBPm | S. |"
+            for step, n in (("Reported", "100"), ("Add-back", "20"), ("Adjusted", "120"))
+        ]
+        text = chart_section("Chart data: EBITDA bridge", BRIDGE_HEADER, *rows)
+    else:
+        text = chart_section(
+            "Chart data: revenue and EBITDA",
+            "| Period | Revenue | Adjusted EBITDA | Reporting unit | Basis and limitation |",
+            "| FY2024 | 100 | 20 | GBPm | S |",
+        )
+    fields = synthetic_charts(text)
+    assert fields["issue"] is None and fields["charts"][0]["unit"] == "GBPm"
+
+
+def test_another_modules_step_table_and_the_refinancing_need_stay_in_us_dollars():
+    rows = [f"| Step {i} | {a} | GBPm | Synthetic. |" for i, a in enumerate(("100", "100"))]
+    assert not synthetic_charts(bridge("100", "100").replace("US$m", "GBPm"))["charts"]
+    assert not synthetic_charts(
+        chart_section("Chart data: liquidity bridge", BRIDGE_HEADER, *rows)
+    )["charts"]
+    need = chart_section(
+        "Chart data: refinancing need",
+        "| Period | Debt maturing | Committed liquidity | Reporting unit | Basis and limitation |",
+        "| FY2026 | 500 | 300 | GBPm | S |",
+    )
+    assert not synthetic_charts(need)["charts"]

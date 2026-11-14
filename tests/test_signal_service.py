@@ -412,16 +412,38 @@ def test_the_service_serves_no_file_from_the_root(svc):
         assert svc.call("GET", path)[0] in (403, 404)
 
 
-def test_loop_pass_updates_status_and_survives_a_failing_pass_with_recorded_feed(svc_with_loop):
+def test_loop_pass_updates_status_and_recovers_from_a_failing_source_with_recorded_feed(
+    svc_with_loop,
+):
     # one approved source; fetch replaced: first call raises RuntimeError, later calls RSS
     loop, call = svc_with_loop
     loop.run_once(NOW)
-    assert call("GET", "/api/status")[2]["loop_error"]  # the failure is visible
-    assert "fell over" not in call("GET", "/api/status")[2]["loop_error"]
-    loop.run_once(NOW + timedelta(seconds=60))
+    status = call("GET", "/api/status")[2]  # the source is recorded failing; the pass completes
+    assert status["loop_error"] is None and status["sources"] == {"approved": 1, "failing": 1}
+    assert status["last_pass_at"] == NOW.isoformat()
+    later = NOW + timedelta(seconds=601)
+    loop.run_once(later)
     status = call("GET", "/api/status")[2]
     assert status["loop_error"] is None and status["sources"] == {"approved": 1, "failing": 0}
-    assert status["last_pass_at"] == (NOW + timedelta(seconds=60)).isoformat()
+    assert status["last_pass_at"] == later.isoformat()
+
+
+def test_a_pass_that_raises_at_loop_level_is_shown_by_type_only_with_recorded_feed(
+    svc_with_loop, monkeypatch
+):
+    loop, call = svc_with_loop
+    good_run_due = service.ingest.run_due
+
+    def boom(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("secret")
+
+    monkeypatch.setattr(service.ingest, "run_due", boom)
+    loop.run_once(NOW)  # must not raise
+    shown = call("GET", "/api/status")[2]["loop_error"]
+    assert shown and "RuntimeError" in shown and "secret" not in shown
+    monkeypatch.setattr(service.ingest, "run_due", good_run_due)
+    loop.run_once(NOW + timedelta(seconds=601))
+    assert call("GET", "/api/status")[2]["loop_error"] is None
 
 
 def test_a_save_during_a_pass_succeeds(svc_with_loop, cookie):

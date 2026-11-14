@@ -2,8 +2,8 @@
 
 Proposal only. No code, test, run folder or method text was changed, and no model was called.
 Revision 3: adds the owner's two ideas (routing presets on the Advanced level; depth by limiting
-steps in every module except the critical ones) and is re-checked against `main` at `4d52f32`, which
-holds PRs 103, 107, 108, 113 and 114. PRs 110 and 111 are open; I read them at `e76625c` and `c532bb3`.
+steps in every module except the critical ones) and is re-checked against `main` at `73aec77`, which
+holds all the methodology work it depends on: PRs 103, 107, 108, 110, 111, 113 and 114.
 
 Three separate controls: **tier** (Lite, Full, Deep: which modules run), **routing** (which model
 and reasoning effort each module gets) and **depth** (how far a module that runs takes its analysis).
@@ -64,14 +64,14 @@ report selector, chart and owner table, the ESG tables
 
 ### What the landed work changes
 
-| Landed (PRs 107 and 108 merged; 110 and 111 open) | Effect on a depth setting |
+| Landed on `main` | Effect on a depth setting |
 | --- | --- |
 | Register scope per module, `CPOS_REGISTER_SCOPE.md`, for ten modules (PR 107) | The fixed cut is done at every depth. CP-2A no longer writes ten registers, CP-3 twenty-three, CP-5 thirteen. Brief cannot save that output again |
 | The cut tells the model to keep doing the work: "Any figure, limitation or conclusion you draw from that work goes in a register you do write" | The steps still run. Not running them is the remaining lever, and it is the owner's second idea |
 | Presence check: a handoff of the ten modules is refused if it lacks a required register (`required_registers`, `register_issues`, PR 108) | A skipped step's registers must be subtracted from the required list, or a Brief handoff is refused for obeying its instructions |
 | CP-5 is told which registers upstream modules were told not to write (`upstream_scope_note`) | The note must also carry the depth omissions, or CP-5 reports them as findings |
-| Instruction ceilings per pathway are not raised (PR 111 ruling); one pathway had 457 characters left before the register cut | A Brief block must make a module's instructions shorter, not longer |
-| CP-DR page and SEC lookups, on by default for a public case, at most 40 pages a run, setting recorded at start and a contradicting relaunch refused (PR 110) | A depth lever for CP-DR (pages), and the pattern for recording depth |
+| Instruction ceilings per pathway are not raised (PR 111 ruling); on `main` `earnings_update` has 566 characters left of 546,000 and `short_snapshot` 1,788 of 157,500 (the CP-1 session's measurement; the ceiling test passes) | A Brief block must make a module's instructions shorter, not longer |
+| CP-DR page and SEC lookups, on by default for a public case, at most 40 distinct addresses a run, setting recorded at start and a contradicting relaunch refused (PR 110) | A depth lever for CP-DR (pages), and the pattern for recording depth |
 | CP-1 on the Deploy V method with an acceptance check (PR 111) | Confirms CP-1 has no Brief or Extended form |
 
 ### Mechanism
@@ -91,8 +91,7 @@ report selector, chart and owner table, the ESG tables
 - Extended uses the methods' own trigger words, as `DEEP_DEBATE_BLOCK` does for CP-6. CP-2's Deep
   Synthesis has no switch today; Extended adds one.
 - An Extended block must fit the same ceilings: CP-2's Deep Synthesis block is checked per pathway.
-  `earnings_update` has under 700 characters left once PR 111 lands (coordinator's measurement), so
-  neither block may add net text there.
+  With 566 characters left on `earnings_update`, neither block may add net text there.
 - Standard sends no block, so today's instruction files and their test pins do not change.
 - Never a turn limit, write limit or output limit: each cuts a module off instead of shortening it.
 
@@ -196,7 +195,7 @@ The run-start page already offers a model (GPT or Claude) and an effort at the A
 | Evidence validation checks less | Its audits of critical figures are never skipped |
 | Savings are smaller than run-to-run variation, which is unknown | Two runs per setting before any figure is shown on the page |
 
-Paid runs, after PRs 110 and 111 merge (they change the baseline). Each needs its own
+Paid runs, on `main` as it now stands (PRs 110 and 111 changed the baseline). Each needs its own
 explicit action under the standing ruling.
 
 1. One Standard, Balanced run on the merged tree: the baseline.
@@ -250,9 +249,10 @@ Build order.
 - That Copilot serves two models within one run without a new session cost or cache loss.
 - The candidate step lists. I read step names and the register scope file, not each step's text; a
   step whose registers are cut may still feed a kept step. Each list must be checked when written.
-- PRs 110 and 111. Both are open and being changed; PR 110 has moved past the commit I read, and PR
-  111 is being revised for two owner rulings. Their final text, and the combined instruction size
-  against the ceilings, are not checked here. `run_script` has no PR yet.
+- PRs 110 and 111 in full. I checked the facts this paper relies on against `main` (the lookup limit
+  and recorded setting, the ceilings, CP-1's method and check, the register scope modules, the
+  Balanced list), not every line of either change. No model has run under the new CP-1 method.
+  `run_script` has no PR yet.
 - How the model behaves when a Brief block and a method gate disagree, and the cost of any rejected
   drafts that follow.
 - Whether today's nine-module Balanced set outperforms the proposed three: six of the nine are untested.

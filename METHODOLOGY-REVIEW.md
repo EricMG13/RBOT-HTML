@@ -747,6 +747,15 @@ last-change commit given). Hashes and the named edits are in `manifest.json`.
   upstream QA gate, never its consumer. It is not the live cp-os file.
 - CP-2: PR #83 Deploy V skill (cp-os `b57a344`) plus the T2.10 correction (caos `99069f83`): Direction is
   Positive or Negative, a two-way driver is split, `None supported` takes a row.
+- CP-1: caos `dfff264` skill, runbook and step file (files last changed `a14f9051`, `b283233c`, `a14f9051`;
+  Deploy V `c4d2e35` is the ancestor, its documents identical to cp-os `a31f3f5`) with named edits: the
+  workbook step (REF_CP-1_13, T4.14-T4.19) removed with its debt rules kept in step 10; routing, scripts,
+  front matter and score removed (the source has no Microsoft 365 text); step 13's analytical rules restated without its tagged tables, in the steps they belong to (T4.18 debt instruments, the adjusted EBITDA bridge, period derivation, reconciliations); the runbook cut to what the step file does not hold;
+  missing values are `Not supplied:` or `Not calculable:`, gaps plain sentences under `## Gaps`, the host's
+  six H2s; statement tables T4.4-T4.6 and T4.9 in the shapes the CP-1 check reads; debt at carrying value
+  and reported EBITDA the primary denominator (owner, 2026-11-13). `prompts/CP-1.md` is still sent. The
+  STEP_CONTRACTS sections written for the JSON runtime are no longer sent. CP-1 becomes a scored module
+  (Confidence inputs). The schema and system references are archived, not sent.
 - CP-1A: PR #83 Deploy V skill and step bundles (cp-os `b57a344`), no later edit.
 - CP-1D: archived Deploy V skill plus caos (`99069f83`) rule 7: an empty CP-1 bridge gives one `NONE` row.
 - CP-2G: step bundle plus caos (`592ee83a`) assumption-register rule: `base` and `downside` rows.

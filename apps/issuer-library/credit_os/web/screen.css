@@ -124,6 +124,7 @@ main{min-width:0;min-height:0;display:flex;flex-direction:column}#module-head{pa
 .library-table th button{font:inherit;color:inherit;padding:0}
 .library-table tr.selected>td{background:var(--blue-50)}
 .library-table td.missing{color:var(--text-quaternary)}
+.library-table .metric-adj{font-size:var(--fs-label);color:var(--text-quaternary);white-space:nowrap}
 .library-run-name{display:block;padding:0;text-align:left;font:600 var(--fs-body)/20px 'Red Hat Text',sans-serif;color:var(--text-primary)}
 .library-table td.run-when{overflow-wrap:anywhere}
 .library-table th:nth-child(1){width:18.3%}.library-table th:nth-child(2){width:19.2%}.library-table th:nth-child(3){width:8.3%}.library-table th:nth-child(4){width:9.2%}.library-table th:nth-child(5){width:6.9%}.library-table th:nth-child(6){width:8.6%}.library-table th:nth-child(7){width:7%}.library-table th:nth-child(8){width:5.5%}.library-table th:nth-child(9){width:9.3%}.library-table th:nth-child(10){width:7.7%}

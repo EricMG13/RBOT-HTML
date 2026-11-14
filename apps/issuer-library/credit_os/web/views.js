@@ -1414,8 +1414,11 @@ function libraryRows() {
 // Runs grouped by issuer, case-insensitively, in order of first appearance.
 const issuerGroups=runs=>[...runs.reduce((m,r)=>m.set(LibraryLogic.issuerKey(r.issuer),[...(m.get(LibraryLogic.issuerKey(r.issuer))||[]),r]),new Map()).values()];
 const libraryCount=({runs,rows,hidden})=>hidden?`${plural(rows.length,'run')} hidden by ${COVERAGE_NAMES[hidden]} · not matching these filters`:rows.length?`${plural(issuerGroups(rows).length,'issuer')} · ${rows.length} of ${plural(runs.length,'run')}`:runs.length?'No issuers match these filters. Clear a filter to list them again.':'No issuers to list.';
+// A leverage, net leverage or cover figure that carries a label (adjusted EBITDA) is shown but not screened; the owner asked the count line and the hidden heading to say so (2026-11-14).
+const LIBRARY_RATIOS=['leverage','net_leverage','coverage'];
+const libraryAdjusted=(runs,group)=>LIBRARY_RATIOS.includes(group)?runs.filter(r=>r.metrics?.[group]?.label&&LibraryLogic.numberOf(r.metrics[group])!==null).length:0;
 function libraryCoverage({runs,coverage,unscreened}) {
-  const lines=Object.entries(coverage).map(([group,{recorded,hidden}])=>`<p data-library-coverage="${group}">${esc(`${COVERAGE_NAMES[group]} recorded for ${recorded} of ${plural(runs.length,'run')}`)}${hidden?` · ${hidden} hidden · <button class="tertiary-action" type="button" data-library-hidden="${group}">Show them</button>`:''}</p>`);
+  const lines=Object.entries(coverage).map(([group,{recorded,hidden}])=>`<p data-library-coverage="${group}">${esc(`${COVERAGE_NAMES[group]} recorded for ${recorded} of ${plural(runs.length,'run')}${libraryAdjusted(runs,group)?` · ${libraryAdjusted(runs,group)} on adjusted EBITDA, not screened`:''}`)}${hidden?` · ${hidden} hidden · <button class="tertiary-action" type="button" data-library-hidden="${group}">Show them</button>`:''}</p>`);
   if(unscreened)lines.push(`<p>${esc(`${plural(unscreened,'run')} not screened by the Latest run rule · choose Any run to show them`)}</p>`);
   return lines.join('');
 }
@@ -1423,7 +1426,7 @@ function libraryCoverage({runs,coverage,unscreened}) {
 // A ratio's basis is Evidence's, not the library's (library redesign, Task 11): the cell title is the period the figure is for.
 const libraryMetricCell=(run,key)=>{
   const metric=run.metrics[key];
-  return `<td${metric?'':' class="missing"'} title="${esc(metric?(metric.period||'Period not recorded'):'Not available')}">${esc(libraryMetric(metric))}</td>`;
+  return `<td${metric?'':' class="missing"'} title="${esc(metric?(metric.label?metric.label+' · ':'')+(metric.period||'Period not recorded'):'Not available')}">${esc(libraryMetric(metric))}${metric&&metric.label?' <small class="metric-adj">adj.</small>':''}</td>`;
 };
 const libraryRatingText=r=>[r.agency||'Agency not recorded',RATING_SCOPES[r.scope]||'Scope not recorded',libraryDate(r.date)].join(' · ');
 function libraryRatingCell(run) {
@@ -1506,13 +1509,13 @@ function libraryResults({runs,rows,skipped,hidden},shown=libraryState.view??'car
   const sort=key=>libraryState.sortKey===key?libraryState.direction==='asc'?'ascending':'descending':'none';
   const head=LIBRARY_COLUMNS.map(([key,label])=>key?`<th scope="col" aria-sort="${sort(key)}"><button type="button" data-library-sort="${key}">${label} <span aria-hidden="true">${{ascending:'↑',descending:'↓',none:'↕'}[sort(key)]}</span></button></th>`:`<th scope="col">${label}</th>`).join('');
   const words=sameNameWords(rows.map(r=>({id:r.id,group:LibraryLogic.issuerKey(r.issuer),name:libraryRunName(r),date:r.date||'',started:runStarted(libraryRunKey(r))})));
-  const heading=hidden?`<div class="hidden-head"><h2 id="library-hidden-title" tabindex="-1">${esc(`Hidden by ${COVERAGE_NAMES[hidden]}: ${['classification','currency','rating','limitation'].includes(hidden)?'not':'no figure'} recorded`)}</h2><button type="button" class="secondary-action" data-library-back>Back to results</button></div>`:'';
+  const heading=hidden?`<div class="hidden-head"><h2 id="library-hidden-title" tabindex="-1">${esc(`Hidden by ${COVERAGE_NAMES[hidden]}: ${['classification','currency','rating','limitation'].includes(hidden)?'not':'no figure'} recorded${libraryAdjusted(rows,hidden)?', or a figure on adjusted EBITDA':''}`)}</h2><button type="button" class="secondary-action" data-library-back>Back to results</button></div>`:'';
   const table=`<div class="table-scroll" role="region" aria-label="Issuer runs table; scroll horizontally for all columns" tabindex="0"><table class="library-table"><caption class="sr-only">Issuer runs, credit metrics, completeness and report availability</caption><thead><tr>${head}</tr></thead><tbody>${rows.map((r,n)=>libraryRow(r,r.id===libraryState.selected,skipped.has(r.id),n,words[n])).join('')}</tbody></table></div>`;
   const bar=`<div class="shape-bar lib-resultbar"><div class="shape-bar-l">${librarySortSelect()}</div><div class="shape-bar-r">${window.Components.viewToggle('Issuers as cards or as a list',[['cards','Cards'],['list','List']],shown)}</div></div>`;
   return `${heading}<div class="lib-block" data-block data-view="${shown}">${bar}${window.Components.pane('cards',libraryCards(rows),shown==='cards')}${window.Components.pane('list',table,shown==='list')}</div><p class="hint">Dates refer to evidence, not execution. Ratios keep their original definitions.</p>`;
 }
 function libraryMetricItem(run,name,metric) {
-  return `<div class="metric-item"><span class="metric-label">${esc(name)}</span><span class="metric-value">${esc(libraryMetric(metric))}${metric&&metric.unit!=='x'&&LibraryLogic.numberOf(metric)!==null?`<small>${esc(metric.unit)}</small>`:''}</span><p>${esc(metric?metric.period:'Not established for this run.')}</p>${metric?.provenance==='user'?'<p>Entered by the user · shown as entered</p>':''}</div>`;
+  return `<div class="metric-item"><span class="metric-label">${esc(name)}</span><span class="metric-value">${esc(libraryMetric(metric))}${metric&&metric.unit!=='x'&&LibraryLogic.numberOf(metric)!==null?`<small>${esc(metric.unit)}</small>`:''}</span>${metric?.label?`<p class="metric-named">${esc(metric.label)}</p>`:''}<p>${esc(metric?metric.period:'Not established for this run.')}</p>${metric?.provenance==='user'?'<p>Entered by the user · shown as entered</p>':''}</div>`;
 }
 // The run's measures as cards; those it does not establish are named in one line under them.
 function libraryMetrics(run) {

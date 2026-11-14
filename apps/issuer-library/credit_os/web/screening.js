@@ -15,6 +15,9 @@ const LibraryLogic = (() => {
     return true;
   };
   const figure = metric => { const n = numberOf(metric); return n !== null && n >= 0 ? n : null; };
+  // A leverage, net leverage or cover figure on adjusted EBITDA carries a label and is not screened or ranked with reported ones (owner, 2026-11-14); it counts as not recorded.
+  const RATIOS = ['leverage', 'net_leverage', 'coverage'];
+  const screenFigure = (run, name) => { const metric = run.metrics?.[name]; return RATIOS.includes(name) && metric?.label ? null : figure(metric); };
   const active = (min, max) => [min, max].some(bound => bound != null && String(bound).trim() !== '');
   const SCALE = 'AAA/Aaa AA+/Aa1 AA/Aa2 AA-/Aa3 A+/A1 A/A2 A-/A3 BBB+/Baa1 BBB/Baa2 BBB-/Baa3 BB+/Ba1 BB/Ba2 BB-/Ba3 B+/B1 B/B2 B-/B3 CCC+/Caa1 CCC/Caa2 CCC-/Caa3 CC/Ca C/C D'.split(' ');
   const RANK = new Map(SCALE.flatMap((row, index) => row.split('/').map(symbol => [symbol, index + 1])));
@@ -40,8 +43,8 @@ const LibraryLogic = (() => {
   const lowestRank = (run, filters) => { const rating = lowestRating(run, filters.ratingScope); return rating ? ratingPlace(rating.label).rank : null; };
   const metricGroup = (name, prefix) => ({
     on: f => active(f[prefix + 'Min'], f[prefix + 'Max']),
-    recorded: run => figure(run.metrics?.[name]) !== null,
-    pass: (run, f) => inRange(figure(run.metrics?.[name]), f[prefix + 'Min'], f[prefix + 'Max'])
+    recorded: run => screenFigure(run, name) !== null,
+    pass: (run, f) => inRange(screenFigure(run, name), f[prefix + 'Min'], f[prefix + 'Max'])
   });
   // Facility rules: one facility satisfies every active facility group; one of its quotes satisfies every active quote group.
   const overlaps = (low, high, minimum, maximum) => low !== null && high !== null && inRange(high, minimum, '') && inRange(low, '', maximum);
@@ -148,7 +151,7 @@ const LibraryLogic = (() => {
   }
   function sortRuns(runs, key, direction, filters = {}) {
     const metrics = ['leverage', 'net_leverage', 'coverage', 'cash', 'undrawn'];
-    const value = run => metrics.includes(key) ? figure(run.metrics?.[key]) : key === 'rating' ? lowestRank(run, filters) : run[key];
+    const value = run => metrics.includes(key) ? screenFigure(run, key) : key === 'rating' ? lowestRank(run, filters) : run[key];
     return [...runs].sort((left, right) => {
       const a = value(left), b = value(right);
       if (a == null && b == null) return left.id.localeCompare(right.id);

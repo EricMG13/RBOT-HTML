@@ -749,9 +749,9 @@ def test_a_pack_built_from_the_cp1_handoff_of_each_formerly_unasked_pathway_stat
     )
     found = measures_of(pack)
     assert {"leverage", "net_leverage", "coverage", "cash", "undrawn"} <= set(found)
-    assert found["leverage"]["current"]["value"] == "3.60"
-    assert found["net_leverage"]["current"]["value"] == "3.25"
-    assert found["coverage"]["current"]["value"] == "3.40"
+    assert found["leverage"]["current"]["value"] == "2.80"
+    assert found["net_leverage"]["current"]["value"] == "2.25"
+    assert found["coverage"]["current"]["value"] == "4.00"
     assert (found["cash"]["current"]["value"], found["undrawn"]["current"]["value"]) == (
         "275",
         "400",
@@ -1745,7 +1745,7 @@ def cp8_answer(context: dict) -> str:
         "",
         "### Key findings",
         "",
-        "Leverage fell from 4.20x to 3.60x because a new period was reported.",
+        "Leverage fell from 4.20x to 2.80x because a new period was reported.",
         "",
         "### Contrary evidence and what would change the view",
         "",
@@ -1760,12 +1760,12 @@ def cp8_answer(context: dict) -> str:
         "| Measure or fact | Earlier | Current | Cause | Effect on the credit view |",
         "| --- | --- | --- | --- | --- |",
         (
-            "| Total debt / EBITDA | 4.20x (FY2023) | 3.60x (FY2024) | New period "
-            "| Leverage fell by 0.60x. |"
+            "| Total debt / EBITDA | 4.20x (FY2023) | 2.80x (FY2024) | New period "
+            "| Leverage fell by 1.40x. |"
         ),
         (
-            "| Net debt / EBITDA | 3.85x (FY2023) | 3.25x (FY2024) | New period "
-            "| Net leverage fell by 0.60x. |"
+            "| Net debt / EBITDA | 3.85x (FY2023) | 2.25x (FY2024) | New period "
+            "| Net leverage fell by 1.60x. |"
         ),
         (
             "| Cash | 300 US$m (FY2023) | 275 US$m (FY2024) | Unresolved "
@@ -1776,7 +1776,7 @@ def cp8_answer(context: dict) -> str:
             "| Not comparable: the facility definitions differ. |"
         ),
         (
-            "| EBITDA / cash interest | Not stated | 3.40x (FY2024) | New source "
+            "| EBITDA / cash interest | Not stated | 4.00x (FY2024) | New source "
             "| Not comparable: the earlier run does not state it. |"
         ),
         (
@@ -1883,8 +1883,8 @@ def test_a_run_with_a_prior_run_gives_cp8_alone_the_earlier_handoffs_and_deliver
     assert (out / "inputs" / sha((receipt.parent / "changes.json").read_bytes())).is_file()
     found = measures_of(pack)
     assert (found["leverage"]["difference"], found["net_leverage"]["difference"]) == (
-        "-0.60",
-        "-0.60",
+        "-1.40",
+        "-1.60",
     )
     assert found["leverage"]["comparable"] == "yes"  # "Synthetic." in both runs
     assert found["cash"]["comparable"] == "judge"  # "Earlier basis." against "Synthetic."
@@ -1908,7 +1908,7 @@ def wrong_cp8():
     """A provider whose CP-8 answers print a current figure the pack does not hold."""
     good = provider.answer
     provider.answer = lambda context: (
-        good(context).replace("3.60x (FY2024)", "3.70x (FY2024)")
+        good(context).replace("2.80x (FY2024)", "2.70x (FY2024)")
         if context["module_id"] == "CP-8"
         else good(context)
     )
@@ -1927,7 +1927,7 @@ def test_a_cp8_that_is_not_accepted_loses_only_itself_and_the_run_says_why(tmp_p
     # The loop sent the answer back, naming the figure, before it gave up.
     sent_back = " ".join(p.read_text() for p in (out / "live/modules").glob("*/*.tools.json"))
     assert "REJECTED" in sent_back
-    assert "Current cell: write exactly `3.60x (FY2024)`" in sent_back
+    assert "Current cell: write exactly `2.80x (FY2024)`" in sent_back
     (receipt,) = (out / "deliveries").glob("*/delivery.json")
     assert not (receipt.parent / "CP-8.md").exists()
     assert not (receipt.parent / "changes.json").exists()
@@ -2073,9 +2073,9 @@ def test_the_canned_launcher_delivers_the_pack_and_an_accepted_cp8_handoff(tmp_p
     assert canned.main(argv) == 0
     receipt = next((out / "deliveries").glob("*/delivery.json"))
     pack = json.loads((receipt.parent / "changes.json").read_text())
-    assert measures_of(pack)["leverage"]["difference"] == "-0.60"  # hand-written above
+    assert measures_of(pack)["leverage"]["difference"] == "-1.40"  # hand-written above
     handoff = (receipt.parent / "CP-8.md").read_text()
-    assert "| Total debt / EBITDA | 4.20x (FY2023) | 3.60x (FY2024) | New period |" in handoff
+    assert "| Total debt / EBITDA | 4.20x (FY2023) | 2.80x (FY2024) | New period |" in handoff
     assert "### Limitations ledger" in handoff
 
 
@@ -4407,3 +4407,75 @@ def test_a_count_and_its_noun_on_two_lines_is_no_count():
 @pytest.mark.parametrize("sentence", ["It ran at 30 September 2024.", "It ran on 2024-09-30."])
 def test_a_written_date_beside_a_withheld_size_is_no_size(sentence):
     assert _w_issues(sentence) == ()
+
+
+# ---- C2 (owner ruling, 2026-11-13): a leverage table headed with the adjusted names is read as
+# the measure of that name; a run on adjusted against a run on reported is two labels, not a change.
+def adjusted_leverage(*rows: str) -> str:
+    return leverage(*rows).replace(
+        "| Period | Total debt / EBITDA | Net debt / EBITDA |",
+        "| Period | Total debt / adjusted EBITDA | Net debt / adjusted EBITDA |",
+    )
+
+
+def test_a_leverage_table_on_the_adjusted_names_is_read_with_the_adjusted_label():
+    row = "| FY2024 | 5.96 | 4.46 | x | Carrying debt over adjusted EBITDA. |"
+    seen = observations(handoff("CP-1", "x", tables=adjusted_leverage(row)))
+    assert (seen["leverage"].label, seen["leverage"].value) == (
+        "Total debt / adjusted EBITDA",
+        "5.96",
+    )
+    assert (seen["net_leverage"].label, seen["net_leverage"].value) == (
+        "Net debt / adjusted EBITDA",
+        "4.46",
+    )
+
+
+def test_interest_cover_on_the_adjusted_name_is_read_with_the_adjusted_label():
+    cover = (
+        "### Chart data: interest cover\n\n"
+        "| Period | Adjusted EBITDA / cash interest | Reporting unit | Basis and limitation |\n"
+        "| --- | --- | --- | --- |\n| FY2024 | 3.60 | x | Adjusted EBITDA over cash interest. |\n\n"
+    )
+    seen = observations(handoff("CP-1", "x", tables=cover))
+    assert (seen["coverage"].label, seen["coverage"].value) == (
+        "Adjusted EBITDA / cash interest",
+        "3.60",
+    )
+
+
+def test_a_run_on_adjusted_against_a_run_on_reported_is_not_a_change_in_one_measure():
+    prior = handoff(
+        "CP-1", "x", tables=leverage("| FY2024 | 6.53 | 4.88 | x | Carrying debt over EBITDA. |")
+    )
+    current = handoff(
+        "CP-1",
+        "x",
+        tables=adjusted_leverage("| FY2024 | 5.96 | 4.46 | x | Carrying debt over EBITDA. |"),
+    )
+    found = measures_of(pair_pack(prior, current))
+    for key, was, now in (
+        ("leverage", "Total debt / EBITDA", "Total debt / adjusted EBITDA"),
+        ("net_leverage", "Net debt / EBITDA", "Net debt / adjusted EBITDA"),
+    ):
+        measure = found[key]
+        assert measure["label"] == now
+        assert (measure["prior"]["label"], measure["current"]["label"]) == (was, now)
+        assert (measure["comparable"], measure["difference"]) == ("no", None)
+        assert f"`{was}`" in measure["reason"] and f"`{now}`" in measure["reason"]
+    assert "-0.57" not in repr(found["leverage"])
+
+
+def test_two_runs_on_the_adjusted_names_compare_as_one_measure():
+    prior = handoff(
+        "CP-1", "x", tables=adjusted_leverage("| FY2023 | 6.50 | 5.00 | x | Debt over EBITDA. |")
+    )
+    current = handoff(
+        "CP-1", "x", tables=adjusted_leverage("| FY2024 | 5.96 | 4.46 | x | Debt over EBITDA. |")
+    )
+    found = measures_of(pair_pack(prior, current))["leverage"]
+    assert (found["label"], found["comparable"], found["difference"]) == (
+        "Total debt / adjusted EBITDA",
+        "yes",
+        "-0.54",
+    )

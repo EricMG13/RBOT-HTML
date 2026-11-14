@@ -1,5 +1,6 @@
 """One ingest pass over the approved sources that are due, and a health summary per source."""
 
+import logging
 import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -20,6 +21,8 @@ from deploy_workflow.signal.store import (
     sources,
 )
 from deploy_workflow.signal.topics import match_story
+
+log = logging.getLogger(__name__)
 
 MIN_INTERVAL = timedelta(seconds=600)
 QUIET_AFTER = timedelta(days=7)
@@ -67,13 +70,30 @@ def run_due(
 ) -> list[tuple[int, bool, str]]:
     """Check every approved source with no check in the last MIN_INTERVAL.
 
-    Only a refused fetch or an unreadable feed is recorded as a failed check; any other
-    exception is a bug and propagates, leaving no check row for that source."""
+    A refused fetch or an unreadable feed is recorded as a failed check with its own reason.
+    Any other Exception is logged with its traceback and recorded as a failed check whose
+    reason names only the exception type (the text may hold internal detail), keeping the
+    previous etag and modified; the pass goes on to the later sources. This is a documented,
+    logged fail-open so one bad source cannot starve the rest. BaseException is not caught."""
     results: list[tuple[int, bool, str]] = []
     for source in sources(db, "approved"):
         if not _is_due(db, source["id"], now):
             continue
-        check = _check_source(db, source, now, fetch_fn if fetch_fn is not None else fetch.fetch)
+        try:
+            check = _check_source(
+                db, source, now, fetch_fn if fetch_fn is not None else fetch.fetch
+            )
+        except Exception as error:
+            log.exception("unexpected error checking source %s", source["id"])
+            previous = last_check(db, source["id"])
+            check = Check(
+                now,
+                False,
+                f"unexpected error ({type(error).__name__}); see the log",
+                previous["etag"] if previous else None,
+                previous["modified"] if previous else None,
+                0,
+            )
         record_check(db, source["id"], check)
         results.append((source["id"], check.ok, check.reason))
     set_meta(db, "last_pass_at", _utc_text(now))

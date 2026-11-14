@@ -348,7 +348,6 @@ class Rule:
     basis: str
     evidence: Literal["per method", "observed offline", "observed live"]
     cite: Callable[[Facts], Guess | None] | None = None  # A guessed document the reason names.
-    propagates: bool = True
 
 
 _SK = "docs/reuse/selected-methods/skills/"
@@ -403,19 +402,6 @@ RULES: tuple[Rule, ...] = (
         "prompts/CP-1.md item 1: 'Preserve every source row's label, sign, unit, quantity type, "
         "entity, period and locator' (CP-1 reads statement rows from the sources)",
         "per method",
-    ),
-    Rule(
-        "chart-strip-usd",
-        "CP-1",
-        lambda f: f.context.run.reporting_currency != "USD",
-        "limited",
-        "Reporting currency entered by user is not USD. The chart strip is US$m only; no USD "
-        "labels invented, so its money cells read 'Not supplied: reported in <unit>'.",
-        "No file needed; the report states the limit. Read chart values as unavailable.",
-        "src/deploy_workflow/owners/cpos_launch.py _selector: 'An issuer reporting in another "
-        "currency or scale writes `Not supplied: reported in <unit>` in monetary cells.'",
-        "per method",
-        propagates=False,
     ),
     Rule(
         "cp1c-no-peer-source",
@@ -666,7 +652,7 @@ def expectations(
     """Expected outcome rows: run first, then each module in order, inherited row last.
 
     `registry` is `edges_for(ordered)`. Only Will refuse and Limited propagate, transitively through
-    each module's effective outcome; Gap, Check and the chart strip never do."""
+    each module's effective outcome; Gap and Check never do."""
     facts = Facts(tuple(ordered), tuple(guesses), context)
     fired = [
         r for r in RULES if (r.scope == RUN or r.scope in facts.ordered) and r.condition(facts)
@@ -690,7 +676,7 @@ def expectations(
     for module in facts.ordered:
         own = [r for r in fired if r.scope == module]
         items += [_from_rule(r, facts) for r in own]
-        levels = [r.outcome for r in own if r.propagates and r.outcome in SEVERITY]
+        levels = [r.outcome for r in own if r.outcome in SEVERITY]
         if row := _inherit(module, facts.ordered, registry, effective):
             items.append(row)
             levels.append(row["outcome"])

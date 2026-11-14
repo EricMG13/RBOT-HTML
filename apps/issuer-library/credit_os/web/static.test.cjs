@@ -1006,7 +1006,7 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules, more
   const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag', 'eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'eventTicks', 'eventAsOf', 'eventStack', 'eventRoom', 'earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes', 'matchesHeading', 'readerPassages', 'splitBasis', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml', 'passageControls', 'eventTimeline', '$', 'appDestinations', 'document', 'ChangesView'];
   const eventTimeline = realEventTimeline(esc, rich);
   const args = [libraryDefaults(), libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), libraryDefaults(), win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head', sections: more.sections?.[id] || [] }])), contexts, more.store || {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => '', ...['eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'eventTicks', 'eventAsOf', 'eventStack', 'eventRoom'].map(name => require('./calendar.js')[name]), ...['earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes'].map(name => require('./reader.js')[name]), (heading, prefix) => (prefix.startsWith('=') ? heading === prefix.slice(1) : heading.startsWith(prefix)), ...['readerPassages', 'splitBasis', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml', 'passageControls'].map(name => require('./reader.js')[name]), eventTimeline, more.dom?.$, new Set(['W-Library', 'CP-OS']), more.dom?.document, require('./changes.js')];
-  return new Function(...names, `${src}; return {runTokens, runReport, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, libraryFilters, libraryChoices, LIBRARY_COLUMNS, libraryView, libraryRows, libraryFacets, libraryCard, libraryCards, libraryLive, libraryChipValue, libraryCount, sameNameWords, libraryRunName, libraryModules, libraryLead, libraryStrip, libraryFiltered, moduleHead, headerChipMarkup, traceHref, drawerFoot, runName, updateWorkspaceChrome, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, moduleReport, reportParts, outlineMarkup, navigatorView, issuerMeta, startRunHref, startRunLink, drawnAnchors, defaultOutput, firstSection, cashflowSection, modelOptionLabels, forecastView, forecastCharts, chartCard, evidenceInput, evidenceHit};`)(...args);
+  return new Function(...names, `${src}; return {runTokens, runReport, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, libraryFilters, libraryChoices, LIBRARY_COLUMNS, libraryView, libraryRows, libraryCoverage, libraryFacets, libraryCard, libraryCards, libraryLive, libraryChipValue, libraryCount, sameNameWords, libraryRunName, libraryModules, libraryLead, libraryStrip, libraryFiltered, moduleHead, headerChipMarkup, traceHref, drawerFoot, runName, updateWorkspaceChrome, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, moduleReport, reportParts, outlineMarkup, navigatorView, issuerMeta, startRunHref, startRunLink, drawnAnchors, defaultOutput, firstSection, cashflowSection, modelOptionLabels, forecastView, forecastCharts, chartCard, evidenceInput, evidenceHit};`)(...args);
 }
 const countOf = (html, re) => (html.match(re) || []).length;
 
@@ -2131,6 +2131,19 @@ test('screen.css (decision 5): a module-page table box shows a scroll shadow, ma
   assert.ok(/\.passage-code\{[^}]*white-space:pre/.test(css));
 });
 
+test('library: a leverage figure on adjusted EBITDA carries a visible adj. marker in its list cell; an unlabelled one is drawn as before', () => {
+  const { libraryRow } = runPage();
+  const base = { id: 'run-z', name: 'Zed', issuer: 'ZED', title: 'Credit Snapshot', sector: 'Telecoms', date: '2024-09-30', period: 'FY-2024', completion: null, artifacts: [], ratings: [] };
+  const plain = { value: '5.96', unit: 'x', basis: 'C9', period: 'FY2024' };
+  const cellOf = (metrics, n) => [...libraryRow({ ...base, metrics }, false, false).matchAll(/<td([^>]*)>(.*?)<\/td>/g)][n][0];
+  const labelled = cellOf({ leverage: { ...plain, label: 'Total debt / adjusted EBITDA' }, net_leverage: plain, coverage: null }, 4);
+  assert.equal(labelled, '<td title="Total debt / adjusted EBITDA · FY2024">5.96\u00d7 <small class="metric-adj">adj.</small></td>');
+  assert.ok(/>[^<]*<small class="metric-adj">adj\.<\/small><\/td>$/.test(labelled), 'the marker is visible text inside the cell, not only an attribute');
+  assert.equal(cellOf({ leverage: plain, net_leverage: plain, coverage: null }, 4), '<td title="FY2024">5.96\u00d7</td>');
+  assert.equal(cellOf({ leverage: plain, net_leverage: { ...plain, label: 'Net <debt> / adjusted EBITDA' }, coverage: null }, 5), '<td title="Net &lt;debt&gt; / adjusted EBITDA · FY2024">5.96\u00d7 <small class="metric-adj">adj.</small></td>');
+  assert.ok(read('screen.css').includes('.library-table .metric-adj{'));
+});
+
 test('library: a row is one item per column; what left the row is the cell title or the selected-run panel', () => {
   const { libraryRow } = runPage();
   const metric = (value, basis) => ({ value, unit: 'x', basis, period: 'FY2024' });
@@ -2635,6 +2648,19 @@ test('library panel: a delivered report is named, never linked; the run opens fr
   // A catalogued report keeps its own label when that is not a hash; an accepted one says so. Neither is a link.
   const other = page.libraryDetail({ rows: [zedRun({ artifacts: [{ kind: 'report', label: 'Board pack', state: 'accepted', relationship: 'direct', issue: '', available: true, href: '../runs/elsewhere/pack.html' }] })] });
   assert.ok(other.includes('<li><span>Board pack</span><small>Accepted</small></li>'), other);
+});
+
+test('library panel: a measure quoted on the adjusted names draws that label; one with no label draws no extra line', () => {
+  const page = runPage();
+  page.libraryState.selected = RUN;
+  const adjusted = zedRun({ metrics: { leverage: { value: '5.96', unit: 'x', basis: 'Carrying debt over EBITDA.', period: 'FY2024', label: 'Total debt / adjusted EBITDA' } } });
+  const html = page.libraryDetail({ rows: [adjusted] });
+  assert.ok(html.includes('<p class="metric-named">Total debt / adjusted EBITDA</p>'), html);
+  assert.ok(!page.libraryDetail({ rows: [zedRun()] }).includes('metric-named'));
+  // The list view says it too, in the cell's title, so an adjusted figure is never read as the reported one.
+  const list = run => page.libraryRow(run, false, false);
+  assert.ok(list(adjusted).includes('title="Total debt / adjusted EBITDA \u00b7 FY2024"'), list(adjusted));
+  assert.ok(list(zedRun()).includes('title="FY2024"') && !list(zedRun()).includes('adjusted'));
 });
 
 test('library filters: Reset shows only while something is filtered or sorted; Completeness is offered once a run records one', () => {
@@ -4660,6 +4686,43 @@ test('library: the count line is the status region and says how many issuers are
   assert.ok(html.includes('class="empty-state"') && html.includes('No issuers in this library yet') && html.includes('Start a run on an issuer, then rebuild the library data file to list it here.'), 'an empty library says what to do');
 });
 
+test('library: the recorded-count line and the hidden heading say when a figure is on adjusted EBITDA and not screened; only the three ratios say it', () => {
+  const adjusted = { ...libMetric('6.0'), label: 'Total debt / adjusted EBITDA' };
+  const withRun = (noc) => libCatalogue().map((run) => (run.id === 'run-n' ? { ...run, ...noc(run) } : run));
+  const show = (catalogue, group, key) => {
+    const page = libPage({ catalogue });
+    Object.assign(page.libraryFilters, { runs: 'any', [`${key}Min`]: '3' });
+    return page;
+  };
+  const SHOW = (group) => `<button class="tertiary-action" type="button" data-library-hidden="${group}">Show them</button>`;
+  const lineOf = (page, group) => new RegExp(`<p data-library-coverage="${group}">(.*?)</p>`).exec(page.libraryCoverage(page.libraryRows()))[1];
+  const headOf = (page, group) => { page.libraryState.hidden = group; return /<h2 id="library-hidden-title"[^>]*>(.*?)<\/h2>/.exec(page.libraryResults(page.libraryRows()))[1]; };
+  // One run's leverage is on adjusted EBITDA; the leverage range is active.
+  const labelled = show(withRun((run) => ({ metrics: { ...run.metrics, leverage: adjusted } })), 'leverage', 'leverage');
+  assert.equal(lineOf(labelled, 'leverage'), `Leverage recorded for 4 of 6 runs · 1 on adjusted EBITDA, not screened · 2 hidden · ${SHOW('leverage')}`);
+  assert.equal(headOf(labelled, 'leverage'), 'Hidden by Leverage: no figure recorded, or a figure on adjusted EBITDA');
+  // No labelled run: the strings are exactly what they were.
+  const plain = show(libCatalogue(), 'leverage', 'leverage');
+  assert.equal(lineOf(plain, 'leverage'), `Leverage recorded for 5 of 6 runs · 1 hidden · ${SHOW('leverage')}`);
+  assert.equal(headOf(plain, 'leverage'), 'Hidden by Leverage: no figure recorded');
+  // A labelled run that is not among the hidden rows does not change the heading; one that is not readable is not counted.
+  const shown = show(withRun((run) => ({ metrics: { ...run.metrics, net_leverage: adjusted } })), 'leverage', 'leverage');
+  assert.equal(lineOf(shown, 'leverage'), `Leverage recorded for 5 of 6 runs · 1 hidden · ${SHOW('leverage')}`);
+  assert.equal(headOf(shown, 'leverage'), 'Hidden by Leverage: no figure recorded');
+  const unreadable = show(withRun((run) => ({ metrics: { ...run.metrics, leverage: { ...adjusted, value: 'n/a' } } })), 'leverage', 'leverage');
+  assert.ok(!lineOf(unreadable, 'leverage').includes('adjusted EBITDA'));
+  // The other two ratios carry the same wording; cash never does.
+  const net = show(withRun((run) => ({ metrics: { ...run.metrics, net_leverage: adjusted } })), 'net_leverage', 'netLeverage');
+  assert.ok(lineOf(net, 'net_leverage').startsWith('Net leverage recorded for 3 of 6 runs · 1 on adjusted EBITDA, not screened'));
+  assert.equal(headOf(net, 'net_leverage'), 'Hidden by Net leverage: no figure recorded, or a figure on adjusted EBITDA');
+  const cover = show(withRun((run) => ({ metrics: { ...run.metrics, coverage: adjusted } })), 'coverage', 'coverage');
+  assert.ok(lineOf(cover, 'coverage').startsWith('Interest coverage recorded for 3 of 6 runs · 1 on adjusted EBITDA, not screened'));
+  assert.equal(headOf(cover, 'coverage'), 'Hidden by Interest coverage: no figure recorded, or a figure on adjusted EBITDA');
+  const cash = show(withRun((run) => ({ metrics: { ...run.metrics, cash: adjusted } })), 'cash', 'cash');
+  assert.ok(!lineOf(cash, 'cash').includes('adjusted EBITDA'));
+  assert.equal(headOf(cash, 'cash'), 'Hidden by Cash: no figure recorded');
+});
+
 test('library cards: one card per issuer, each with its name, ticker and sector, the latest run named by period and pathway, its state mark and first sentence, a dot per module and the links', () => {
   const page = libPage(), view = page.libraryRows(), html = page.libraryResults(view);
   const cards = html.split('<article class="lib-card"').slice(1);
@@ -5314,4 +5377,28 @@ test('ESG part: a new-format handoff with no ESG heading has no esg part', () =>
   assert.ok(!ids.includes('esg'));
   const withoutEsg = esgSections(esgLines('h3')).filter(s => !/^T2G\./.test(s.heading));
   assert.ok(!esgPage('h3', withoutEsg).reportParts(esgId).some(p => p[0] === 'esg'));
+});
+
+test('a leverage, net leverage or cover figure on adjusted EBITDA is not screened or ranked; cash is unchanged (owner: "Take them out")', () => {
+  const logic = new Function(`${read('screening.js')}; return LibraryLogic;`)();
+  const label = { 'leverage': 'Total debt / adjusted EBITDA', 'net_leverage': 'Net debt / adjusted EBITDA', 'coverage': 'Adjusted EBITDA / cash interest' };
+  const run = (id, metrics) => ({ id, issuer: id, artifacts: [], metrics });
+  const figure = (value, extra = {}) => ({ value, unit: 'x', period: 'FY2024', ...extra });
+  const prefix = { leverage: 'leverage', net_leverage: 'netLeverage', coverage: 'coverage', cash: 'cash' };
+  for (const name of ['leverage', 'net_leverage', 'coverage']) {
+    const filters = { runs: 'any', [prefix[name] + 'Min']: '5' };
+    const reported = run('a-reported', { [name]: figure('5.96') });
+    const adjusted = run('b-adjusted', { [name]: figure('5.96', { label: label[name] }) });
+    const none = run('c-none', {});
+    const runs = [adjusted, none, reported];
+    assert.deepEqual(logic.filterRuns(runs, filters).map(r => r.id), ['a-reported'], name);
+    assert.deepEqual(logic.coverage(runs, filters)[name], { recorded: 1, hidden: 2 }, name + ' counts');
+    assert.deepEqual(logic.hiddenBy(runs, filters, name).map(r => r.id).sort(), ['b-adjusted', 'c-none'], name + ' hidden');
+    const sorted = direction => logic.sortRuns([adjusted, none, reported, run('d-low', { [name]: figure('1.0') })], name, direction).map(r => r.id);
+    assert.deepEqual(sorted('asc'), ['d-low', 'a-reported', 'b-adjusted', 'c-none'], name + ' asc');
+    assert.deepEqual(sorted('desc'), ['a-reported', 'd-low', 'b-adjusted', 'c-none'], name + ' desc');
+  }
+  const cash = run('cash', { cash: figure('7', { label: 'Cash and equivalents' }) });
+  assert.deepEqual(logic.filterRuns([cash], { runs: 'any', cashMin: '5' }).map(r => r.id), ['cash'], 'a labelled cash metric is still screened');
+  assert.equal(logic.coverage([cash], { runs: 'any', cashMin: '5' }).cash.recorded, 1);
 });
