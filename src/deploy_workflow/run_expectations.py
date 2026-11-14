@@ -155,13 +155,8 @@ def _lines(page: str, first: bool) -> list[str]:
 def _wraps(previous: str, line: str) -> bool:
     """True when ``line`` is the wrapped tail of a prose sentence: the previous line stops without
     closing punctuation, and this line is long mixed-case text rather than a short or capitalised
-    title. A banner label above is a heading, not open prose: the text before the previous line's
-    first " - " is upper case and has at least two words, each letters only
-    (``SYNTHETIC FIXTURE - not issuer evidence``); ``EBITDA``, ``Q3 2025`` and ``S&P`` are not."""
-    label, dash, _ = previous.partition(" - ")
-    words = label.split()
-    heading = bool(dash) and label.isupper() and len(words) >= 2 and all(w.isalpha() for w in words)
-    open_prose = len(previous.split()) >= 6 and previous[-1] not in ".!?:;" and not heading
+    title."""
+    open_prose = len(previous.split()) >= 6 and previous[-1] not in ".!?:;"
     return open_prose and len(line.split()) > 6 and not line.isupper()
 
 
