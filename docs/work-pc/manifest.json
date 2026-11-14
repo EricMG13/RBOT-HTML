@@ -397,7 +397,7 @@
   "docs/sweeps/2026-11-13-optimisation-review/analysis-depth-proposal.md": "74d258f16e9d895aeb1eadbdad0ce7ab4a23681b",
   "docs/sweeps/2026-11-13-optimisation-review/appendix-inventory.md": "ec7c31b41dc227356692337afc543de2f2fe1185",
   "docs/sweeps/2026-11-13-optimisation-review/findings.json": "9dc14da7ec36b7cfd49c315a28ec893586046373",
-  "docs/sweeps/2026-11-13-optimisation-review/frontend-changes-needed.md": "cb1b774f1d989e852b5e7591b8703f56c73eb339",
+  "docs/sweeps/2026-11-13-optimisation-review/frontend-changes-needed.md": "8f8aec11814b80dfc93c42fd4312056c56f3ac11",
   "docs/sweeps/2026-11-13-optimisation-review/module-scripts-inventory.tsv": "eb1171b5d999ed615dbd36e4d9376a66ae2f0d77",
   "docs/sweeps/2026-11-13-optimisation-review/pathway-tiers-proposal.md": "10226bdf12a7988f0032bb6e9bfac6d87e24bce2",
   "docs/templates/README.md": "cc14e2026c2693425b8d304e270bb35fed24c923",
@@ -912,6 +912,6 @@
   "tools/work_pc_delta.py": "fa5e9e81c534657f593cb8752a94de10cba0eead",
   "uv.lock": "7a4f05aeff999e9284ec29f34acacdd2619d64b1"
  },
- "head": "e7bfc1aa5812c6a474822eec755e45913a0815a2",
- "head_date": "2026-11-14T00:11:37Z"
+ "head": "c627679960e7c41e2b8426e9280f013ad842f5e7",
+ "head_date": "2026-11-14T00:15:08Z"
 }
