@@ -920,3 +920,69 @@ def test_feed_shared_accepts_only_one(world):
     assert world.call("GET", "/api/feed?view=latest&shared=1", cookie=AK_C)[2]["cards"] == []
     for value in ("0", "true", "", "2"):
         assert world.call("GET", f"/api/feed?view=latest&shared={value}", cookie=ML_C)[0] == 400
+
+
+SURROGATE_ROUTES = [
+    ("POST", "/api/groups"),
+    ("POST", "/api/groups/1/members"),
+    ("DELETE", "/api/groups/1/members"),
+    ("POST", "/api/groups/1/threads"),
+    ("POST", "/api/threads/1/comments"),
+    ("POST", "/api/comments/1"),
+    ("POST", "/api/threads/1/read"),
+]
+
+
+@pytest.mark.parametrize("method,path", SURROGATE_ROUTES)
+def test_a_field_name_that_is_a_lone_surrogate_is_an_ordinary_400(world, method, path):
+    before = world.counts()
+    status, _, reply = world.call(method, path, cookie=ZZ_C, raw=b'{"\\ud800": 1}')
+    assert status == 400 and list(reply) == ["error"]
+    assert "\ud800" not in json.dumps(reply, ensure_ascii=False)  # no client text in a refusal
+    assert world.call("GET", "/api/groups", cookie=AK_C)[0] == 200
+    assert world.counts() == before
+
+
+def test_a_refusal_that_cannot_be_encoded_is_the_documented_500_and_is_logged(
+    world, monkeypatch, caplog
+):
+    def echo(*args, **kwargs):
+        raise service.store.StoreError("\ud800 is not a thing")  # a store text echoing input
+
+    monkeypatch.setattr(service.groups, "list_groups", echo)
+    with caplog.at_level(logging.ERROR, logger=service.log.name):
+        status, _, reply = world.call("GET", "/api/groups", cookie=AK_C)
+    assert (status, reply) == (500, {"error": "the service failed; see its log"})
+    assert any(r.exc_info for r in caplog.records)
+    monkeypatch.undo()
+    assert world.call("GET", "/api/groups", cookie=AK_C)[0] == 200
+
+
+@pytest.mark.parametrize("raw", [b"[]", b'{"a": 1}', b'{"text": "x"}', b"5"])
+def test_the_read_route_needs_an_empty_json_object(world, raw):
+    before = world.counts()
+    status, _, reply = world.call("POST", "/api/threads/1/read", cookie=ML_C, raw=raw)
+    assert status == 400 and list(reply) == ["error"]
+    assert world.counts() == before
+    assert world.call("POST", "/api/threads/1/read", cookie=ML_C, raw=b"{}")[0] == 200
+
+
+def test_leaving_an_invited_group_as_a_non_last_member_hides_it_from_the_leaver(world):
+    world.call("POST", "/api/groups/2/members", cookie=AK_C, body={"name": "ml"})
+    status, _, reply = world.call("DELETE", "/api/groups/2/members", cookie=ML_C, body={})
+    assert (status, reply) == (200, {"members": []})
+    db = open_db(world.root)
+    try:
+        gone = db.execute("SELECT 1 FROM group_members WHERE group_id=2 AND user_name='ml'")
+        assert gone.fetchone() is None
+    finally:
+        db.close()
+    assert world.call("GET", "/api/groups/2", cookie=ML_C)[0] == 404
+
+
+@pytest.mark.parametrize("method,path,body", WRITES)
+def test_every_write_with_no_origin_header_is_refused(world, method, path, body):
+    before = world.counts()
+    status, _, _ = world.call(method, path, cookie=AK_C, body=body, origin=None)
+    assert status == 403
+    assert world.counts() == before

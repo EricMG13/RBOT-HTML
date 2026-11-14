@@ -282,7 +282,10 @@ def _topics(req: _Req) -> _Reply:
     return _Reply(200, [{key: row[key] for key in keys} for row in rows])
 
 
-def _mapped(handler: Callable[[_Req], _Reply]) -> Callable[[_Req], _Reply]:
+_Handler = Callable[[_Req], _Reply]
+
+
+def _mapped(handler: _Handler) -> _Handler:
     """The one place a store error becomes a status: Forbidden is 403, "no such ..." is 404 (a
     hidden group, thread or comment raises the same text as a missing one), any other store or
     view error is 400."""
@@ -301,9 +304,8 @@ def _mapped(handler: Callable[[_Req], _Reply]) -> Callable[[_Req], _Reply]:
 
 
 def _only(body: dict[str, Any], *allowed: str) -> dict[str, Any]:
-    extra = sorted(set(body) - set(allowed))
-    if extra:
-        raise _refuse(400, f"the request has an unexpected field: {extra[0]}")
+    if set(body) - set(allowed):  # a fixed text: a refusal never carries client text
+        raise _refuse(400, "the request has a field this route does not take")
     return body
 
 
@@ -433,12 +435,12 @@ def _thread_page(req: _Req) -> _Reply:
 @_mapped
 def _thread_start(req: _Req) -> _Reply:
     body, group_id = req.body(), int(req.groups[0])
-    if "story_id" in body and "title" not in body and "text" not in body:
+    if "story_id" in body:
         _only(body, "story_id", "note")
         story_id, note = _whole(body["story_id"], "story_id"), _opt_str(body, "note")
         thread_id, joined = threads.share_story(req.db, _act(req), group_id, story_id, note)
         return _Reply(200, {"thread_id": thread_id, "joined": joined})
-    if "title" in body and "text" in body and "story_id" not in body and "note" not in body:
+    if "title" in body and "text" in body:
         _only(body, "title", "text")
         title, text = _str(body, "title"), _str(body, "text")
         return _Reply(
@@ -459,6 +461,7 @@ def _thread_get(req: _Req) -> _Reply:
 
 @_mapped
 def _thread_read(req: _Req) -> _Reply:
+    _only(req.body())  # {} and nothing else
     name = req.person.name
     threads.mark_read(req.db, name, int(req.groups[0]))
     return _Reply(200, {"unread": _unread_json(threads.unread(req.db, name))})
@@ -486,16 +489,13 @@ def _comment_delete(req: _Req) -> _Reply:
     return _Reply(200, {})
 
 
-@_mapped
-def _react(req: _Req) -> _Reply:
-    threads.react(req.db, req.person, int(req.groups[0]), req.groups[1])
-    return _Reply(200, {})
+def _reaction(action: Callable[[sqlite3.Connection, identity.User, int, str], None]) -> _Handler:
+    @_mapped
+    def run(req: _Req) -> _Reply:
+        action(req.db, req.person, int(req.groups[0]), req.groups[1])
+        return _Reply(200, {})
 
-
-@_mapped
-def _unreact(req: _Req) -> _Reply:
-    threads.unreact(req.db, req.person, int(req.groups[0]), req.groups[1])
-    return _Reply(200, {})
+    return run
 
 
 @_mapped
@@ -550,8 +550,10 @@ _ROUTES = (
     _Route("POST", re.compile(f"/api/threads/{_ID}/comments"), _comment_add),
     _Route("POST", re.compile(f"/api/comments/{_ID}"), _comment_edit),
     _Route("DELETE", re.compile(f"/api/comments/{_ID}"), _comment_delete),
-    _Route("POST", re.compile(f"/api/comments/{_ID}/reactions/{_KEY}"), _react),
-    _Route("DELETE", re.compile(f"/api/comments/{_ID}/reactions/{_KEY}"), _unreact),
+    _Route("POST", re.compile(f"/api/comments/{_ID}/reactions/{_KEY}"), _reaction(threads.react)),
+    _Route(
+        "DELETE", re.compile(f"/api/comments/{_ID}/reactions/{_KEY}"), _reaction(threads.unreact)
+    ),
     _Route("GET", re.compile("/api/unread"), _unread_get),
 )
 
@@ -679,9 +681,9 @@ class Handler(BaseHTTPRequestHandler):
             self._check_origin()
             if self.headers.get("Transfer-Encoding") is not None:
                 raise _refuse(411, "a body needs Content-Length")
-            self._send(self._dispatch(urllib.parse.urlsplit(self.path)))
+            self._reply(self._dispatch(urllib.parse.urlsplit(self.path)))
         except _Reply as reply:
-            self._send(reply)
+            self._reply(reply)
         except Exception:
             # The one catch-all of a request, documented: whatever a handler raises becomes a 500
             # with fixed text. The traceback goes to the log; neither it nor the exception text
@@ -720,6 +722,15 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Security-Policy", _POLICY)
         self.send_header("X-Frame-Options", "DENY")
         super().end_headers()
+
+    def _reply(self, reply: _Reply) -> None:
+        """Send a reply; one that cannot be built or encoded (any failure but a dead socket, which
+        `_send` handles) is logged with its traceback and becomes the documented 500."""
+        try:
+            self._send(reply)
+        except Exception:
+            log.exception("%s %s: reply could not be sent", self.command, self.path)
+            self._send(_refuse(500, _FAILED))
 
     def _send(self, reply: _Reply) -> None:
         if isinstance(reply.body, bytes):
