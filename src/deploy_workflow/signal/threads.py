@@ -290,7 +290,7 @@ def edit_comment(db: sqlite3.Connection, by: Act, comment_id: int, text: str) ->
 
 def delete_comment(db: sqlite3.Connection, by: Act, comment_id: int) -> None:
     """Remove a comment: it keeps its place, loses its text and reactions. Repeating is safe."""
-    user = by.user
+    user, stamp = by.user, _utc_text(by.now)
     with _write_transaction(db):
         row = _comment_row(db, user.name, comment_id)
         if row["author"] != user.name:
@@ -299,7 +299,7 @@ def delete_comment(db: sqlite3.Connection, by: Act, comment_id: int) -> None:
             return
         db.execute(
             "UPDATE comments SET text='', deleted_at=? WHERE id=?",
-            (_utc_text(by.now), comment_id),
+            (stamp, comment_id),
         )
         db.execute("DELETE FROM reactions WHERE comment_id=?", (comment_id,))
 
@@ -415,14 +415,23 @@ def _before(before: str) -> tuple[str, int]:
     return feedview._instant(stamp, "cursor time"), feedview._id(number, "cursor id")
 
 
+# A thread that is new to the user (alias t; binds the user name three times): in a group they
+# belong to, made at or after they joined, started by someone else (not automatic), never read.
+_NEW_THREAD = (
+    "(t.started_by IS NOT NULL AND t.started_by <> ?"
+    " AND EXISTS(SELECT 1 FROM group_members m WHERE m.group_id = t.group_id AND m.user_name = ?"
+    "  AND t.created_at >= m.joined_at)"
+    " AND NOT EXISTS(SELECT 1 FROM read_marks r WHERE r.user_name = ? AND r.thread_id = t.id))"
+)
+
 _ROWS = (
     "SELECT t.id, t.story_id, COALESCE(s.title, t.title) AS title, src.name AS source,"
     " t.started_by, t.last_activity_at,"
     " (SELECT COUNT(*) FROM comments c WHERE c.thread_id = t.id AND c.deleted_at IS NULL)"
     "  AS comments,"
-    " EXISTS(SELECT 1 FROM comments c WHERE c.thread_id = t.id AND c.deleted_at IS NULL"
-    "  AND c.author <> ? AND c.id > COALESCE((SELECT r.seen_comment_id FROM read_marks r"
-    "   WHERE r.user_name = ? AND r.thread_id = t.id), 0)) AS unread"
+    " (" + _NEW_THREAD + " OR EXISTS(SELECT 1 FROM comments c WHERE c.thread_id = t.id"
+    "  AND c.deleted_at IS NULL AND c.author <> ? AND c.id > COALESCE((SELECT r.seen_comment_id"
+    "   FROM read_marks r WHERE r.user_name = ? AND r.thread_id = t.id), 0))) AS unread"
     " FROM threads t LEFT JOIN stories s ON s.id = t.story_id"
     " LEFT JOIN sources src ON src.id = s.source_id WHERE t.group_id = ?"
 )
@@ -435,7 +444,7 @@ def thread_list(
     with feedview._snapshot(db):
         require_visible(db, user_name, group_id)
         sql = _ROWS
-        params: list[object] = [user_name, user_name, group_id]
+        params: list[object] = [user_name] * 5 + [group_id]
         if before is not None:
             stamp, thread_id = _before(before)
             sql += " AND (t.last_activity_at < ? OR (t.last_activity_at = ? AND t.id < ?))"
@@ -476,11 +485,9 @@ def mark_read(db: sqlite3.Connection, user_name: str, thread_id: int) -> None:
 
 
 _UNREAD_THREADS = (
-    "SELECT t.group_id AS gid, COUNT(*) AS n FROM threads t"
-    " JOIN group_members m ON m.group_id = t.group_id AND m.user_name = ?"
-    " WHERE t.created_at >= m.joined_at AND t.started_by IS NOT NULL AND t.started_by <> ?"
-    " AND NOT EXISTS(SELECT 1 FROM read_marks r WHERE r.user_name = ? AND r.thread_id = t.id)"
-    " GROUP BY t.group_id"
+    "SELECT t.group_id AS gid, COUNT(*) AS n FROM threads t WHERE "
+    + _NEW_THREAD
+    + " GROUP BY t.group_id"
 )
 _UNREAD_REPLIES = (
     "SELECT t.group_id AS gid, COUNT(*) AS n FROM comments c"

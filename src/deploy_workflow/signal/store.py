@@ -256,7 +256,9 @@ def open_db(root: Path) -> sqlite3.Connection:
         db.row_factory = sqlite3.Row
         _enable_wal(db)
         db.execute("PRAGMA foreign_keys=ON")
-        db.execute("PRAGMA secure_delete=ON")  # a deleted comment's text is overwritten in the file
+        # The text leaves the database file at the next checkpoint and can remain in the
+        # write-ahead log while other connections are open.
+        db.execute("PRAGMA secure_delete=ON")
         _migrate(db)
     except BaseException:
         db.close()

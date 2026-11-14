@@ -373,7 +373,7 @@ def test_thread_row_unread_follows_marks_and_other_authors(db, gid):
     def flags(who):
         return [r.unread for r in thread_list(db, who, gid, None)[0]]
 
-    assert flags("ak") == [False] and flags("ml") == [True]  # my own comment is not unread
+    assert flags("ak") == [False] and flags("ml") == [True]  # new to ml; ak started it
     mark_read(db, "ml", tid)
     assert flags("ml") == [False]
     add_comment(db, Act(ML, T0 + MIN), tid, "y", None)
@@ -389,13 +389,25 @@ def test_a_naive_now_is_refused_like_every_other_entry_point(db, gid):
         read_thread(db, AK, tid, naive)
 
 
-def test_a_deleted_comment_text_does_not_stay_in_the_database_file(tmp_path):
-    secret = "ZQX-deleted-secret-7731"
-    db = team_db(tmp_path)
-    assert db.execute("PRAGMA secure_delete").fetchone()[0] == 1
-    gid = create_group(db, Act(AK, T0), "TMT", "everyone", [])
+def test_a_database_opens_with_secure_delete_on(tmp_path):
+    assert team_db(tmp_path).execute("PRAGMA secure_delete").fetchone()[0] == 1
+
+
+def test_a_naive_now_on_an_already_removed_comment_is_refused(db, gid):
     tid, _ = share_story(db, Act(AK, T0), gid, 1, None)
-    cid = add_comment(db, Act(AK, T0), tid, secret, None)
+    cid = add_comment(db, Act(AK, T0), tid, "x", None)
     delete_comment(db, Act(AK, T0), cid)
-    db.close()
-    assert not any(secret.encode() in f.read_bytes() for f in (tmp_path / "signal").iterdir())
+    with pytest.raises(StoreError, match="time must be timezone-aware"):
+        delete_comment(db, Act(AK, T0.replace(tzinfo=None)), cid)
+
+
+def test_new_thread_flags_in_a_list_match_the_unread_count(db):
+    gid = create_group(db, Act(AK, T0), "TMT", "everyone", [])
+    join(db, "ml", gid, T0)
+    share_story(db, Act(AK, T0 + MIN), gid, 1, None)
+    opened, _ = share_story(db, Act(AK, T0 + 2 * MIN), gid, 2, "note")
+    start_note(db, Act(ML, T0 + 3 * MIN), gid, "mine", "own")
+    mark_read(db, "ml", opened)
+    flagged = [r for r in thread_list(db, "ml", gid, None)[0] if r.unread]
+    assert [r.id for r in flagged] == [1]
+    assert len(flagged) == unread(db, "ml").by_group[gid] == unread(db, "ml").threads
