@@ -25,6 +25,8 @@
 | P9 | No search over comments. | Spec 5.4 indexes stories only. | An FTS table later. |
 | P10 | Renaming a group, changing its visibility or topics after creation waits for slice 4. | Settings slice. | None. |
 | P11 | (added during the build) The quality gate allows five parameters. The writer actions that take both the user and the time take them as one value, `groups.Act(user: User, now: datetime)`, in the user's position: `create_group`, `add_member`, `share_story`, `start_note`, `add_comment`, `edit_comment`, `delete_comment`. Where a signature or test below shows `USER, ..., now` for these, read `Act(USER, now), ...`. Expected values are unchanged. | Six parameters fail ruff PLR0913 and suppressions are not allowed. | A mechanical change of call sites. |
+| P12 | (added during the build) Group names are unique across all groups on a key: the cleaned name, NFKC, case-folded. Creating a group with a taken name answers "that group name is taken" whether or not the creator can see the other group. | One name per group avoids two groups nobody can tell apart; the disclosure is one guessed name, to writers only. This is the one stated exception to "a hidden group is indistinguishable from a missing one". | Names unique per visible set, and a way to tell twins apart. |
+| P13 | (added during the build) An invited group always keeps a member who is a writer or the owner: a `leave` or `remove_member` that would break this is refused. | Otherwise nobody, the owner included, can see or manage it and its name stays taken. | One check. |
 
 ## Prior art (searched 2026-11-13)
 
