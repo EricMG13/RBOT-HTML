@@ -274,7 +274,7 @@ def add_comment(
 
 
 def edit_comment(db: sqlite3.Connection, by: Act, comment_id: int, text: str) -> None:
-    user = by.user
+    user, stamp = by.user, _utc_text(by.now)
     with _write_transaction(db):
         row = _comment_row(db, user.name, comment_id)
         if row["author"] != user.name or row["deleted_at"] is not None:
@@ -284,7 +284,7 @@ def edit_comment(db: sqlite3.Connection, by: Act, comment_id: int, text: str) ->
         body = clean_text(text, MAX_TEXT)
         db.execute(
             "UPDATE comments SET text=?, edited_at=? WHERE id=?",
-            (body, _utc_text(by.now), comment_id),
+            (body, stamp, comment_id),
         )
 
 
@@ -387,6 +387,7 @@ def _comments(
 
 
 def read_thread(db: sqlite3.Connection, user: User, thread_id: int, now: datetime) -> ThreadView:
+    _utc_text(now)  # refuse a naive time here, as every other entry point does
     with feedview._snapshot(db):
         thread = _thread_row(db, user.name, thread_id)
         group = require_visible(db, user.name, thread["group_id"])

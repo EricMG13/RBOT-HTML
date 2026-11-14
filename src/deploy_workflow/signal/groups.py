@@ -51,7 +51,10 @@ def _member_name(raw: str) -> str:
 
 
 def _name_key(name: str) -> str:
-    return unicodedata.normalize("NFKC", name).casefold()
+    """NFKC(casefold(NFKC(name))): one more NFKC after the fold, since folding can produce
+    characters that have a compatibility form (U+03B0 and U+03AB U+0301 meet only that way)."""
+    folded = unicodedata.normalize("NFKC", name).casefold()
+    return unicodedata.normalize("NFKC", folded)
 
 
 def may_post(user: User) -> bool:

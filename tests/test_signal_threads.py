@@ -378,3 +378,24 @@ def test_thread_row_unread_follows_marks_and_other_authors(db, gid):
     assert flags("ml") == [False]
     add_comment(db, Act(ML, T0 + MIN), tid, "y", None)
     assert flags("ml") == [False] and flags("ak") == [True]
+
+
+def test_a_naive_now_is_refused_like_every_other_entry_point(db, gid):
+    tid, _ = share_story(db, Act(AK, T0), gid, 1, "x")
+    naive = T0.replace(tzinfo=None)
+    with pytest.raises(StoreError, match="time must be timezone-aware"):
+        edit_comment(db, Act(AK, naive), 1, "y")
+    with pytest.raises(StoreError, match="time must be timezone-aware"):
+        read_thread(db, AK, tid, naive)
+
+
+def test_a_deleted_comment_text_does_not_stay_in_the_database_file(tmp_path):
+    secret = "ZQX-deleted-secret-7731"
+    db = team_db(tmp_path)
+    assert db.execute("PRAGMA secure_delete").fetchone()[0] == 1
+    gid = create_group(db, Act(AK, T0), "TMT", "everyone", [])
+    tid, _ = share_story(db, Act(AK, T0), gid, 1, None)
+    cid = add_comment(db, Act(AK, T0), tid, secret, None)
+    delete_comment(db, Act(AK, T0), cid)
+    db.close()
+    assert not any(secret.encode() in f.read_bytes() for f in (tmp_path / "signal").iterdir())

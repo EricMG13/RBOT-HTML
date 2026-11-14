@@ -9,6 +9,7 @@ from deploy_workflow.signal.feeds import Entry
 from deploy_workflow.signal.groups import (
     Act,
     Forbidden,
+    _name_key,
     add_member,
     can_see,
     create_group,
@@ -232,3 +233,11 @@ def test_ids_outside_the_sqlite_range_are_missing_ids(db, gid):
     with pytest.raises(StoreError):
         create_group(db, Act(AK, T0), "T", "everyone", [gid])
     assert count(db, "groups") == 0
+
+
+@pytest.mark.parametrize(
+    ("first", "second"),
+    [("x\u03b0", "x\u03ab\u0301"), ("x\u1fd2", "x\u03aa\u0300"), ("x\u1fd7", "x\u03aa\u0342")],
+)
+def test_names_equal_after_case_folding_and_compatibility_share_one_key(first, second):
+    assert _name_key(first) == _name_key(second)
