@@ -418,3 +418,19 @@ test('the reply box has a visible prompt naming the group, or the person replied
   assert.equal(R.replyPlaceholder('TMT', 'ml'), 'Replying to ml\u2026');
   assert.ok(panel.querySelector('label').textContent === 'Reply');   // the accessible label stays
 });
+
+test('a thread error is an alert line in the panel with Retry only where one applies', () => {
+  const withRetry = R.threadError(doc, 'Signal could not be reached.', true);
+  assert.equal(withRetry.getAttribute('role'), 'alert');
+  assert.ok(withRetry.textContent.includes('Signal could not be reached.'));
+  assert.ok(withRetry.querySelector('[data-action="retry-thread"]'));
+  assert.equal(R.threadError(doc, '<b>x</b>', false).querySelector('[data-action="retry-thread"]'), null);
+  assert.equal(R.threadError(doc, '<b>x</b>', false).querySelectorAll('b').length, 0);
+});
+test('the reply box states the 15-minute edit rule once, quietly', () => {
+  assert.equal(R.EDIT_RULE, 'You can edit a comment for 15 minutes.');
+  const panel = R.threadPanel(doc, {id: 3, group: 'TMT', story: null, title: 'T', started_by: 'ak', comments: [], can_post: true}, new Date('2026-11-13T12:00:00Z'));
+  assert.ok(panel.textContent.includes(R.EDIT_RULE));
+  const reader = R.threadPanel(doc, {id: 3, group: 'TMT', story: null, title: 'T', started_by: 'ak', comments: [], can_post: false}, new Date('2026-11-13T12:00:00Z'));
+  assert.ok(!reader.textContent.includes(R.EDIT_RULE));
+});

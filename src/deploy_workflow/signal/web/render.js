@@ -16,6 +16,7 @@
     {key: 'check', emoji: '✅', name: 'Check'},
     {key: 'question', emoji: '❓', name: 'Question'},
   ];
+  const EDIT_RULE = 'You can edit a comment for 15 minutes.';
   const IDENTITY_NOTE = 'Names are not checked: anyone on this network can post under any name.';
   const ROLE_TAGS = {writer: 'Writer', owner: 'Owner'};
   const ICONS = {
@@ -412,6 +413,7 @@
     box.appendChild(label);
     box.appendChild(field);
     box.appendChild(el(doc, 'p', 'identity-note', IDENTITY_NOTE));
+    box.appendChild(el(doc, 'p', 'identity-note edit-rule', EDIT_RULE));
     return box;
   }
 
@@ -638,6 +640,15 @@
     return panel;
   }
 
+  // A failure inside the panel, so it is seen at every width; Retry only where trying again can help.
+  function threadError(doc, message, canRetry) {
+    const box = el(doc, 'div', 'thread-error');
+    box.setAttribute('role', 'alert');
+    box.appendChild(el(doc, 'p', null, message));
+    if (canRetry) box.appendChild(button(doc, 'btn', 'Retry', 'retry-thread', 0));
+    return box;
+  }
+
   function tag(doc, text, iconName) {
     const t = el(doc, 'span', 'tag visibility');
     if (iconName) t.appendChild(icon(doc, iconName));
@@ -829,7 +840,7 @@
   }
 
   return {
-    IDENTITY_NOTE, card, emptyState, relativeTime, safeLink, icon, fullTime, initials,
+    IDENTITY_NOTE, EDIT_RULE, threadError, card, emptyState, relativeTime, safeLink, icon, fullTime, initials,
     linkify, comment, threadPanel, threadRow, groupItem, sharedLine, threadChips,
     replyPlaceholder, unreadLabel, groupsEmpty, notFound, threadsEmpty, threadLoading, threadMessage, membersStrip, groupHead,
     groupChoices, visibilityChoices, topicChoices, replyingTo, editForm,

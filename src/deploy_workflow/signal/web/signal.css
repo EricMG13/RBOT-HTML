@@ -325,3 +325,6 @@ dialog input[type="radio"],dialog input[type="checkbox"]{width:auto}
   .act.share span,.act.open span{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   .act.share,.act.open{padding:6px 8px}
 }
+.thread-error{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--red-bg);border-bottom:1px solid var(--red);color:var(--red);padding:8px 16px;font-weight:600}
+.thread-error p{flex:1;min-width:0;overflow-wrap:anywhere;margin:0}
+.edit-rule{margin-top:2px}

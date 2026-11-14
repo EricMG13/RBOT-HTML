@@ -19,7 +19,7 @@
     dialog: $('name-dialog'), form: $('name-form'), input: $('name-input'), nameError: $('name-error'), cancel: $('name-cancel'),
     app: document.querySelector('.app'), rail: document.querySelector('.rail'), railLink: document.querySelector('.rail-link'),
     railBadge: $('rail-badge'), groupList: $('group-list'), newGroup: $('new-group'), feedBar: $('feed-bar'),
-    groupHead: $('group-head'), threads: $('threads'), slot: $('thread-slot'),
+    groupHead: $('group-head'), threads: $('threads'), slot: $('thread-slot'), skip: $('skip-link'),
   };
   const SHARE = {dialog: $('share-dialog'), form: $('share-dialog-form'), error: $('share-dialog-error'), submit: $('share-submit'),
     box: $('share-groups-box'), groups: $('share-groups'), note: $('share-note')};
@@ -34,7 +34,7 @@
   const state = {
     view: 'foryou', kind: '', q: '', next: null, shown: 0, topics: [], approved: undefined,
     me: null, seq: 0, loading: false, newest: null, retry: null, pollTimer: null, searchTimer: null,
-    groups: [], canCreate: false, groupsLoaded: false, groupId: null, group: null, groupSeq: 0, groupNext: null, threadRows: 0,
+    groups: [], canCreate: false, groupId: null, group: null, groupSeq: 0, groupNext: null, threadRows: 0,
     threadId: null, thread: null, pendingOpener: null, dialogOpener: null, shareStory: null, noteGroup: null,
   };
 
@@ -44,7 +44,8 @@
 
   async function api(method, path, body) {
     const init = {method, headers: {}};
-    if (method !== 'GET') {
+    // A body goes with a write that has one; routes that take none (DELETE comment, reaction, save) get none.
+    if (method === 'POST' || body !== undefined) {
       init.headers['Content-Type'] = 'application/json';
       init.body = JSON.stringify(body === undefined ? {} : body);
     }
@@ -63,6 +64,9 @@
     }
     if (!res.ok) {
       const message = data && typeof data.error === 'string' ? data.error : 'Signal could not complete that request.';
+      // A refusal for want of a name is handled here, once: the name dialog opens. Callers still get the
+      // error (status 401) so they can restore their own state, and show nothing for it (see `failed`).
+      if (res.status === 401) askName();
       throw new ApiError(res.status, message);
     }
     if (!readable) throw new ApiError(res.status, 'The service sent an unreadable answer.');
@@ -72,6 +76,11 @@
   function announce(text) {
     els.live.textContent = '';
     window.setTimeout(() => { els.live.textContent = text; }, 50);
+  }
+
+  // An error in a view's own area: the band, except for a refusal for want of a name (the dialog shows that).
+  function failed(err, retry) {
+    if (err.status !== 401) showError(err.message, retry);
   }
 
   function showError(message, retry) {
@@ -153,8 +162,7 @@
       if (seq !== state.seq) return false;
       // A failed reset leaves the old cards under the new title: they must not be extendable.
       if (reset) state.next = null;
-      if (err.status === 401) { askName(); return false; }
-      showError(err.message, () => load(reset));
+      failed(err, () => load(reset));
       return false;
     } finally {
       if (seq === state.seq) {
@@ -247,7 +255,7 @@
       const topic = state.topics.find(t => 'topic:' + t.id === state.view);
       if (topic) els.title.textContent = topic.name;
     } catch (err) {
-      if (err.status !== 401) showError(err.message, loadTopics);
+      failed(err, loadTopics);
     }
   }
 
@@ -269,7 +277,7 @@
         restoreFollowFocus(id, container);
       }
     } catch (err) {
-      if (err.status === 401) askName(); else showError(err.message, () => toggleFollow(id));
+      failed(err, () => toggleFollow(id));
     }
   }
 
@@ -283,7 +291,7 @@
       button.setAttribute('aria-pressed', data.saved ? 'true' : 'false');
       announce(data.saved ? 'Saved' : 'Removed from saved');
     } catch (err) {
-      if (err.status === 401) askName(); else showError(err.message, () => toggleSave(button));
+      failed(err, () => toggleSave(button));
     }
   }
 
@@ -350,6 +358,8 @@
   }
 
   function renderGroupList() {
+    const active = document.activeElement;
+    const focusId = els.groupList.contains(active) ? active.getAttribute('data-id') : null;
     els.groupList.textContent = '';
     if (state.groups.length === 0) els.groupList.appendChild(R.groupsEmpty(document));
     for (const g of state.groups) {
@@ -359,6 +369,10 @@
     }
     els.newGroup.hidden = !state.canCreate;
     markCurrentChannel();
+    if (focusId !== null) {
+      const same = els.groupList.querySelector('[data-action="open-group"][data-id="' + focusId.replace(/\D/g, '') + '"]');
+      if (same) same.focus({preventScroll: true});
+    }
   }
 
   async function loadGroups(quiet) {
@@ -367,13 +381,11 @@
       const data = await api('GET', '/api/groups');
       state.groups = data.groups;
       state.canCreate = Boolean(data.can_create);
-      state.groupsLoaded = true;
       renderGroupList();
       return true;
     } catch (err) {
-      if (err.status === 401) askName();
-      else if (quiet) console.warn('group list refresh failed:', err.message);
-      else showError(err.message, () => loadGroups(false));
+      if (quiet) console.warn('group list refresh failed:', err.message);
+      else failed(err, () => loadGroups(false));
       return false;
     } finally {
       els.groupList.setAttribute('aria-busy', 'false');
@@ -393,9 +405,10 @@
     renderGroupList();
   }
 
+  // The rail badge only: the channel list is rebuilt once per poll, by loadGroups.
   async function refreshUnread() {
     try {
-      applyUnread(await api('GET', '/api/unread'));
+      setRailBadge((await api('GET', '/api/unread')).total);
     } catch (err) {
       console.warn('unread refresh failed:', err.message);
     }
@@ -427,24 +440,17 @@
     }
   }
 
-  // Re-reads the feed pages until the story's card is found and replaces that one card; the scroll position
-  // and the list around it stay. Fail-open: a failure is logged and the card is corrected by the next load.
+  // Re-reads one card (GET /api/stories/<id>) and replaces it if it is on the page; scroll and focus stay.
+  // Fail-open: a failure is logged and the card is corrected by the next load.
   async function refreshCard(storyId) {
     if (storyId === null || storyId === undefined || state.groupId !== null) return;
     const find = () => els.cards.querySelector('article.card[data-id="' + String(storyId).replace(/\D/g, '') + '"]');
     if (!find()) return;
     const seq = state.seq;
-    let before = null;
     try {
-      for (let page = 0; page < 10; page += 1) {
-        const data = await api('GET', '/api/feed?' + feedParams(before));
-        if (seq !== state.seq) return;
-        const story = data.cards.find(c => c.id === storyId);
-        const current = find();
-        if (story && current) { replaceCard(current, story); return; }
-        if (data.next_before === null) return;
-        before = data.next_before;
-      }
+      const story = await api('GET', '/api/stories/' + encodeURIComponent(storyId));
+      const current = find();
+      if (seq === state.seq && current) replaceCard(current, story);
     } catch (err) {
       console.warn('card refresh failed:', err.message);
     }
@@ -526,25 +532,18 @@
     markCurrentChannel();
     setChannelsOpen(false);
     try {
-      const [group, page] = await Promise.all([
-        api('GET', '/api/groups/' + id), api('GET', '/api/groups/' + id + '/threads')]);
+      const group = await api('GET', '/api/groups/' + id);
       if (seq !== state.groupSeq) return;
       state.group = group;
-      state.groupNext = page.next_before;
-      state.threadRows = 0;
       els.title.textContent = group.name;
-      els.threads.textContent = '';
-      appendThreadRows(page.threads);
-      els.threads.hidden = false;
-      renderGroupHead();
-      renderThreadsEmpty();
-      els.more.hidden = state.groupNext === null;
-      announce(group.name + ': ' + (state.threadRows === 1 ? '1 thread' : state.threadRows + ' threads'));
+      if (await loadThreads(true)) {
+        renderGroupHead();
+        announce(group.name + ': ' + (state.threadRows === 1 ? '1 thread' : state.threadRows + ' threads'));
+      }
     } catch (err) {
       if (seq !== state.groupSeq) return;
       if (err.status === 404) showGroupMissing();
-      else if (err.status === 401) askName();
-      else showError(err.message, () => openGroup(id));
+      else failed(err, () => openGroup(id));
     } finally {
       if (seq === state.groupSeq) {
         setBusy(false);
@@ -553,39 +552,32 @@
     }
   }
 
-  async function moreThreads() {
+  // The group's threads: reset replaces the list with the first page, otherwise the next page is appended
+  // (the same shape as load(reset) for the feed). Returns whether the page was shown.
+  async function loadThreads(reset) {
     const seq = state.groupSeq;
     const id = state.groupId;
-    els.more.disabled = true;
+    if (!reset) els.more.disabled = true;
     try {
-      const page = await api('GET', '/api/groups/' + id + '/threads?' + new URLSearchParams({before: state.groupNext}));
-      if (seq !== state.groupSeq) return;
+      const query = !reset && state.groupNext ? '?' + new URLSearchParams({before: state.groupNext}) : '';
+      const page = await api('GET', '/api/groups/' + id + '/threads' + query);
+      if (seq !== state.groupSeq) return false;
+      if (reset) { els.threads.textContent = ''; state.threadRows = 0; }
       const first = els.threads.children.length;
       appendThreadRows(page.threads);
       state.groupNext = page.next_before;
-      els.more.hidden = state.groupNext === null;
-      if (els.threads.children[first]) els.threads.children[first].focus();
-    } catch (err) {
-      if (seq === state.groupSeq) showError(err.message, moreThreads);
-    } finally {
-      els.more.disabled = false;
-    }
-  }
-
-  // The first page again, replacing the rows (after a note was started).
-  async function reloadThreads() {
-    const seq = state.groupSeq;
-    try {
-      const page = await api('GET', '/api/groups/' + state.groupId + '/threads');
-      if (seq !== state.groupSeq) return;
-      els.threads.textContent = '';
-      state.threadRows = 0;
-      appendThreadRows(page.threads);
-      state.groupNext = page.next_before;
+      els.threads.hidden = false;
       renderThreadsEmpty();
       els.more.hidden = state.groupNext === null;
+      if (!reset && els.threads.children[first]) els.threads.children[first].focus();
+      return true;
     } catch (err) {
-      if (seq === state.groupSeq) showError(err.message, reloadThreads);
+      if (seq !== state.groupSeq) return false;
+      if (err.status === 404) showGroupMissing();
+      else failed(err, () => loadThreads(reset));
+      return false;
+    } finally {
+      if (!reset) els.more.disabled = false;
     }
   }
 
@@ -638,8 +630,7 @@
     } catch (err) {
       if (seq !== state.groupSeq) return;
       if (err.status === 404) showGroupMissing(); // for example after leaving an invited group
-      else if (err.status === 401) askName();
-      else showError(err.message, () => rereadGroup(focusSelector));
+      else failed(err, () => rereadGroup(focusSelector));
     }
   }
 
@@ -648,8 +639,7 @@
     try {
       await api(method, '/api/groups/' + state.groupId + '/members', body);
     } catch (err) {
-      if (err.status === 401) askName();
-      else if (seq === state.groupSeq) { membersError(err.message); announce(err.message); }
+      if (err.status !== 401 && seq === state.groupSeq) { membersError(err.message); announce(err.message); }
       return;
     }
     await rereadGroup(focusSelector);
@@ -713,6 +703,8 @@
   function setInert() {
     const on = state.threadId !== null && NARROW.matches;
     for (const node of [els.rail, els.channels, els.feed]) node.toggleAttribute('inert', on);
+    els.skip.hidden = on; // its target, the feed, is covered and inert
+
   }
 
   function showPanel(panel) {
@@ -723,13 +715,26 @@
     setInert();
   }
 
+  // Where a focused control is found again after the panel is painted again. A link inside a comment's text
+  // or the story's title has no data hooks: it is found by its comment and its position among that text's links.
   function selectorFor(node) {
+    const linkSelectors = link => {
+      const article = link.closest ? link.closest('article.comment') : null;
+      const parent = link.parentNode;
+      if (article && parent) {
+        const n = Array.from(parent.children).filter(c => c.tagName === 'A').indexOf(link) + 1;
+        return ['article.comment[data-id="' + String(article.getAttribute('data-id')).replace(/\D/g, '') + '"] .comment-text a:nth-of-type(' + n + ')'];
+      }
+      if (link.closest && link.closest('.quote')) return ['.quote a'];
+      return ['a'];
+    };
     const clean = value => String(value).replace(/[^\w-]/g, '');
     if (node.classList.contains('reply-text')) return ['.reply-text'];
     if (node.classList.contains('thread-title')) return ['.thread-title'];
     const id = node.getAttribute('data-id');
     if (node.classList.contains('edit-text')) return ['.edit-text[data-id="' + clean(id) + '"]'];
     const action = node.getAttribute('data-action');
+    if (!action && node.tagName === 'A') return linkSelectors(node);
     if (!action) return [];
     let base = '[data-action="' + clean(action) + '"]';
     if (id !== null) base += '[data-id="' + clean(id) + '"]';
@@ -789,7 +794,9 @@
       if (!body) {
         t.editing = null;
       } else {
-        body.replaceWith(R.editForm(document, c, t.editing.text, t.editing.error));
+        const form = R.editForm(document, c, t.editing.text, t.editing.error);
+        form.querySelector('[data-action="save-edit"]').disabled = t.saving;
+        body.replaceWith(form);
         const acts = article.querySelector('.comment-acts');
         if (acts) acts.hidden = true;
       }
@@ -808,7 +815,9 @@
     const selection = wasFocused.length && typeof active.selectionStart === 'number' ? [active.selectionStart, active.selectionEnd] : null;
     const panel = R.threadPanel(document, t.view, new Date());
     restoreDraft(panel, t);
+    paintError(panel, t);
     showPanel(panel);
+    t.rendered = true;
     const body = panel.querySelector('.tbody');
     if (body) body.scrollTop = scroll;
     if (t.first) { t.first = false; panel.querySelector('.thread-title').focus(); return; }
@@ -816,20 +825,43 @@
     if (target && !focus && selection && typeof target.setSelectionRange === 'function') target.setSelectionRange(selection[0], selection[1]);
   }
 
+  // A thread error is shown in the panel (the page's band can sit under the covered, inert feed) and is
+  // owned by the thread: only a thread success clears it.
+  function paintError(panel, t) {
+    if (!t.error) return;
+    const head = panel.querySelector('.thead');
+    if (head) head.after(R.threadError(document, t.error.message, Boolean(t.error.retry)));
+  }
+
   function threadFailure(t, err, mode) {
-    if (err.status === 401) { askName(); return; }
+    if (err.status === 401) return; // api() opened the name dialog; the panel keeps what it shows
     if (err.status === 404) {
+      t.view = null;
+      t.error = null;
       showPanel(R.threadMessage(document, t.id, 'missing'));
       if (mode === 'open') els.slot.querySelector('.thread-title').focus();
       return;
     }
     if (mode === 'poll') { console.warn('thread refresh failed:', err.message); return; }
-    if (mode === 'open') showPanel(R.threadMessage(document, t.id, 'failed'));
-    showError(err.message, () => fetchThread(mode));
+    t.error = {message: err.message, retry: () => { t.error = null; fetchThread(mode); }};
+    if (t.view) { renderThread(); return; }
+    const panel = R.threadMessage(document, t.id, 'failed');
+    paintError(panel, t);
+    showPanel(panel);
+    els.slot.querySelector('.thread-title').focus();
+  }
+
+  // The poll's quiet update when nothing changed: only the relative times move, so focus is never disturbed.
+  function refreshTimes() {
+    const now = new Date();
+    for (const time of els.slot.querySelectorAll('time[datetime]')) {
+      const text = R.relativeTime(time.getAttribute('datetime'), now);
+      if (time.textContent !== text) time.textContent = text;
+    }
   }
 
   // mode: 'open' (first load), 'write' (after a change) or 'poll' (background; a failure only warns and
-  // the next poll tries again).
+  // the next poll tries again). A poll that finds the thread unchanged leaves the panel as it is.
   async function fetchThread(mode, focus) {
     const t = state.thread;
     if (!t) return;
@@ -842,8 +874,12 @@
       return;
     }
     if (state.thread !== t || seq !== t.seq) return;
-    clearError();
+    const sig = JSON.stringify(view);
+    const unchanged = mode === 'poll' && t.rendered && sig === t.sig && !t.error;
+    t.error = null;
     t.view = view;
+    t.sig = sig;
+    if (unchanged) { refreshTimes(); return; }
     renderThread(focus);
     if (mode === 'open') markRead(t.id);
     if (mode === 'write' && view.story) refreshCard(view.story.id);
@@ -866,10 +902,10 @@
   function openThread(id) {
     if (state.threadId === id) { state.pendingOpener = null; return; }
     state.threadId = id;
-    state.thread = {id, view: null, seq: 0, first: true, sending: false, editing: null,
+    state.thread = {id, view: null, seq: 0, first: true, sending: false, saving: false, editing: null,
+      error: null, rendered: false, sig: '', busy: new Set(),
       draft: {text: '', replyTo: null, error: ''}, opener: state.pendingOpener || null};
     state.pendingOpener = null;
-    clearError();
     showPanel(R.threadLoading(document, id));
     els.slot.querySelector('.thread-title').focus();
     return fetchThread('open');
@@ -889,14 +925,19 @@
   }
 
   // One change in the open thread, then a re-read; focus goes to `focus` (selectors of the control used).
+  // A refusal goes to onRefusal (the draft or the edit shows it) or to the panel's error line with Retry;
+  // either way the panel is painted again from state, so no control stays in a busy state.
   async function threadWrite(call, focus, onRefusal) {
     const t = state.thread;
     try {
       await call();
     } catch (err) {
-      if (err.status === 401) askName();
-      else if (state.thread === t && onRefusal) onRefusal(err);
-      else if (state.thread === t) showError(err.message, () => threadWrite(call, focus, onRefusal));
+      if (state.thread !== t) return false;
+      if (err.status !== 401) {
+        if (onRefusal) onRefusal(err);
+        else t.error = {message: err.message, retry: () => { t.error = null; threadWrite(call, focus, onRefusal); }};
+      }
+      renderThread(focus);
       return false;
     }
     if (state.thread === t) await fetchThread('write', focus);
@@ -924,20 +965,27 @@
         if (t.draft.text === sent) t.draft = {text: '', replyTo: null, error: ''};
       },
       ['.reply-text'],
-      err => { t.draft.error = err.message; renderThread(['.reply-text']); });
+      err => { t.draft.error = err.message; });
   }
 
   async function saveEdit(id) {
     const t = state.thread;
-    if (!t.editing || t.editing.id !== id) return;
+    if (!t.editing || t.editing.id !== id || t.saving) return;
+    t.saving = true; // one Save in flight: a second press or Ctrl+Enter does nothing
+    const save = els.slot.querySelector('[data-action="save-edit"]');
+    if (save) save.disabled = true;
     const editButton = '[data-action="edit-comment"][data-id="' + id + '"]';
     await threadWrite(
       async () => {
-        await api('POST', '/api/comments/' + id, {text: t.editing.text});
+        try {
+          await api('POST', '/api/comments/' + id, {text: t.editing.text});
+        } finally {
+          t.saving = false;
+        }
         t.editing = null;
       },
       [editButton],
-      err => { t.editing.error = err.message; renderThread(['.edit-text[data-id="' + id + '"]']); });
+      err => { if (t.editing) t.editing.error = err.message; });
   }
 
   function commentById(id) {
@@ -952,6 +1000,7 @@
     const id = b.getAttribute('data-id');
     const used = selectorFor(b);
     if (action === 'close-thread') navigate({group: state.groupId, thread: null});
+    else if (action === 'retry-thread') { const retry = t.error && t.error.retry; if (retry) retry(); }
     else if (!t.view) return;
     else if (action === 'send-comment') sendReply();
     else if (action === 'reply') {
@@ -967,7 +1016,12 @@
       if (window.confirm('Delete this comment?')) threadWrite(() => api('DELETE', '/api/comments/' + id), []);
     } else if (action === 'react' || action === 'add-reaction') {
       const remove = action === 'react' && b.getAttribute('aria-pressed') === 'true';
-      threadWrite(() => api(remove ? 'DELETE' : 'POST', '/api/comments/' + id + '/reactions/' + b.getAttribute('data-key')), used);
+      const key = b.getAttribute('data-key');
+      const mark = id + ':' + key;
+      if (t.busy.has(mark)) return; // one change per reaction at a time
+      t.busy.add(mark);
+      threadWrite(() => api(remove ? 'DELETE' : 'POST', '/api/comments/' + id + '/reactions/' + key), used)
+        .finally(() => t.busy.delete(mark));
     }
   }
 
@@ -1045,7 +1099,7 @@
       parts.dialog.close();
       done(data);
     } catch (err) {
-      if (err.status === 401) { parts.dialog.close(); askName(); return; }
+      if (err.status === 401) { parts.dialog.close(); return; } // api() opened the name dialog
       dialogError(parts, err.message);
     }
   }
@@ -1136,7 +1190,7 @@
     const gid = state.noteGroup;
     submitDialog(NOTE, () => api('POST', '/api/groups/' + gid + '/threads', {title, text}), data => {
       announce('Note started');
-      if (state.groupId === gid) reloadThreads();
+      if (state.groupId === gid) loadThreads(true);
       loadGroups(true);
       navigate({group: state.groupId, thread: String(data.thread_id)});
     });
@@ -1182,7 +1236,7 @@
     try {
       if (!(await refreshMe())) { askName(); return; }
     } catch (err) {
-      showError(err.message, start);
+      failed(err, start);
       return;
     }
     await loadTopics();
@@ -1247,7 +1301,7 @@
     setChannelsOpen(false);
   });
   els.retry.addEventListener('click', () => { if (state.retry) state.retry(); });
-  els.more.addEventListener('click', () => { if (state.groupId !== null) moreThreads(); else load(false); });
+  els.more.addEventListener('click', () => { if (state.groupId !== null) loadThreads(false); else load(false); });
   els.pill.addEventListener('click', async () => {
     if (await load(true) && els.cards.firstElementChild) els.cards.firstElementChild.focus();
   });
