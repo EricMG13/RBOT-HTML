@@ -36,6 +36,7 @@ A refusal is ``{"error": "<plain sentence>"}``; an unexpected failure is 500
 from __future__ import annotations
 
 import dataclasses
+import functools
 import ipaddress
 import json
 import logging
@@ -52,7 +53,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, cast
 
-from deploy_workflow.signal import feedview, identity, ingest, store, topics
+from deploy_workflow.signal import feedview, groups, identity, ingest, store, threads, topics
 from deploy_workflow.signal.ingest import FetchFn
 
 __all__ = ["STATIC", "Handler", "Loop", "StartError", "make_server", "serve"]
@@ -215,6 +216,10 @@ def _feed(req: _Req) -> _Reply:
         filters["query"] = req.params["q"]
     if "before" in req.params:
         filters["before"] = req.params["before"]
+    if "shared" in req.params:
+        if req.params["shared"] != "1":
+            raise _refuse(400, f"invalid shared {req.params['shared']!r}; expected 1")
+        filters["shared"] = True
     try:
         page = feedview.feed(req.db, req.person.name, req.param("view"), **filters)
     except feedview.ViewError as error:
@@ -277,6 +282,227 @@ def _topics(req: _Req) -> _Reply:
     return _Reply(200, [{key: row[key] for key in keys} for row in rows])
 
 
+def _mapped(handler: Callable[[_Req], _Reply]) -> Callable[[_Req], _Reply]:
+    """The one place a store error becomes a status: Forbidden is 403, "no such ..." is 404 (a
+    hidden group, thread or comment raises the same text as a missing one), any other store or
+    view error is 400."""
+
+    @functools.wraps(handler)
+    def run(req: _Req) -> _Reply:
+        try:
+            return handler(req)
+        except groups.Forbidden as error:
+            raise _refuse(403, str(error)) from None
+        except (store.StoreError, feedview.ViewError) as error:
+            text = str(error)
+            raise _refuse(404 if text.startswith("no such") else 400, text) from None
+
+    return run
+
+
+def _only(body: dict[str, Any], *allowed: str) -> dict[str, Any]:
+    extra = sorted(set(body) - set(allowed))
+    if extra:
+        raise _refuse(400, f"the request has an unexpected field: {extra[0]}")
+    return body
+
+
+def _str(body: dict[str, Any], name: str) -> str:
+    value = body.get(name)
+    if not isinstance(value, str):
+        raise _refuse(400, f"{name} must be text")
+    return value
+
+
+def _opt_str(body: dict[str, Any], name: str) -> str | None:
+    return None if body.get(name) is None else _str(body, name)
+
+
+def _whole(value: object, name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise _refuse(400, f"{name} must be a whole number")
+    return value
+
+
+def _opt_whole(body: dict[str, Any], name: str) -> int | None:
+    return None if body.get(name) is None else _whole(body[name], name)
+
+
+def _ids(body: dict[str, Any], name: str) -> list[int]:
+    value = body.get(name, [])
+    if not isinstance(value, list):
+        raise _refuse(400, f"{name} must be a list of whole numbers")
+    return [_whole(item, name) for item in value]
+
+
+def _act(req: _Req) -> groups.Act:
+    return groups.Act(req.person, datetime.now(UTC))
+
+
+def _unread_json(unread: threads.Unread) -> dict[str, Any]:
+    return {
+        "replies": unread.replies,
+        "threads": unread.threads,
+        "total": unread.replies + unread.threads,
+        "by_group": {str(group): count for group, count in unread.by_group.items()},
+    }
+
+
+@_mapped
+def _group_list(req: _Req) -> _Reply:
+    person = req.person
+    by_group = threads.unread(req.db, person.name).by_group
+    found = [
+        {
+            "id": row["id"],
+            "name": row["name"],
+            "visibility": row["visibility"],
+            "member": bool(row["member"]),
+            "members": row["members"],
+            "threads": row["threads"],
+            "unread": by_group.get(row["id"], 0),
+        }
+        for row in groups.list_groups(req.db, person.name)
+    ]
+    return _Reply(200, {"groups": found, "can_create": groups.may_post(person)})
+
+
+@_mapped
+def _group_create(req: _Req) -> _Reply:
+    body = _only(req.body(), "name", "visibility", "topics")
+    name, visibility, topic_ids = _str(body, "name"), _str(body, "visibility"), _ids(body, "topics")
+    return _Reply(200, {"id": groups.create_group(req.db, _act(req), name, visibility, topic_ids)})
+
+
+@_mapped
+def _group_get(req: _Req) -> _Reply:
+    person, group_id = req.person, int(req.groups[0])
+    row = groups.require_visible(req.db, person.name, group_id)
+    names = groups.members(req.db, person.name, group_id)
+    return _Reply(
+        200,
+        {
+            "id": row["id"],
+            "name": row["name"],
+            "visibility": row["visibility"],
+            "member": person.name in names,
+            "can_manage": groups.can_manage(req.db, person, group_id),
+            "members": names,
+        },
+    )
+
+
+@_mapped
+def _member_add(req: _Req) -> _Reply:
+    body, group_id = _only(req.body(), "name"), int(req.groups[0])
+    if not body:  # {}: the caller joins
+        groups.join(req.db, req.person.name, group_id, datetime.now(UTC))
+    else:
+        groups.add_member(req.db, _act(req), group_id, _str(body, "name"))
+    return _Reply(200, {"members": _visible_members(req, group_id)})
+
+
+@_mapped
+def _member_remove(req: _Req) -> _Reply:
+    body, group_id = _only(req.body(), "name"), int(req.groups[0])
+    if not body:  # {}: the caller leaves; a hidden or missing group is a 404 like everywhere else
+        groups.require_visible(req.db, req.person.name, group_id)
+        groups.leave(req.db, req.person.name, group_id)
+    else:
+        groups.remove_member(req.db, req.person, group_id, _str(body, "name"))
+    return _Reply(200, {"members": _visible_members(req, group_id)})
+
+
+def _visible_members(req: _Req, group_id: int) -> list[str]:
+    """The member list for the reply; a person who just left an invited group no longer sees it."""
+    if not groups.can_see(req.db, req.person.name, group_id):
+        return []
+    return groups.members(req.db, req.person.name, group_id)
+
+
+@_mapped
+def _thread_page(req: _Req) -> _Reply:
+    page, next_before = threads.thread_list(
+        req.db, req.person.name, int(req.groups[0]), req.params.get("before")
+    )
+    return _Reply(
+        200, {"threads": [dataclasses.asdict(row) for row in page], "next_before": next_before}
+    )
+
+
+@_mapped
+def _thread_start(req: _Req) -> _Reply:
+    body, group_id = req.body(), int(req.groups[0])
+    if "story_id" in body and "title" not in body and "text" not in body:
+        _only(body, "story_id", "note")
+        story_id, note = _whole(body["story_id"], "story_id"), _opt_str(body, "note")
+        thread_id, joined = threads.share_story(req.db, _act(req), group_id, story_id, note)
+        return _Reply(200, {"thread_id": thread_id, "joined": joined})
+    if "title" in body and "text" in body and "story_id" not in body and "note" not in body:
+        _only(body, "title", "text")
+        title, text = _str(body, "title"), _str(body, "text")
+        return _Reply(
+            200,
+            {
+                "thread_id": threads.start_note(req.db, _act(req), group_id, title, text),
+                "joined": False,
+            },
+        )
+    raise _refuse(400, "send either story_id (with note) or title and text")
+
+
+@_mapped
+def _thread_get(req: _Req) -> _Reply:
+    view = threads.read_thread(req.db, req.person, int(req.groups[0]), datetime.now(UTC))
+    return _Reply(200, dataclasses.asdict(view))
+
+
+@_mapped
+def _thread_read(req: _Req) -> _Reply:
+    name = req.person.name
+    threads.mark_read(req.db, name, int(req.groups[0]))
+    return _Reply(200, {"unread": _unread_json(threads.unread(req.db, name))})
+
+
+@_mapped
+def _comment_add(req: _Req) -> _Reply:
+    body = _only(req.body(), "text", "parent")
+    text, parent = _str(body, "text"), _opt_whole(body, "parent")
+    return _Reply(
+        200, {"id": threads.add_comment(req.db, _act(req), int(req.groups[0]), text, parent)}
+    )
+
+
+@_mapped
+def _comment_edit(req: _Req) -> _Reply:
+    text = _str(_only(req.body(), "text"), "text")
+    threads.edit_comment(req.db, _act(req), int(req.groups[0]), text)
+    return _Reply(200, {})
+
+
+@_mapped
+def _comment_delete(req: _Req) -> _Reply:
+    threads.delete_comment(req.db, _act(req), int(req.groups[0]))
+    return _Reply(200, {})
+
+
+@_mapped
+def _react(req: _Req) -> _Reply:
+    threads.react(req.db, req.person, int(req.groups[0]), req.groups[1])
+    return _Reply(200, {})
+
+
+@_mapped
+def _unreact(req: _Req) -> _Reply:
+    threads.unreact(req.db, req.person, int(req.groups[0]), req.groups[1])
+    return _Reply(200, {})
+
+
+@_mapped
+def _unread_get(req: _Req) -> _Reply:
+    return _Reply(200, _unread_json(threads.unread(req.db, req.person.name)))
+
+
 def _status(req: _Req) -> _Reply:
     now = datetime.now(UTC)
     approved = store.sources(req.db, "approved")
@@ -300,6 +526,7 @@ class _Route:
 
 
 _ID = "([0-9]{1,18})"  # ASCII digits only (a str pattern's \d also matches other scripts)
+_KEY = "([a-z]{1,12})"
 _ROUTES = (
     _Route("GET", re.compile("/api/me"), _me, open_to_all=True),
     _Route("POST", re.compile("/api/me"), _set_me, open_to_all=True),
@@ -311,6 +538,21 @@ _ROUTES = (
     _Route("GET", re.compile("/api/topics"), _topics),
     _Route("POST", re.compile(f"/api/topics/{_ID}/follow"), _follow),
     _Route("DELETE", re.compile(f"/api/topics/{_ID}/follow"), _unfollow),
+    _Route("GET", re.compile("/api/groups"), _group_list),
+    _Route("POST", re.compile("/api/groups"), _group_create),
+    _Route("GET", re.compile(f"/api/groups/{_ID}"), _group_get),
+    _Route("POST", re.compile(f"/api/groups/{_ID}/members"), _member_add),
+    _Route("DELETE", re.compile(f"/api/groups/{_ID}/members"), _member_remove),
+    _Route("GET", re.compile(f"/api/groups/{_ID}/threads"), _thread_page),
+    _Route("POST", re.compile(f"/api/groups/{_ID}/threads"), _thread_start),
+    _Route("GET", re.compile(f"/api/threads/{_ID}"), _thread_get),
+    _Route("POST", re.compile(f"/api/threads/{_ID}/read"), _thread_read),
+    _Route("POST", re.compile(f"/api/threads/{_ID}/comments"), _comment_add),
+    _Route("POST", re.compile(f"/api/comments/{_ID}"), _comment_edit),
+    _Route("DELETE", re.compile(f"/api/comments/{_ID}"), _comment_delete),
+    _Route("POST", re.compile(f"/api/comments/{_ID}/reactions/{_KEY}"), _react),
+    _Route("DELETE", re.compile(f"/api/comments/{_ID}/reactions/{_KEY}"), _unreact),
+    _Route("GET", re.compile("/api/unread"), _unread_get),
 )
 
 
