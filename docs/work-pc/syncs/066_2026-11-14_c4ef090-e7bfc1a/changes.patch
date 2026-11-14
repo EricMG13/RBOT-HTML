@@ -1,0 +1,114 @@
+diff --git a/VERIFICATION.md b/VERIFICATION.md
+index 8696dd6..8e04b19 100644
+--- a/VERIFICATION.md
++++ b/VERIFICATION.md
+@@ -10,7 +10,8 @@ Scope: OFFLINE only; tests on synthetic handoffs and catalogue rows; no model ru
+ - Library list view (`1882de8`): a leverage, net leverage or cover figure on adjusted EBITDA shows `adj.` beside the number, full name in the title; a figure with no label renders as before (string pinned). Fidelity check: `static.test.cjs` only.
+ - Library screening (`6a4b45c`, owner: "Take them out"): for leverage, net leverage and interest cover, a figure carrying the adjusted label is treated as not recorded by the range filters and the sort (one helper, `screenFigure`); cash and undrawn unchanged; the figure is still displayed. Test first (the adjusted run passed a leverage range before). The ruling record, which had wrongly said adjusted leverage was already out of the filters, is corrected and carries the owner's words.
+ - Gates: `uv run pytest tests/test_cpos_cp1_check.py tests/test_cpos_launch.py tests/test_library_index.py tests/test_credit_os_catalogue.py tests/test_credit_os_store.py -q -m "not browser"` 1379 passed, 1 skipped (paid), exit 0; the node suite `checks.yml` lists, 566 passed, exit 0; `uv run python tools/quality_gate.py` exit 0, 0 findings.
+-Not verified: the line "Leverage recorded for N of M runs" now leaves out an adjusted-only run whose figure is shown (wording unchanged); the marker in a browser (the leverage columns are narrow, it may wrap under the number); `US $m` on a USD issuer has no test of its own; any model run; browser-marked tests and the full suite.
++- Wording (`611dfc3`, owner: "Yes, reword it"): the count line reads "Leverage recorded for N of M runs · A on adjusted EBITDA, not screened" and the hidden-rows heading "…no figure recorded, or a figure on adjusted EBITDA" when adjusted figures are present; both strings are pinned unchanged when there are none. Fidelity check: `static.test.cjs` only; node suite, the two library pytest files and the quality gate exit 0 on this commit.
++Not verified: the marker and the reworded lines in a browser (the leverage columns are narrow, it may wrap under the number); `US $m` on a USD issuer has no test of its own; any model run; browser-marked tests and the full suite.
+ 
+ ## 2026-11-13 — CP-1 runs the Deploy V method, adapted; its figures are checked in code at acceptance (branch `claude/cp1-deploy-v-method`, ruling `docs/rulings/2026-11-13-cp1-deploy-v-method-and-acceptance-check.md`)
+ Scope: OFFLINE only. Tests, reviewer probes (`.superpowers/sdd/cp1-method/probes/`) and the check run over two retained TDG CP-1 handoffs; no provider or model call, and no handoff written under this method exists. Built, not accepted: Forecast, charts, Overview and Changes read CP-1's tables, so a paid run (the owner's separate action) is needed before acceptance.
+diff --git a/apps/issuer-library/credit_os/web/static.test.cjs b/apps/issuer-library/credit_os/web/static.test.cjs
+index ea0db62..33916b0 100644
+--- a/apps/issuer-library/credit_os/web/static.test.cjs
++++ b/apps/issuer-library/credit_os/web/static.test.cjs
+@@ -1006,7 +1006,7 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules, more
+   const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag', 'eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'eventTicks', 'eventAsOf', 'eventStack', 'eventRoom', 'earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes', 'matchesHeading', 'readerPassages', 'splitBasis', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml', 'passageControls', 'eventTimeline', '$', 'appDestinations', 'document', 'ChangesView'];
+   const eventTimeline = realEventTimeline(esc, rich);
+   const args = [libraryDefaults(), libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), libraryDefaults(), win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head', sections: more.sections?.[id] || [] }])), contexts, more.store || {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => '', ...['eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'eventTicks', 'eventAsOf', 'eventStack', 'eventRoom'].map(name => require('./calendar.js')[name]), ...['earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes'].map(name => require('./reader.js')[name]), (heading, prefix) => (prefix.startsWith('=') ? heading === prefix.slice(1) : heading.startsWith(prefix)), ...['readerPassages', 'splitBasis', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml', 'passageControls'].map(name => require('./reader.js')[name]), eventTimeline, more.dom?.$, new Set(['W-Library', 'CP-OS']), more.dom?.document, require('./changes.js')];
+-  return new Function(...names, `${src}; return {runTokens, runReport, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, libraryFilters, libraryChoices, LIBRARY_COLUMNS, libraryView, libraryRows, libraryFacets, libraryCard, libraryCards, libraryLive, libraryChipValue, libraryCount, sameNameWords, libraryRunName, libraryModules, libraryLead, libraryStrip, libraryFiltered, moduleHead, headerChipMarkup, traceHref, drawerFoot, runName, updateWorkspaceChrome, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, moduleReport, reportParts, outlineMarkup, navigatorView, issuerMeta, startRunHref, startRunLink, drawnAnchors, defaultOutput, firstSection, cashflowSection, modelOptionLabels, forecastView, forecastCharts, chartCard, evidenceInput, evidenceHit};`)(...args);
++  return new Function(...names, `${src}; return {runTokens, runReport, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, libraryFilters, libraryChoices, LIBRARY_COLUMNS, libraryView, libraryRows, libraryCoverage, libraryFacets, libraryCard, libraryCards, libraryLive, libraryChipValue, libraryCount, sameNameWords, libraryRunName, libraryModules, libraryLead, libraryStrip, libraryFiltered, moduleHead, headerChipMarkup, traceHref, drawerFoot, runName, updateWorkspaceChrome, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, moduleReport, reportParts, outlineMarkup, navigatorView, issuerMeta, startRunHref, startRunLink, drawnAnchors, defaultOutput, firstSection, cashflowSection, modelOptionLabels, forecastView, forecastCharts, chartCard, evidenceInput, evidenceHit};`)(...args);
+ }
+ const countOf = (html, re) => (html.match(re) || []).length;
+ 
+@@ -4686,6 +4686,43 @@ test('library: the count line is the status region and says how many issuers are
+   assert.ok(html.includes('class="empty-state"') && html.includes('No issuers in this library yet') && html.includes('Start a run on an issuer, then rebuild the library data file to list it here.'), 'an empty library says what to do');
+ });
+ 
++test('library: the recorded-count line and the hidden heading say when a figure is on adjusted EBITDA and not screened; only the three ratios say it', () => {
++  const adjusted = { ...libMetric('6.0'), label: 'Total debt / adjusted EBITDA' };
++  const withRun = (noc) => libCatalogue().map((run) => (run.id === 'run-n' ? { ...run, ...noc(run) } : run));
++  const show = (catalogue, group, key) => {
++    const page = libPage({ catalogue });
++    Object.assign(page.libraryFilters, { runs: 'any', [`${key}Min`]: '3' });
++    return page;
++  };
++  const SHOW = (group) => `<button class="tertiary-action" type="button" data-library-hidden="${group}">Show them</button>`;
++  const lineOf = (page, group) => new RegExp(`<p data-library-coverage="${group}">(.*?)</p>`).exec(page.libraryCoverage(page.libraryRows()))[1];
++  const headOf = (page, group) => { page.libraryState.hidden = group; return /<h2 id="library-hidden-title"[^>]*>(.*?)<\/h2>/.exec(page.libraryResults(page.libraryRows()))[1]; };
++  // One run's leverage is on adjusted EBITDA; the leverage range is active.
++  const labelled = show(withRun((run) => ({ metrics: { ...run.metrics, leverage: adjusted } })), 'leverage', 'leverage');
++  assert.equal(lineOf(labelled, 'leverage'), `Leverage recorded for 4 of 6 runs · 1 on adjusted EBITDA, not screened · 2 hidden · ${SHOW('leverage')}`);
++  assert.equal(headOf(labelled, 'leverage'), 'Hidden by Leverage: no figure recorded, or a figure on adjusted EBITDA');
++  // No labelled run: the strings are exactly what they were.
++  const plain = show(libCatalogue(), 'leverage', 'leverage');
++  assert.equal(lineOf(plain, 'leverage'), `Leverage recorded for 5 of 6 runs · 1 hidden · ${SHOW('leverage')}`);
++  assert.equal(headOf(plain, 'leverage'), 'Hidden by Leverage: no figure recorded');
++  // A labelled run that is not among the hidden rows does not change the heading; one that is not readable is not counted.
++  const shown = show(withRun((run) => ({ metrics: { ...run.metrics, net_leverage: adjusted } })), 'leverage', 'leverage');
++  assert.equal(lineOf(shown, 'leverage'), `Leverage recorded for 5 of 6 runs · 1 hidden · ${SHOW('leverage')}`);
++  assert.equal(headOf(shown, 'leverage'), 'Hidden by Leverage: no figure recorded');
++  const unreadable = show(withRun((run) => ({ metrics: { ...run.metrics, leverage: { ...adjusted, value: 'n/a' } } })), 'leverage', 'leverage');
++  assert.ok(!lineOf(unreadable, 'leverage').includes('adjusted EBITDA'));
++  // The other two ratios carry the same wording; cash never does.
++  const net = show(withRun((run) => ({ metrics: { ...run.metrics, net_leverage: adjusted } })), 'net_leverage', 'netLeverage');
++  assert.ok(lineOf(net, 'net_leverage').startsWith('Net leverage recorded for 3 of 6 runs · 1 on adjusted EBITDA, not screened'));
++  assert.equal(headOf(net, 'net_leverage'), 'Hidden by Net leverage: no figure recorded, or a figure on adjusted EBITDA');
++  const cover = show(withRun((run) => ({ metrics: { ...run.metrics, coverage: adjusted } })), 'coverage', 'coverage');
++  assert.ok(lineOf(cover, 'coverage').startsWith('Interest coverage recorded for 3 of 6 runs · 1 on adjusted EBITDA, not screened'));
++  assert.equal(headOf(cover, 'coverage'), 'Hidden by Interest coverage: no figure recorded, or a figure on adjusted EBITDA');
++  const cash = show(withRun((run) => ({ metrics: { ...run.metrics, cash: adjusted } })), 'cash', 'cash');
++  assert.ok(!lineOf(cash, 'cash').includes('adjusted EBITDA'));
++  assert.equal(headOf(cash, 'cash'), 'Hidden by Cash: no figure recorded');
++});
++
+ test('library cards: one card per issuer, each with its name, ticker and sector, the latest run named by period and pathway, its state mark and first sentence, a dot per module and the links', () => {
+   const page = libPage(), view = page.libraryRows(), html = page.libraryResults(view);
+   const cards = html.split('<article class="lib-card"').slice(1);
+diff --git a/apps/issuer-library/credit_os/web/views.js b/apps/issuer-library/credit_os/web/views.js
+index 5245b24..d0dbbf4 100644
+--- a/apps/issuer-library/credit_os/web/views.js
++++ b/apps/issuer-library/credit_os/web/views.js
+@@ -1414,8 +1414,11 @@ function libraryRows() {
+ // Runs grouped by issuer, case-insensitively, in order of first appearance.
+ const issuerGroups=runs=>[...runs.reduce((m,r)=>m.set(LibraryLogic.issuerKey(r.issuer),[...(m.get(LibraryLogic.issuerKey(r.issuer))||[]),r]),new Map()).values()];
+ const libraryCount=({runs,rows,hidden})=>hidden?`${plural(rows.length,'run')} hidden by ${COVERAGE_NAMES[hidden]} · not matching these filters`:rows.length?`${plural(issuerGroups(rows).length,'issuer')} · ${rows.length} of ${plural(runs.length,'run')}`:runs.length?'No issuers match these filters. Clear a filter to list them again.':'No issuers to list.';
++// A leverage, net leverage or cover figure that carries a label (adjusted EBITDA) is shown but not screened; the owner asked the count line and the hidden heading to say so (2026-11-14).
++const LIBRARY_RATIOS=['leverage','net_leverage','coverage'];
++const libraryAdjusted=(runs,group)=>LIBRARY_RATIOS.includes(group)?runs.filter(r=>r.metrics?.[group]?.label&&LibraryLogic.numberOf(r.metrics[group])!==null).length:0;
+ function libraryCoverage({runs,coverage,unscreened}) {
+-  const lines=Object.entries(coverage).map(([group,{recorded,hidden}])=>`<p data-library-coverage="${group}">${esc(`${COVERAGE_NAMES[group]} recorded for ${recorded} of ${plural(runs.length,'run')}`)}${hidden?` · ${hidden} hidden · <button class="tertiary-action" type="button" data-library-hidden="${group}">Show them</button>`:''}</p>`);
++  const lines=Object.entries(coverage).map(([group,{recorded,hidden}])=>`<p data-library-coverage="${group}">${esc(`${COVERAGE_NAMES[group]} recorded for ${recorded} of ${plural(runs.length,'run')}${libraryAdjusted(runs,group)?` · ${libraryAdjusted(runs,group)} on adjusted EBITDA, not screened`:''}`)}${hidden?` · ${hidden} hidden · <button class="tertiary-action" type="button" data-library-hidden="${group}">Show them</button>`:''}</p>`);
+   if(unscreened)lines.push(`<p>${esc(`${plural(unscreened,'run')} not screened by the Latest run rule · choose Any run to show them`)}</p>`);
+   return lines.join('');
+ }
+@@ -1506,7 +1509,7 @@ function libraryResults({runs,rows,skipped,hidden},shown=libraryState.view??'car
+   const sort=key=>libraryState.sortKey===key?libraryState.direction==='asc'?'ascending':'descending':'none';
+   const head=LIBRARY_COLUMNS.map(([key,label])=>key?`<th scope="col" aria-sort="${sort(key)}"><button type="button" data-library-sort="${key}">${label} <span aria-hidden="true">${{ascending:'↑',descending:'↓',none:'↕'}[sort(key)]}</span></button></th>`:`<th scope="col">${label}</th>`).join('');
+   const words=sameNameWords(rows.map(r=>({id:r.id,group:LibraryLogic.issuerKey(r.issuer),name:libraryRunName(r),date:r.date||'',started:runStarted(libraryRunKey(r))})));
+-  const heading=hidden?`<div class="hidden-head"><h2 id="library-hidden-title" tabindex="-1">${esc(`Hidden by ${COVERAGE_NAMES[hidden]}: ${['classification','currency','rating','limitation'].includes(hidden)?'not':'no figure'} recorded`)}</h2><button type="button" class="secondary-action" data-library-back>Back to results</button></div>`:'';
++  const heading=hidden?`<div class="hidden-head"><h2 id="library-hidden-title" tabindex="-1">${esc(`Hidden by ${COVERAGE_NAMES[hidden]}: ${['classification','currency','rating','limitation'].includes(hidden)?'not':'no figure'} recorded${libraryAdjusted(rows,hidden)?', or a figure on adjusted EBITDA':''}`)}</h2><button type="button" class="secondary-action" data-library-back>Back to results</button></div>`:'';
+   const table=`<div class="table-scroll" role="region" aria-label="Issuer runs table; scroll horizontally for all columns" tabindex="0"><table class="library-table"><caption class="sr-only">Issuer runs, credit metrics, completeness and report availability</caption><thead><tr>${head}</tr></thead><tbody>${rows.map((r,n)=>libraryRow(r,r.id===libraryState.selected,skipped.has(r.id),n,words[n])).join('')}</tbody></table></div>`;
+   const bar=`<div class="shape-bar lib-resultbar"><div class="shape-bar-l">${librarySortSelect()}</div><div class="shape-bar-r">${window.Components.viewToggle('Issuers as cards or as a list',[['cards','Cards'],['list','List']],shown)}</div></div>`;
+   return `${heading}<div class="lib-block" data-block data-view="${shown}">${bar}${window.Components.pane('cards',libraryCards(rows),shown==='cards')}${window.Components.pane('list',table,shown==='list')}</div><p class="hint">Dates refer to evidence, not execution. Ratios keep their original definitions.</p>`;
+diff --git a/docs/rulings/2026-11-13-cp1-deploy-v-method-and-acceptance-check.md b/docs/rulings/2026-11-13-cp1-deploy-v-method-and-acceptance-check.md
+index 3e8e200..6669f0d 100644
+--- a/docs/rulings/2026-11-13-cp1-deploy-v-method-and-acceptance-check.md
++++ b/docs/rulings/2026-11-13-cp1-deploy-v-method-and-acceptance-check.md
+@@ -98,8 +98,10 @@ written "to stop the model from self validation and calculation"; CP-OS runs non
+   filters and sort?": "Take them out". For leverage, net leverage and interest cover, screening
+   treats a figure that carries the adjusted label as not recorded: it passes no range and sorts
+   where a missing value sorts. The figure is still displayed. The line "Leverage recorded for N
+-  of M runs" therefore does not count an adjusted-only run whose figure is shown; its wording is
+-  unchanged and is left for the owner.
++  of M runs" therefore does not count an adjusted-only run whose figure is shown. Owner, asked
++  whether to reword it: "Yes, reword it". The line now adds "· A on adjusted EBITDA, not
++  screened" when there are such runs, and the hidden-rows heading adds ", or a figure on
++  adjusted EBITDA" when a hidden run has one; with no such run both read as before.
+ - On the Changes page a run on reported EBITDA against a run on adjusted EBITDA is "not
+   comparable", with both labels in the reason; no difference is printed.
+ - Instruction size. The method text CP-1 is sent was shortened by 5,851 characters (duplicate
