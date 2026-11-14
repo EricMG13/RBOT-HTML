@@ -4,6 +4,31 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-14 — Synthetic loan market-data pack (branch `claude/synthetic-market-data-screenshots-bb52f7`, PR #121)
+
+Scope is **offline and synthetic only**: fictional issuers, no provider call, no model response, nothing
+under `src/` changed. The pack is test data in the shape of the owner's loan relative-value sheets; it
+is not issuer evidence and proves no pathway.
+
+- Change: `tools/synthetic_market_data.py` (seeded, stdlib) writes `tests/fixtures/market-data/`: 7 sector
+  CSVs, 4 ratings averages, index statistics, and one issuer's `issuer-quotes.txt` and
+  `issuer-context-quotes.json`. Answer key written by hand: `schema.json`.
+- Connection proven: the quotes file is classified `market_quotes`; the context rows pass
+  `load_context`; `cp3-no-quotes-no-talk` and `cp3d-no-quotes` fire without it and clear with it, at
+  rule level and through CP-OS `prepare` (`relative_value`), with a control.
+- Commands: `uv run pytest tests/test_synthetic_market_data.py -q` 28 passed; `uv run pytest
+  tests/test_cpos_launch.py -q -m "not live and not browser"` 809 passed (reviewer's run);
+  `uv run python tools/quality_gate.py --base 7c21c1e` 0 findings. Exit 0 each.
+- Reviews: task reviews (`mx-precise`) pass; whole-branch `adversarial-reviewer` (`mx-architect`)
+  pass, no High or Medium; report `.superpowers/sdd/synthetic-market-data/branch-review.md`.
+- Owner ruling 2026-11-14: sector-peer sheets stay unrecognised by the run-start classifier.
+- Open (Low): ratings-average delta/YTM/DM columns and index values are checked only by the byte
+  snapshot; the brand word `Linden` is also the first word of a real borrower in one source sheet.
+- For the owner, predates this change: `_wraps` in `run_expectations.py` skips a cover line under a
+  six-word unpunctuated heading, so `synthetic/18-market-quotes.txt` reads as `unrecognised`.
+- Not verified: any model run consuming the quotes; the context-quotes route through `prepare`;
+  Windows line endings; names against a register of real companies; `/sweep` discover was not run.
+
 ## 2026-11-14 — CP-1 follow-ups: a spaced prefixed currency symbol keeps the gap option; the library list marks adjusted leverage (branch `claude/cp1-spaced-prefix-advice`)
 Scope: OFFLINE only; tests on synthetic handoffs and catalogue rows; no model run, no browser.
 - Unit advice (`5a1ab8c`): on a USD issuer `C $m`, `A $m` and `HK $ thousands` in a CP-1 money table were told to restate under `US$m` with no gap option; they now get "use `US$m` if the figure is in the statement currency in millions, else write `Not supplied: reported in <unit>`". Test first (three cases red), reviewer probe `probe_adv7_spaced_prefix_told_to_restate.py` exit 0; `$m` on USD and `£m` on GBP keep the definite advice.
@@ -928,52 +953,3 @@ a protected `main` would refuse its push (the run fails visibly; hand generation
 2026-11-12: packs 001–017 chain without gaps; every merged PR #42–#61 appears; `check` on
 `origin/main` identical. `plan` (copy/delete/merge/keep per file, 6 tests pass) on an archive
 of `04e7221` with two edits against `origin/main`: 2 merge, 140 copy, 7 delete, 1 keep.
-
-## 2026-11-10 — Visuals package 8: complete the whole-branch review
-
-Scope: continued the interrupted `claude/visuals-p8` changes from reviewed package 7
-(original tip `44108e6`). Offline synthetic tests and a deterministic rebuild from retained
-handoffs; no provider call or new analytical run. Packages 1–8 were later pushed and merged through GitHub PRs #33–#40. No further rewrite tournaments,
-per the current user's instruction.
-
-Confidence review, ranked doubts and outcomes:
-- **Missing evidence could force invented rows (M1).** Every owner row table now accepts its
-  explicit all-gap form; the library retains the reason in `chartGaps` without a chart or an
-  invalid-table complaint. Checked all independently written owner fixtures and the original
-  reviewer's no-data probe. Empty unit/basis and mixed gap/data rows remain invalid. A stated
-  gap in a unit/basis cell remains permitted as explicit missing information, never a guessed unit.
-- **Index claims could disagree with actual pages (M2).** Not-assessable modules' charts show
-  their limitation and no placement/table-form link; maps remain available as their pages draw
-  them. Static regressions and the original folded-page browser probe (updated to expect the
-  removed link) verify this through the generated library.
-- **Event-log failure could masquerade as no history (M3/L4).** The run record carries the read
-  error; the page names and escapes it. Non-object JSON records invalidate the log without
-  stopping the build. Missing logs remain distinct. The shared log reader's existing tolerance
-  for an unfinished final JSON line is unchanged.
-- **Launcher/store disagreement could misstate figures (L1-L3/L5).** Fixed currency instructions,
-  reminder status, unit constraints, peer bounds, maturity ordering, scenario count and duplicate
-  class/scenario rejection. The reviewer's parity probe reports zero disagreements. Confidence
-  review additionally reproduced a missing EUR period relabelling later USD figures; the chart
-  now takes its unit from a numeric row. No numeric value is converted or derived.
-- **Cleanup could remove a live caller (L6).** Traced callers and removed unused owner metadata,
-  UI options, the redundant format lookup/CSS class and comparison-registry intermediate;
-  repeated allocation/map instructions are emitted once. Affected fixtures still pass.
-- **Package limit (M4).** Removed one redundant test-heading comment from package 2 and restacked
-  the later local packages. Package 2 is exactly 800 changed lines; each other package is below
-  800. Original branch tips are retained under `refs/codex-backups/visuals-p*-before-p8-review`.
-
-Verification (each test process bounded to 300 seconds using Python subprocess timeout because
-this macOS host has no `timeout` executable):
-- `uv run pytest -q --tb=short -m 'not live' tests/test_cpos_launch.py
-  tests/test_update_library.py tests/test_credit_os_store.py tests/test_library_page_browser.py`:
-  **612 passed, 1 deselected**, including Chrome over file URLs; 84.40 seconds.
-- `node --test apps/issuer-library/credit_os/web/static.test.cjs
-  apps/issuer-library/credit_os/web/calendar.test.cjs`: **186 passed**.
-- `uv run python tools/quality_gate.py`: **0 findings**; `git diff --check` clean.
-- Retained-source rebuild into a temporary directory: `cpos-tdg-copilot-sol-medium-002`,
-  `cpos-tdg-sol-high-001`, `cpos-tdg-sol-high-cp2-001`. The unfinished Copilot run was excluded
-  for no completion record; `cpos-tdg-sol-medium-all-001` was excluded for the changed shared
-  methodology. Original run directories were read only. This is library compatibility evidence,
-  not proof that a model satisfies the new combined chart instructions or a complete TDG pathway.
-- Still outside scope: paid model output for the new contracts, Windows, screen-reader/print
-  testing, the pre-existing escaped-pipe parser discrepancy and the weekly full test suite.

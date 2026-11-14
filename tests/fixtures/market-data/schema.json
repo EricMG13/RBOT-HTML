@@ -1,0 +1,73 @@
+{
+  "_note": "Answer key for the synthetic loan market-data pack. Written from the owner's 30 source screenshots, which are not in the repository (Bloomberg-style loan relative-value sheets, 27 Jun 2026). Not edited by the generator's author.",
+  "as_of": "2026-06-27",
+  "seed": 20260627,
+  "layouts": {
+    "issuers": [
+      "Company", "Borrower Name", "Core Business Description", "Sub-Sector", "Sub-Group",
+      "Public/Private", "Bloomberg ID", "FIGI", "Loan Type", "Ranking", "Ratings",
+      "Size ($Mn)", "Margin", "Maturity", "Bid", "Ask",
+      "Δ 1D", "Δ 1W", "Δ 1M", "Δ 3M", "Δ 6M", "Δ 1YR", "Δ YTD", "Mid YTM", "Mid 3Y DM"
+    ],
+    "peers": [
+      "Group", "Company", "Bloomberg ID", "Loan Type", "Ranking", "Ratings",
+      "Size ($Mn)", "Margin", "Maturity", "Bid", "Ask", "Δ 1M", "Δ YTD", "Mid YTM", "Mid 3Y DM"
+    ]
+  },
+  "sectors": {
+    "entertainment": {"layout": "issuers", "rows": 16, "ratings_average": true},
+    "telecoms": {"layout": "issuers", "rows": 40, "ratings_average": true},
+    "it-services": {"layout": "issuers", "rows": 35, "ratings_average": true},
+    "software": {"layout": "issuers", "rows": 80, "ratings_average": true},
+    "chemicals": {
+      "layout": "peers", "rows": 24, "ratings_average": false,
+      "groups": {"Specialty": 12, "Commodity": 6, "Adjacent": 6}
+    },
+    "healthcare": {
+      "layout": "peers", "rows": 45, "ratings_average": false,
+      "groups": {
+        "Hospitals": 3, "Home Health": 8, "Staffing": 3, "Outsourced Radiology": 3,
+        "Distributors": 1, "Providers/ASC": 14, "Other": 13
+      }
+    },
+    "power": {"layout": "peers", "rows": 27, "ratings_average": false, "groups": {"Power": 27}}
+  },
+  "ratings_average_columns": [
+    "Rating", "# Issuers", "Size ($Mn)", "Margin", "Maturity", "Bid", "Ask",
+    "Δ 1D", "Δ 1W", "Δ 1M", "Δ 3M", "Δ 6M", "Δ 1YR", "Δ YTD", "Mid YTM", "Mid 3Y DM"
+  ],
+  "ratings_average_buckets": ["Ba2", "Ba3", "B1", "B2", "B3", "Caa1", "Caa2", "Caa3", "WR"],
+  "index_columns": [
+    "Index", "Index ID", "Market Value ($Bn)", "Avg Price",
+    "Δ 1D", "Δ 1W", "Δ 1M", "Δ 3M", "Δ 6M", "Δ 1YR", "Δ YTD", "YTM", "3Y DM"
+  ],
+  "index_rows": 4,
+  "issuer": {
+    "_note": "One fictional issuer of the pack in the shape of an issuer's market files (synthetic, not issuer evidence): a quotes file the run-start classifier reads as market_quotes, and run-context quote rows. Values copied by hand from telecoms.csv (Kestrel Ridge, two clean tranches); price is (bid + ask) / 2.",
+    "quotes_file": "issuer-quotes.txt",
+    "quotes_text": [
+      "SYNTHETIC FIXTURE - not issuer evidence.",
+      "Loan quotes as of 2026-06-27 - Kestrel Ridge (Kestrel Ridge Finco Inc)",
+      "Bloomberg ID,Loan Type,Ranking,Ratings,Size ($Mn),Margin,Maturity,Bid,Ask,Mid YTM,Mid 3Y DM",
+      "SYN8256223,B,1L Gtd Sr. Secd,Ba3 / BB-,3925,250,07-Nov-27,99.625,100.375,6.5,252",
+      "SYN6321352,FLSO,1L Gtd Sr. Secd,Ba3 / BB-,4730,250,28-Jan-33,99,99.75,6.5,270"
+    ],
+    "context_quotes_file": "issuer-context-quotes.json",
+    "context_quotes": [
+      {
+        "facility_id": "SYN8256223", "kind": "observed", "bid": "99.625", "ask": "100.375",
+        "price": "100", "yield_pct": "6.5", "spread_bps": "252", "as_of": "2026-06-27",
+        "provider": "Synthetic loan pack"
+      },
+      {
+        "facility_id": "SYN6321352", "kind": "observed", "bid": "99", "ask": "99.75",
+        "price": "99.375", "yield_pct": "6.5", "spread_bps": "270", "as_of": "2026-06-27",
+        "provider": "Synthetic loan pack"
+      }
+    ],
+    "document_kind": "market_quotes",
+    "rules_cleared": ["cp3-no-quotes-no-talk", "cp3d-no-quotes"]
+  },
+  "dirty_tokens": ["#N/A N/A", "#N/A Field Not Applicable", "#NAME?"],
+  "forbidden_id_prefixes": ["BL", "BBG", "I3"]
+}

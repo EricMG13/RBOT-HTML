@@ -1,0 +1,24 @@
+[
+  {
+    "facility_id": "SYN8256223",
+    "kind": "observed",
+    "bid": "99.625",
+    "ask": "100.375",
+    "price": "100",
+    "yield_pct": "6.5",
+    "spread_bps": "252",
+    "as_of": "2026-06-27",
+    "provider": "Synthetic loan pack"
+  },
+  {
+    "facility_id": "SYN6321352",
+    "kind": "observed",
+    "bid": "99",
+    "ask": "99.75",
+    "price": "99.375",
+    "yield_pct": "6.5",
+    "spread_bps": "270",
+    "as_of": "2026-06-27",
+    "provider": "Synthetic loan pack"
+  }
+]

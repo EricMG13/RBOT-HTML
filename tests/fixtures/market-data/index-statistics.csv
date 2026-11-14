@@ -1,0 +1,5 @@
+Index,Index ID,Market Value ($Bn),Avg Price,Δ 1D,Δ 1W,Δ 1M,Δ 3M,Δ 6M,Δ 1YR,Δ YTD,YTM,3Y DM
+Synthetic Leveraged Loan Index: Ba,SYNIDX01,342.7,99.17,-0.0625,0.0625,-0.1875,-0.3125,-0.3125,-0.25,0.9375,5.9,240
+Synthetic Leveraged Loan Index: Ba/B,SYNIDX02,1309.2,97.10,0,-0.125,-0.1875,0.25,-0.5,0.1875,-0.6875,7.4,407
+Synthetic Leveraged Loan Index: B,SYNIDX03,987.9,96.05,0,-0.125,0.1875,-0.0625,-0.5,-0.1875,0.1875,8.0,470
+Synthetic Leveraged Loan Index: Caa,SYNIDX04,89.2,76.44,0,-0.375,0.5625,-0.9375,-1.125,3,-2.1875,18.3,1527

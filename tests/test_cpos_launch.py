@@ -3522,6 +3522,28 @@ def test_prepared_carries_each_pinned_sources_guess_and_the_expectations(tmp_pat
     assert all(i["id"] and i["outcome"] for i in prepared.expectations)
 
 
+def test_a_quotes_file_in_the_folder_clears_the_no_quotes_gaps_offline(tmp_path):
+    schema = json.loads((ROOT / "tests/fixtures/market-data/schema.json").read_text("utf-8"))
+    rules = tuple(schema["issuer"]["rules_cleared"])
+    pack = ROOT / "tests/fixtures/market-data/issuer-quotes.txt"
+
+    def gaps_for(name: str, with_quotes: bool):
+        base = tmp_path / name
+        base.mkdir()
+        folder = report_folder(base)
+        if with_quotes:
+            shutil.copy(pack, folder / pack.name)
+        prepared = prepared_with(base, declared_context(base, "relative_value"), folder)
+        return prepared, {i["id"].rsplit(":", 1)[-1] for i in prepared.expectations}
+
+    _, bare_gaps = gaps_for("bare", with_quotes=False)
+    assert set(rules) <= bare_gaps  # control: both modules are in the pathway and both gaps fire
+    prepared, quoted_gaps = gaps_for("quoted", with_quotes=True)
+    row = next(d for d in prepared.documents if d["source"] == pack.name)
+    assert row["kind"] == "market_quotes"
+    assert not quoted_gaps & set(rules)
+
+
 def test_html_guess_is_keyed_by_the_pinned_text_source_and_skips_the_file_name_header(tmp_path):
     folder = tmp_path / "issuer"
     folder.mkdir()
