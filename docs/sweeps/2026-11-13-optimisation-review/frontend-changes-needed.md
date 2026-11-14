@@ -52,9 +52,15 @@ Status: **Done** (in a PR), **Needed** (the screen is wrong or incomplete withou
 | 18 | Reported EBITDA is primary; adjusted shown beside it | Overview, charts | Label which EBITDA each ratio uses | Needed | T6 ruling |
 | 19 | CP-1 tables get a fixed row vocabulary | Financials grid, company profile | Row counts varied 83 against 16 between two runs; confirm the grid is stable and complete with the new tables | Check | Comparison report |
 | 20 | A CP-1 written before the code check may fail it | Run-start (resume) | Say why an older run cannot be resumed | Decide | T6 ruling |
-| 20a | A non-USD issuer cannot state leverage (the US$m tables are gaps and the tie refuses a stated ratio) | Overview, Forecast, charts | Owner, 2026-11-13: leverage in the issuer's own currency. Axis, table and chart labels must carry that currency; nothing is converted | Needed (T6 building) | PR 111 ruling; review of PR 111 |
-| 20b | The leverage chart ties to reported EBITDA only | Overview, charts | Owner, 2026-11-13: headline leverage on adjusted EBITDA is allowed, labelled as adjusted on every ratio, column and chart | Needed (T6 building) | Review of PR 111 |
+| 20a | A non-USD issuer cannot state leverage (the US$m tables are gaps and the tie refuses a stated ratio) | Overview, Forecast, charts | Owner, 2026-11-13: leverage in the issuer's own currency. Axis, table and chart labels must carry that currency; nothing is converted | Built in PR 111 (merged): CP-1's money tables, strips and library charts carry `US$m` or the code and `m` (`GBPm`); not seen on a rendered page with a real non-USD handoff | PR 111 ruling; review of PR 111 at c07fa80 |
+| 20b | The leverage chart ties to reported EBITDA only | Overview, charts | Owner, 2026-11-13: headline leverage on adjusted EBITDA is allowed, labelled as adjusted on every ratio, column and chart | Built in PR 111 (merged): strip, run card and Changes carry the adjusted names; list view marked `adj.` in PR 117 (merged); not seen on a rendered page | Review of PR 111 at c07fa80; PR 117 |
 | 20c | CP-1 now writes a Period table, a debt reconciliation and `### Confidence inputs` | Modules (CP-1), Changes | Confirm each is drawn once and the Changes page reads periods by date | Check | PR 111 ruling |
+| 20d | For a non-USD issuer only CP-1's money tables are in its currency | Modules (CP-2D, CP-3C, CP-4C), run-start | Their money tables stay `US$m` and read "Not supplied"; the run-start form says so. Decide whether those modules follow CP-1's currency | Decide | Review of PR 111 at c07fa80 |
+| 20e | An adjusted-only issuer's ratios share the reported metric keys | Library (filters, sort) | Owner, 2026-11-14: "Take them out". A leverage, net leverage or cover figure on adjusted EBITDA passes no range filter and sorts as missing; it is still displayed | Done in PR 118 (merged); not seen on a rendered page | PR 118 ruling; review of PR 118 |
+| 20f | A displayed adjusted figure is counted as not recorded | Library (count line, hidden-rows heading) | Owner, 2026-11-14: "Yes, reword it". The line adds "N on adjusted EBITDA, not screened"; the heading adds ", or a figure on adjusted EBITDA" | Done in PR 119 (merged); not seen on a rendered page | Review of PR 119 at 32fdee1 |
+| 20g | The `adj.` marker sits in a narrow list column | Library (list view) | Check it does not wrap or clip beside the figure | Check | Review of PR 117 |
+| 20h | A reported run against an adjusted run | Changes | Row reads "not comparable" with both labels and no difference; confirm it is drawn as a measure change, not an issuer change | Check | Review of PR 111 at c07fa80 |
+| 20i | Reported EBITDA stated for any period forces the reported headers | Overview, charts | A period with only adjusted EBITDA is then a gap in the leverage chart (controller default, not an owner ruling) | Decide | PR 111 ruling record |
 
 ## From `run_script` (T7, not started)
 
@@ -108,4 +114,7 @@ Status: **Done** (in a PR), **Needed** (the screen is wrong or incomplete withou
 - No row marked Check or Needed has been looked at on a rendered page for this record.
 - Rows for T4, T5 and T6 come from their briefs, session reports, rulings and my reading of PRs
   107, 108, 110 and 111; none has had a paid run.
-- Any presentation change needs the reader check and fidelity check `AGENTS.md` requires.
+- Any presentation change needs the fidelity check `AGENTS.md` requires (the reader check
+  against the VMO2 reference was retired by the owner on 2026-11-13).
+- Rows 20a, 20b and 20d to 20i come from my reviews of PRs 111, 117, 118 and 119; no real
+  non-USD or adjusted-only handoff exists yet, and none was looked at in a browser.
