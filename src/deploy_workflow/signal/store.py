@@ -122,7 +122,8 @@ CREATE INDEX IF NOT EXISTS idx_stories_title_key ON stories(title_key);
 _MIGRATION_3 = """
 CREATE TABLE groups(
     id INTEGER PRIMARY KEY,
-    name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    name TEXT NOT NULL UNIQUE,
+    name_key TEXT NOT NULL UNIQUE,
     visibility TEXT NOT NULL CHECK(visibility IN ('everyone', 'invited')),
     created_by TEXT NOT NULL,
     created_at TEXT NOT NULL

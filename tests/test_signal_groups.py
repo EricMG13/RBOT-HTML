@@ -173,3 +173,62 @@ def test_any_group_name_is_stored_cleaned_or_refused(name):
 def test_a_name_of_sixty_visible_characters_with_controls_is_accepted(db):
     gid = create_group(db, Act(AK, T0), "x" * 30 + "\x00\x01" + "y" * 30, "everyone", [])
     assert rows(db, "SELECT name FROM groups WHERE id=?", gid) == [("x" * 30 + "y" * 30,)]
+
+
+def test_name_length_is_judged_after_nfc(db):
+    decomposed = "é" * 40  # 80 code points, 40 after NFC
+    gid = create_group(db, Act(AK, T0), decomposed, "everyone", [])
+    assert rows(db, "SELECT name FROM groups WHERE id=?", gid) == [("é" * 40,)]
+    with pytest.raises(StoreError):  # 60 raw characters, 120 once composed
+        create_group(db, Act(AK, T0), "क़" * 60, "everyone", [])
+    assert count(db, "groups") == 1
+
+
+@pytest.mark.parametrize(
+    "first,second",
+    [
+        ("Télécoms", "TÉLÉCOMS"),
+        ("Télécoms", "Télécoms"),
+        ("Ωmega desk", "ωmega desk"),
+        ("Straße", "STRASSE"),
+    ],
+)
+def test_group_names_are_unique_across_unicode_case_and_forms(db, first, second):
+    create_group(db, Act(AK, T0), first, "invited", [])
+    with pytest.raises(StoreError, match="^that group name is taken$"):
+        create_group(db, Act(ML, T0), second, "everyone", [])
+    assert count(db, "groups") == 1
+
+
+def test_an_invited_group_keeps_a_writer_member(db):
+    gid = create_group(db, Act(AK, T0), "Deal team", "invited", [])
+    add_member(db, Act(AK, T0), gid, "rd")
+    for call in (lambda: leave(db, "ak", gid), lambda: remove_member(db, AK, gid, "ak")):
+        with pytest.raises(StoreError, match="^an invited group needs a writer member$"):
+            call()
+    assert members(db, "ak", gid) == ["ak", "rd"]
+    add_member(db, Act(AK, T0), gid, "ml")
+    leave(db, "ak", gid)
+    assert members(db, "ml", gid) == ["rd", "ml"]
+    open_group = create_group(db, Act(ML, T0), "Open", "everyone", [])
+    leave(db, "ml", open_group)
+    assert members(db, "rd", open_group) == []
+
+
+@pytest.mark.parametrize("gid", [2**63 - 1, 2**63, -(2**63) - 1])
+def test_ids_outside_the_sqlite_range_are_missing_ids(db, gid):
+    assert can_see(db, "ak", gid) is False
+    assert list_groups(db, "ak") == []
+    leave(db, "ak", gid)
+    for call in (
+        lambda: require_visible(db, "ak", gid),
+        lambda: members(db, "ak", gid),
+        lambda: join(db, "ak", gid, T0),
+        lambda: add_member(db, Act(AK, T0), gid, "x"),
+        lambda: remove_member(db, AK, gid, "x"),
+    ):
+        with pytest.raises(StoreError, match="^no such group$"):
+            call()
+    with pytest.raises(StoreError):
+        create_group(db, Act(AK, T0), "T", "everyone", [gid])
+    assert count(db, "groups") == 0

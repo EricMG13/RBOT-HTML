@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import sqlite3
+import unicodedata
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
-from deploy_workflow.signal.identity import IdentityError, User, _printable, clean_name
+from deploy_workflow.signal.identity import IdentityError, User, clean_name, cleaned
 from deploy_workflow.signal.store import StoreError, _utc_text, _write_transaction
 
 VISIBILITIES = ("everyone", "invited")
@@ -27,11 +28,36 @@ class Forbidden(Exception):
     """The user may not do this; the service answers 403."""
 
 
+_ID_MIN, _ID_MAX = -(2**63), 2**63 - 1
+# A group the user can see: open to everyone, or the user is a member. Binds the user name once.
+_VISIBLE = (
+    "(g.visibility = 'everyone' OR EXISTS("
+    "SELECT 1 FROM group_members vm WHERE vm.group_id = g.id AND vm.user_name = ?))"
+)
+_NEEDS_WRITER = "an invited group needs a writer member"
+
+
 def _clean(raw: str) -> str:
+    text = cleaned(raw)
+    if not text:
+        raise StoreError("display name is empty")
+    return text
+
+
+def _member_name(raw: str) -> str:
     try:
         return clean_name(raw)
     except IdentityError as exc:
         raise StoreError(str(exc)) from exc
+
+
+def _in_range(number: int) -> bool:
+    """Whether SQLite can hold the id; anything else is an id no row has."""
+    return _ID_MIN <= number <= _ID_MAX
+
+
+def _name_key(name: str) -> str:
+    return unicodedata.normalize("NFKC", name).casefold()
 
 
 def _may_manage(user: User) -> bool:
@@ -44,23 +70,27 @@ def create_group(
     user = by.user
     if not _may_manage(user):
         raise Forbidden("only writers and the owner can create groups")
-    cleaned = _clean(name)
-    if len(" ".join("".join(_printable(ch) for ch in name).split())) > MAX_NAME:
+    group_name = _clean(name)
+    if len(group_name) > MAX_NAME:
         raise StoreError(f"a group name is at most {MAX_NAME} characters")
     if visibility not in VISIBILITIES:
         raise StoreError(f"invalid visibility {visibility!r}; expected one of everyone, invited")
     stamp = _utc_text(by.now)
     with _write_transaction(db):
         for topic_id in topic_ids:
-            if db.execute("SELECT 1 FROM topics WHERE id=?", (topic_id,)).fetchone() is None:
+            if (
+                not _in_range(topic_id)
+                or db.execute("SELECT 1 FROM topics WHERE id=?", (topic_id,)).fetchone() is None
+            ):
                 raise StoreError(f"no topic with id {topic_id}")
         try:
             cur = db.execute(
-                "INSERT INTO groups(name, visibility, created_by, created_at) VALUES(?, ?, ?, ?)",
-                (cleaned, visibility, user.name, stamp),
+                "INSERT INTO groups(name, name_key, visibility, created_by, created_at)"
+                " VALUES(?, ?, ?, ?, ?)",
+                (group_name, _name_key(group_name), visibility, user.name, stamp),
             )
         except sqlite3.IntegrityError as exc:
-            raise StoreError(f"group {cleaned!r} already exists") from exc
+            raise StoreError("that group name is taken") from exc
         group_id = cur.lastrowid
         assert group_id is not None
         for topic_id in topic_ids:
@@ -77,13 +107,12 @@ def create_group(
 
 def can_see(db: sqlite3.Connection, user_name: str, group_id: int) -> bool:
     """The group exists and is open to everyone, or the user is a member."""
+    if not _in_range(group_id):
+        return False
     row = db.execute(
-        "SELECT g.visibility = 'everyone' OR EXISTS("
-        " SELECT 1 FROM group_members m WHERE m.group_id = g.id AND m.user_name = ?) AS seen"
-        " FROM groups g WHERE g.id = ?",
-        (user_name, group_id),
+        "SELECT 1 FROM groups g WHERE g.id = ? AND " + _VISIBLE, (group_id, user_name)
     ).fetchone()
-    return row is not None and bool(row["seen"])
+    return row is not None
 
 
 def require_visible(db: sqlite3.Connection, user_name: str, group_id: int) -> sqlite3.Row:
@@ -109,11 +138,31 @@ def join(db: sqlite3.Connection, user_name: str, group_id: int, now: datetime) -
         )
 
 
+def _drop_member(db: sqlite3.Connection, group_id: int, user_name: str) -> None:
+    """Delete one membership; refuse (the caller's transaction rolls back) when that leaves an
+    invited group with no manager: a member whose stored role is writer or owner, or its creator
+    (who held that power when the group was made)."""
+    if not _in_range(group_id):
+        return
+    removed = db.execute(
+        "DELETE FROM group_members WHERE group_id=? AND user_name=?", (group_id, user_name)
+    ).rowcount
+    if not removed:
+        return
+    orphaned = db.execute(
+        "SELECT 1 FROM groups g WHERE g.id = ? AND g.visibility = 'invited' AND NOT EXISTS("
+        "SELECT 1 FROM group_members m LEFT JOIN users u ON u.name = m.user_name"
+        " WHERE m.group_id = g.id"
+        " AND (u.role IN ('writer', 'owner') OR m.user_name = g.created_by))",
+        (group_id,),
+    ).fetchone()
+    if orphaned:
+        raise StoreError(_NEEDS_WRITER)
+
+
 def leave(db: sqlite3.Connection, user_name: str, group_id: int) -> None:
     with _write_transaction(db):
-        db.execute(
-            "DELETE FROM group_members WHERE group_id=? AND user_name=?", (group_id, user_name)
-        )
+        _drop_member(db, group_id, user_name)
 
 
 def add_member(db: sqlite3.Connection, by: Act, group_id: int, name: str) -> str:
@@ -123,12 +172,12 @@ def add_member(db: sqlite3.Connection, by: Act, group_id: int, name: str) -> str
         require_visible(db, actor.name, group_id)
         if not _may_manage(actor):
             raise Forbidden("only writers and the owner can manage members")
-        cleaned = _clean(name)
+        member = _member_name(name)
         db.execute(
             "INSERT OR IGNORE INTO group_members(group_id, user_name, joined_at) VALUES(?, ?, ?)",
-            (group_id, cleaned, stamp),
+            (group_id, member, stamp),
         )
-    return cleaned
+    return member
 
 
 def remove_member(db: sqlite3.Connection, actor: User, group_id: int, name: str) -> None:
@@ -136,10 +185,7 @@ def remove_member(db: sqlite3.Connection, actor: User, group_id: int, name: str)
         require_visible(db, actor.name, group_id)
         if not _may_manage(actor):
             raise Forbidden("only writers and the owner can manage members")
-        db.execute(
-            "DELETE FROM group_members WHERE group_id=? AND user_name=?",
-            (group_id, _clean(name)),
-        )
+        _drop_member(db, group_id, _member_name(name))
 
 
 def list_groups(db: sqlite3.Connection, user_name: str) -> list[sqlite3.Row]:
@@ -150,10 +196,7 @@ def list_groups(db: sqlite3.Connection, user_name: str) -> list[sqlite3.Row]:
         "  AS member,"
         " (SELECT COUNT(*) FROM group_members m WHERE m.group_id = g.id) AS members,"
         " (SELECT COUNT(*) FROM threads t WHERE t.group_id = g.id) AS threads"
-        " FROM groups g"
-        " WHERE g.visibility = 'everyone' OR EXISTS("
-        "  SELECT 1 FROM group_members m WHERE m.group_id = g.id AND m.user_name = ?)"
-        " ORDER BY g.name COLLATE NOCASE, g.id",
+        " FROM groups g WHERE " + _VISIBLE + " ORDER BY g.name_key, g.id",
         (user_name, user_name),
     ).fetchall()
 
