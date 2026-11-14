@@ -145,7 +145,7 @@ SYLLABLES = (
     ("ra", "on", "is", "ex", "ia", "um", "ar", "ix"),
 )
 WORDS = (
-    ("Kestrel", "Amber", "Harrow", "Linden", "Marlow", "Northgate", "Opal", "Quarry"),
+    ("Kestrel", "Amber", "Harrow", "Tamsin", "Marlow", "Northgate", "Opal", "Quarry"),
     ("Ridge", "Point", "Field", "Crest", "Works", "Bay", "Hollow", "Forge"),
 )
 CUSTOMERS = ("mid-sized enterprises", "regional customers", "institutional clients", "consumers")

@@ -5,6 +5,7 @@ import json
 from collections import Counter
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
@@ -113,6 +114,58 @@ def test_index_statistics() -> None:
     header, rows = load(FIXTURES / "index-statistics.csv")
     assert header == SCHEMA["index_columns"]
     assert len(rows) == SCHEMA["index_rows"]
+    bounds = {k: v for k, v in SCHEMA["index_bounds"].items() if not k.startswith("_")}
+    delta_max = Decimal(str(SCHEMA["index_bounds"]["delta_abs_max"]))
+    delta_cols = [c for c in header if c.startswith("\u0394")]
+    assert sorted(r["Index"].rsplit(": ", 1)[1] for r in rows) == sorted(
+        k for k in bounds if k != "delta_abs_max"
+    )
+    for row in rows:
+        suffix = row["Index"].rsplit(": ", 1)[1]
+        for col, (low, high) in bounds[suffix].items():
+            assert Decimal(str(low)) <= Decimal(row[col]) <= Decimal(str(high)), (suffix, col)
+        for col in delta_cols:
+            assert abs(Decimal(row[col])) <= delta_max, (suffix, col)
+
+
+def numeric(cell: str) -> Decimal | None:
+    return Decimal(cell) if cell[:1] in "-0123456789" else None
+
+
+def written_mean(values: list[Decimal]) -> str:
+    """Arithmetic mean, 2 dp half-up, trailing zeros trimmed; '-' when nothing is numeric."""
+    if not values:
+        return "-"
+    cents = (sum(values, Decimal(0)) / len(values)).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+    return f"{cents:.2f}".rstrip("0").rstrip(".")
+
+
+def written_mean_date(texts: list[str]) -> str:
+    """Mean of the day numbers rounded to the nearest day (an exact half goes to the even day)."""
+    days = [to_date(t).toordinal() for t in texts if t[:1].isdigit()]
+    if not days:
+        return "-"
+    mean_day = date.fromordinal(round(Fraction(sum(days), len(days))))
+    return f"{mean_day.day:02d}-{MONTHS[mean_day.month - 1]}-{mean_day.year % 100:02d}"
+
+
+@pytest.mark.parametrize("sector", [s for s, v in SECTORS.items() if v["ratings_average"]])
+def test_ratings_average_every_column_recomputed(sector: str) -> None:
+    _, rows = load(FIXTURES / f"{sector}.csv")
+    header, avg = load(FIXTURES / f"{sector}-ratings-average.csv")
+    averaged = [c for c in header if c not in ("Rating", "# Issuers")]
+    assert len(averaged) == 14
+    for bucket in avg:
+        members = [r for r in rows if r["Ratings"].split(" / ")[0] == bucket["Rating"]]
+        for col in averaged:
+            if col == "Maturity":
+                expected = written_mean_date([r[col] for r in members])
+            else:
+                nums = [n for r in members if (n := numeric(r[col])) is not None]
+                expected = written_mean(nums)
+            assert bucket[col] == expected, (sector, bucket["Rating"], col)
 
 
 def test_ratings_average_cells_round_half_up() -> None:
