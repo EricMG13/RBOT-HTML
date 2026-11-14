@@ -1,0 +1,5 @@
+SYNTHETIC FIXTURE - not issuer evidence.
+Loan quotes as of 2026-06-27 - Kestrel Ridge (Kestrel Ridge Finco Inc)
+Bloomberg ID,Loan Type,Ranking,Ratings,Size ($Mn),Margin,Maturity,Bid,Ask,Mid YTM,Mid 3Y DM
+SYN8256223,B,1L Gtd Sr. Secd,Ba3 / BB-,3925,250,07-Nov-27,99.625,100.375,6.5,252
+SYN6321352,FLSO,1L Gtd Sr. Secd,Ba3 / BB-,4730,250,28-Jan-33,99,99.75,6.5,270
