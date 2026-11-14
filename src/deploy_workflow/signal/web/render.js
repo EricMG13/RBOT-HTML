@@ -28,6 +28,7 @@
     share: 'M4 12v7h16v-7M12 3v12M8 7l4-4 4 4',
     message: 'M4 5h16v11H9l-5 4z',
     close: 'M6 6l12 12M18 6L6 18',
+    plus: 'M12 5v14M5 12h14',
   };
 
   function icon(doc, name) {
@@ -565,8 +566,266 @@
     return box;
   }
 
+  // ----- group view, dialogs and messages (page wiring; every function is pure and takes the document)
+
+  function unreadLabel(total) {
+    return total + ' unread';
+  }
+
+  function groupsEmpty(doc) {
+    return el(doc, 'li', 'side-empty', 'No groups yet');
+  }
+
+  // A group or thread that is missing or hidden reads the same either way. what: 'group' | 'thread'.
+  function notFound(doc, what) {
+    const box = el(doc, 'div', 'empty');
+    box.appendChild(el(doc, 'h2', 'empty-title', 'This ' + what + ' does not exist or is not open to you.'));
+    return box;
+  }
+
+  function threadsEmpty(doc, canStart) {
+    const box = el(doc, 'div', 'empty');
+    box.appendChild(el(doc, 'h2', 'empty-title', 'No threads in this group yet'));
+    box.appendChild(el(doc, 'p', 'empty-hint', canStart
+      ? 'Share a story from the feed or start a note.'
+      : 'Threads appear here when a writer shares a story or starts a note.'));
+    return box;
+  }
+
+  // The panel shell with a heading and a close control, for the states that have no thread to show.
+  function panelShell(doc, threadId, title) {
+    const panel = el(doc, 'aside', 'thread');
+    panel.setAttribute('aria-labelledby', 'thread-title-' + threadId);
+    panel.setAttribute('data-id', String(threadId));
+    const head = el(doc, 'div', 'thead');
+    const titles = el(doc, 'div', 'thead-text');
+    const h = el(doc, 'h2', 'thread-title', title);
+    h.setAttribute('id', 'thread-title-' + threadId);
+    h.setAttribute('tabindex', '-1');
+    titles.appendChild(h);
+    head.appendChild(titles);
+    const close = button(doc, 'icon-btn', null, 'close-thread', threadId);
+    close.setAttribute('aria-label', 'Close thread');
+    close.appendChild(icon(doc, 'close'));
+    head.appendChild(close);
+    panel.appendChild(head);
+    return panel;
+  }
+
+  function threadLoading(doc, threadId) {
+    const panel = panelShell(doc, threadId, 'Loading thread');
+    panel.setAttribute('aria-busy', 'true');
+    const body = el(doc, 'div', 'tbody');
+    for (const w of ['w2', 'w4', 'w3']) body.appendChild(el(doc, 'span', 'bar-s ' + w));
+    panel.appendChild(body);
+    return panel;
+  }
+
+  // what: 'missing' (404) or 'failed' (any other refusal; the page also shows the error band with Retry).
+  function threadMessage(doc, threadId, what) {
+    const failed = what === 'failed';
+    const panel = panelShell(doc, threadId, failed ? 'Thread could not be loaded' : 'Thread not found');
+    const body = el(doc, 'div', 'tbody');
+    body.appendChild(failed
+      ? el(doc, 'p', 'no-comments', 'Try again in a moment.') : notFound(doc, 'thread'));
+    panel.appendChild(body);
+    return panel;
+  }
+
+  function tag(doc, text, iconName) {
+    const t = el(doc, 'span', 'tag visibility');
+    if (iconName) t.appendChild(icon(doc, iconName));
+    t.appendChild(doc.createTextNode(text));
+    return t;
+  }
+
+  // Members of the open group. group: {id, visibility, member, can_manage, members: [name]}.
+  // Emits join-group, leave-group (data-id), a form[data-action=add-member] and remove-member (data-name).
+  const MEMBERS_SHOWN = 8;
+  function membersStrip(doc, group) {
+    const names = Array.isArray(group.members) ? group.members : [];
+    const invited = group.visibility === 'invited';
+    const box = el(doc, 'section', 'members');
+    box.setAttribute('aria-label', 'Members');
+    const row = el(doc, 'div', 'members-row');
+    row.appendChild(tag(doc, invited ? 'Invited only' : 'Open to everyone', invited ? 'lock' : 'hash'));
+    const avatars = el(doc, 'ul', 'avatars');
+    for (const name of names.slice(0, MEMBERS_SHOWN)) {
+      const li = el(doc, 'li');
+      const av = el(doc, 'span', 'av', initials(name));
+      av.setAttribute('aria-hidden', 'true');
+      li.appendChild(av);
+      li.appendChild(srOnly(doc, name));
+      avatars.appendChild(li);
+    }
+    if (names.length > MEMBERS_SHOWN) {
+      const li = el(doc, 'li');
+      li.appendChild(el(doc, 'span', 'av more', '+' + (names.length - MEMBERS_SHOWN)));
+      li.appendChild(srOnly(doc, ' more members'));
+      avatars.appendChild(li);
+    }
+    row.appendChild(avatars);
+    row.appendChild(el(doc, 'span', 'members-count', plural(names.length, 'member', 'members')));
+    if (!invited) {
+      row.appendChild(button(doc, 'btn', group.member ? 'Leave' : 'Join',
+        group.member ? 'leave-group' : 'join-group', group.id));
+    }
+    box.appendChild(row);
+    if (invited && group.can_manage) {
+      const list = el(doc, 'ul', 'member-list');
+      names.forEach((name, i) => {
+        const li = el(doc, 'li');
+        li.appendChild(el(doc, 'span', 'member-name', name)).setAttribute('id', 'member-name-' + i);
+        const rm = button(doc, 'link-btn', 'Remove', 'remove-member', group.id);
+        rm.setAttribute('data-name', name);
+        rm.setAttribute('id', 'member-remove-' + i);
+        rm.setAttribute('aria-labelledby', 'member-remove-' + i + ' member-name-' + i);
+        li.appendChild(rm);
+        list.appendChild(li);
+      });
+      box.appendChild(list);
+      const form = el(doc, 'form', 'add-member');
+      form.setAttribute('data-action', 'add-member');
+      form.setAttribute('data-id', String(group.id));
+      form.setAttribute('novalidate', '');
+      const label = el(doc, 'label', 'sr-only', 'Name to add');
+      label.setAttribute('for', 'add-member-name');
+      const input = el(doc, 'input');
+      input.setAttribute('type', 'text');
+      input.setAttribute('id', 'add-member-name');
+      input.setAttribute('maxlength', '60');
+      input.setAttribute('autocomplete', 'off');
+      input.setAttribute('placeholder', 'Name to add');
+      form.append(label, input, el(doc, 'button', 'btn', 'Add member'));
+      form.children[2].setAttribute('type', 'submit');
+      box.appendChild(form);
+    }
+    const err = el(doc, 'p', 'field-error');
+    err.setAttribute('data-slot', 'members-error');
+    err.setAttribute('role', 'alert');
+    err.setAttribute('hidden', '');
+    box.appendChild(err);
+    return box;
+  }
+
+  // The head of a group view: the members strip and, for those who may post, Start a note.
+  function groupHead(doc, group, canStart) {
+    const head = el(doc, 'div', 'group-head');
+    head.appendChild(membersStrip(doc, group));
+    if (canStart) {
+      const b = button(doc, 'btn pri', null, 'start-note', group.id);
+      b.appendChild(icon(doc, 'plus'));
+      b.appendChild(el(doc, 'span', null, 'Start a note'));
+      head.appendChild(b);
+    }
+    return head;
+  }
+
+  function radioOption(doc, name, value, className) {
+    const label = el(doc, 'label', className);
+    const input = el(doc, 'input');
+    input.setAttribute('type', 'radio');
+    input.setAttribute('name', name);
+    input.setAttribute('value', value);
+    label.appendChild(input);
+    return label;
+  }
+
+  // Radios for the share dialog. With no groups: a sentence, and New group for those who may create one.
+  function groupChoices(doc, groups, canCreate) {
+    const frag = doc.createDocumentFragment();
+    if (groups.length === 0) {
+      frag.appendChild(el(doc, 'p', 'empty-hint', canCreate
+        ? 'There are no groups yet. Create one to share this story.' : 'There are no groups open to you yet.'));
+      if (canCreate) frag.appendChild(button(doc, 'btn', 'New group', 'new-group', 0));
+      return frag;
+    }
+    const list = el(doc, 'ul', 'choice-list');
+    for (const g of groups) {
+      const li = el(doc, 'li');
+      const label = radioOption(doc, 'share-group', String(g.id), 'choice');
+      if (g.visibility === 'invited') {
+        label.appendChild(icon(doc, 'lock'));
+        label.appendChild(srOnly(doc, 'Invited group: '));
+      }
+      label.appendChild(el(doc, 'span', 'choice-name', g.name));
+      li.appendChild(label);
+      list.appendChild(li);
+    }
+    frag.appendChild(list);
+    return frag;
+  }
+
+  // The two visibility options of the new group dialog as a joined pair of real radios.
+  function visibilityChoices(doc) {
+    const wrap = el(doc, 'div', 'seg');
+    const defs = [['everyone', 'Open to everyone', 'hash'], ['invited', 'Invited only', 'lock']];
+    defs.forEach(([value, text, iconName], i) => {
+      const label = radioOption(doc, 'group-visibility', value, 'seg-opt');
+      if (i === 0) label.children[0].setAttribute('checked', '');
+      label.appendChild(icon(doc, iconName));
+      label.appendChild(el(doc, 'span', null, text));
+      wrap.appendChild(label);
+    });
+    return wrap;
+  }
+
+  function topicChoices(doc, topics) {
+    const frag = doc.createDocumentFragment();
+    if (topics.length === 0) {
+      frag.appendChild(el(doc, 'p', 'empty-hint', 'No topics yet'));
+      return frag;
+    }
+    const list = el(doc, 'ul', 'choice-list');
+    for (const t of topics) {
+      const li = el(doc, 'li');
+      const label = el(doc, 'label', 'choice');
+      const input = el(doc, 'input');
+      input.setAttribute('type', 'checkbox');
+      input.setAttribute('name', 'group-topic');
+      input.setAttribute('value', String(t.id));
+      label.appendChild(input);
+      label.appendChild(el(doc, 'span', 'choice-name', t.name));
+      li.appendChild(label);
+      list.appendChild(li);
+    }
+    frag.appendChild(list);
+    return frag;
+  }
+
+  // Above the reply box while replying to a top-level comment.
+  function replyingTo(doc, name) {
+    const bar = el(doc, 'div', 'replying');
+    bar.appendChild(el(doc, 'span', null, 'Replying to ' + name));
+    bar.appendChild(button(doc, 'link-btn', 'Cancel', 'cancel-reply', 0));
+    return bar;
+  }
+
+  // A comment's body while it is edited in place; error is the server's line for a refused save.
+  function editForm(doc, c, text, error) {
+    const form = el(doc, 'div', 'edit-form');
+    const ta = el(doc, 'textarea', 'edit-text', text);
+    ta.setAttribute('rows', '3');
+    ta.setAttribute('maxlength', '4000');
+    ta.setAttribute('data-id', String(c.id));
+    ta.setAttribute('aria-labelledby', 'c' + c.id + '-author');
+    form.appendChild(ta);
+    if (error) {
+      const p = el(doc, 'p', 'field-error', error);
+      p.setAttribute('role', 'alert');
+      form.appendChild(p);
+    }
+    const acts = el(doc, 'div', 'edit-acts');
+    acts.appendChild(button(doc, 'btn', 'Cancel', 'cancel-edit', c.id));
+    acts.appendChild(button(doc, 'btn pri', 'Save', 'save-edit', c.id));
+    form.appendChild(acts);
+    return form;
+  }
+
   return {
     IDENTITY_NOTE, card, emptyState, relativeTime, safeLink, icon, fullTime, initials,
     linkify, comment, threadPanel, threadRow, groupItem, sharedLine, threadChips,
+    unreadLabel, groupsEmpty, notFound, threadsEmpty, threadLoading, threadMessage, membersStrip, groupHead,
+    groupChoices, visibilityChoices, topicChoices, replyingTo, editForm,
   };
 });

@@ -321,3 +321,92 @@ test('a story thread row shows the source kind in words as a card does', () => {
   const nokind = R.threadRow(doc, Object.assign({}, row, {source_kind: null}), NOW);
   assert.ok(nokind.textContent.includes('Authority') && !nokind.textContent.includes('· Authority'));
 });
+
+// ----- page wiring helpers (Task 6)
+test('missing and hidden groups and threads read the same, in words', () => {
+  assert.equal(R.notFound(doc, 'group').textContent, 'This group does not exist or is not open to you.');
+  assert.equal(R.notFound(doc, 'thread').textContent, 'This thread does not exist or is not open to you.');
+  assert.equal(R.unreadLabel(3), '3 unread');
+  assert.equal(R.groupsEmpty(doc).textContent, 'No groups yet');
+});
+test('an empty group tells writers what to do and readers what to expect', () => {
+  assert.ok(R.threadsEmpty(doc, true).textContent.includes('start a note'));
+  assert.ok(R.threadsEmpty(doc, false).textContent.includes('when a writer'));
+});
+test('a loading or failed panel keeps its heading, label and close control', () => {
+  for (const p of [R.threadLoading(doc, 7), R.threadMessage(doc, 7, 'missing'), R.threadMessage(doc, 7, 'failed')]) {
+    assert.equal(p.tagName, 'ASIDE');
+    assert.equal(p.getAttribute('aria-labelledby'), 'thread-title-7');
+    assert.equal(p.querySelector('[data-action="close-thread"]').getAttribute('data-id'), '7');
+  }
+  assert.equal(R.threadLoading(doc, 7).getAttribute('aria-busy'), 'true');
+  assert.ok(R.threadMessage(doc, 7, 'missing').textContent.includes('does not exist or is not open to you'));
+});
+test('the members strip shows eight avatars and the rest as a count', () => {
+  const members = Array.from({length: 11}, (_, i) => 'Member ' + String.fromCharCode(65 + i));
+  const strip = R.membersStrip(doc, {id: 4, visibility: 'everyone', member: false, can_manage: false, members});
+  assert.equal(strip.querySelector('.avatars').querySelectorAll('.av').length, 9);
+  assert.ok(strip.querySelector('.av.more').textContent === '+3');
+  assert.ok(strip.textContent.includes('11 members'));
+  const join = strip.querySelector('[data-action="join-group"]');
+  assert.equal(join.getAttribute('data-id'), '4');
+  assert.equal(strip.querySelector('[data-action="remove-member"]'), null);
+  assert.equal(strip.querySelector('form'), null);
+});
+test('a member of an everyone group can leave; an invited group has no join or leave', () => {
+  const open = R.membersStrip(doc, {id: 4, visibility: 'everyone', member: true, can_manage: false, members: ['ak']});
+  assert.ok(open.querySelector('[data-action="leave-group"]'));
+  const closed = R.membersStrip(doc, {id: 5, visibility: 'invited', member: true, can_manage: false, members: ['ak']});
+  assert.equal(closed.querySelector('[data-action="leave-group"]'), null);
+  assert.equal(closed.querySelector('[data-action="join-group"]'), null);
+  assert.ok(closed.textContent.includes('Invited only'));
+});
+test('a manager of an invited group can add and remove members; names stay text', () => {
+  const strip = R.membersStrip(doc, {id: 5, visibility: 'invited', member: true, can_manage: true, members: ['<b>x</b>', 'ml']});
+  assert.equal(strip.querySelectorAll('[data-action="remove-member"]').length, 2);
+  assert.equal(strip.querySelectorAll('[data-action="remove-member"]')[0].getAttribute('data-name'), '<b>x</b>');
+  assert.equal(strip.querySelectorAll('b').length, 0);
+  assert.equal(strip.querySelector('form[data-action="add-member"]').getAttribute('data-id'), '5');
+  assert.ok(strip.querySelector('[data-slot="members-error"]').hasAttribute('hidden'));
+});
+test('the group head offers Start a note only when asked', () => {
+  const g = {id: 4, visibility: 'everyone', member: true, can_manage: false, members: []};
+  assert.ok(R.groupHead(doc, g, true).querySelector('[data-action="start-note"]'));
+  assert.equal(R.groupHead(doc, g, false).querySelector('[data-action="start-note"]'), null);
+});
+test('the share dialog lists groups as radios, with the lock in words, or says there are none', () => {
+  const list = R.groupChoices(doc, [{id: 1, name: 'TMT', visibility: 'everyone'}, {id: 2, name: '<i>Core</i>', visibility: 'invited'}], true);
+  const radios = list.querySelectorAll('input[type="radio"]');
+  assert.equal(radios.length, 2);
+  assert.equal(radios[1].getAttribute('value'), '2');
+  assert.ok(list.textContent.includes('Invited group: '));
+  assert.equal(list.querySelectorAll('i').length, 0);
+  const none = R.groupChoices(doc, [], true);
+  assert.ok(none.textContent.includes('no groups yet'));
+  assert.ok(none.querySelector('[data-action="new-group"]'));
+  const noneReader = R.groupChoices(doc, [], false);
+  assert.equal(noneReader.querySelector('[data-action="new-group"]'), null);
+});
+test('the visibility choice is two radios with everyone checked; topics are checkboxes', () => {
+  const seg = R.visibilityChoices(doc);
+  const radios = seg.querySelectorAll('input[type="radio"]');
+  assert.deepEqual(radios.map(r => r.getAttribute('value')), ['everyone', 'invited']);
+  assert.ok(radios[0].hasAttribute('checked'));
+  const topics = R.topicChoices(doc, [{id: 3, name: 'Rates'}]);
+  assert.equal(topics.querySelectorAll('input[type="checkbox"]')[0].getAttribute('value'), '3');
+  assert.ok(R.topicChoices(doc, []).textContent.includes('No topics yet'));
+});
+test('the reply-to bar names the author as text and offers Cancel', () => {
+  const bar = R.replyingTo(doc, '<b>ak</b>');
+  assert.equal(bar.querySelector('span').textContent, 'Replying to <b>ak</b>');
+  assert.ok(bar.querySelector('[data-action="cancel-reply"]'));
+});
+test('the edit form keeps the text and shows the refusal beside it', () => {
+  const form = R.editForm(doc, {id: 9}, 'my words', 'edits close after 15 minutes');
+  assert.equal(form.querySelector('textarea').textContent, 'my words');
+  assert.equal(form.querySelector('textarea').getAttribute('maxlength'), '4000');
+  assert.ok(form.textContent.includes('edits close after 15 minutes'));
+  assert.equal(form.querySelector('[data-action="save-edit"]').getAttribute('data-id'), '9');
+  assert.ok(form.querySelector('[data-action="cancel-edit"]'));
+  assert.equal(R.editForm(doc, {id: 9}, 'x', '').querySelector('.field-error'), null);
+});
