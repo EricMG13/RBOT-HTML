@@ -273,6 +273,11 @@ def get_meta(db: sqlite3.Connection, key: str) -> str | None:
     return str(row["value"]) if row else None
 
 
+def in_range(number: int) -> bool:
+    """Whether SQLite can hold the id; anything else is an id no row has."""
+    return -(2**63) <= number <= 2**63 - 1
+
+
 def _utc_text(at: datetime) -> str:
     if at.tzinfo is None or at.utcoffset() is None:
         raise StoreError("time must be timezone-aware")

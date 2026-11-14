@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from deploy_workflow.signal.identity import IdentityError, User, clean_name, cleaned
-from deploy_workflow.signal.store import StoreError, _utc_text, _write_transaction
+from deploy_workflow.signal.store import StoreError, _utc_text, _write_transaction, in_range
 
 VISIBILITIES = ("everyone", "invited")
 MAX_NAME = 60
@@ -28,7 +28,6 @@ class Forbidden(Exception):
     """The user may not do this; the service answers 403."""
 
 
-_ID_MIN, _ID_MAX = -(2**63), 2**63 - 1
 # A group the user can see: open to everyone, or the user is a member. Binds the user name once.
 _VISIBLE = (
     "(g.visibility = 'everyone' OR EXISTS("
@@ -51,16 +50,11 @@ def _member_name(raw: str) -> str:
         raise StoreError(str(exc)) from exc
 
 
-def _in_range(number: int) -> bool:
-    """Whether SQLite can hold the id; anything else is an id no row has."""
-    return _ID_MIN <= number <= _ID_MAX
-
-
 def _name_key(name: str) -> str:
     return unicodedata.normalize("NFKC", name).casefold()
 
 
-def _may_manage(user: User) -> bool:
+def may_post(user: User) -> bool:
     return user.role in ("writer", "owner")
 
 
@@ -68,7 +62,7 @@ def create_group(
     db: sqlite3.Connection, by: Act, name: str, visibility: str, topic_ids: Sequence[int]
 ) -> int:
     user = by.user
-    if not _may_manage(user):
+    if not may_post(user):
         raise Forbidden("only writers and the owner can create groups")
     group_name = _clean(name)
     if len(group_name) > MAX_NAME:
@@ -79,7 +73,7 @@ def create_group(
     with _write_transaction(db):
         for topic_id in topic_ids:
             if (
-                not _in_range(topic_id)
+                not in_range(topic_id)
                 or db.execute("SELECT 1 FROM topics WHERE id=?", (topic_id,)).fetchone() is None
             ):
                 raise StoreError(f"no topic with id {topic_id}")
@@ -107,7 +101,7 @@ def create_group(
 
 def can_see(db: sqlite3.Connection, user_name: str, group_id: int) -> bool:
     """The group exists and is open to everyone, or the user is a member."""
-    if not _in_range(group_id):
+    if not in_range(group_id):
         return False
     row = db.execute(
         "SELECT 1 FROM groups g WHERE g.id = ? AND " + _VISIBLE, (group_id, user_name)
@@ -124,7 +118,7 @@ def require_visible(db: sqlite3.Connection, user_name: str, group_id: int) -> sq
 
 
 def can_manage(db: sqlite3.Connection, user: User, group_id: int) -> bool:
-    return _may_manage(user) and can_see(db, user.name, group_id)
+    return may_post(user) and can_see(db, user.name, group_id)
 
 
 def join(db: sqlite3.Connection, user_name: str, group_id: int, now: datetime) -> None:
@@ -142,7 +136,7 @@ def _drop_member(db: sqlite3.Connection, group_id: int, user_name: str) -> None:
     """Delete one membership; refuse (the caller's transaction rolls back) when that leaves an
     invited group with no manager: a member whose stored role is writer or owner, or its creator
     (who held that power when the group was made)."""
-    if not _in_range(group_id):
+    if not in_range(group_id):
         return
     removed = db.execute(
         "DELETE FROM group_members WHERE group_id=? AND user_name=?", (group_id, user_name)
@@ -170,7 +164,7 @@ def add_member(db: sqlite3.Connection, by: Act, group_id: int, name: str) -> str
     stamp = _utc_text(by.now)
     with _write_transaction(db):
         require_visible(db, actor.name, group_id)
-        if not _may_manage(actor):
+        if not may_post(actor):
             raise Forbidden("only writers and the owner can manage members")
         member = _member_name(name)
         db.execute(
@@ -183,7 +177,7 @@ def add_member(db: sqlite3.Connection, by: Act, group_id: int, name: str) -> str
 def remove_member(db: sqlite3.Connection, actor: User, group_id: int, name: str) -> None:
     with _write_transaction(db):
         require_visible(db, actor.name, group_id)
-        if not _may_manage(actor):
+        if not may_post(actor):
             raise Forbidden("only writers and the owner can manage members")
         _drop_member(db, group_id, _member_name(name))
 

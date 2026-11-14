@@ -163,6 +163,28 @@ def _card(db: sqlite3.Connection, row: sqlite3.Row) -> Card:
     )
 
 
+_CARD_SELECT = (
+    "SELECT s.id, s.title, s.link, s.summary, s.published_at, src.name AS source,"
+    " src.kind AS kind,"
+    " (SELECT COUNT(DISTINCT d.duplicate_source_id) FROM story_duplicates d"
+    "  WHERE d.story_id = s.id) AS other_sources,"
+    " EXISTS(SELECT 1 FROM saves me WHERE me.story_id = s.id AND me.user_name = ?) AS saved"
+    " FROM stories s JOIN sources src ON src.id = s.source_id"
+)
+
+
+def card_for(db: sqlite3.Connection, user_name: str, story_id: int) -> Card:
+    """The card of one story as the user sees it, else ViewError."""
+    row = (
+        db.execute(_CARD_SELECT + " WHERE s.id = ?", (user_name, story_id)).fetchone()
+        if 0 <= story_id <= MAX_ID
+        else None
+    )
+    if row is None:
+        raise ViewError(f"no story with id {story_id}")
+    return _card(db, row)
+
+
 def feed(
     db: sqlite3.Connection,
     user_name: str,
@@ -198,14 +220,7 @@ def _read_page(db: sqlite3.Connection, user_name: str, view: str, filters: Filte
         params += [stamp, stamp, story_id]
     where = " WHERE " + " AND ".join(conditions) if conditions else ""
     rows = db.execute(
-        "SELECT s.id, s.title, s.link, s.summary, s.published_at, src.name AS source,"
-        " src.kind AS kind,"
-        " (SELECT COUNT(DISTINCT d.duplicate_source_id) FROM story_duplicates d"
-        "  WHERE d.story_id = s.id) AS other_sources,"
-        " EXISTS(SELECT 1 FROM saves me WHERE me.story_id = s.id AND me.user_name = ?) AS saved"
-        " FROM stories s JOIN sources src ON src.id = s.source_id"
-        + where
-        + " ORDER BY s.published_at DESC, s.id DESC LIMIT ?",
+        _CARD_SELECT + where + " ORDER BY s.published_at DESC, s.id DESC LIMIT ?",
         [user_name, *params, PAGE + 1],
     ).fetchall()
     cards = tuple(_card(db, row) for row in rows[:PAGE])
