@@ -953,5 +953,3 @@ a protected `main` would refuse its push (the run fails visibly; hand generation
 2026-11-12: packs 001–017 chain without gaps; every merged PR #42–#61 appears; `check` on
 `origin/main` identical. `plan` (copy/delete/merge/keep per file, 6 tests pass) on an archive
 of `04e7221` with two edits against `origin/main`: 2 merge, 140 copy, 7 delete, 1 keep.
-
-## 2026-11-10 — Visuals package 8: complete the whole-branch review
