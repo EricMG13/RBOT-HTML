@@ -39,9 +39,16 @@ def regenerated(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 def test_regeneration_is_byte_identical(regenerated: Path) -> None:
-    committed = {p.name for p in FIXTURES.iterdir()} - {"schema.json"}
-    assert {p.name for p in regenerated.iterdir()} == committed
-    for name in committed:
+    generated = {p.name for p in regenerated.iterdir() if not p.name.startswith(".")}
+    committed_data = {
+        p.name
+        for p in FIXTURES.iterdir()
+        if not p.name.startswith(".")
+        and p.suffix in {".csv", ".txt", ".json"}
+        and p.name != "schema.json"
+    }
+    assert committed_data <= generated, "committed data file the generator does not write"
+    for name in generated:
         assert (regenerated / name).read_bytes() == (FIXTURES / name).read_bytes(), name
 
 

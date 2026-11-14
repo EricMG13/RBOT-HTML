@@ -1,5 +1,5 @@
 {
-  "_note": "Answer key for the synthetic loan market-data pack. Written from the 30 screenshots in /Users/ericguei/Desktop/Market Data (Bloomberg-style loan relative-value sheets, 27 Jun 2026). Not edited by the generator's author.",
+  "_note": "Answer key for the synthetic loan market-data pack. Written from the owner's 30 source screenshots, which are not in the repository (Bloomberg-style loan relative-value sheets, 27 Jun 2026). Not edited by the generator's author.",
   "as_of": "2026-06-27",
   "seed": 20260627,
   "layouts": {
@@ -43,7 +43,7 @@
   ],
   "index_rows": 4,
   "issuer": {
-    "_note": "One issuer of the pack presented as issuer evidence: a quotes file the run-start classifier reads as market_quotes, and run-context quote rows. Values copied by hand from telecoms.csv (Kestrel Ridge, two clean tranches); price is (bid + ask) / 2.",
+    "_note": "One fictional issuer of the pack in the shape of an issuer's market files (synthetic, not issuer evidence): a quotes file the run-start classifier reads as market_quotes, and run-context quote rows. Values copied by hand from telecoms.csv (Kestrel Ridge, two clean tranches); price is (bid + ask) / 2.",
     "quotes_file": "issuer-quotes.txt",
     "quotes_text": [
       "SYNTHETIC FIXTURE - not issuer evidence.",

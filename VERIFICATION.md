@@ -4,6 +4,31 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-14 — Synthetic loan market-data pack (branch `claude/synthetic-market-data-screenshots-bb52f7`, PR #121)
+
+Scope is **offline and synthetic only**: fictional issuers, no provider call, no model response, nothing
+under `src/` changed. The pack is test data in the shape of the owner's loan relative-value sheets; it
+is not issuer evidence and proves no pathway.
+
+- Change: `tools/synthetic_market_data.py` (seeded, stdlib) writes `tests/fixtures/market-data/`: 7 sector
+  CSVs, 4 ratings averages, index statistics, and one issuer's `issuer-quotes.txt` and
+  `issuer-context-quotes.json`. Answer key written by hand: `schema.json`.
+- Connection proven: the quotes file is classified `market_quotes`; the context rows pass
+  `load_context`; `cp3-no-quotes-no-talk` and `cp3d-no-quotes` fire without it and clear with it, at
+  rule level and through CP-OS `prepare` (`relative_value`), with a control.
+- Commands: `uv run pytest tests/test_synthetic_market_data.py -q` 28 passed; `uv run pytest
+  tests/test_cpos_launch.py -q -m "not live and not browser"` 809 passed (reviewer's run);
+  `uv run python tools/quality_gate.py --base 7c21c1e` 0 findings. Exit 0 each.
+- Reviews: task reviews (`mx-precise`) pass; whole-branch `adversarial-reviewer` (`mx-architect`)
+  pass, no High or Medium; report `.superpowers/sdd/synthetic-market-data/branch-review.md`.
+- Owner ruling 2026-11-14: sector-peer sheets stay unrecognised by the run-start classifier.
+- Open (Low): ratings-average delta/YTM/DM columns and index values are checked only by the byte
+  snapshot; the brand word `Linden` is also the first word of a real borrower in one source sheet.
+- For the owner, predates this change: `_wraps` in `run_expectations.py` skips a cover line under a
+  six-word unpunctuated heading, so `synthetic/18-market-quotes.txt` reads as `unrecognised`.
+- Not verified: any model run consuming the quotes; the context-quotes route through `prepare`;
+  Windows line endings; names against a register of real companies; `/sweep` discover was not run.
+
 ## 2026-11-13 — CP-DR web lookup: page fetch and SEC EDGAR tools (branch `claude/t5-cpdr-lookup-2e88f4`)
 
 Ruling: `docs/rulings/2026-11-13-cpdr-web-lookup.md`. Scope is **offline only**: no live request, no

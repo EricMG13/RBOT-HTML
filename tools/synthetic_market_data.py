@@ -495,7 +495,10 @@ def issuer_tranches(rows: list[Row]) -> list[Row]:
 
 
 def write_issuer_files(out_dir: Path, rows: list[Row], as_of: date) -> None:
-    """One issuer as issuer evidence: a quotes file and the matching context quote rows."""
+    """One fictional issuer in the shape of an issuer's market files.
+
+    Synthetic, not issuer evidence. Writes a quotes file and the matching context quote rows.
+    """
     tranches = issuer_tranches(rows)
     head = tranches[0]
     buffer = io.StringIO()
