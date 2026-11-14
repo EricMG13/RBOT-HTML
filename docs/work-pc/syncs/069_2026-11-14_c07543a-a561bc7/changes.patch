@@ -1,0 +1,452 @@
+diff --git a/.github/workflows/checks.yml b/.github/workflows/checks.yml
+index 9f74e29..c1423ff 100644
+--- a/.github/workflows/checks.yml
++++ b/.github/workflows/checks.yml
+@@ -36,6 +36,7 @@ jobs:
+         run: |
+           deselect=$(sed -e 's/#.*//' -e '/^\s*$/d' tests/known-failures.txt | awk '{print "--deselect=" $1}')
+           uv run pytest -q -p no:cacheprovider -m "not live and not browser" $deselect \
++            tests/test_document_key.py tests/test_synthetic_market_data.py \
+             tests/test_library_index.py tests/test_update_library.py \
+             tests/test_issuer_library_packaging.py tests/test_reader_summary.py \
+             tests/test_credit_os_catalogue.py tests/test_credit_os_store.py \
+diff --git a/VERIFICATION.md b/VERIFICATION.md
+index 1aa28a2..56ae882 100644
+--- a/VERIFICATION.md
++++ b/VERIFICATION.md
+@@ -4,6 +4,32 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
+ engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
+ `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
+ 
++## 2026-11-14 — Synthetic pack follow-ups and the document-key test (branch `claude/synthetic-pack-followups`, PR #124)
++
++Scope is **offline and synthetic only**; nothing under `src/` changes. Closes the two Low items left
++open by the entry below.
++
++- Change: `tests/test_synthetic_market_data.py` recomputes every ratings-average column with its own
++  code and checks index values against hand-written bounds in `schema.json`; the brand word `Linden`
++  is replaced and the fixtures regenerated (rename only); new `tests/test_document_key.py`; both test
++  files join the pull-request test list.
++- `tests/test_document_key.py`: `guess_kind` against `document-key.json` for the 25 keyed documents
++  present (35 real ones are not in this repository): 21 under the launcher's own paging, 4 synthetic
++  files (07, 10, 18, 19) only under the key's paging; 13 prose cases must stay `unrecognised`.
++- Withdrawn: a banner-label rule in `_wraps` (46f1f31, reverted in 39fdf96). Two reviews and the sweep
++  each found prose that `main` reads as `unrecognised` and the rule read as a confident kind.
++- Commands: `uv run pytest tests/test_document_key.py tests/test_synthetic_market_data.py -q`;
++  `uv run pytest tests/test_cpos_launch.py -q -m "not live and not browser"` 837 passed;
++  `uv run python tools/quality_gate.py` 0 findings. Exit 0 each.
++- Reviews: `/sweep refactoring discover changed-update` no confirmed defect (register
++  `.superpowers/sdd/pack-followups/sweep/register.md`); whole-branch `adversarial-reviewer`
++  (`mx-architect`) pass, no High or Medium (`.superpowers/sdd/pack-followups/branch-review.md`).
++- For the owner: the key's note pages synthetic text files at `=== PAGE ===` without the banner; the
++  launcher gives one 12,000-character page with it. Either the key's paging or the classifier's
++  handling of a heading line above a cover line needs a ruling; neither was changed.
++- Not verified: the 35 real keyed documents; real issuer files with a heading above a mixed-case
++  title; `Tamsin` against a register of real companies; a mutation tool (hand mutants only).
++
+ ## 2026-11-14 — Synthetic loan market-data pack (branch `claude/synthetic-market-data-screenshots-bb52f7`, PR #121)
+ 
+ Scope is **offline and synthetic only**: fictional issuers, no provider call, no model response, nothing
+@@ -22,8 +48,8 @@ is not issuer evidence and proves no pathway.
+ - Reviews: task reviews (`mx-precise`) pass; whole-branch `adversarial-reviewer` (`mx-architect`)
+   pass, no High or Medium; report `.superpowers/sdd/synthetic-market-data/branch-review.md`.
+ - Owner ruling 2026-11-14: sector-peer sheets stay unrecognised by the run-start classifier.
+-- Open (Low): ratings-average delta/YTM/DM columns and index values are checked only by the byte
+-  snapshot; the brand word `Linden` is also the first word of a real borrower in one source sheet.
++- Two Low items open at merge (thin checks on derived files; the brand word `Linden`) were closed
++  in PR #124, entry above.
+ - For the owner, predates this change: `_wraps` in `run_expectations.py` skips a cover line under a
+   six-word unpunctuated heading, so `synthetic/18-market-quotes.txt` reads as `unrecognised`.
+ - Not verified: any model run consuming the quotes; the context-quotes route through `prepare`;
+diff --git a/tests/fixtures/market-data/healthcare.csv b/tests/fixtures/market-data/healthcare.csv
+index c0a09c7..43d5b55 100644
+--- a/tests/fixtures/market-data/healthcare.csv
++++ b/tests/fixtures/market-data/healthcare.csv
+@@ -7,7 +7,7 @@ Home Health,Orraex,SYN1281782,B,1L Gtd Sr. Secd,B2 / B,4300,375,22-Dec-32,100,10
+ Home Health,Orvera,SYN0145Z238Y,B,1L Gtd Sr. Secd,B2 / B,2380,300,03-Oct-29,100,100.375,-0.0625,0.5625,6.9,285
+ Home Health,Opal Field,SYN01NPMMMP9,B3,1L Gtd Sr. Secd,Ba1 / BB+,5385,150,31-Jul-30,100.375,101.125,0.5,-0.8125,5.2,120
+ Home Health,Opal Hollow,SYN4690120,B3,1L Sr. Secd,B3 / B-,3855,400,10-Jul-31,95.625,95.875,-0.1875,2.3125,8.8,570
+-Home Health,Linden Field,SYN017NL11P2,B,1L Gtd Sr. Secd,B2 / B,3860,300,01-Jun-29,100.5,101.25,-0.375,1.1875,6.6,267
++Home Health,Tamsin Field,SYN017NL11P2,B,1L Gtd Sr. Secd,B2 / B,3860,300,01-Jun-29,100.5,101.25,-0.375,1.1875,6.6,267
+ Home Health,Quornoix,SYN5755289,B,1L Sr. Secd,WR / NR,1395,350,30-Jun-33,100.5,101,-0.125,0,7.4,311
+ Home Health,Zendoex,SYN015XFG1Z8,B,1L Sr. Secd,B2 / B,4605,350,08-Oct-32,99.375,100.125,0.5,-1,7.4,368
+ Staffing,Valdoon,SYN01V5Z8QBM,B,1L Gtd Sr. Secd,B1 / B+,440,300,26-Dec-27,99.875,100.125,-0.5,-0.9375,6.9,292
+@@ -25,7 +25,7 @@ Providers/ASC,#NAME?,SYN6128042,#NAME?,#NAME?,#NAME?,#NAME?,#NAME?,#NAME?,#NAME?
+ Providers/ASC,Taltaon,SYN2695103,B,1L Gtd Sr. Secd,B1 / B+,1840,300,28-Nov-29,99.375,99.75,-0.4375,0.625,7.0,318
+ Providers/ASC,Kestrel Bay,SYN2035390,B,1L Gtd Sr. Secd,B3 / B-,3685,375,29-Jun-31,99.25,100,0.9375,2.75,7.7,398
+ Providers/ASC,Valraum,SYN7617936,B,1L Gtd Sr. Secd,B2 / B,4655,375,21-Sep-28,98.5,99.25,#N/A N/A,-1.5,8.1,427
+-Providers/ASC,Linden Ridge,SYN1166451,B,1L Gtd Sr. Secd,B2 / B,2495,300,06-Jun-31,99.75,100.5,-0.3125,-1.25,6.8,287
++Providers/ASC,Tamsin Ridge,SYN1166451,B,1L Gtd Sr. Secd,B2 / B,2495,300,06-Jun-31,99.75,100.5,-0.3125,-1.25,6.8,287
+ Providers/ASC,Talnoon,SYN01RZZ102S,B,1L Gtd Sr. Secd,B1 / B+,5100,300,27-Sep-32,99.75,100.375,0,1.6875,7.0,291
+ Providers/ASC,Draveia,SYN7280806,B,1L Gtd Sr. Secd,B2 / B,2600,325,27-Feb-30,100.125,100.625,0,1.875,7.1,307
+ Providers/ASC,Brinseis,SYN2958068,B6,1L Gtd Sr. Secd,B2 / B,5800,375,11-May-30,99.625,100.25,-0.1875,1.375,7.7,381
+diff --git a/tests/fixtures/market-data/it-services.csv b/tests/fixtures/market-data/it-services.csv
+index 570af18..f6ea46a 100644
+--- a/tests/fixtures/market-data/it-services.csv
++++ b/tests/fixtures/market-data/it-services.csv
+@@ -17,7 +17,6 @@ Kestrel Field,Kestrel Field Parent LLC,Supplies data management and analytics to
+ Kesveum,Kesveum Holdco LLC,Provides technology advisory and delivery services to institutional clients.,Consulting,Advisory,Private,SYN4955905,SYN01YLCRM70,B,2L Gtd Sr. Secd,Caa1 / CCC+,3695,525,10-Nov-30,92,93.75,#N/A N/A,0.6875,-1.4375,-1.125,3.9375,4,3.375,10.8,824
+ Kesveum,Kesveum Holdco LLC,Provides technology advisory and delivery services to institutional clients.,Consulting,Advisory,Private,SYN5424914,SYN01DHK7JV8,B4,1L Gtd Sr. Secd,Caa1 / CCC+,4430,500,06-Jul-28,81,82.5,0.3125,-0.1875,0.625,-0.8125,5.625,-6,6.4375,17.9,1251
+ Kesveum,Kesveum Holdco LLC,Provides technology advisory and delivery services to institutional clients.,Consulting,Advisory,Private,SYN4947963,SYN01F3MDN1B,B1,1L Gtd Sr. Secd,Caa1 / CCC+,4249,475,20-Nov-28,95,96,0.125,0.5,-0.6875,-3.0625,0.1875,-5.5,-1.1875,10.5,660
+-Linden Works,Linden Works Finco Inc,Supplies data management and analytics tooling to regional customers.,Data,Analytics,Public,SYN4175830,SYN01MGCYY8J,B,1L Gtd Sr. Secd,Ba2 / BB,2312,175,25-Jan-29,98.5,98.875,0,0.25,0.125,0,#N/A N/A,-0.5,0.5625,6.2,222
+ Lysera,Lysera Parent LLC,Runs outsourced IT operations for institutional clients.,Managed Services,Outsourcing,Private,SYN2452098,SYN014DDTSWJ,B,1L Sr. Secd,Ba2 / BB-,3000,200,11-May-29,100,100.625,0,-0.0625,0.25,0.5,0.5,0.1875,0.1875,5.7,183
+ Lysera,Lysera Parent LLC,Runs outsourced IT operations for institutional clients.,Managed Services,Outsourcing,Private,SYN8061798,SYN019GCC6JQ,B1,1L Gtd Sr. Secd,Ba2 / BB-,530,175,18-Apr-28,100.25,100.5,-0.0625,-0.125,-0.0625,0.9375,-0.5625,-1.4375,#N/A N/A,5.5,159
+ Marlow Hollow,Marlow Hollow Intermediate Holdings LLC,Supplies data management and analytics tooling to consumers.,Data,Analytics,Private,SYN0304641,SYN010G1RFK1,B,1L Sr. Secd,B2 / B,4080,325,17-Jul-32,99.75,100.375,0,-0.125,-0.3125,0.25,0.75,1.0625,-0.6875,7.1,320
+@@ -27,6 +26,7 @@ Nevraon,Nevraon Lux Sarl,Runs outsourced IT operations for mid-sized enterprises
+ Opal Bay,Opal Bay Group Ltd,Supplies data management and analytics tooling to mid-sized enterprises.,Data,Analytics,Public,SYN1873474,SYN0198WQHT9,B,1L Gtd Sr. Secd,B1 / B+,5445,250,07-Mar-29,98.5,99,0.0625,-0.0625,0.1875,0.125,0.125,-0.125,0.75,6.9,295
+ Quarry Bay,Quarry Bay Holdings Inc,Runs outsourced IT operations for mid-sized enterprises.,Managed Services,Outsourcing,Private,SYN5930256,SYN01PC3G47Z,B,1L Gtd Sr. Secd,B3 / B-,4310,425,07-Jan-32,97.75,98.5,0.25,#N/A N/A,-0.25,1.375,-0.75,-1.5625,#N/A N/A,8.5,496
+ Sylseis,Sylseis Group Ltd,Provides technology advisory and delivery services to consumers.,Consulting,Advisory,Private,SYN7757265,SYN013G7MB6M,#N/A Field Not Applicable,1L Sr. Secd,Caa1 / CCC+,1610,525,20-May-29,72.5,74.125,#N/A N/A,0.0625,-1.375,0.0625,-4.25,#N/A N/A,-0.5625,18.3,1630
++Tamsin Works,Tamsin Works Finco Inc,Supplies data management and analytics tooling to regional customers.,Data,Analytics,Public,SYN4175830,SYN01MGCYY8J,B,1L Gtd Sr. Secd,Ba2 / BB,2312,175,25-Jan-29,98.5,98.875,0,0.25,0.125,0,#N/A N/A,-0.5,0.5625,6.2,222
+ Valseia,Valseia Group Ltd,Provides technology advisory and delivery services to mid-sized enterprises.,Consulting,Advisory,Private,SYN4670892,SYN01C9MVTXV,B,1L Sr. Secd,B1 / B+,3700,300,14-Oct-31,98.625,99,0,-0.25,-0.5,0.875,0.5625,1.9375,-1.4375,7.2,344
+ Valseia,Valseia Group Ltd,Provides technology advisory and delivery services to mid-sized enterprises.,Consulting,Advisory,Private,SYN0582918,SYN01N2ZCM68,C,1L Sr. Secd,B1 / B+,3215,275,15-Jul-29,100.5,101.125,-0.0625,-0.25,0.25,0.75,0.5625,0.9375,#N/A N/A,6.3,236
+ Valseia,Valseia Group Ltd,Provides technology advisory and delivery services to mid-sized enterprises.,Consulting,Advisory,Private,SYN8448946,SYN0172MWMBH,B4,1L Sr. Secd,B1 / B+,4335,275,28-Dec-29,98.875,99.25,-0.125,0.1875,-0.25,-0.3125,0.75,-1.1875,-1.8125,6.9,307
+diff --git a/tests/fixtures/market-data/power.csv b/tests/fixtures/market-data/power.csv
+index 2c3b9cf..0736105 100644
+--- a/tests/fixtures/market-data/power.csv
++++ b/tests/fixtures/market-data/power.csv
+@@ -20,7 +20,7 @@ Power,Kesveia,SYN7964917,B,1L Gtd Sr. Secd,B2 / B,2070,300,15-Mar-29,100.125,100
+ Power,Lydois,SYN01FQBL8P7,C,1L Gtd Sr. Secd,B2 / B,5955,350,23-May-30,99.875,100.625,0.375,-1.5625,7.4,333
+ Power,Quordoum,SYN01J11HHPX,B,2L Gtd Sr. Secd,B2 / B,5845,300,26-Jul-30,100.5,100.875,0.375,-1.625,6.8,277
+ Power,Dramira,SYN01JYSYXND,B,1L Gtd Sr. Secd,B1 / B+,3850,250,10-May-29,99.375,99.875,0,-1.3125,6.6,273
+-Power,Linden Forge,SYN01P5X82CT,B,1L SuperP Sr. Secd,Caa1 / CCC+,1150,450,27-Mar-32,82,82.625,0.5625,4.875,11.5,1187
++Power,Tamsin Forge,SYN01P5X82CT,B,1L SuperP Sr. Secd,Caa1 / CCC+,1150,450,27-Mar-32,82,82.625,0.5625,4.875,11.5,1187
+ Power,Keslaon,SYN015NDZ64Q,B5,1L Gtd Sr. Secd,B1 / B+,4450,250,25-Nov-30,98.875,99.125,-0.375,0.875,6.7,288
+ Power,Mernoia,SYN014C2LQW7,B4,1L Sr. Secd,B2 / B-,1705,350,11-Sep-28,100.375,100.75,#N/A N/A,-0.625,7.1,330
+ Power,Marlow Forge,SYN01RPYKYG5,#N/A Field Not Applicable,1L Gtd Sr. Secd,B2 / B,2236,375,06-Apr-33,100.5,101.125,-0.4375,-0.8125,7.5,338
+diff --git a/tests/fixtures/market-data/schema.json b/tests/fixtures/market-data/schema.json
+index 00fb291..9821daa 100644
+--- a/tests/fixtures/market-data/schema.json
++++ b/tests/fixtures/market-data/schema.json
+@@ -42,6 +42,13 @@
+     "Δ 1D", "Δ 1W", "Δ 1M", "Δ 3M", "Δ 6M", "Δ 1YR", "Δ YTD", "YTM", "3Y DM"
+   ],
+   "index_rows": 4,
++  "index_bounds": {
++    "_note": "Inclusive bounds per index row (suffix of the Index name after ': '), written by hand: anchor plus or minus the stated noise. Every delta column of a row lies within plus or minus that row's delta_abs_max.",
++    "Ba": {"delta_abs_max": 1, "Market Value ($Bn)": [306, 374], "Avg Price": [99.1, 99.3], "YTM": [5.85, 6.15], "3Y DM": [230, 246]},
++    "Ba/B": {"delta_abs_max": 1, "Market Value ($Bn)": [1125, 1375], "Avg Price": [96.9, 97.1], "YTM": [7.35, 7.65], "3Y DM": [393, 409]},
++    "B": {"delta_abs_max": 1, "Market Value ($Bn)": [810, 990], "Avg Price": [95.9, 96.1], "YTM": [7.85, 8.15], "3Y DM": [455, 471]},
++    "Caa": {"delta_abs_max": 3, "Market Value ($Bn)": [76.5, 93.5], "Avg Price": [76.4, 76.6], "YTM": [18.25, 18.55], "3Y DM": [1514, 1530]}
++  },
+   "issuer": {
+     "_note": "One fictional issuer of the pack in the shape of an issuer's market files (synthetic, not issuer evidence): a quotes file the run-start classifier reads as market_quotes, and run-context quote rows. Values copied by hand from telecoms.csv (Kestrel Ridge, two clean tranches); price is (bid + ask) / 2.",
+     "quotes_file": "issuer-quotes.txt",
+diff --git a/tests/fixtures/market-data/software.csv b/tests/fixtures/market-data/software.csv
+index edbaa84..ddaa85c 100644
+--- a/tests/fixtures/market-data/software.csv
++++ b/tests/fixtures/market-data/software.csv
+@@ -22,8 +22,6 @@ Kestrel Crest,Kestrel Crest Holdco LLC,Operates payment processing platforms for
+ Kestrel Crest,Kestrel Crest Holdco LLC,Operates payment processing platforms for institutional clients.,Fintech,Payments,Private,SYN3525978,SYN018WCLTMS,B5,1L Gtd Sr. Secd,B2 / B,4365,325,10-Apr-29,98.875,99.375,0.125,0,-0.125,#N/A N/A,0.75,-2,0.8125,7.5,354
+ Kestrel Crest,Kestrel Crest Holdco LLC,Operates payment processing platforms for institutional clients.,Fintech,Payments,Private,SYN3667985,SYN01P5PP9FZ,B4,1L Gtd Sr. Secd,B2 / B,1105,300,09-Nov-28,98.875,99.5,0.125,#N/A N/A,0.25,-1,0.0625,1.5,-1.5,7.3,339
+ Kesveix,Kesveix Holdings Inc,Sells industry-specific subscription software to regional customers.,Applications,Vertical,Private,SYN6857962,SYN01H4PJ6B6,B,1L Sr. Secd,B2 / B,2535,375,14-Oct-32,99.625,99.875,0,-0.0625,0,-0.5625,-0.75,-1.25,-1,7.6,381
+-Linden Bay,Linden Bay Parent LLC,Provides cloud security software to consumers.,Infrastructure,Security,Private,SYN0096777,SYN01ZV7LH97,B,1L Gtd Sr. Secd,B1 / B+,4665,275,20-Jun-33,98.5,98.875,0,-0.0625,0,0.3125,1.3125,-0.6875,0.125,6.9,322
+-Linden Crest,Linden Crest Holdings Inc,Operates payment processing platforms for mid-sized enterprises.,Fintech,Payments,Public*,SYN9124862,SYN01LLD9VPF,#N/A Field Not Applicable,1L Gtd Sr. Secd,B1 / B+,3575,292.5,10-Feb-28,100.125,100.5,0,-0.1875,0.3125,0.75,0.25,0.5,-1.6875,6.7,281
+ Lydoia,Lydoia Group Ltd,Operates payment processing platforms for consumers.,Fintech,Payments,Private,SYN0062178,SYN01T2XZ09R,B,1L Gtd Sr. Secd,Ba3 / BB-,560,225,20-Oct-32,100.125,100.875,-0.0625,-0.1875,0.1875,-0.9375,-0.375,1.625,-0.5,6.1,212
+ Lymira,Lymira Finco Inc,Sells industry-specific subscription software to regional customers.,Applications,Vertical,Private,SYN3111710,SYN018XX4ZLH,B,1L Gtd Sr. Secd,B1 / B+,1470,275,14-Feb-30,99.625,100,-0.125,#N/A N/A,-0.3125,0.125,-0.875,1.0625,0.25,6.7,281
+ Lynoex,Lynoex Lux Sarl,Offers workflow and collaboration software to consumers.,Applications,Horizontal,Private,SYN6381728,SYN01W1N9DW8,B6,2L Gtd Sr. Secd,B1 / B+,5919,300,05-Jan-33,98.75,99.5,0,-0.25,-0.25,0.8125,-1.125,-1.0625,1,7.0,337
+@@ -70,6 +68,8 @@ Tallaon,Tallaon Holdco LLC,Sells industry-specific subscription software to mid-
+ Talnoar,Talnoar Group Ltd,Offers workflow and collaboration software to regional customers.,Applications,Horizontal,Private,SYN5116848,SYN01Z334N3H,B,1L Gtd Sr. Secd,Caa2 / CCC,2950,600,05-Mar-30,94.75,95.625,0,0.25,-1.1875,-1.0625,3.1875,2.75,0.4375,11.2,798
+ Talnora,Talnora Finco Inc,Operates payment processing platforms for consumers.,Fintech,Payments,Private,SYN4126944,SYN01BDPHPGY,B,1L Sr. Secd,B3 / B-,485,375,26-Aug-32,95.125,95.75,0.25,0.5,0.3125,1.375,-2.75,-1.3125,-2.125,8.5,558
+ Talveia,Talveia Holdings Inc,Provides cloud security software to institutional clients.,Infrastructure,Security,Private,SYN9404306,SYN01ZZ4YP84,B,1L Gtd Sr. Secd,B3 / B-,2930,400,02-Jul-29,98.25,99,0.25,-0.25,-0.5625,-0.9375,-1.125,-0.625,-2.5,8.3,454
++Tamsin Bay,Tamsin Bay Parent LLC,Provides cloud security software to consumers.,Infrastructure,Security,Private,SYN0096777,SYN01ZV7LH97,B,1L Gtd Sr. Secd,B1 / B+,4665,275,20-Jun-33,98.5,98.875,0,-0.0625,0,0.3125,1.3125,-0.6875,0.125,6.9,322
++Tamsin Crest,Tamsin Crest Holdings Inc,Operates payment processing platforms for mid-sized enterprises.,Fintech,Payments,Public*,SYN9124862,SYN01LLD9VPF,#N/A Field Not Applicable,1L Gtd Sr. Secd,B1 / B+,3575,292.5,10-Feb-28,100.125,100.5,0,-0.1875,0.3125,0.75,0.25,0.5,-1.6875,6.7,281
+ Valmira,Valmira Holdco LLC,Operates payment processing platforms for consumers.,Fintech,Payments,Private,SYN5548379,SYN01KTR86L1,#N/A Field Not Applicable,1L Sr. Secd,Caa1 / CCC+,4800,492.5,07-Jun-29,81.25,82,0,-0.4375,-1.125,2.25,2.3125,#N/A N/A,5.75,15.1,1260
+ Valseis,Valseis Holdco LLC,Offers workflow and collaboration software to mid-sized enterprises.,Applications,Horizontal,Private,SYN2662921,SYN01KT2S2GJ,FLSO,2L Gtd Sr. Secd,Ba2 / BB,5886,200,18-Jan-31,100,100.75,0,-0.125,-0.0625,#N/A N/A,0.75,-1.4375,-0.1875,5.8,188
+ Valveis,Valveis Lux Sarl,Sells industry-specific subscription software to regional customers.,Applications,Vertical,Private,SYN7561921,SYN01VZ3MP4J,B4,1L Gtd Sr. Secd,B2 / B,3150,375,07-Jul-32,99.5,99.75,0,-0.1875,0.125,0.875,1.1875,0.8125,-1.5625,7.7,391
+diff --git a/tests/fixtures/market-data/telecoms.csv b/tests/fixtures/market-data/telecoms.csv
+index d0bbe62..5b8cb99 100644
+--- a/tests/fixtures/market-data/telecoms.csv
++++ b/tests/fixtures/market-data/telecoms.csv
+@@ -16,8 +16,6 @@ Kestrel Hollow,Kestrel Hollow Holdings Inc,Owns shared wireless infrastructure u
+ Kestrel Point,Kestrel Point Holdco LLC,Provides satellite connectivity services to mid-sized enterprises.,Satellite,Services,Public,SYN8403014,SYN01VSK7VW7,B,1L Sr. Secd,B2 / B,5790,325,23-Oct-32,99.25,100,0,0,-0.25,-0.1875,0.75,0.75,0.5,7.2,338
+ Kestrel Ridge,Kestrel Ridge Finco Inc,Provides broadband and video bundles to institutional clients.,Cable,Broadband,Private,SYN8256223,SYN01884PBNZ,B,1L Gtd Sr. Secd,Ba3 / BB-,3925,250,07-Nov-27,99.625,100.375,0.125,0.125,#N/A N/A,0.8125,-0.4375,0.125,-0.875,6.5,252
+ Kestrel Ridge,Kestrel Ridge Finco Inc,Provides broadband and video bundles to institutional clients.,Cable,Broadband,Private,SYN6321352,SYN01XC2X70H,FLSO,1L Gtd Sr. Secd,Ba3 / BB-,4730,250,28-Jan-33,99,99.75,0,0.1875,0.1875,-0.9375,-1.5,-1.3125,1.75,6.5,270
+-Linden Hollow,Linden Hollow Holdco LLC,Owns shared wireless infrastructure used by institutional clients.,Wireless,Towers,Private*,SYN8002231,SYN015H09HBJ,#N/A Field Not Applicable,1L Gtd Sr. Secd,B1 / B+,1780,300,26-Feb-32,100.125,100.75,0,0.25,-0.1875,0.4375,1,1.875,1.9375,6.9,275
+-Linden Point,Linden Point Intermediate Holdings LLC,Provides broadband and video bundles to mid-sized enterprises.,Cable,Broadband,Private,SYN0286879,SYN01H7NH2NL,B,1L Gtd Sr. Secd,Caa2 / CCC,5625,650,07-May-29,73.75,74.75,-0.5,-0.625,0.6875,3.375,-3.5,3.1875,4.5,19.4,1714
+ Lydoum,Lydoum Intermediate Holdings LLC,Owns shared wireless infrastructure used by regional customers.,Wireless,Towers,Public*,SYN2237037,SYN014G0DWX2,B,1L Sr. Secd,B3 / B-,1780,425,06-Jul-29,98.625,98.875,0,-0.4375,0.3125,2,-1.9375,0.6875,-1.75,8.5,473
+ Lyseex,Lyseex Finco Inc,Builds and leases fibre network capacity to consumers.,Wireline,Fibre,Private,SYN6062793,SYN015BSS2TQ,B,1L Sr. Secd,B3 / B-,2645,400,27-Feb-28,96.75,97.5,-0.125,-0.25,0.5625,-1.5625,0.875,1.3125,3.25,9.5,525
+ Lyveix,Lyveix Lux Sarl,Provides broadband and video bundles to institutional clients.,Cable,Broadband,Private,SYN9503144,SYN01QVSYHWX,B,1L Gtd Sr. Secd,Ba3 / BB-,4750,200,08-Nov-30,99.625,100.375,0.125,#N/A N/A,0.375,0.375,1.3125,1.8125,0.6875,5.9,200
+@@ -32,6 +30,8 @@ Quarry Field,Quarry Field Lux Sarl,Builds and leases fibre network capacity to i
+ Quarry Field,Quarry Field Lux Sarl,Builds and leases fibre network capacity to institutional clients.,Wireline,Fibre,Private,SYN5010628,SYN0142BVN2S,B1,1L Sr. Secd,#N/A N/A / CCC+,730,500,08-Oct-31,82.375,83.75,-0.25,0.5625,1.0625,0.5625,5.9375,6.125,0.8125,12.2,1197
+ Quorlaon,Quorlaon Holdco LLC,Provides broadband and video bundles to mid-sized enterprises.,Cable,Broadband,Private,SYN0248871,SYN01GYD80PG,#N/A Field Not Applicable,1L Sr. Secd,B2 / B,5200,300,21-Dec-31,100.25,100.875,0,0.1875,#N/A N/A,-0.25,-1.125,0,1.25,6.8,269
+ Quorseon,Quorseon Lux Sarl,Builds and leases fibre network capacity to consumers.,Wireline,Fibre,Private,SYN3306412,SYN01Z74MB8K,B,1L Gtd Sr. Secd,#N/A N/A / B-,2640,425,16-Nov-32,99.625,100.125,0,0,-0.75,-0.375,1.8125,#N/A N/A,-2.25,8.3,433
++Tamsin Hollow,Tamsin Hollow Holdco LLC,Owns shared wireless infrastructure used by institutional clients.,Wireless,Towers,Private*,SYN8002231,SYN015H09HBJ,#N/A Field Not Applicable,1L Gtd Sr. Secd,B1 / B+,1780,300,26-Feb-32,100.125,100.75,0,0.25,-0.1875,0.4375,1,1.875,1.9375,6.9,275
++Tamsin Point,Tamsin Point Intermediate Holdings LLC,Provides broadband and video bundles to mid-sized enterprises.,Cable,Broadband,Private,SYN0286879,SYN01H7NH2NL,B,1L Gtd Sr. Secd,Caa2 / CCC,5625,650,07-May-29,73.75,74.75,-0.5,-0.625,0.6875,3.375,-3.5,3.1875,4.5,19.4,1714
+ Valdois,Valdois Holdco LLC,Provides broadband and video bundles to mid-sized enterprises.,Cable,Broadband,Private,SYN5285923,SYN01FBN739Z,B,1L Gtd Sr. Secd,WR / NR,2875,325,22-Jul-30,99.5,99.875,-0.125,0.1875,-0.1875,0.125,0,1.6875,-1.125,7.3,335
+ Wexdora,Wexdora Parent LLC,Builds and leases fibre network capacity to mid-sized enterprises.,Wireline,Fibre,Private,SYN5627733,SYN0178LV8BM,B,1L Gtd Sr. Secd,B3 / B-,4325,375,23-Feb-31,98,98.25,-0.0625,0.3125,-0.0625,-0.125,-0.6875,2.875,0.9375,8.1,447
+ Wextaex,Wextaex Holdco LLC,Builds and leases fibre network capacity to consumers.,Wireline,Fibre,Private,SYN4766380,SYN01C38043B,B1,1L Gtd Sr. Secd,B3 / B-,2525,375,06-May-28,97.25,97.875,0,-0.375,0.875,1.1875,-0.0625,-2.125,-3.125,9.0,482
+diff --git a/tests/test_document_key.py b/tests/test_document_key.py
+new file mode 100644
+index 0000000..e9b39ca
+--- /dev/null
++++ b/tests/test_document_key.py
+@@ -0,0 +1,186 @@
++"""guess_kind against the hand-written answer key tests/fixtures/run-expectations/document-key.json.
++
++Each entry whose file exists is paged as the launcher pages it (the launcher's own ``_pages``,
++called on the file's bytes) and the guess must equal the key's kind, executed flag and period end:
++21 of the 25 present entries are checked that way. Four named files (KEY_PAGING_ONLY) are checked
++under the key's own paging instead. The key is not edited here and the comparison is not
++loosened."""
++
++from __future__ import annotations
++
++import json
++from pathlib import Path
++
++import pytest
++
++from deploy_workflow.model.handoff import _pages
++from deploy_workflow.owners import cpos_launch
++from deploy_workflow.run_expectations import guess_kind
++
++ROOT = Path(__file__).resolve().parent.parent
++KEY = json.loads((ROOT / "tests/fixtures/run-expectations/document-key.json").read_text())
++FIRST_PAGES = cpos_launch.FIRST_PAGES  # the guess sees the launcher's first pages
++
++# Keyed for pages split at '=== PAGE ===' with the banner dropped (the key's note); the launcher
++# pages a .txt as 12,000-character chunks, so 07 and 10 reach guess_kind as one page holding two
++# kinds' covers. For 18 and 19 the fixture banner line sits above the cover line under launcher
++# paging. 21 of the 25 present keyed documents pass under launcher paging; the four here are
++# checked below under the key's own paging.
++KEY_PAGING_ONLY = {
++    "tests/fixtures/run-expectations/synthetic/07-combined-compliance-certificate-then-10q.txt": (
++        "launcher gives one page holding a compliance certificate and a 10-Q cover"
++    ),
++    "tests/fixtures/run-expectations/synthetic/10-earnings-release.txt": (
++        "launcher gives one page holding the release and a statements heading"
++    ),
++    "tests/fixtures/run-expectations/synthetic/18-market-quotes.txt": (
++        "under launcher paging the banner line sits above the cover line and the classifier "
++        "reads the cover line as a wrapped sentence tail, so the result is unrecognised; whether "
++        "the classifier or the key's paging should change is an open owner decision"
++    ),
++    "tests/fixtures/run-expectations/synthetic/19-peer-data.txt": (
++        "under launcher paging the banner line sits above the cover line and the classifier "
++        "reads the cover line as a wrapped sentence tail, so the result is unrecognised; whether "
++        "the classifier or the key's paging should change is an open owner decision"
++    ),
++}
++ENTRIES = [e for e in KEY["entries"] if (ROOT / e["path"]).is_file()]
++
++
++def test_every_synthetic_entry_exists() -> None:
++    missing = [e["path"] for e in KEY["entries"] if e["origin"] == "synthetic" and e not in ENTRIES]
++    assert not missing, missing
++
++
++def _launcher_pages(path: Path) -> list[str]:
++    return _pages(path.name, path.read_bytes())
++
++
++@pytest.mark.parametrize(
++    "entry",
++    [pytest.param(e, id=e["path"]) for e in ENTRIES if e["path"] not in KEY_PAGING_ONLY],
++)
++def test_guess_matches_key(entry: dict[str, object]) -> None:
++    path = ROOT / str(entry["path"])
++    guess = guess_kind(path.name, _launcher_pages(path)[:FIRST_PAGES])
++    assert (guess.kind, guess.executed, guess.period_end) == (
++        entry["kind"],
++        entry["executed"],
++        entry["period_end"],
++    )
++
++
++@pytest.mark.parametrize(
++    "entry",
++    [pytest.param(e, id=e["path"]) for e in ENTRIES if e["path"] in KEY_PAGING_ONLY],
++)
++def test_guess_matches_key_under_key_paging(entry: dict[str, object]) -> None:
++    path = ROOT / str(entry["path"])
++    body = path.read_text().split("\n", 1)[1]  # line 1 is the banner, not page text
++    guess = guess_kind(path.name, body.split("\n=== PAGE ===\n")[:FIRST_PAGES])
++    assert (guess.kind, guess.executed, guess.period_end) == (
++        entry["kind"],
++        entry["executed"],
++        entry["period_end"],
++    )
++
++
++WRAPPED = [
++    pytest.param(
++        "The borrower shall deliver to the administrative agent within forty five days a duly\n"
++        "compliance certificate signed by a responsible officer of the borrower each quarter",
++        id="compliance-certificate",
++    ),
++    pytest.param(
++        "Lenders will rely on the figures that the sponsor supplied and that we reviewed in\n"
++        "peer data gathered from several public sources over the last twelve months",
++        id="peer-data",
++    ),
++]
++
++
++@pytest.mark.parametrize("page", WRAPPED)
++def test_wrapped_prose_tail_is_not_a_title(page: str) -> None:
++    assert guess_kind("notes.txt", [page]).kind == "unrecognised"
++
++
++def test_wrapped_prose_does_not_add_a_second_kind() -> None:
++    page = (
++        "COMPLIANCE CERTIFICATE\n"
++        "Each quarter the borrower delivers to the agent, on the date set by the lenders, a duly\n"
++        "peer data gathered from several public sources over the last twelve months"
++    )
++    assert guess_kind("notes.txt", [page]).kind == "compliance_certificate"
++
++
++# Prose whose previous line holds a spaced hyphen or is upper case is still open prose: a bare
++# " - " or an all-caps line does not make the line below a title, so the wrapped tail stays
++# skipped.
++PROSE_ABOVE = [
++    pytest.param(
++        "dealer-commentary.txt",
++        "Secondary prices drifted lower after the sponsor - which also owns the borrower - "
++        "released\n"
++        "market quotes from three dealers that we have not been able to verify independently\n",
++        id="dash-prose-market-quotes",
++    ),
++    pytest.param(
++        "lender-update-executed.txt",
++        "THE BORROWER HAS DELIVERED THE NOTICE REQUIRED BY SECTION 6.02 OF THE\n"
++        "amended and restated credit agreement dated as of March 3, 2021 among the lenders\n",
++        id="upper-prose-credit-agreement",
++    ),
++    pytest.param(
++        "notes.txt",
++        "Management - in line with prior quarters - expects to deliver its next quarterly\n"
++        "compliance certificate within forty five days after the end of the quarter\n",
++        id="dash-prose-compliance-certificate",
++    ),
++    pytest.param(
++        "notes.txt",
++        "Leverage is above the median of the group - see the table below for the figures from\n"
++        "peer data compiled by the sponsor and not reviewed by any independent party here\n",
++        id="dash-prose-peer-data",
++    ),
++    pytest.param(
++        "dealer-commentary.txt",
++        "EBITDA - as defined in the credit agreement and adjusted for the items released in\n"
++        "market quotes from three dealers that we have not been able to verify independently\n",
++        id="acronym-label-market-quotes",
++    ),
++    pytest.param(
++        "notes.txt",
++        "Q3 2025 - management expects to deliver its next quarterly\n"
++        "compliance certificate within forty five days after the end of the quarter\n",
++        id="quarter-label-compliance-certificate",
++    ),
++    pytest.param(
++        "notes.txt",
++        "S&P - downgraded the issuer on weaker cash flow and pointed to the\n"
++        "peer data compiled by the sponsor and not reviewed by any independent party here\n",
++        id="agency-label-peer-data",
++    ),
++    pytest.param(
++        "notes.txt",
++        "RISK FACTORS - investors should read this entire document including the\n"
++        "offering memorandum and the annual report before deciding to invest here",
++        id="label-prose-risk-factors",
++    ),
++    pytest.param(
++        "notes.txt",
++        "NOTE TO DRAFT - the borrower will deliver to the agent within forty five days a\n"
++        "compliance certificate signed by a responsible officer of the borrower each quarter",
++        id="label-prose-note-to-draft",
++    ),
++    pytest.param(
++        "notes.txt",
++        "MARKET UPDATE - secondary prices drifted lower after the sponsor released\n"
++        "market quotes from three dealers that we have not been able to verify independently",
++        id="label-prose-market-update",
++    ),
++]
++
++
++@pytest.mark.parametrize(("name", "page"), PROSE_ABOVE)
++def test_prose_with_dash_or_capitals_above_stays_unrecognised(name: str, page: str) -> None:
++    assert guess_kind(name, [page]).kind == "unrecognised"
+diff --git a/tests/test_synthetic_market_data.py b/tests/test_synthetic_market_data.py
+index cf9b31b..d1ffc23 100644
+--- a/tests/test_synthetic_market_data.py
++++ b/tests/test_synthetic_market_data.py
+@@ -5,6 +5,7 @@ import json
+ from collections import Counter
+ from datetime import date
+ from decimal import ROUND_HALF_UP, Decimal
++from fractions import Fraction
+ from pathlib import Path
+ 
+ import pytest
+@@ -113,6 +114,57 @@ def test_index_statistics() -> None:
+     header, rows = load(FIXTURES / "index-statistics.csv")
+     assert header == SCHEMA["index_columns"]
+     assert len(rows) == SCHEMA["index_rows"]
++    bounds = {k: v for k, v in SCHEMA["index_bounds"].items() if not k.startswith("_")}
++    delta_cols = [c for c in header if c.startswith("\u0394")]
++    assert sorted(r["Index"].rsplit(": ", 1)[1] for r in rows) == sorted(bounds)
++    for row in rows:
++        suffix = row["Index"].rsplit(": ", 1)[1]
++        spec = dict(bounds[suffix])
++        delta_max = Decimal(str(spec.pop("delta_abs_max")))
++        for col, (low, high) in spec.items():
++            assert Decimal(str(low)) <= Decimal(row[col]) <= Decimal(str(high)), (suffix, col)
++        for col in delta_cols:
++            assert abs(Decimal(row[col])) <= delta_max, (suffix, col)
++
++
++def numeric(cell: str) -> Decimal | None:
++    return Decimal(cell) if cell[:1] in "-0123456789" else None
++
++
++def written_mean(values: list[Decimal]) -> str:
++    """Arithmetic mean, 2 dp half-up, trailing zeros trimmed; '-' when nothing is numeric."""
++    if not values:
++        return "-"
++    cents = (sum(values, Decimal(0)) / len(values)).quantize(
++        Decimal("0.01"), rounding=ROUND_HALF_UP
++    )
++    return f"{cents:.2f}".rstrip("0").rstrip(".")
++
++
++def written_mean_date(texts: list[str]) -> str:
++    """Mean of the day numbers rounded to the nearest day (an exact half goes to the even day)."""
++    days = [to_date(t).toordinal() for t in texts if t[:1].isdigit()]
++    if not days:
++        return "-"
++    mean_day = date.fromordinal(round(Fraction(sum(days), len(days))))
++    return f"{mean_day.day:02d}-{MONTHS[mean_day.month - 1]}-{mean_day.year % 100:02d}"
++
++
++@pytest.mark.parametrize("sector", [s for s, v in SECTORS.items() if v["ratings_average"]])
++def test_ratings_average_every_column_recomputed(sector: str) -> None:
++    _, rows = load(FIXTURES / f"{sector}.csv")
++    header, avg = load(FIXTURES / f"{sector}-ratings-average.csv")
++    averaged = [c for c in header if c not in ("Rating", "# Issuers")]
++    assert len(averaged) == 14
++    for bucket in avg:
++        members = [r for r in rows if r["Ratings"].split(" / ")[0] == bucket["Rating"]]
++        for col in averaged:
++            if col == "Maturity":
++                expected = written_mean_date([r[col] for r in members])
++            else:
++                nums = [n for r in members if (n := numeric(r[col])) is not None]
++                expected = written_mean(nums)
++            assert bucket[col] == expected, (sector, bucket["Rating"], col)
+ 
+ 
+ def test_ratings_average_cells_round_half_up() -> None:
+diff --git a/tools/synthetic_market_data.py b/tools/synthetic_market_data.py
+index 7e31d75..54c033a 100644
+--- a/tools/synthetic_market_data.py
++++ b/tools/synthetic_market_data.py
+@@ -145,7 +145,7 @@ SYLLABLES = (
+     ("ra", "on", "is", "ex", "ia", "um", "ar", "ix"),
+ )
+ WORDS = (
+-    ("Kestrel", "Amber", "Harrow", "Linden", "Marlow", "Northgate", "Opal", "Quarry"),
++    ("Kestrel", "Amber", "Harrow", "Tamsin", "Marlow", "Northgate", "Opal", "Quarry"),
+     ("Ridge", "Point", "Field", "Crest", "Works", "Bay", "Hollow", "Forge"),
+ )
+ CUSTOMERS = ("mid-sized enterprises", "regional customers", "institutional clients", "consumers")
