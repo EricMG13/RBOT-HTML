@@ -25,13 +25,16 @@ from typing import Any
 import pytest
 from test_signal_feeds import RSS
 from test_signal_feedview import build_feed_db
+from test_signal_groups import AK, ML, T0, team_db
 
 from deploy_workflow.signal import service
 from deploy_workflow.signal.cli import main
 from deploy_workflow.signal.feeds import Entry
 from deploy_workflow.signal.fetch import Fetched, FetchRefused
+from deploy_workflow.signal.groups import Act, create_group, join
 from deploy_workflow.signal.service import Loop, make_server
 from deploy_workflow.signal.store import add_story, open_db, propose_source, set_source_state
+from deploy_workflow.signal.threads import share_story
 
 NOW = datetime(2026, 11, 13, 10, 0, tzinfo=UTC)
 SAME = object()  # "the page's own origin", the default for a request that is not a GET
@@ -593,3 +596,393 @@ def test_a_save_waits_for_a_held_write_lock(svc_with_loop, cookie, tmp_path):
     finally:
         release.join()
         other.close()
+
+
+# ---- groups and threads (slice 3, task 4) ----
+
+TABLES = ("groups", "group_members", "threads", "comments", "reactions", "read_marks")
+
+
+class Site(Live):
+    """A server over a team database (users ak and ml are writers, rd a reader)."""
+
+    def __init__(self, server: ThreadingHTTPServer, root: Path) -> None:
+        super().__init__(server)
+        self.root = root
+
+    def counts(self) -> dict[str, int]:
+        db = open_db(self.root)
+        try:
+            return {t: db.execute(f"SELECT count(*) FROM {t}").fetchone()[0] for t in TABLES}
+        finally:
+            db.close()
+
+
+def _team(root: Path, *, seeded: bool) -> None:
+    """The team's users, sources and stories; seeded adds group 1 "TMT" (everyone; ak made it, ml
+    joined at T0) with thread 1 (story 1, ak's note "look", at T0 + 1 minute) and group 2 "Inner"
+    (invited; ak the only member) with thread 2 (story 2, ak's note "secret note")."""
+    db = team_db(root)
+    if seeded:
+        tmt = create_group(db, Act(AK, T0), "TMT", "everyone", [])
+        join(db, ML.name, tmt, T0)
+        later = T0 + timedelta(minutes=1)
+        share_story(db, Act(AK, later), tmt, 1, "look")
+        inner = create_group(db, Act(AK, T0), "Inner", "invited", [])
+        share_story(db, Act(AK, later), inner, 2, "secret note")
+    db.close()
+
+
+@pytest.fixture
+def site(tmp_path: Path) -> Iterator[Site]:
+    _team(tmp_path, seeded=False)
+    live = Site(make_server(tmp_path, "127.0.0.1", 0), tmp_path)
+    yield live
+    live.close()
+
+
+@pytest.fixture
+def world(tmp_path: Path) -> Iterator[Site]:
+    _team(tmp_path, seeded=True)
+    live = Site(make_server(tmp_path, "127.0.0.1", 0), tmp_path)
+    yield live
+    live.close()
+
+
+@pytest.fixture
+def world_loop(tmp_path: Path) -> Iterator[tuple[Loop, Site]]:
+    _team(tmp_path, seeded=True)
+    loop = Loop(tmp_path)
+    live = Site(make_server(tmp_path, "127.0.0.1", 0, loop=loop), tmp_path)
+    yield loop, live
+    live.close()
+
+
+AK_C, ML_C, RD_C, ZZ_C = (f"signal_name={n}" for n in ("ak", "ml", "rd", "zz"))
+NEW_GROUP = {"name": "New", "visibility": "everyone", "topics": []}
+
+# Every POST and DELETE route of the table, on the world's visible group 1, thread 1, comment 1.
+WRITES = [
+    ("POST", "/api/groups", NEW_GROUP),
+    ("POST", "/api/groups/1/members", {}),
+    ("POST", "/api/groups/1/members", {"name": "rd"}),
+    ("DELETE", "/api/groups/1/members", {}),
+    ("DELETE", "/api/groups/1/members", {"name": "ak"}),
+    ("POST", "/api/groups/1/threads", {"story_id": 2, "note": "n"}),
+    ("POST", "/api/groups/1/threads", {"title": "T", "text": "x"}),
+    ("POST", "/api/threads/1/read", {}),
+    ("POST", "/api/threads/1/comments", {"text": "hi"}),
+    ("POST", "/api/comments/1", {"text": "changed"}),
+    ("DELETE", "/api/comments/1", None),
+    ("POST", "/api/comments/1/reactions/up", None),
+    ("DELETE", "/api/comments/1/reactions/up", None),
+]
+# Open to readers (status 200): a person joining or leaving an everyone-group themself, and the
+# read route. Every other write is refused to a reader with 403.
+OPEN_TO_READERS = [
+    ("POST", "/api/groups/1/members", {}),
+    ("DELETE", "/api/groups/1/members", {}),
+    ("POST", "/api/threads/1/read", {}),
+]
+
+# The invited group's ids in the world are group 2, thread 2, comment 2; 999999 is missing.
+HIDDEN_READS = [
+    ("GET", "/api/groups/{g}", None),
+    ("GET", "/api/groups/{g}/threads", None),
+    ("GET", "/api/threads/{t}", None),
+]
+HIDDEN_WRITES = [
+    ("POST", "/api/groups/{g}/members", {}),
+    ("POST", "/api/groups/{g}/members", {"name": "ml"}),
+    ("DELETE", "/api/groups/{g}/members", {}),
+    ("DELETE", "/api/groups/{g}/members", {"name": "ak"}),
+    ("POST", "/api/groups/{g}/threads", {"story_id": 1}),
+    ("POST", "/api/groups/{g}/threads", {"title": "T", "text": "x"}),
+    ("POST", "/api/threads/{t}/read", {}),
+    ("POST", "/api/threads/{t}/comments", {"text": "x"}),
+    ("POST", "/api/comments/{c}", {"text": "x"}),
+    ("DELETE", "/api/comments/{c}", None),
+    ("POST", "/api/comments/{c}/reactions/up", None),
+    ("DELETE", "/api/comments/{c}/reactions/up", None),
+]
+
+
+def test_a_writer_creates_a_group_shares_a_story_and_a_reader_reads_the_thread_with_recorded_feed(
+    site,
+):
+    status, _, made = site.call(
+        "POST", "/api/groups", cookie=AK_C, body=NEW_GROUP | {"name": "TMT"}
+    )
+    assert (status, made) == (200, {"id": 1})
+    status, _, shared = site.call(
+        "POST", "/api/groups/1/threads", cookie=AK_C, body={"story_id": 1, "note": "look"}
+    )
+    assert (status, shared) == (200, {"thread_id": 1, "joined": False})
+    status, _, thread = site.call("GET", "/api/threads/1", cookie=RD_C)
+    assert status == 200
+    assert thread["comments"][0]["text"] == "look"
+    assert thread["can_post"] is False
+    status, _, page = site.call("GET", "/api/feed?view=latest", cookie=RD_C)
+    card = next(c for c in page["cards"] if c["id"] == 1)
+    expected = {"id": 1, "group": "TMT", "comments": 1, "shared_by": "ak", "note": "look"}
+    assert status == 200 and card["threads"] == [expected]
+
+
+@pytest.mark.parametrize("method,path,body", WRITES)
+def test_a_reader_is_refused_every_write_and_nothing_changes(world, method, path, body):
+    for who in (RD_C, ZZ_C):  # rd is a reader; zz is no one the store knows, so a reader too
+        before = world.counts()
+        status, _, reply = world.call(method, path, cookie=who, body=body)
+        if (method, path, body) in OPEN_TO_READERS:
+            assert status == 200, reply
+            moves = ("group_members", "read_marks")  # what joining, leaving and reading write
+            after = world.counts()
+            assert {t: n for t, n in after.items() if t not in moves} == {
+                t: n for t, n in before.items() if t not in moves
+            }
+        else:
+            assert status == 403 and list(reply) == ["error"], reply
+            assert world.counts() == before
+
+
+@pytest.mark.parametrize("method,path,body", WRITES)
+def test_every_write_without_this_sites_origin_is_refused(world, method, path, body):
+    before = world.counts()
+    status, _, _ = world.call(
+        method, path, cookie=AK_C, body=body, origin="http://elsewhere.test:{port}"
+    )
+    assert status == 403
+    assert world.counts() == before
+
+
+@pytest.mark.parametrize("method,path,body", HIDDEN_READS + HIDDEN_WRITES)
+def test_a_hidden_group_answers_exactly_like_a_missing_one(world, method, path, body):
+    before = world.counts()
+    hidden = path.format(g=2, t=2, c=2)
+    missing = path.format(g=999999, t=999999, c=999999)
+    seen = world.call(method, hidden, cookie=ML_C, body=body)
+    gone = world.call(method, missing, cookie=ML_C, body=body)
+    assert seen[0] == 404
+    assert (seen[0], seen[2]) == (gone[0], gone[2])
+    assert world.counts() == before
+
+
+def test_a_hidden_group_is_absent_from_lists_counts_and_cards(world):
+    groups = world.call("GET", "/api/groups", cookie=ML_C)[2]
+    assert [g["id"] for g in groups["groups"]] == [1]
+    unread = world.call("GET", "/api/unread", cookie=ML_C)[2]
+    assert set(unread["by_group"]) <= {"1"}
+    everything = json.dumps(
+        [groups, unread, world.call("GET", "/api/feed?view=latest", cookie=ML_C)[2]]
+    )
+    assert "Inner" not in everything and "secret note" not in everything
+    cards = world.call("GET", "/api/feed?view=latest", cookie=ML_C)[2]["cards"]
+    assert next(c for c in cards if c["id"] == 2)["threads"] == []
+    own = world.call("GET", "/api/feed?view=latest", cookie=AK_C)[2]["cards"]
+    assert [t["group"] for t in next(c for c in own if c["id"] == 2)["threads"]] == ["Inner"]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        b"[]",
+        b'{"text": 5}',
+        b'{"text": ""}',
+        b'{"parent": "1", "text": "x"}',
+        b'{"text": "' + b"x" * 4001 + b'"}',
+    ],
+)
+def test_a_malformed_comment_is_a_400_not_a_500(world, body):
+    before = world.counts()
+    status, _, reply = world.call("POST", "/api/threads/1/comments", cookie=AK_C, raw=body)
+    assert status == 400 and list(reply) == ["error"]
+    assert world.counts() == before
+
+
+@pytest.mark.parametrize(
+    "path,body",
+    [
+        ("/api/groups/1/threads", {"story_id": True}),
+        ("/api/groups/1/threads", {"story_id": 1.0}),
+        ("/api/groups/1/threads", {"story_id": "1"}),
+        ("/api/groups/1/threads", {"story_id": 1, "note": 5}),
+        ("/api/groups/1/threads", {"story_id": 1, "title": "T", "text": "x"}),
+        ("/api/groups/1/threads", {}),
+        ("/api/groups/1/threads", {"title": "T"}),
+        ("/api/groups/1/threads", {"story_id": 1, "extra": 1}),
+        ("/api/groups", {"name": "N", "visibility": "everyone", "topics": [True]}),
+        ("/api/groups", {"name": "N", "visibility": "everyone", "topics": "1"}),
+        ("/api/groups", {"name": 5, "visibility": "everyone"}),
+        ("/api/groups", {"name": "N", "visibility": None}),
+        ("/api/groups", {"name": "N", "visibility": "everyone", "topics": [999]}),
+        ("/api/threads/1/comments", {"text": "x", "parent": True}),
+        ("/api/threads/1/comments", {"text": "x", "parent": 1.0}),
+        ("/api/groups/1/members", {"name": 5}),
+        ("/api/comments/1", {"text": None}),
+    ],
+)
+def test_wrong_types_and_shapes_are_a_400_never_a_500(world, path, body):
+    before = world.counts()
+    status, _, reply = world.call("POST", path, cookie=AK_C, body=body)
+    assert status == 400 and list(reply) == ["error"], reply
+    assert world.counts() == before
+
+
+def test_a_comment_posted_during_an_ingest_pass_succeeds_with_recorded_feed(world_loop):
+    loop, site = world_loop  # the loop's fetch function blocks on an Event mid-pass
+    with pass_in_progress(loop):
+        status, _, made = site.call(
+            "POST", "/api/threads/1/comments", cookie=AK_C, body={"text": "during"}
+        )
+        assert status == 200 and "id" in made
+    assert loop.last_error is None
+
+
+def test_unread_rides_the_poll_and_clears_on_read(world):
+    unread = world.call("GET", "/api/unread", cookie=ML_C)[2]
+    assert unread == {"replies": 0, "threads": 1, "total": 1, "by_group": {"1": 1}}
+    assert world.call("GET", "/api/groups", cookie=ML_C)[2]["groups"][0]["unread"] == 1
+    status, _, read = world.call("POST", "/api/threads/1/read", cookie=ML_C, body={})
+    assert status == 200 and read["unread"]["total"] == 0
+    assert world.call("GET", "/api/groups", cookie=ML_C)[2]["groups"][0]["unread"] == 0
+
+
+def test_reading_a_thread_does_not_record_it_as_read(world):
+    world.call("GET", "/api/threads/1", cookie=ML_C)
+    assert world.call("GET", "/api/unread", cookie=ML_C)[2]["total"] == 1
+
+
+def test_group_list_and_detail_carry_what_the_page_needs(world):
+    listed = world.call("GET", "/api/groups", cookie=RD_C)[2]
+    assert listed["can_create"] is False
+    assert listed["groups"] == [
+        {
+            "id": 1,
+            "name": "TMT",
+            "visibility": "everyone",
+            "member": False,
+            "members": 2,
+            "threads": 1,
+            "unread": 0,
+        }
+    ]
+    assert world.call("GET", "/api/groups", cookie=AK_C)[2]["can_create"] is True
+    detail = world.call("GET", "/api/groups/1", cookie=ML_C)[2]
+    assert detail == {
+        "id": 1,
+        "name": "TMT",
+        "visibility": "everyone",
+        "member": True,
+        "can_manage": True,
+        "members": ["ak", "ml"],
+    }
+    assert world.call("GET", "/api/groups/1", cookie=RD_C)[2]["can_manage"] is False
+
+
+def test_members_are_joined_added_and_removed_and_the_reply_is_the_list(world):
+    assert world.call("POST", "/api/groups/1/members", cookie=RD_C, body={})[2] == {
+        "members": ["ak", "ml", "rd"]
+    }
+    assert world.call("DELETE", "/api/groups/1/members", cookie=RD_C, body={})[2] == {
+        "members": ["ak", "ml"]
+    }
+    assert world.call("POST", "/api/groups/2/members", cookie=AK_C, body={"name": "ml"})[2] == {
+        "members": ["ak", "ml"]
+    }
+    assert world.call("DELETE", "/api/groups/2/members", cookie=AK_C, body={"name": "ml"})[2] == {
+        "members": ["ak"]
+    }
+    status, _, refused = world.call("DELETE", "/api/groups/2/members", cookie=AK_C, body={})
+    assert status == 400 and "writer" in refused["error"]  # the last writer cannot leave
+
+
+def test_threads_page_comments_and_reactions_round_trip(world):
+    rows = world.call("GET", "/api/groups/1/threads", cookie=ML_C)[2]
+    assert rows["next_before"] is None and [r["id"] for r in rows["threads"]] == [1]
+    assert world.call("GET", "/api/groups/1/threads?before=bad", cookie=ML_C)[0] == 400
+    made = world.call(
+        "POST", "/api/threads/1/comments", cookie=ML_C, body={"text": "a", "parent": 1}
+    )
+    assert made[2] == {"id": 2 + 1}  # comments 1 and 2 exist already (thread 2's note is 2)
+    assert world.call("POST", "/api/comments/3/reactions/eyes", cookie=AK_C)[2] == {}
+    assert world.call("POST", "/api/comments/3/reactions/nope", cookie=AK_C)[0] == 400
+    thread = world.call("GET", "/api/threads/1", cookie=AK_C)[2]
+    reactions = thread["comments"][1]["reactions"]
+    assert reactions == [{"key": "eyes", "count": 1, "mine": True}]
+    assert world.call("POST", "/api/comments/3", cookie=ML_C, body={"text": "b"})[2] == {}
+    assert world.call("DELETE", "/api/comments/3", cookie=ML_C)[2] == {}
+    assert world.call("GET", "/api/threads/1", cookie=AK_C)[2]["comments"][1]["removed"] is True
+
+
+def test_feed_shared_accepts_only_one(world):
+    shared = world.call("GET", "/api/feed?view=latest&shared=1", cookie=ML_C)[2]["cards"]
+    assert [c["id"] for c in shared] == [1]  # ak shared story 1 into ml's group
+    assert world.call("GET", "/api/feed?view=latest&shared=1", cookie=AK_C)[2]["cards"] == []
+    for value in ("0", "true", "", "2"):
+        assert world.call("GET", f"/api/feed?view=latest&shared={value}", cookie=ML_C)[0] == 400
+
+
+SURROGATE_ROUTES = [
+    ("POST", "/api/groups"),
+    ("POST", "/api/groups/1/members"),
+    ("DELETE", "/api/groups/1/members"),
+    ("POST", "/api/groups/1/threads"),
+    ("POST", "/api/threads/1/comments"),
+    ("POST", "/api/comments/1"),
+    ("POST", "/api/threads/1/read"),
+]
+
+
+@pytest.mark.parametrize("method,path", SURROGATE_ROUTES)
+def test_a_field_name_that_is_a_lone_surrogate_is_an_ordinary_400(world, method, path):
+    before = world.counts()
+    status, _, reply = world.call(method, path, cookie=ZZ_C, raw=b'{"\\ud800": 1}')
+    assert status == 400 and list(reply) == ["error"]
+    assert "\ud800" not in json.dumps(reply, ensure_ascii=False)  # no client text in a refusal
+    assert world.call("GET", "/api/groups", cookie=AK_C)[0] == 200
+    assert world.counts() == before
+
+
+def test_a_refusal_that_cannot_be_encoded_is_the_documented_500_and_is_logged(
+    world, monkeypatch, caplog
+):
+    def echo(*args, **kwargs):
+        raise service.store.StoreError("\ud800 is not a thing")  # a store text echoing input
+
+    monkeypatch.setattr(service.groups, "list_groups", echo)
+    with caplog.at_level(logging.ERROR, logger=service.log.name):
+        status, _, reply = world.call("GET", "/api/groups", cookie=AK_C)
+    assert (status, reply) == (500, {"error": "the service failed; see its log"})
+    assert any(r.exc_info for r in caplog.records)
+    monkeypatch.undo()
+    assert world.call("GET", "/api/groups", cookie=AK_C)[0] == 200
+
+
+@pytest.mark.parametrize("raw", [b"[]", b'{"a": 1}', b'{"text": "x"}', b"5"])
+def test_the_read_route_needs_an_empty_json_object(world, raw):
+    before = world.counts()
+    status, _, reply = world.call("POST", "/api/threads/1/read", cookie=ML_C, raw=raw)
+    assert status == 400 and list(reply) == ["error"]
+    assert world.counts() == before
+    assert world.call("POST", "/api/threads/1/read", cookie=ML_C, raw=b"{}")[0] == 200
+
+
+def test_leaving_an_invited_group_as_a_non_last_member_hides_it_from_the_leaver(world):
+    world.call("POST", "/api/groups/2/members", cookie=AK_C, body={"name": "ml"})
+    status, _, reply = world.call("DELETE", "/api/groups/2/members", cookie=ML_C, body={})
+    assert (status, reply) == (200, {"members": []})
+    db = open_db(world.root)
+    try:
+        gone = db.execute("SELECT 1 FROM group_members WHERE group_id=2 AND user_name='ml'")
+        assert gone.fetchone() is None
+    finally:
+        db.close()
+    assert world.call("GET", "/api/groups/2", cookie=ML_C)[0] == 404
+
+
+@pytest.mark.parametrize("method,path,body", WRITES)
+def test_every_write_with_no_origin_header_is_refused(world, method, path, body):
+    before = world.counts()
+    status, _, _ = world.call(method, path, cookie=AK_C, body=body, origin=None)
+    assert status == 403
+    assert world.counts() == before
