@@ -35,9 +35,14 @@ def _printable(ch: str) -> str:
     return "" if unicodedata.category(ch) in ("Cc", "Cf", "Cs") else ch
 
 
-def _clean(raw: str) -> str:
+def cleaned(raw: str) -> str:
+    """The cleaned text, not cut to MAX_NAME: controls dropped, NFC, whitespace collapsed."""
     text = unicodedata.normalize("NFC", "".join(_printable(ch) for ch in raw))
-    return " ".join(text.split())[:MAX_NAME].strip()
+    return " ".join(text.split())
+
+
+def _clean(raw: str) -> str:
+    return cleaned(raw)[:MAX_NAME].strip()
 
 
 def clean_name(raw: str) -> str:
