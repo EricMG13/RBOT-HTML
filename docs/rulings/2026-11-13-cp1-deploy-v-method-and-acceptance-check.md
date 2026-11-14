@@ -90,10 +90,16 @@ written "to stop the model from self validation and calculation"; CP-OS runs non
 - Library, as the code stands (corrected 2026-11-14; an earlier version of this record said
   adjusted leverage was kept out of the screening filters, which was wrong). An adjusted-only
   run's leverage, net leverage and interest cover are stored under the same metric keys as a
-  reported run's, with the adjusted name as `label`. The library's range filters and sort read
-  the number only, so an adjusted multiple is filtered and ranked beside reported ones. The run
-  card names the adjusted measure and the list view marks the figure `adj.` (full name on hover).
-  Open for the owner: whether adjusted figures stay in the leverage filters and sort.
+  reported run's, with the adjusted name as `label`. The run card names the adjusted measure and
+  the list view marks the figure `adj.` (full name on hover). The library's range filters and
+  sort read the number only, so until 2026-11-14 an adjusted multiple was filtered and ranked
+  beside reported ones.
+- Owner, 2026-11-14, asked "Should adjusted-EBITDA leverage stay in the library's leverage
+  filters and sort?": "Take them out". For leverage, net leverage and interest cover, screening
+  treats a figure that carries the adjusted label as not recorded: it passes no range and sorts
+  where a missing value sorts. The figure is still displayed. The line "Leverage recorded for N
+  of M runs" therefore does not count an adjusted-only run whose figure is shown; its wording is
+  unchanged and is left for the owner.
 - On the Changes page a run on reported EBITDA against a run on adjusted EBITDA is "not
   comparable", with both labels in the reason; no difference is printed.
 - Instruction size. The method text CP-1 is sent was shortened by 5,851 characters (duplicate
