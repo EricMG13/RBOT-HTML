@@ -270,7 +270,8 @@ test('markup in a group name, title, note or comment is text', () => {
     for (const x of e.elements()) for (const k of Object.keys(x.attrs)) {
       assert.ok(!k.startsWith('on') && k !== 'style', 'attribute ' + k);
       // slice 2's card puts the title in aria-label (pre-existing, out of this task); the new elements do not.
-      if (e !== out[0]) assert.ok(!x.attrs[k].includes('<img'), 'data in attribute ' + k);
+      // the reply box's visible placeholder names the group on request of the controller (set as an attribute, never parsed).
+      if (e !== out[0] && k !== 'placeholder') assert.ok(!x.attrs[k].includes('<img'), 'data in attribute ' + k);
     }
   }
 });
@@ -409,4 +410,11 @@ test('the edit form keeps the text and shows the refusal beside it', () => {
   assert.equal(form.querySelector('[data-action="save-edit"]').getAttribute('data-id'), '9');
   assert.ok(form.querySelector('[data-action="cancel-edit"]'));
   assert.equal(R.editForm(doc, {id: 9}, 'x', '').querySelector('.field-error'), null);
+});
+
+test('the reply box has a visible prompt naming the group, or the person replied to', () => {
+  const panel = R.threadPanel(doc, {id: 3, group: 'TMT', story: null, title: 'T', started_by: 'ak', comments: [], can_post: true}, new Date('2026-11-13T12:00:00Z'));
+  assert.equal(panel.querySelector('textarea').getAttribute('placeholder'), 'Reply to TMT\u2026');
+  assert.equal(R.replyPlaceholder('TMT', 'ml'), 'Replying to ml\u2026');
+  assert.ok(panel.querySelector('label').textContent === 'Reply');   // the accessible label stays
 });

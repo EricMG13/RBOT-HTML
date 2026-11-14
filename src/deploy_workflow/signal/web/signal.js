@@ -333,6 +333,7 @@
     loadGroups(true);
     refreshUnread();
     refreshOpenThread();
+    if (state.groupId !== null) refreshGroupRows();
     pollNewStories();
   }
 
@@ -397,6 +398,55 @@
       applyUnread(await api('GET', '/api/unread'));
     } catch (err) {
       console.warn('unread refresh failed:', err.message);
+    }
+  }
+
+  // ----- feed cards refreshed in place after a share or a change in a thread
+  const OPENER_KEYS = ['dialogOpener', 'pendingOpener'];
+
+  // Points a remembered control that lived in the old card at its twin in the new one.
+  function remapOpeners(oldCard, newCard) {
+    const twin = node => {
+      const action = node.getAttribute('data-action');
+      return (action && newCard.querySelector('[data-action="' + action.replace(/[^\w-]/g, '') + '"]')) || newCard;
+    };
+    for (const key of OPENER_KEYS) if (state[key] && oldCard.contains(state[key])) state[key] = twin(state[key]);
+    if (state.thread && state.thread.opener && oldCard.contains(state.thread.opener)) state.thread.opener = twin(state.thread.opener);
+  }
+
+  function replaceCard(oldCard, story) {
+    const fresh = R.card(document, story, new Date(), {canShare: state.canCreate});
+    const active = document.activeElement;
+    const hadFocus = oldCard.contains(active);
+    const action = hadFocus ? active.getAttribute('data-action') : null;
+    remapOpeners(oldCard, fresh);
+    oldCard.replaceWith(fresh);
+    if (hadFocus) {
+      const target = (action && fresh.querySelector('[data-action="' + action.replace(/[^\w-]/g, '') + '"]')) || fresh;
+      target.focus({preventScroll: true});
+    }
+  }
+
+  // Re-reads the feed pages until the story's card is found and replaces that one card; the scroll position
+  // and the list around it stay. Fail-open: a failure is logged and the card is corrected by the next load.
+  async function refreshCard(storyId) {
+    if (storyId === null || storyId === undefined || state.groupId !== null) return;
+    const find = () => els.cards.querySelector('article.card[data-id="' + String(storyId).replace(/\D/g, '') + '"]');
+    if (!find()) return;
+    const seq = state.seq;
+    let before = null;
+    try {
+      for (let page = 0; page < 10; page += 1) {
+        const data = await api('GET', '/api/feed?' + feedParams(before));
+        if (seq !== state.seq) return;
+        const story = data.cards.find(c => c.id === storyId);
+        const current = find();
+        if (story && current) { replaceCard(current, story); return; }
+        if (data.next_before === null) return;
+        before = data.next_before;
+      }
+    } catch (err) {
+      console.warn('card refresh failed:', err.message);
     }
   }
 
@@ -536,6 +586,37 @@
       els.more.hidden = state.groupNext === null;
     } catch (err) {
       if (seq === state.groupSeq) showError(err.message, reloadThreads);
+    }
+  }
+
+  // The poll's re-read of the group view: rows already shown are replaced in place (counts, last activity,
+  // unread dot); threads not shown yet join at the top. Rows are not reordered, so scroll and focus stay put.
+  // Fail-open: a failure is logged; the next poll tries again.
+  async function refreshGroupRows() {
+    const seq = state.groupSeq;
+    if (state.groupId === null || !state.group) return;
+    try {
+      const page = await api('GET', '/api/groups/' + state.groupId + '/threads');
+      if (seq !== state.groupSeq) return;
+      const now = new Date();
+      const added = [];
+      for (const row of page.threads) {
+        const sel = '.thread-row[data-id="' + String(row.id).replace(/\D/g, '') + '"]';
+        const old = els.threads.querySelector(sel);
+        const fresh = R.threadRow(document, row, now);
+        if (!old) { added.push(fresh); continue; }
+        const focused = document.activeElement === old;
+        old.replaceWith(fresh);
+        if (focused) fresh.focus({preventScroll: true});
+      }
+      for (const row of added.reverse()) els.threads.insertBefore(row, els.threads.firstChild);
+      state.threadRows += added.length;
+      if (state.threadId !== null) {
+        for (const dot of els.threads.querySelectorAll('.thread-row[data-id="' + String(state.threadId).replace(/\D/g, '') + '"] .dot')) dot.remove();
+      }
+      if (added.length) renderThreadsEmpty();
+    } catch (err) {
+      console.warn('thread list refresh failed:', err.message);
     }
   }
 
@@ -686,6 +767,7 @@
       const target = t.draft.replyTo && comments.find(c => c.id === t.draft.replyTo.id && !c.removed);
       if (!target) t.draft.replyTo = null;
       const field = panel.querySelector('.reply-field');
+      ta.setAttribute('placeholder', R.replyPlaceholder(t.view.group, t.draft.replyTo && t.draft.replyTo.name));
       if (t.draft.replyTo) field.parentNode.insertBefore(R.replyingTo(document, t.draft.replyTo.name), field);
       if (t.draft.error) {
         const p = document.createElement('p');
@@ -764,6 +846,7 @@
     t.view = view;
     renderThread(focus);
     if (mode === 'open') markRead(t.id);
+    if (mode === 'write' && view.story) refreshCard(view.story.id);
   }
 
   function refreshOpenThread() {
@@ -981,6 +1064,8 @@
       SHARE.groups.textContent = '';
       SHARE.groups.appendChild(R.groupChoices(document, data.groups, state.canCreate));
       SHARE.submit.hidden = data.groups.length === 0;
+      const radios = SHARE.groups.querySelectorAll('input[name="share-group"]');
+      if (radios.length === 1) radios[0].checked = true; // one choice: no need to make it
       const first = SHARE.groups.querySelector('input, button');
       if (first) first.focus();
     } catch (err) {
@@ -993,7 +1078,14 @@
 
   function submitShare() {
     const chosen = SHARE.form.querySelector('input[name="share-group"]:checked');
-    if (!chosen) { dialogError(SHARE, 'Choose a group.'); return; }
+    if (!chosen) {
+      // Today: nothing is sent; the dialog says why, and focus goes to the choice.
+      const loading = SHARE.box.getAttribute('aria-busy') === 'true';
+      dialogError(SHARE, loading ? 'The groups are still loading.' : 'Choose a group to share this story to.');
+      const first = SHARE.form.querySelector('input[name="share-group"]');
+      if (first) first.focus();
+      return;
+    }
     const body = {story_id: Number(state.shareStory)};
     const note = SHARE.note.value.trim();
     if (note) body.note = note;
@@ -1001,6 +1093,7 @@
       announce('Shared to the group');
       loadGroups(true);
       navigate({group: state.groupId, thread: String(data.thread_id)});
+      refreshCard(Number(state.shareStory));
     });
   }
 

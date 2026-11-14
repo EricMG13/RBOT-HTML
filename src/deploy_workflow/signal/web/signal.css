@@ -112,7 +112,7 @@ kbd{font:500 var(--fs-label) var(--mono);border:1px solid var(--line);border-rad
 
 /* cards */
 .cards{display:flex;flex-direction:column;gap:12px}
-.card{position:relative;background:var(--card);border:1px solid var(--rule);border-left:4px solid var(--accent,var(--muted));border-radius:12px;box-shadow:var(--shadow);padding:12px 16px 6px;min-width:0}
+.card{container-type:inline-size;position:relative;background:var(--card);border:1px solid var(--rule);border-left:4px solid var(--accent,var(--muted));border-radius:12px;box-shadow:var(--shadow);padding:12px 16px 6px;min-width:0}
 .card:focus{outline:0}
 .card:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 .card-regulator{--accent:var(--violet)}
@@ -140,8 +140,8 @@ kbd{font:500 var(--fs-label) var(--mono);border:1px solid var(--line);border-rad
 .tag{font-size:var(--fs-label);border:1px solid var(--rule);border-radius:4px;padding:1px 8px;color:var(--muted);overflow-wrap:anywhere}
 .also{display:flex;align-items:center;gap:6px;font-size:var(--fs-label);color:var(--muted);margin:6px 0}
 .also .ico{width:14px;height:14px}
-.acts{display:flex;align-items:center;gap:4px;border-top:1px solid var(--rule);margin:8px -16px 0;padding:4px 10px}
-.act{display:inline-flex;align-items:center;gap:6px;padding:6px 8px;border-radius:6px;color:var(--muted);font-size:var(--fs-label);font-weight:600;text-decoration:none}
+.acts{display:flex;flex-wrap:nowrap;align-items:center;gap:4px;border-top:1px solid var(--rule);margin:8px -16px 0;padding:4px 10px}
+.act{white-space:nowrap;flex:none;display:inline-flex;align-items:center;gap:6px;padding:6px 8px;border-radius:6px;color:var(--muted);font-size:var(--fs-label);font-weight:600;text-decoration:none}
 .act:hover{background:var(--ground)}
 .act.open{margin-left:auto;color:var(--blue-ink)}
 .act .ico{width:16px;height:16px}
@@ -181,7 +181,6 @@ dialog input{width:100%;border:1px solid var(--line);border-radius:8px;padding:8
   .main{padding:12px 12px 40px}
   .live{margin-left:0;flex-basis:100%}
   .search{max-width:none;flex-basis:100%;margin-left:0}
-  .acts{flex-wrap:wrap}
 }
 /* slice 3: shared line, thread chips, thread panel, comments, group items */
 .shared{display:flex;align-items:center;gap:8px;font-size:var(--fs-label);color:var(--muted);margin-bottom:10px;padding-bottom:10px;border-bottom:1px dashed var(--rule)}
@@ -319,4 +318,10 @@ dialog input[type="radio"],dialog input[type="checkbox"]{width:auto}
 }
 @media (prefers-reduced-motion:reduce){
   *,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+}
+
+/* One-line card actions: when the card is narrow, Share and Open source keep their names but show only the icon. */
+@container (max-width:420px){
+  .act.share span,.act.open span{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .act.share,.act.open{padding:6px 8px}
 }

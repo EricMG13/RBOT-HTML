@@ -384,6 +384,11 @@
     return q;
   }
 
+  // The hint inside an empty reply box; replyToName is set while replying to a comment.
+  function replyPlaceholder(group, replyToName) {
+    return replyToName ? 'Replying to ' + replyToName + '\u2026' : 'Reply to ' + group + '\u2026';
+  }
+
   function replyBox(doc, view) {
     const box = el(doc, 'div', 'reply-box');
     const field = el(doc, 'div', 'reply-field');
@@ -391,6 +396,7 @@
     ta.setAttribute('id', 'reply-' + view.id);
     ta.setAttribute('rows', '3');
     ta.setAttribute('maxlength', '4000');
+    ta.setAttribute('placeholder', replyPlaceholder(view.group, null));
     ta.setAttribute('aria-labelledby', 'reply-label-' + view.id);
     field.appendChild(ta);
     const foot = el(doc, 'div', 'reply-foot');
@@ -825,7 +831,7 @@
   return {
     IDENTITY_NOTE, card, emptyState, relativeTime, safeLink, icon, fullTime, initials,
     linkify, comment, threadPanel, threadRow, groupItem, sharedLine, threadChips,
-    unreadLabel, groupsEmpty, notFound, threadsEmpty, threadLoading, threadMessage, membersStrip, groupHead,
+    replyPlaceholder, unreadLabel, groupsEmpty, notFound, threadsEmpty, threadLoading, threadMessage, membersStrip, groupHead,
     groupChoices, visibilityChoices, topicChoices, replyingTo, editForm,
   };
 });
