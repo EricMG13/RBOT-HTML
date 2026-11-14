@@ -42,6 +42,13 @@
     "Δ 1D", "Δ 1W", "Δ 1M", "Δ 3M", "Δ 6M", "Δ 1YR", "Δ YTD", "YTM", "3Y DM"
   ],
   "index_rows": 4,
+  "index_bounds": {
+    "_note": "Inclusive bounds per index row (suffix of the Index name after ': '), written by hand: anchor plus or minus the stated noise. Every delta column of a row lies within plus or minus that row's delta_abs_max.",
+    "Ba": {"delta_abs_max": 1, "Market Value ($Bn)": [306, 374], "Avg Price": [99.1, 99.3], "YTM": [5.85, 6.15], "3Y DM": [230, 246]},
+    "Ba/B": {"delta_abs_max": 1, "Market Value ($Bn)": [1125, 1375], "Avg Price": [96.9, 97.1], "YTM": [7.35, 7.65], "3Y DM": [393, 409]},
+    "B": {"delta_abs_max": 1, "Market Value ($Bn)": [810, 990], "Avg Price": [95.9, 96.1], "YTM": [7.85, 8.15], "3Y DM": [455, 471]},
+    "Caa": {"delta_abs_max": 3, "Market Value ($Bn)": [76.5, 93.5], "Avg Price": [76.4, 76.6], "YTM": [18.25, 18.55], "3Y DM": [1514, 1530]}
+  },
   "issuer": {
     "_note": "One fictional issuer of the pack in the shape of an issuer's market files (synthetic, not issuer evidence): a quotes file the run-start classifier reads as market_quotes, and run-context quote rows. Values copied by hand from telecoms.csv (Kestrel Ridge, two clean tranches); price is (bid + ask) / 2.",
     "quotes_file": "issuer-quotes.txt",

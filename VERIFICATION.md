@@ -4,6 +4,32 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-14 — Synthetic pack follow-ups and the document-key test (branch `claude/synthetic-pack-followups`, PR #124)
+
+Scope is **offline and synthetic only**; nothing under `src/` changes. Closes the two Low items left
+open by the entry below.
+
+- Change: `tests/test_synthetic_market_data.py` recomputes every ratings-average column with its own
+  code and checks index values against hand-written bounds in `schema.json`; the brand word `Linden`
+  is replaced and the fixtures regenerated (rename only); new `tests/test_document_key.py`; both test
+  files join the pull-request test list.
+- `tests/test_document_key.py`: `guess_kind` against `document-key.json` for the 25 keyed documents
+  present (35 real ones are not in this repository): 21 under the launcher's own paging, 4 synthetic
+  files (07, 10, 18, 19) only under the key's paging; 13 prose cases must stay `unrecognised`.
+- Withdrawn: a banner-label rule in `_wraps` (46f1f31, reverted in 39fdf96). Two reviews and the sweep
+  each found prose that `main` reads as `unrecognised` and the rule read as a confident kind.
+- Commands: `uv run pytest tests/test_document_key.py tests/test_synthetic_market_data.py -q`;
+  `uv run pytest tests/test_cpos_launch.py -q -m "not live and not browser"` 837 passed;
+  `uv run python tools/quality_gate.py` 0 findings. Exit 0 each.
+- Reviews: `/sweep refactoring discover changed-update` no confirmed defect (register
+  `.superpowers/sdd/pack-followups/sweep/register.md`); whole-branch `adversarial-reviewer`
+  (`mx-architect`) pass, no High or Medium (`.superpowers/sdd/pack-followups/branch-review.md`).
+- For the owner: the key's note pages synthetic text files at `=== PAGE ===` without the banner; the
+  launcher gives one 12,000-character page with it. Either the key's paging or the classifier's
+  handling of a heading line above a cover line needs a ruling; neither was changed.
+- Not verified: the 35 real keyed documents; real issuer files with a heading above a mixed-case
+  title; `Tamsin` against a register of real companies; a mutation tool (hand mutants only).
+
 ## 2026-11-14 — Synthetic loan market-data pack (branch `claude/synthetic-market-data-screenshots-bb52f7`, PR #121)
 
 Scope is **offline and synthetic only**: fictional issuers, no provider call, no model response, nothing
@@ -22,8 +48,8 @@ is not issuer evidence and proves no pathway.
 - Reviews: task reviews (`mx-precise`) pass; whole-branch `adversarial-reviewer` (`mx-architect`)
   pass, no High or Medium; report `.superpowers/sdd/synthetic-market-data/branch-review.md`.
 - Owner ruling 2026-11-14: sector-peer sheets stay unrecognised by the run-start classifier.
-- Open (Low): ratings-average delta/YTM/DM columns and index values are checked only by the byte
-  snapshot; the brand word `Linden` is also the first word of a real borrower in one source sheet.
+- Two Low items open at merge (thin checks on derived files; the brand word `Linden`) were closed
+  in PR #124, entry above.
 - For the owner, predates this change: `_wraps` in `run_expectations.py` skips a cover line under a
   six-word unpunctuated heading, so `synthetic/18-market-quotes.txt` reads as `unrecognised`.
 - Not verified: any model run consuming the quotes; the context-quotes route through `prepare`;
