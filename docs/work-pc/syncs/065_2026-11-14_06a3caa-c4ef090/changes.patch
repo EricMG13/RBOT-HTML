@@ -1,0 +1,108 @@
+diff --git a/VERIFICATION.md b/VERIFICATION.md
+index 08ba5b4..8696dd6 100644
+--- a/VERIFICATION.md
++++ b/VERIFICATION.md
+@@ -8,9 +8,9 @@ engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflo
+ Scope: OFFLINE only; tests on synthetic handoffs and catalogue rows; no model run, no browser.
+ - Unit advice (`5a1ab8c`): on a USD issuer `C $m`, `A $m` and `HK $ thousands` in a CP-1 money table were told to restate under `US$m` with no gap option; they now get "use `US$m` if the figure is in the statement currency in millions, else write `Not supplied: reported in <unit>`". Test first (three cases red), reviewer probe `probe_adv7_spaced_prefix_told_to_restate.py` exit 0; `$m` on USD and `£m` on GBP keep the definite advice.
+ - Library list view (`1882de8`): a leverage, net leverage or cover figure on adjusted EBITDA shows `adj.` beside the number, full name in the title; a figure with no label renders as before (string pinned). Fidelity check: `static.test.cjs` only.
+-- Ruling record corrected: the library's filters and sort rank an adjusted multiple beside reported ones (it had said they did not). Whether that stays is the owner's open question.
+-- Gates: `uv run pytest tests/test_cpos_cp1_check.py tests/test_cpos_launch.py tests/test_library_index.py tests/test_credit_os_catalogue.py tests/test_credit_os_store.py -q -m "not browser"` 1379 passed, 1 skipped (paid), exit 0; the node suite `checks.yml` lists, 565 passed, exit 0; `uv run python tools/quality_gate.py` exit 0, 0 findings.
+-Not verified: the marker in a browser (the leverage columns are narrow, it may wrap under the number); `US $m` on a USD issuer has no test of its own; any model run; browser-marked tests and the full suite.
++- Library screening (`6a4b45c`, owner: "Take them out"): for leverage, net leverage and interest cover, a figure carrying the adjusted label is treated as not recorded by the range filters and the sort (one helper, `screenFigure`); cash and undrawn unchanged; the figure is still displayed. Test first (the adjusted run passed a leverage range before). The ruling record, which had wrongly said adjusted leverage was already out of the filters, is corrected and carries the owner's words.
++- Gates: `uv run pytest tests/test_cpos_cp1_check.py tests/test_cpos_launch.py tests/test_library_index.py tests/test_credit_os_catalogue.py tests/test_credit_os_store.py -q -m "not browser"` 1379 passed, 1 skipped (paid), exit 0; the node suite `checks.yml` lists, 566 passed, exit 0; `uv run python tools/quality_gate.py` exit 0, 0 findings.
++Not verified: the line "Leverage recorded for N of M runs" now leaves out an adjusted-only run whose figure is shown (wording unchanged); the marker in a browser (the leverage columns are narrow, it may wrap under the number); `US $m` on a USD issuer has no test of its own; any model run; browser-marked tests and the full suite.
+ 
+ ## 2026-11-13 — CP-1 runs the Deploy V method, adapted; its figures are checked in code at acceptance (branch `claude/cp1-deploy-v-method`, ruling `docs/rulings/2026-11-13-cp1-deploy-v-method-and-acceptance-check.md`)
+ Scope: OFFLINE only. Tests, reviewer probes (`.superpowers/sdd/cp1-method/probes/`) and the check run over two retained TDG CP-1 handoffs; no provider or model call, and no handoff written under this method exists. Built, not accepted: Forecast, charts, Overview and Changes read CP-1's tables, so a paid run (the owner's separate action) is needed before acceptance.
+diff --git a/apps/issuer-library/credit_os/web/screening.js b/apps/issuer-library/credit_os/web/screening.js
+index 3ca6f21..87e57e6 100644
+--- a/apps/issuer-library/credit_os/web/screening.js
++++ b/apps/issuer-library/credit_os/web/screening.js
+@@ -15,6 +15,9 @@ const LibraryLogic = (() => {
+     return true;
+   };
+   const figure = metric => { const n = numberOf(metric); return n !== null && n >= 0 ? n : null; };
++  // A leverage, net leverage or cover figure on adjusted EBITDA carries a label and is not screened or ranked with reported ones (owner, 2026-11-14); it counts as not recorded.
++  const RATIOS = ['leverage', 'net_leverage', 'coverage'];
++  const screenFigure = (run, name) => { const metric = run.metrics?.[name]; return RATIOS.includes(name) && metric?.label ? null : figure(metric); };
+   const active = (min, max) => [min, max].some(bound => bound != null && String(bound).trim() !== '');
+   const SCALE = 'AAA/Aaa AA+/Aa1 AA/Aa2 AA-/Aa3 A+/A1 A/A2 A-/A3 BBB+/Baa1 BBB/Baa2 BBB-/Baa3 BB+/Ba1 BB/Ba2 BB-/Ba3 B+/B1 B/B2 B-/B3 CCC+/Caa1 CCC/Caa2 CCC-/Caa3 CC/Ca C/C D'.split(' ');
+   const RANK = new Map(SCALE.flatMap((row, index) => row.split('/').map(symbol => [symbol, index + 1])));
+@@ -40,8 +43,8 @@ const LibraryLogic = (() => {
+   const lowestRank = (run, filters) => { const rating = lowestRating(run, filters.ratingScope); return rating ? ratingPlace(rating.label).rank : null; };
+   const metricGroup = (name, prefix) => ({
+     on: f => active(f[prefix + 'Min'], f[prefix + 'Max']),
+-    recorded: run => figure(run.metrics?.[name]) !== null,
+-    pass: (run, f) => inRange(figure(run.metrics?.[name]), f[prefix + 'Min'], f[prefix + 'Max'])
++    recorded: run => screenFigure(run, name) !== null,
++    pass: (run, f) => inRange(screenFigure(run, name), f[prefix + 'Min'], f[prefix + 'Max'])
+   });
+   // Facility rules: one facility satisfies every active facility group; one of its quotes satisfies every active quote group.
+   const overlaps = (low, high, minimum, maximum) => low !== null && high !== null && inRange(high, minimum, '') && inRange(low, '', maximum);
+@@ -148,7 +151,7 @@ const LibraryLogic = (() => {
+   }
+   function sortRuns(runs, key, direction, filters = {}) {
+     const metrics = ['leverage', 'net_leverage', 'coverage', 'cash', 'undrawn'];
+-    const value = run => metrics.includes(key) ? figure(run.metrics?.[key]) : key === 'rating' ? lowestRank(run, filters) : run[key];
++    const value = run => metrics.includes(key) ? screenFigure(run, key) : key === 'rating' ? lowestRank(run, filters) : run[key];
+     return [...runs].sort((left, right) => {
+       const a = value(left), b = value(right);
+       if (a == null && b == null) return left.id.localeCompare(right.id);
+diff --git a/apps/issuer-library/credit_os/web/static.test.cjs b/apps/issuer-library/credit_os/web/static.test.cjs
+index 39a559a..ea0db62 100644
+--- a/apps/issuer-library/credit_os/web/static.test.cjs
++++ b/apps/issuer-library/credit_os/web/static.test.cjs
+@@ -5341,3 +5341,27 @@ test('ESG part: a new-format handoff with no ESG heading has no esg part', () =>
+   const withoutEsg = esgSections(esgLines('h3')).filter(s => !/^T2G\./.test(s.heading));
+   assert.ok(!esgPage('h3', withoutEsg).reportParts(esgId).some(p => p[0] === 'esg'));
+ });
++
++test('a leverage, net leverage or cover figure on adjusted EBITDA is not screened or ranked; cash is unchanged (owner: "Take them out")', () => {
++  const logic = new Function(`${read('screening.js')}; return LibraryLogic;`)();
++  const label = { 'leverage': 'Total debt / adjusted EBITDA', 'net_leverage': 'Net debt / adjusted EBITDA', 'coverage': 'Adjusted EBITDA / cash interest' };
++  const run = (id, metrics) => ({ id, issuer: id, artifacts: [], metrics });
++  const figure = (value, extra = {}) => ({ value, unit: 'x', period: 'FY2024', ...extra });
++  const prefix = { leverage: 'leverage', net_leverage: 'netLeverage', coverage: 'coverage', cash: 'cash' };
++  for (const name of ['leverage', 'net_leverage', 'coverage']) {
++    const filters = { runs: 'any', [prefix[name] + 'Min']: '5' };
++    const reported = run('a-reported', { [name]: figure('5.96') });
++    const adjusted = run('b-adjusted', { [name]: figure('5.96', { label: label[name] }) });
++    const none = run('c-none', {});
++    const runs = [adjusted, none, reported];
++    assert.deepEqual(logic.filterRuns(runs, filters).map(r => r.id), ['a-reported'], name);
++    assert.deepEqual(logic.coverage(runs, filters)[name], { recorded: 1, hidden: 2 }, name + ' counts');
++    assert.deepEqual(logic.hiddenBy(runs, filters, name).map(r => r.id).sort(), ['b-adjusted', 'c-none'], name + ' hidden');
++    const sorted = direction => logic.sortRuns([adjusted, none, reported, run('d-low', { [name]: figure('1.0') })], name, direction).map(r => r.id);
++    assert.deepEqual(sorted('asc'), ['d-low', 'a-reported', 'b-adjusted', 'c-none'], name + ' asc');
++    assert.deepEqual(sorted('desc'), ['a-reported', 'd-low', 'b-adjusted', 'c-none'], name + ' desc');
++  }
++  const cash = run('cash', { cash: figure('7', { label: 'Cash and equivalents' }) });
++  assert.deepEqual(logic.filterRuns([cash], { runs: 'any', cashMin: '5' }).map(r => r.id), ['cash'], 'a labelled cash metric is still screened');
++  assert.equal(logic.coverage([cash], { runs: 'any', cashMin: '5' }).cash.recorded, 1);
++});
+diff --git a/docs/rulings/2026-11-13-cp1-deploy-v-method-and-acceptance-check.md b/docs/rulings/2026-11-13-cp1-deploy-v-method-and-acceptance-check.md
+index ccf5c81..3e8e200 100644
+--- a/docs/rulings/2026-11-13-cp1-deploy-v-method-and-acceptance-check.md
++++ b/docs/rulings/2026-11-13-cp1-deploy-v-method-and-acceptance-check.md
+@@ -90,10 +90,16 @@ written "to stop the model from self validation and calculation"; CP-OS runs non
+ - Library, as the code stands (corrected 2026-11-14; an earlier version of this record said
+   adjusted leverage was kept out of the screening filters, which was wrong). An adjusted-only
+   run's leverage, net leverage and interest cover are stored under the same metric keys as a
+-  reported run's, with the adjusted name as `label`. The library's range filters and sort read
+-  the number only, so an adjusted multiple is filtered and ranked beside reported ones. The run
+-  card names the adjusted measure and the list view marks the figure `adj.` (full name on hover).
+-  Open for the owner: whether adjusted figures stay in the leverage filters and sort.
++  reported run's, with the adjusted name as `label`. The run card names the adjusted measure and
++  the list view marks the figure `adj.` (full name on hover). The library's range filters and
++  sort read the number only, so until 2026-11-14 an adjusted multiple was filtered and ranked
++  beside reported ones.
++- Owner, 2026-11-14, asked "Should adjusted-EBITDA leverage stay in the library's leverage
++  filters and sort?": "Take them out". For leverage, net leverage and interest cover, screening
++  treats a figure that carries the adjusted label as not recorded: it passes no range and sorts
++  where a missing value sorts. The figure is still displayed. The line "Leverage recorded for N
++  of M runs" therefore does not count an adjusted-only run whose figure is shown; its wording is
++  unchanged and is left for the owner.
+ - On the Changes page a run on reported EBITDA against a run on adjusted EBITDA is "not
+   comparable", with both labels in the reason; no difference is printed.
+ - Instruction size. The method text CP-1 is sent was shortened by 5,851 characters (duplicate

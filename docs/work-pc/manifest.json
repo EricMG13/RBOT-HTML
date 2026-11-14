@@ -10,7 +10,7 @@
   "AGENTS.md": "fdb9b92b4148f91c725308a9a78fc33e54633e71",
   "METHODOLOGY-REVIEW.md": "871255332345560880ba100a51702052e7099ef5",
   "README.md": "1fd3352f4b147b38f0a7f73a1bf2be3bb67c7f95",
-  "VERIFICATION.md": "08ba5b438a5a4ff49368f699cf2973df39b4280d",
+  "VERIFICATION.md": "8696dd6f0a5e94015eb27b7ff3fd855b0a85a0fb",
   "apps/issuer-library/README.md": "f776e07a39ac8965f66d2256054d61bfa2214f09",
   "apps/issuer-library/credit_os/SOURCE.md": "a88ec9a069c4e0b38946ab497a97873ca1a81e88",
   "apps/issuer-library/credit_os/catalog.json": "f8b0cedb8da041c14694bc7b971d71ea48c99697",
@@ -73,12 +73,12 @@
   "apps/issuer-library/credit_os/web/reader.test.cjs": "4f85839390418bb0e5d84e9b7463673fe75765f8",
   "apps/issuer-library/credit_os/web/screen.css": "60e11e36d6fe4615b05ccf329aac4e63d3e3eb3e",
   "apps/issuer-library/credit_os/web/screen.js": "3537f960adf46cd7c6dcdd6fe85f4d7415ed55b0",
-  "apps/issuer-library/credit_os/web/screening.js": "3ca6f2139b4618da199e4c37ac2d378bcce07a6f",
+  "apps/issuer-library/credit_os/web/screening.js": "87e57e6250d7fb91b1d8c690fd5088faf1cc8e5e",
   "apps/issuer-library/credit_os/web/shapes.js": "61e34c78f3cc65fb1999b7269430d40a48394faf",
   "apps/issuer-library/credit_os/web/shapes.test.cjs": "7371e9b161f305061a29ff52944ab35b01ef795b",
   "apps/issuer-library/credit_os/web/shared.js": "7a9696b7b73522fab6a885e90e23491e2fe1a665",
   "apps/issuer-library/credit_os/web/static-boot.js": "4e1ea095240d1190ce64ac503a70bd232a9f35f9",
-  "apps/issuer-library/credit_os/web/static.test.cjs": "39a559a9e6639d591df162f54be31d23d22d3973",
+  "apps/issuer-library/credit_os/web/static.test.cjs": "ea0db62d4472be04574d83d393771738bd59bb8a",
   "apps/issuer-library/credit_os/web/views.js": "5245b2461a6f1ff6ccf0ded4264d5395afd99732",
   "apps/issuer-library/engine/run_workflow.py": "798a6367391147a75c2306fc1f5241c5635553bd",
   "apps/issuer-library/fixtures/build_synthetic_run.py": "e4a6893a99c800a312c3e8520cc0dce4405c4de8",
@@ -361,7 +361,7 @@
   "docs/rulings/2026-11-12-module-output-review-changes.md": "418a2214aab79c1914e89d8c9d39a534c2b60b18",
   "docs/rulings/2026-11-12-tdg-mixed-effort-to-cp2.md": "269a699cb6dc69c2834246ea386262fa8bea5722",
   "docs/rulings/2026-11-13-appendix-and-routing-scope.md": "914fb31e833b2109ca33ca630f033a09d6a9900b",
-  "docs/rulings/2026-11-13-cp1-deploy-v-method-and-acceptance-check.md": "ccf5c819e826c74fc3bb67c048a49b5780bd9856",
+  "docs/rulings/2026-11-13-cp1-deploy-v-method-and-acceptance-check.md": "3e8e2002fbf57ff52d46f92ed6af670df1e0c4ef",
   "docs/rulings/2026-11-13-cpdr-web-lookup.md": "5069cae6c02394efa7440a174d5637953506573f",
   "docs/rulings/2026-11-13-downside-follows-forward-model.md": "62075a415b19ebc11e5a65b0a41692ee6e0b456a",
   "docs/rulings/2026-11-13-full-and-lite-credit-assessments.md": "134b3db9f542c958ed318754be5725e2cba29171",
@@ -912,6 +912,6 @@
   "tools/work_pc_delta.py": "fa5e9e81c534657f593cb8752a94de10cba0eead",
   "uv.lock": "7a4f05aeff999e9284ec29f34acacdd2619d64b1"
  },
- "head": "06a3caa77968288c3fa6e5ad46090c85abaa8736",
- "head_date": "2026-11-13T23:57:50Z"
+ "head": "c4ef090ef6e6aeb609dd6b9edb0d71a3d3430631",
+ "head_date": "2026-11-14T00:01:49Z"
 }
