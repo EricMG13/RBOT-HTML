@@ -265,6 +265,13 @@ def test_a_story_thread_lists_the_story_title_and_source(db, gid):
     share_story(db, Act(AK, T0), gid, 2, None)
     ((row,), _) = thread_list(db, "ak", gid, None)
     assert (row.kind, row.title, row.source, row.comments) == ("story", "Story 2", "Source 2", 0)
+    assert row.source_kind == "news"
+
+
+def test_a_note_thread_row_has_no_source_kind(db, gid):
+    start_note(db, Act(AK, T0), gid, "a note", "x")
+    ((row,), _) = thread_list(db, "ak", gid, None)
+    assert row.kind == "note" and row.source_kind is None
 
 
 def test_a_malformed_cursor_is_refused(db, gid):

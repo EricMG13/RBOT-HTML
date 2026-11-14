@@ -87,6 +87,7 @@ class ThreadRow:
     kind: Literal["story", "note"]
     title: str
     source: str | None
+    source_kind: str | None
     started_by: str | None
     comments: int
     last_activity_at: str
@@ -426,7 +427,7 @@ _NEW_THREAD = (
 
 _ROWS = (
     "SELECT t.id, t.story_id, COALESCE(s.title, t.title) AS title, src.name AS source,"
-    " t.started_by, t.last_activity_at,"
+    " src.kind AS source_kind, t.started_by, t.last_activity_at,"
     " (SELECT COUNT(*) FROM comments c WHERE c.thread_id = t.id AND c.deleted_at IS NULL)"
     "  AS comments,"
     " (" + _NEW_THREAD + " OR EXISTS(SELECT 1 FROM comments c WHERE c.thread_id = t.id"
@@ -458,6 +459,7 @@ def thread_list(
             kind="story" if row["story_id"] is not None else "note",
             title=row["title"],
             source=row["source"],
+            source_kind=row["source_kind"],
             started_by=row["started_by"],
             comments=row["comments"],
             last_activity_at=row["last_activity_at"],

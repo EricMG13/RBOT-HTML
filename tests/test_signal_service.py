@@ -722,6 +722,8 @@ def test_a_writer_creates_a_group_shares_a_story_and_a_reader_reads_the_thread_w
     assert status == 200
     assert thread["comments"][0]["text"] == "look"
     assert thread["can_post"] is False
+    status, _, rows = site.call("GET", "/api/groups/1/threads", cookie=RD_C)
+    assert status == 200 and rows["threads"][0]["source_kind"] == "regulator"
     status, _, page = site.call("GET", "/api/feed?view=latest", cookie=RD_C)
     card = next(c for c in page["cards"] if c["id"] == 1)
     expected = {"id": 1, "group": "TMT", "comments": 1, "shared_by": "ak", "note": "look"}
@@ -986,3 +988,26 @@ def test_every_write_with_no_origin_header_is_refused(world, method, path, body)
     status, _, _ = world.call(method, path, cookie=AK_C, body=body, origin=None)
     assert status == 403
     assert world.counts() == before
+
+
+def test_one_story_card_is_the_feed_card_with_only_the_threads_the_user_can_see(world):
+    status, _, page = world.call("GET", "/api/feed?view=latest", cookie=ML_C)
+    from_feed = {c["id"]: c for c in page["cards"]}
+    status, _, card = world.call("GET", "/api/stories/1", cookie=ML_C)
+    assert status == 200 and card == from_feed[1]
+    assert [t["group"] for t in card["threads"]] == ["TMT"]
+    # Story 2 is shared only to the invited group "Inner": ml is no member, ak is.
+    assert world.call("GET", "/api/stories/2", cookie=ML_C)[2]["threads"] == []
+    assert [t["group"] for t in world.call("GET", "/api/stories/2", cookie=AK_C)[2]["threads"]] == [
+        "Inner"
+    ]
+
+
+def test_a_missing_story_card_is_a_404_and_a_story_needs_a_name(world):
+    assert world.call("GET", "/api/stories/999999", cookie=ML_C)[0] == 404
+    assert world.call("GET", "/api/stories/1")[0] == 401
+
+
+@pytest.mark.parametrize("ident", ["abc", "-1", "5.0", "1" * 19, "%D9%A5", "5%20"])
+def test_story_card_ids_follow_the_path_id_rule(world, ident):
+    assert world.call("GET", f"/api/stories/{ident}", cookie=ML_C)[0] == 404

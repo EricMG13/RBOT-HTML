@@ -260,6 +260,15 @@ def _topic(req: _Req, action: Callable[[sqlite3.Connection, str, int], None], on
     return _Reply(200, {"following": on})
 
 
+def _story_card(req: _Req) -> _Reply:
+    """One card as the feed shows it to this user; threads of hidden groups are absent."""
+    try:
+        card = feedview.card_for(req.db, req.person.name, int(req.groups[0]))
+    except feedview.ViewError as error:
+        raise _refuse(404, str(error)) from None
+    return _Reply(200, dataclasses.asdict(card))
+
+
 def _save(req: _Req) -> _Reply:
     return _story(req, feedview.save, True)
 
@@ -533,6 +542,7 @@ _ROUTES = (
     _Route("GET", re.compile("/api/status"), _status, open_to_all=True),
     _Route("GET", re.compile("/api/feed"), _feed),
     _Route("GET", re.compile("/api/feed/new"), _feed_new),
+    _Route("GET", re.compile(f"/api/stories/{_ID}"), _story_card),
     _Route("POST", re.compile(f"/api/stories/{_ID}/save"), _save),
     _Route("DELETE", re.compile(f"/api/stories/{_ID}/save"), _unsave),
     _Route("GET", re.compile("/api/topics"), _topics),

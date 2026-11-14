@@ -2,7 +2,8 @@
 // Card rendering of the Signal feed page, tested with a small DOM double (no browser).
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { card, relativeTime, safeLink, emptyState, initials } = require('./render.js');
+const R = require('./render.js');
+const { card, relativeTime, safeLink, emptyState, initials } = R;
 
 // A DOM double. textContent is plain text and never parsed as markup, like the real DOM.
 class Text {
@@ -18,7 +19,10 @@ class El {
   setAttribute(k, v) { this.attrs[k] = String(v); }
   getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; }
   hasAttribute(k) { return k in this.attrs; }
-  appendChild(c) { c.parent = this; this.children.push(c); return c; }
+  appendChild(c) {
+    if (c instanceof Fragment) { for (const k of c.children) { k.parent = this; this.children.push(k); } c.children = []; return c; }
+    c.parent = this; this.children.push(c); return c;
+  }
   append(...cs) { for (const c of cs) this.appendChild(typeof c === 'string' ? new Text(c) : c); }
   elements() { const out = []; for (const c of this.children) if (c instanceof El) out.push(c, ...c.elements()); return out; }
   querySelectorAll(sel) {
@@ -42,7 +46,8 @@ function matcher(sel) {
     });
   };
 }
-const doc = { createElement: tag => new El(tag), createElementNS: (ns, tag) => new El(tag), createTextNode: s => new Text(s) };
+class Fragment extends El { constructor() { super('#fragment'); } }
+const doc = { createDocumentFragment: () => new Fragment(), createElement: tag => new El(tag), createElementNS: (ns, tag) => new El(tag), createTextNode: s => new Text(s) };
 
 test('the DOM double does not parse markup', () => {
   const e = doc.createElement('div'); e.textContent = '<b>x</b>';
@@ -123,4 +128,309 @@ test('initials are letters or digits of the first two words', () => {
   assert.equal(initials('  '), '?');
   assert.equal(initials('Ünal Çelik'), 'ÜÇ');
   assert.equal(initials('<b>x</b> y'), 'Y');
+});
+
+// ---- slice 3: threads, comments, groups ----
+const NOW = new Date('2026-11-13T12:00:00Z');
+const links = f => f.querySelectorAll('a[href]').map(a => a.getAttribute('href'));
+const elementsNamed = (f, tag) => f.querySelectorAll(tag);
+const byAction = (e, a) => e.querySelectorAll('[data-action="' + a + '"]');
+const cm = (o) => Object.assign({id: 1, parent_id: null, author: 'A. Kovac', role: 'writer', text: 'hello', created_at: '2026-11-13T09:12:00Z',
+  edited: false, removed: false, reactions: [], mine: false, editable: false}, o);
+const tview = (o) => Object.assign({id: 7, group_id: 2, group: 'TMT analysts', story: null, title: 'A note', started_by: 'ak', comments: [], can_post: true}, o);
+
+test('linkify links only http and https and keeps punctuation outside', () => {
+  const f = R.linkify(doc, 'see https://a.org/x). and javascript:alert(1) and <b>');
+  assert.deepEqual(links(f), ['https://a.org/x']);
+  assert.equal(f.textContent, 'see https://a.org/x). and javascript:alert(1) and <b>');
+  assert.equal(elementsNamed(f, 'b').length, 0);
+});
+test('a link opens in a new tab without an opener', () => {
+  const a = R.linkify(doc, 'x http://a.org/y').querySelector('a[href]');
+  assert.equal(a.getAttribute('target'), '_blank');
+  assert.equal(a.getAttribute('rel'), 'noopener noreferrer');
+  assert.equal(a.textContent, 'http://a.org/y');
+});
+test('newlines become line breaks', () => {
+  const f = R.linkify(doc, 'a\nb\n\nc');
+  assert.equal(elementsNamed(f, 'br').length, 3);
+  assert.equal(f.textContent, 'abc');
+});
+test('a removed comment shows the placeholder and no controls', () => {
+  const e = R.comment(doc, cm({removed: true, text: 'secret', mine: true, editable: true, reactions: [{key: 'up', count: 1, mine: false}]}), NOW);
+  assert.ok(e.textContent.includes('This comment was removed.'));
+  assert.ok(!e.textContent.includes('secret'));
+  assert.equal(e.querySelectorAll('button').length, 0);
+});
+test('edit and delete appear only on my comments, edit only while editable', () => {
+  const other = R.comment(doc, cm({}), NOW);
+  assert.equal(byAction(other, 'edit-comment').length + byAction(other, 'delete-comment').length, 0);
+  const mine = R.comment(doc, cm({mine: true, editable: true}), NOW);
+  assert.equal(byAction(mine, 'edit-comment').length, 1);
+  assert.equal(byAction(mine, 'delete-comment').length, 1);
+  const late = R.comment(doc, cm({mine: true, editable: false}), NOW);
+  assert.equal(byAction(late, 'edit-comment').length, 0);
+  assert.equal(byAction(late, 'delete-comment').length, 1);
+  assert.equal(byAction(late, 'delete-comment')[0].getAttribute('data-id'), '1');
+});
+test('a reaction chip states its count and pressed state', () => {
+  const e = R.comment(doc, cm({reactions: [{key: 'eyes', count: 1, mine: false}, {key: 'up', count: 2, mine: true}, {key: 'check', count: 0, mine: false}]}), NOW, {canPost: true});
+  const chips = byAction(e, 'react');
+  assert.equal(chips.length, 2);
+  assert.equal(chips[0].textContent, '👍 2');            // fixed order: up before eyes
+  assert.equal(chips[0].getAttribute('aria-pressed'), 'true');
+  assert.equal(chips[0].getAttribute('aria-label'), 'Thumbs up, 2');
+  assert.equal(chips[0].getAttribute('data-key'), 'up');
+  assert.equal(chips[1].textContent, '👀 1');
+  assert.equal(chips[1].getAttribute('aria-pressed'), 'false');
+  assert.equal(byAction(e, 'add-reaction').length, 2);   // check and question remain
+  const reader = R.comment(doc, cm({reactions: [{key: 'up', count: 1, mine: false}]}), NOW, {canPost: false});
+  const forgot = R.comment(doc, cm({reactions: [{key: 'up', count: 1, mine: false}]}), NOW);
+  assert.equal(byAction(forgot, 'add-reaction').length + byAction(forgot, 'reply').length, 0);   // default is read-only
+  assert.equal(byAction(reader, 'add-reaction').length, 0);
+  assert.equal(byAction(reader, 'reply').length, 0);
+});
+test('comment shows name, role tag, edited tag and time', () => {
+  const e = R.comment(doc, cm({edited: true, role: 'owner'}), NOW);
+  assert.ok(e.textContent.includes('A. Kovac'));
+  assert.ok(e.textContent.includes('Owner'));
+  assert.ok(e.textContent.includes('edited'));
+  assert.equal(e.querySelector('time').getAttribute('datetime'), '2026-11-13T09:12:00Z');
+  assert.ok(!R.comment(doc, cm({role: 'reader'}), NOW).textContent.includes('Reader'));
+});
+test('replies render under their parent, one level', () => {
+  const p = R.threadPanel(doc, tview({comments: [cm({id: 1}), cm({id: 2, parent_id: 1, text: 'reply'}), cm({id: 3, text: 'next'})]}), NOW);
+  const top = p.querySelector('ol.comments').children;
+  assert.equal(top.length, 2);
+  assert.equal(top[0].querySelectorAll('ol.replies').length, 1);
+  assert.ok(top[0].querySelector('ol.replies').textContent.includes('reply'));
+  assert.equal(top[1].querySelectorAll('ol.replies').length, 0);
+  assert.equal(byAction(top[0].querySelector('ol.replies'), 'reply').length, 0);
+  assert.equal(byAction(top[0], 'reply').length, 1);   // the panel passes can_post down
+});
+test('a reader gets the note in place of the reply box', () => {
+  const r = R.threadPanel(doc, tview({can_post: false}), NOW);
+  assert.ok(r.textContent.includes('Readers see this thread but not the reply box.'));
+  assert.equal(r.querySelectorAll('textarea').length, 0);
+  const w = R.threadPanel(doc, tview({can_post: true}), NOW);
+  assert.ok(!w.textContent.includes('Readers see this thread'));
+  assert.equal(w.querySelectorAll('textarea').length, 1);
+  assert.equal(byAction(w, 'send-comment')[0].getAttribute('data-id'), '7');
+});
+test('the panel is a labelled aside with a heading, a quote for a story and day dividers', () => {
+  const story = {id: 5, title: 'Big deal', link: 'https://a.org/s', source: 'Authority', kind: 'regulator', summary: '', published_at: '', other_sources: 0, saved: false, topics: [], threads: []};
+  const p = R.threadPanel(doc, tview({story, title: null, comments: [
+    cm({id: 1, created_at: '2026-11-12T09:00:00Z'}), cm({id: 2, created_at: '2026-11-12T10:00:00Z'}), cm({id: 3, created_at: '2026-11-13T08:00:00Z'})]}), NOW);
+  assert.equal(p.tagName, 'ASIDE');
+  assert.ok(p.hasAttribute('aria-labelledby'));
+  assert.equal(p.querySelector('h2').getAttribute('tabindex'), '-1');
+  assert.ok(p.querySelector('.quote').textContent.includes('Big deal'));
+  const days = p.querySelectorAll('.day').map(d => d.textContent);
+  assert.deepEqual(days, ['Today']);
+  const p2 = R.threadPanel(doc, tview({comments: [cm({id: 1, created_at: '2026-11-01T09:00:00Z'}), cm({id: 2, created_at: '2026-11-12T10:00:00Z'}),
+    cm({id: 3, created_at: '2026-11-13T08:00:00Z'})]}), NOW);
+  assert.deepEqual(p2.querySelectorAll('.day').map(d => d.textContent), ['Yesterday', 'Today']);
+  const p3 = R.threadPanel(doc, tview({comments: [cm({id: 1, created_at: '2026-11-01T09:00:00Z'}), cm({id: 2, created_at: '2026-11-03T10:00:00Z'})]}), NOW);
+  assert.deepEqual(p3.querySelectorAll('.day').map(d => d.textContent), ['3 Nov 2026']);
+});
+test('a thread without comments says so', () => {
+  assert.ok(R.threadPanel(doc, tview({}), NOW).textContent.includes('No comments yet'));
+});
+test('a card shows who shared it where with the note and a chip per thread', () => {
+  const story = {id: 5, title: 'T', link: 'https://a.org/s', source: 'S', kind: 'news', summary: '', published_at: '2026-11-13T11:00:00Z', other_sources: 0, saved: false, topics: [],
+    threads: [{id: 9, group: 'TMT analysts', comments: 3, shared_by: 'A. Kovac', note: 'Heavier than assumed.\nSecond line'}, {id: 10, group: 'Credit', comments: 0, shared_by: null, note: null}]};
+  const e = card(doc, story, NOW);
+  const line = e.querySelector('.shared');
+  assert.ok(line.textContent.includes('A. Kovac'));
+  assert.ok(line.textContent.includes('shared to'));
+  assert.ok(line.textContent.includes('TMT analysts'));
+  assert.ok(line.textContent.includes('Heavier than assumed.'));
+  assert.ok(!line.textContent.includes('Second line'));
+  const chips = byAction(e, 'open-thread');
+  assert.equal(chips.length, 2);
+  assert.equal(chips[0].getAttribute('data-id'), '9');
+  assert.ok(chips[0].textContent.includes('3'));
+  assert.equal(byAction(card(doc, story, NOW, {canShare: true}), 'share')[0].getAttribute('data-id'), '5');
+  assert.equal(byAction(card(doc, story, NOW, {canShare: false}), 'share').length, 0);
+  assert.equal(byAction(card(doc, story, NOW), 'share').length, 0);       // default: no Share
+  assert.equal(byAction(card(doc, story, NOW, {canShare: true}), 'share').length, 1);
+  assert.equal(card(doc, Object.assign({}, story, {threads: []}), NOW).querySelectorAll('.shared').length, 0);
+});
+test('markup in a group name, title, note or comment is text', () => {
+  const bad = '<img src=x onerror=alert(1)><b>x</b>';
+  const story = {id: 5, title: bad, link: 'javascript:1', source: bad, kind: 'news', summary: bad, published_at: '', other_sources: 0, saved: false, topics: [],
+    threads: [{id: 9, group: bad, comments: 1, shared_by: bad, note: bad}]};
+  const out = [card(doc, story, NOW),
+    R.threadPanel(doc, tview({group: bad, title: bad, started_by: bad, story, comments: [cm({author: bad, text: bad})]}), NOW),
+    R.threadRow(doc, {id: 1, kind: 'note', title: bad, source: bad, started_by: bad, comments: 2, last_activity_at: '2026-11-13T11:00:00Z', unread: true}, NOW),
+    R.groupItem(doc, {id: 1, name: bad, visibility: 'invited', member: true, members: 2, threads: 1, unread: 3})];
+  for (const e of out) {
+    assert.equal(e.querySelectorAll('img, b, script').length, 0);
+    assert.ok(e.textContent.includes(bad));
+    for (const x of e.elements()) for (const k of Object.keys(x.attrs)) {
+      assert.ok(!k.startsWith('on') && k !== 'style', 'attribute ' + k);
+      // slice 2's card puts the title in aria-label (pre-existing, out of this task); the new elements do not.
+      // the reply box's visible placeholder names the group on request of the controller (set as an attribute, never parsed).
+      if (e !== out[0] && k !== 'placeholder') assert.ok(!x.attrs[k].includes('<img'), 'data in attribute ' + k);
+    }
+  }
+});
+test('a thread row shows kind, counts, last activity and an unread mark in words', () => {
+  const row = {id: 4, kind: 'story', title: 'Deal', source: 'Authority', started_by: 'ak', comments: 1, last_activity_at: '2026-11-13T11:15:00Z', unread: true};
+  const e = R.threadRow(doc, row, NOW);
+  assert.equal(e.getAttribute('data-action'), 'open-thread');
+  assert.equal(e.getAttribute('data-id'), '4');
+  assert.ok(e.textContent.includes('Authority') && e.textContent.includes('Deal'));
+  assert.ok(e.textContent.includes('1 comment') && !e.textContent.includes('1 comments'));
+  assert.ok(e.textContent.includes('45 min ago'));
+  assert.ok(e.textContent.includes('Unread'));
+  assert.ok(!R.threadRow(doc, Object.assign({}, row, {unread: false, comments: 0}), NOW).textContent.includes('Unread'));
+  const note = R.threadRow(doc, Object.assign({}, row, {kind: 'note', source: null, title: 'My note'}), NOW);
+  assert.ok(note.textContent.includes('My note') && note.textContent.includes('Note'));
+});
+test('a group item has its name, a lock when invited and an unread count', () => {
+  const g = {id: 3, name: 'TMT', visibility: 'invited', member: true, members: 4, threads: 2, unread: 5};
+  const e = R.groupItem(doc, g);
+  assert.equal(e.getAttribute('data-action'), 'open-group');
+  assert.equal(e.getAttribute('data-id'), '3');
+  assert.ok(e.textContent.includes('TMT'));
+  assert.ok(e.textContent.includes('Invited group'));
+  assert.ok(e.textContent.includes('5'));
+  const open = R.groupItem(doc, Object.assign({}, g, {visibility: 'everyone', unread: 0}));
+  assert.ok(!open.textContent.includes('Invited group'));
+  assert.equal(open.querySelectorAll('.badge').length, 0);
+});
+
+test('the identity note is the fixed sentence, exported once', () => {
+  assert.equal(R.IDENTITY_NOTE, 'Names are not checked: anyone on this network can post under any name.');
+  assert.ok(R.threadPanel(doc, tview({can_post: true}), NOW).textContent.includes(R.IDENTITY_NOTE));
+});
+test('the header counts live comments, not removed ones', () => {
+  const p = R.threadPanel(doc, tview({comments: [cm({id: 1}), cm({id: 2, removed: true}), cm({id: 3, removed: true})]}), NOW);
+  assert.ok(p.querySelector('.thead-sub').textContent.includes('1 comment'));
+  assert.ok(!p.querySelector('.thead-sub').textContent.includes('1 comments'));
+});
+test('day dividers are separators with the date as label, not list items of comments', () => {
+  const p = R.threadPanel(doc, tview({comments: [cm({id: 1, created_at: '2026-11-12T09:00:00Z'}), cm({id: 2, created_at: '2026-11-13T08:00:00Z'})]}), NOW);
+  const d = p.querySelector('.day');
+  assert.equal(d.getAttribute('role'), 'separator');
+  assert.equal(d.getAttribute('aria-label'), 'Today');
+});
+test('a story thread row shows the source kind in words as a card does', () => {
+  const row = {id: 4, kind: 'story', title: 'Deal', source: 'Authority', source_kind: 'regulator', started_by: 'ak', comments: 0, last_activity_at: '2026-11-13T11:15:00Z', unread: false};
+  assert.ok(R.threadRow(doc, row, NOW).textContent.includes('Regulator · Authority'));
+  const nokind = R.threadRow(doc, Object.assign({}, row, {source_kind: null}), NOW);
+  assert.ok(nokind.textContent.includes('Authority') && !nokind.textContent.includes('· Authority'));
+});
+
+// ----- page wiring helpers (Task 6)
+test('missing and hidden groups and threads read the same, in words', () => {
+  assert.equal(R.notFound(doc, 'group').textContent, 'This group does not exist or is not open to you.');
+  assert.equal(R.notFound(doc, 'thread').textContent, 'This thread does not exist or is not open to you.');
+  assert.equal(R.unreadLabel(3), '3 unread');
+  assert.equal(R.groupsEmpty(doc).textContent, 'No groups yet');
+});
+test('an empty group tells writers what to do and readers what to expect', () => {
+  assert.ok(R.threadsEmpty(doc, true).textContent.includes('start a note'));
+  assert.ok(R.threadsEmpty(doc, false).textContent.includes('when a writer'));
+});
+test('a loading or failed panel keeps its heading, label and close control', () => {
+  for (const p of [R.threadLoading(doc, 7), R.threadMessage(doc, 7, 'missing'), R.threadMessage(doc, 7, 'failed')]) {
+    assert.equal(p.tagName, 'ASIDE');
+    assert.equal(p.getAttribute('aria-labelledby'), 'thread-title-7');
+    assert.equal(p.querySelector('[data-action="close-thread"]').getAttribute('data-id'), '7');
+  }
+  assert.equal(R.threadLoading(doc, 7).getAttribute('aria-busy'), 'true');
+  assert.ok(R.threadMessage(doc, 7, 'missing').textContent.includes('does not exist or is not open to you'));
+});
+test('the members strip shows eight avatars and the rest as a count', () => {
+  const members = Array.from({length: 11}, (_, i) => 'Member ' + String.fromCharCode(65 + i));
+  const strip = R.membersStrip(doc, {id: 4, visibility: 'everyone', member: false, can_manage: false, members});
+  assert.equal(strip.querySelector('.avatars').querySelectorAll('.av').length, 9);
+  assert.ok(strip.querySelector('.av.more').textContent === '+3');
+  assert.ok(strip.textContent.includes('11 members'));
+  const join = strip.querySelector('[data-action="join-group"]');
+  assert.equal(join.getAttribute('data-id'), '4');
+  assert.equal(strip.querySelector('[data-action="remove-member"]'), null);
+  assert.equal(strip.querySelector('form'), null);
+});
+test('a member of an everyone group can leave; an invited group has no join or leave', () => {
+  const open = R.membersStrip(doc, {id: 4, visibility: 'everyone', member: true, can_manage: false, members: ['ak']});
+  assert.ok(open.querySelector('[data-action="leave-group"]'));
+  const closed = R.membersStrip(doc, {id: 5, visibility: 'invited', member: true, can_manage: false, members: ['ak']});
+  assert.equal(closed.querySelector('[data-action="leave-group"]'), null);
+  assert.equal(closed.querySelector('[data-action="join-group"]'), null);
+  assert.ok(closed.textContent.includes('Invited only'));
+});
+test('a manager of an invited group can add and remove members; names stay text', () => {
+  const strip = R.membersStrip(doc, {id: 5, visibility: 'invited', member: true, can_manage: true, members: ['<b>x</b>', 'ml']});
+  assert.equal(strip.querySelectorAll('[data-action="remove-member"]').length, 2);
+  assert.equal(strip.querySelectorAll('[data-action="remove-member"]')[0].getAttribute('data-name'), '<b>x</b>');
+  assert.equal(strip.querySelectorAll('b').length, 0);
+  assert.equal(strip.querySelector('form[data-action="add-member"]').getAttribute('data-id'), '5');
+  assert.ok(strip.querySelector('[data-slot="members-error"]').hasAttribute('hidden'));
+});
+test('the group head offers Start a note only when asked', () => {
+  const g = {id: 4, visibility: 'everyone', member: true, can_manage: false, members: []};
+  assert.ok(R.groupHead(doc, g, true).querySelector('[data-action="start-note"]'));
+  assert.equal(R.groupHead(doc, g, false).querySelector('[data-action="start-note"]'), null);
+});
+test('the share dialog lists groups as radios, with the lock in words, or says there are none', () => {
+  const list = R.groupChoices(doc, [{id: 1, name: 'TMT', visibility: 'everyone'}, {id: 2, name: '<i>Core</i>', visibility: 'invited'}], true);
+  const radios = list.querySelectorAll('input[type="radio"]');
+  assert.equal(radios.length, 2);
+  assert.equal(radios[1].getAttribute('value'), '2');
+  assert.ok(list.textContent.includes('Invited group: '));
+  assert.equal(list.querySelectorAll('i').length, 0);
+  const none = R.groupChoices(doc, [], true);
+  assert.ok(none.textContent.includes('no groups yet'));
+  assert.ok(none.querySelector('[data-action="new-group"]'));
+  const noneReader = R.groupChoices(doc, [], false);
+  assert.equal(noneReader.querySelector('[data-action="new-group"]'), null);
+});
+test('the visibility choice is two radios with everyone checked; topics are checkboxes', () => {
+  const seg = R.visibilityChoices(doc);
+  const radios = seg.querySelectorAll('input[type="radio"]');
+  assert.deepEqual(radios.map(r => r.getAttribute('value')), ['everyone', 'invited']);
+  assert.ok(radios[0].hasAttribute('checked'));
+  const topics = R.topicChoices(doc, [{id: 3, name: 'Rates'}]);
+  assert.equal(topics.querySelectorAll('input[type="checkbox"]')[0].getAttribute('value'), '3');
+  assert.ok(R.topicChoices(doc, []).textContent.includes('No topics yet'));
+});
+test('the reply-to bar names the author as text and offers Cancel', () => {
+  const bar = R.replyingTo(doc, '<b>ak</b>');
+  assert.equal(bar.querySelector('span').textContent, 'Replying to <b>ak</b>');
+  assert.ok(bar.querySelector('[data-action="cancel-reply"]'));
+});
+test('the edit form keeps the text and shows the refusal beside it', () => {
+  const form = R.editForm(doc, {id: 9}, 'my words', 'edits close after 15 minutes');
+  assert.equal(form.querySelector('textarea').textContent, 'my words');
+  assert.equal(form.querySelector('textarea').getAttribute('maxlength'), '4000');
+  assert.ok(form.textContent.includes('edits close after 15 minutes'));
+  assert.equal(form.querySelector('[data-action="save-edit"]').getAttribute('data-id'), '9');
+  assert.ok(form.querySelector('[data-action="cancel-edit"]'));
+  assert.equal(R.editForm(doc, {id: 9}, 'x', '').querySelector('.field-error'), null);
+});
+
+test('the reply box has a visible prompt naming the group, or the person replied to', () => {
+  const panel = R.threadPanel(doc, {id: 3, group: 'TMT', story: null, title: 'T', started_by: 'ak', comments: [], can_post: true}, new Date('2026-11-13T12:00:00Z'));
+  assert.equal(panel.querySelector('textarea').getAttribute('placeholder'), 'Reply to TMT\u2026');
+  assert.equal(R.replyPlaceholder('TMT', 'ml'), 'Replying to ml\u2026');
+  assert.ok(panel.querySelector('label').textContent === 'Reply');   // the accessible label stays
+});
+
+test('a thread error is an alert line in the panel with Retry only where one applies', () => {
+  const withRetry = R.threadError(doc, 'Signal could not be reached.', true);
+  assert.equal(withRetry.getAttribute('role'), 'alert');
+  assert.ok(withRetry.textContent.includes('Signal could not be reached.'));
+  assert.ok(withRetry.querySelector('[data-action="retry-thread"]'));
+  assert.equal(R.threadError(doc, '<b>x</b>', false).querySelector('[data-action="retry-thread"]'), null);
+  assert.equal(R.threadError(doc, '<b>x</b>', false).querySelectorAll('b').length, 0);
+});
+test('the reply box states the 15-minute edit rule once, quietly', () => {
+  assert.equal(R.EDIT_RULE, 'You can edit a comment for 15 minutes.');
+  const panel = R.threadPanel(doc, {id: 3, group: 'TMT', story: null, title: 'T', started_by: 'ak', comments: [], can_post: true}, new Date('2026-11-13T12:00:00Z'));
+  assert.ok(panel.textContent.includes(R.EDIT_RULE));
+  const reader = R.threadPanel(doc, {id: 3, group: 'TMT', story: null, title: 'T', started_by: 'ak', comments: [], can_post: false}, new Date('2026-11-13T12:00:00Z'));
+  assert.ok(!reader.textContent.includes(R.EDIT_RULE));
 });

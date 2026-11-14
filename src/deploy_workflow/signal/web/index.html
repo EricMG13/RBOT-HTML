@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="/static/signal.css">
 </head>
 <body>
-<a class="skip-link" href="#feed">Skip to the feed</a>
+<a class="skip-link" id="skip-link" href="#feed">Skip to the feed</a>
 <div class="app">
 
   <nav class="rail" aria-label="Application">
@@ -18,6 +18,7 @@
       <li>
         <a class="rail-link on" href="/" aria-current="page" aria-label="Signal" title="Signal">
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2 20h.01M7 20v-4M12 20v-8M17 20V8M22 4v16"/></svg>
+          <span class="rail-badge" id="rail-badge" aria-hidden="true" hidden></span>
         </a>
       </li>
     </ul>
@@ -38,6 +39,10 @@
     </ul>
     <h2 class="side-head" id="topics-head">Topics</h2>
     <ul class="ch-list" id="topic-list" aria-labelledby="topics-head"></ul>
+    <h2 class="side-head" id="groups-head">Groups</h2>
+    <ul class="ch-list" id="group-list" aria-labelledby="groups-head" aria-busy="false"></ul>
+    <button type="button" class="ch new-group" id="new-group" data-action="new-group" hidden>
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg>New group</button>
     <div class="me">
       <button type="button" class="me-chip" id="name-chip" aria-describedby="name-note">
         <span class="av" id="me-initials" aria-hidden="true"></span>
@@ -55,7 +60,7 @@
       <p class="live" id="freshness"><span class="pulse" aria-hidden="true"></span><span id="freshness-text">Checking sources</span></p>
     </header>
 
-    <div class="bar">
+    <div class="bar" id="feed-bar">
       <div class="chips" role="group" aria-label="Kind of story" id="kind-chips">
         <button type="button" class="chip" data-kind="" aria-pressed="true">All</button>
         <button type="button" class="chip" data-kind="regulator" aria-pressed="false">Regulators</button>
@@ -77,6 +82,8 @@
       <button type="button" class="btn" id="retry">Retry</button>
     </div>
 
+    <div id="group-head" hidden></div>
+    <div id="threads" class="cards" hidden></div>
     <div id="cards" class="cards"></div>
     <div id="skeleton" class="cards" aria-hidden="true" hidden>
       <div class="card skel"><span class="bar-s w1"></span><span class="bar-s w2"></span><span class="bar-s w3"></span><span class="bar-s w4"></span></div>
@@ -86,6 +93,8 @@
     <div id="empty" hidden></div>
     <button type="button" class="btn more" id="more" hidden>Show older</button>
   </main>
+
+  <div class="thread-slot" id="thread-slot" hidden></div>
 </div>
 
 <dialog id="name-dialog" aria-labelledby="name-title" aria-describedby="name-help">
@@ -98,6 +107,87 @@
     <div class="dialog-acts">
       <button type="button" class="btn" id="name-cancel" hidden>Cancel</button>
       <button type="submit" class="btn pri">Continue</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="share-dialog" class="dlg" aria-labelledby="share-dialog-title" aria-describedby="share-dialog-help">
+  <form id="share-dialog-form" novalidate>
+    <div class="dlg-head">
+      <h2 id="share-dialog-title">Share to a group</h2>
+      <button type="button" class="icon-btn" id="share-dialog-close" aria-label="Close">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <p id="share-dialog-help">Choose where this story goes. Everyone who can see the group can read the thread.</p>
+    <fieldset class="field" id="share-groups-box" aria-busy="false">
+      <legend>Group</legend>
+      <div id="share-groups"></div>
+    </fieldset>
+    <div class="field">
+      <label for="share-note">Note (optional)</label>
+      <textarea id="share-note" rows="3" maxlength="4000"></textarea>
+    </div>
+    <p class="identity-note">Names are not checked: anyone on this network can post under any name.</p>
+    <p class="field-error" id="share-dialog-error" role="alert" hidden></p>
+    <div class="dialog-acts">
+      <button type="button" class="btn quiet" id="share-dialog-cancel">Cancel</button>
+      <button type="submit" class="btn pri" id="share-submit">Share</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="group-dialog" class="dlg" aria-labelledby="group-dialog-title" aria-describedby="group-dialog-help">
+  <form id="group-dialog-form" novalidate>
+    <div class="dlg-head">
+      <h2 id="group-dialog-title">New group</h2>
+      <button type="button" class="icon-btn" id="group-dialog-close" aria-label="Close">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <p id="group-dialog-help">A group is a place to discuss stories with colleagues.</p>
+    <div class="field">
+      <label for="group-name">Name</label>
+      <input type="text" id="group-name" maxlength="60" autocomplete="off" required>
+    </div>
+    <fieldset class="field" id="group-visibility-box">
+      <legend>Who can join</legend>
+      <div id="group-visibility"></div>
+    </fieldset>
+    <fieldset class="field" id="group-topics-box">
+      <legend>Topics that post here automatically</legend>
+      <div id="group-topics"></div>
+    </fieldset>
+    <p class="identity-note">Names are not checked: anyone on this network can post under any name.</p>
+    <p class="field-error" id="group-dialog-error" role="alert" hidden></p>
+    <div class="dialog-acts">
+      <button type="button" class="btn quiet" id="group-dialog-cancel">Cancel</button>
+      <button type="submit" class="btn pri" id="group-submit">Create group</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="note-dialog" class="dlg" aria-labelledby="note-dialog-title" aria-describedby="note-dialog-help">
+  <form id="note-dialog-form" novalidate>
+    <div class="dlg-head">
+      <h2 id="note-dialog-title">Start a note</h2>
+      <button type="button" class="icon-btn" id="note-dialog-close" aria-label="Close">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <p id="note-dialog-help">A note is a thread with no story: a title and a first comment.</p>
+    <div class="field">
+      <label for="note-title">Title</label>
+      <input type="text" id="note-title" maxlength="120" autocomplete="off" required>
+    </div>
+    <div class="field">
+      <label for="note-text">Text</label>
+      <textarea id="note-text" rows="5" maxlength="4000" required></textarea>
+    </div>
+    <p class="field-error" id="note-dialog-error" role="alert" hidden></p>
+    <div class="dialog-acts">
+      <button type="button" class="btn quiet" id="note-dialog-cancel">Cancel</button>
+      <button type="submit" class="btn pri" id="note-submit">Start note</button>
     </div>
   </form>
 </dialog>
