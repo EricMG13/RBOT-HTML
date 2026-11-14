@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import NotRequired, TypedDict, Unpack
 
+from deploy_workflow.signal.groups import VISIBLE
 from deploy_workflow.signal.store import KINDS, _utc_text, _write_transaction
 from deploy_workflow.signal.topics import fts_phrase
 
@@ -18,6 +19,15 @@ MAX_QUERY = 100
 
 class ViewError(ValueError):
     """An unknown view, kind, topic or story, or a malformed cursor."""
+
+
+@dataclass(frozen=True)
+class CardThread:
+    id: int
+    group: str
+    comments: int
+    shared_by: str | None
+    note: str | None
 
 
 @dataclass(frozen=True)
@@ -32,6 +42,7 @@ class Card:
     other_sources: int
     saved: bool
     topics: tuple[str, ...]
+    threads: tuple[CardThread, ...]
 
 
 @dataclass(frozen=True)
@@ -47,11 +58,22 @@ class Filters(TypedDict):
     kind: NotRequired[str | None]
     query: NotRequired[str]
     before: NotRequired[str | None]
+    shared: NotRequired[bool]
 
 
 _FOLLOWED = (
     "EXISTS(SELECT 1 FROM topic_stories ts JOIN topic_follows f ON f.topic_id = ts.topic_id"
     " WHERE ts.story_id = s.id AND f.user_name = ?)"
+)
+# A thread in a group the user is a member of (membership, not mere visibility).
+_IN_MY_GROUP = (
+    "EXISTS(SELECT 1 FROM threads mt JOIN group_members mm ON mm.group_id = mt.group_id"
+    " WHERE mt.story_id = s.id AND mm.user_name = ?)"
+)
+_SHARED = (
+    "EXISTS(SELECT 1 FROM threads mt JOIN group_members mm ON mm.group_id = mt.group_id"
+    " WHERE mt.story_id = s.id AND mm.user_name = ?"
+    " AND mt.started_by IS NOT NULL AND mt.started_by <> ?)"
 )
 _SAVED = "EXISTS(SELECT 1 FROM saves v WHERE v.story_id = s.id AND v.user_name = ?)"
 _IN_TOPIC = "EXISTS(SELECT 1 FROM topic_stories ts WHERE ts.story_id = s.id AND ts.topic_id = ?)"
@@ -115,7 +137,7 @@ def _view_clause(
     if view == "latest":
         return None, []
     if view == "foryou":
-        return _FOLLOWED, [user_name]
+        return f"({_FOLLOWED} OR {_IN_MY_GROUP})", [user_name, user_name]
     if view == "saved":
         return _SAVED, [user_name]
     prefix, _, number = view.partition(":")
@@ -148,7 +170,26 @@ def _topic_names(db: sqlite3.Connection, story_id: int) -> tuple[str, ...]:
     return tuple(row["name"] for row in rows)
 
 
-def _card(db: sqlite3.Connection, row: sqlite3.Row) -> Card:
+_CARD_THREADS = (
+    "SELECT t.id, g.name AS grp, t.started_by,"
+    " (SELECT COUNT(*) FROM comments c WHERE c.thread_id = t.id AND c.deleted_at IS NULL)"
+    "  AS comments,"
+    " (SELECT substr(c.text, 1, 140) FROM comments c WHERE c.thread_id = t.id"
+    "  AND c.author = t.started_by AND c.deleted_at IS NULL ORDER BY c.id LIMIT 1) AS note"
+    " FROM threads t JOIN groups g ON g.id = t.group_id"
+    " WHERE t.story_id = ? AND " + VISIBLE + " ORDER BY t.id"
+)
+
+
+def _card_threads(db: sqlite3.Connection, user_name: str, story_id: int) -> tuple[CardThread, ...]:
+    found = db.execute(_CARD_THREADS, (story_id, user_name)).fetchall()
+    return tuple(
+        CardThread(row["id"], row["grp"], row["comments"], row["started_by"], row["note"])
+        for row in found
+    )
+
+
+def _card(db: sqlite3.Connection, user_name: str, row: sqlite3.Row) -> Card:
     return Card(
         id=row["id"],
         title=row["title"],
@@ -160,6 +201,7 @@ def _card(db: sqlite3.Connection, row: sqlite3.Row) -> Card:
         other_sources=row["other_sources"],
         saved=bool(row["saved"]),
         topics=_topic_names(db, row["id"]),
+        threads=_card_threads(db, user_name, row["id"]),
     )
 
 
@@ -182,7 +224,7 @@ def card_for(db: sqlite3.Connection, user_name: str, story_id: int) -> Card:
     )
     if row is None:
         raise ViewError(f"no story with id {story_id}")
-    return _card(db, row)
+    return _card(db, user_name, row)
 
 
 def feed(
@@ -214,6 +256,9 @@ def _read_page(db: sqlite3.Connection, user_name: str, view: str, filters: Filte
     if match is not None:
         conditions.append("s.id IN (SELECT rowid FROM stories_fts WHERE stories_fts MATCH ?)")
         params.append(match)
+    if filters.get("shared"):
+        conditions.append(_SHARED)
+        params += [user_name, user_name]
     if before is not None:
         stamp, story_id = _cursor(before)
         conditions.append("(s.published_at < ? OR (s.published_at = ? AND s.id < ?))")
@@ -223,7 +268,7 @@ def _read_page(db: sqlite3.Connection, user_name: str, view: str, filters: Filte
         _CARD_SELECT + where + " ORDER BY s.published_at DESC, s.id DESC LIMIT ?",
         [user_name, *params, PAGE + 1],
     ).fetchall()
-    cards = tuple(_card(db, row) for row in rows[:PAGE])
+    cards = tuple(_card(db, user_name, row) for row in rows[:PAGE])
     more = len(rows) > PAGE
     last = cards[-1] if more else None
     return Page(cards, f"{last.published_at}|{last.id}" if last else None, _newest(db))

@@ -8,7 +8,14 @@ from hypothesis import strategies as st
 from test_signal_groups import AK, ML, RD, T0, count, rows, team_db
 
 from deploy_workflow.signal import feedview
-from deploy_workflow.signal.groups import Act, Forbidden, create_group
+from deploy_workflow.signal.groups import (
+    Act,
+    Forbidden,
+    add_member,
+    create_group,
+    join,
+    remove_member,
+)
 from deploy_workflow.signal.store import StoreError, open_db
 from deploy_workflow.signal.threads import (
     EDIT_WINDOW,
@@ -16,17 +23,20 @@ from deploy_workflow.signal.threads import (
     MAX_TEXT,
     MAX_TITLE,
     REACTIONS,
+    Unread,
     add_comment,
     auto_post,
     clean_text,
     delete_comment,
     edit_comment,
+    mark_read,
     react,
     read_thread,
     share_story,
     start_note,
     thread_list,
     unreact,
+    unread,
 )
 
 MIN = timedelta(minutes=1)
@@ -293,3 +303,78 @@ def test_any_text_is_cleaned_or_refused_never_an_error(raw):
     assert text and all(
         ch == "\n" or unicodedata.category(ch) not in ("Cc", "Cf", "Cs") for ch in text
     )
+
+
+def test_unread_counts_new_threads_and_replies_and_clears_on_read(db):
+    gid = create_group(db, Act(AK, T0), "TMT", "everyone", [])
+    join(db, "ml", gid, T0)
+    tid, _ = share_story(db, Act(AK, T0 + MIN), gid, 1, "look")  # comment 1
+    assert unread(db, "ml") == Unread(0, 1, {gid: 1}) and unread(db, "ak") == Unread(0, 0, {})
+    add_comment(db, Act(ML, T0 + 2 * MIN), tid, "reply to ak", 1)
+    assert unread(db, "ak") == Unread(1, 0, {gid: 1})
+    mark_read(db, "ak", tid)
+    mark_read(db, "ml", tid)
+    assert unread(db, "ak") == unread(db, "ml") == Unread(0, 0, {})
+
+
+def test_threads_from_before_joining_and_automatic_threads_are_not_unread(db):
+    gid = create_group(db, Act(AK, T0), "TMT", "everyone", [])
+    share_story(db, Act(AK, T0 + MIN), gid, 1, "early")
+    join(db, "ml", gid, T0 + 2 * MIN)
+    assert unread(db, "ml") == Unread(0, 0, {})
+    db.execute(
+        "INSERT INTO topics(name, keywords, kinds, created_by, created_at)"
+        " VALUES('x', '[]', '[]', 'ak', 'now')"
+    )
+    db.execute("INSERT INTO group_topics(group_id, topic_id) VALUES(?, 1)", (gid,))
+    db.commit()
+    assert auto_post(db, 2, [1], T0 + 3 * MIN) == [2]
+    assert unread(db, "ml") == Unread(0, 0, {})
+
+
+def test_a_removed_reply_and_my_own_reply_are_not_unread(db):
+    gid = create_group(db, Act(AK, T0), "TMT", "everyone", [])
+    tid, _ = share_story(db, Act(AK, T0 + MIN), gid, 1, "look")
+    add_comment(db, Act(AK, T0 + 2 * MIN), tid, "my own reply", 1)
+    reply = add_comment(db, Act(ML, T0 + 3 * MIN), tid, "reply to ak", 1)
+    assert unread(db, "ak") == Unread(1, 0, {gid: 1})
+    delete_comment(db, Act(ML, T0 + 4 * MIN), reply)
+    assert unread(db, "ak") == Unread(0, 0, {})
+
+
+def test_unread_never_counts_an_invited_group_after_removal_from_it(db):
+    gid = create_group(db, Act(AK, T0), "Deal team", "invited", [])
+    add_member(db, Act(AK, T0), gid, "ml")
+    tid = start_note(db, Act(ML, T0 + MIN), gid, "note", "first")
+    add_comment(db, Act(AK, T0 + 2 * MIN), tid, "reply to ml", 1)
+    assert unread(db, "ml") == Unread(1, 0, {gid: 1})
+    remove_member(db, AK, gid, "ml")
+    assert unread(db, "ml") == Unread(0, 0, {})
+
+
+def test_marking_a_hidden_thread_read_is_refused_and_a_mark_never_lowers(db):
+    gid = create_group(db, Act(AK, T0), "Deal team", "invited", [])
+    tid, _ = share_story(db, Act(AK, T0), gid, 1, "x")
+    with pytest.raises(StoreError, match="no such thread"):
+        mark_read(db, "ml", tid)
+    with pytest.raises(StoreError, match="no such thread"):
+        mark_read(db, "ak", 999)
+    add_comment(db, Act(AK, T0 + MIN), tid, "second", None)
+    mark_read(db, "ak", tid)
+    db.execute("UPDATE read_marks SET seen_comment_id = 99")
+    db.commit()
+    mark_read(db, "ak", tid)
+    assert rows(db, "SELECT seen_comment_id FROM read_marks") == [(99,)]
+
+
+def test_thread_row_unread_follows_marks_and_other_authors(db, gid):
+    tid, _ = share_story(db, Act(AK, T0), gid, 1, "x")
+
+    def flags(who):
+        return [r.unread for r in thread_list(db, who, gid, None)[0]]
+
+    assert flags("ak") == [False] and flags("ml") == [True]  # my own comment is not unread
+    mark_read(db, "ml", tid)
+    assert flags("ml") == [False]
+    add_comment(db, Act(ML, T0 + MIN), tid, "y", None)
+    assert flags("ml") == [False] and flags("ak") == [True]

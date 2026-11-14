@@ -6,10 +6,21 @@ from pathlib import Path
 import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
+from test_signal_groups import AK, T0, team_db
 
 from deploy_workflow.signal.feeds import Entry
-from deploy_workflow.signal.feedview import Page, ViewError, feed, new_count, save, unsave
+from deploy_workflow.signal.feedview import (
+    CardThread,
+    Page,
+    ViewError,
+    feed,
+    new_count,
+    save,
+    unsave,
+)
+from deploy_workflow.signal.groups import Act, create_group, join
 from deploy_workflow.signal.store import add_story, open_db, propose_source, set_source_state
+from deploy_workflow.signal.threads import share_story
 from deploy_workflow.signal.topics import add_topic, follow
 
 FETCHED = datetime(2026, 11, 13, 9, 40, tzinfo=UTC)
@@ -194,3 +205,29 @@ def test_ids_of_thousands_of_digits_raise_view_error(db_feed):
         feed(db_feed, "ak", "topic:" + "9" * 5000)
     with pytest.raises(ViewError):
         feed(db_feed, "ak", "latest", before="2026-11-13T09:00:00+00:00|" + "9" * 5000)
+
+
+def test_cards_carry_only_visible_threads(tmp_path):
+    db = team_db(tmp_path)
+    open_g = create_group(db, Act(AK, T0), "TMT", "everyone", [])
+    closed = create_group(db, Act(AK, T0), "Deal team", "invited", [])
+    share_story(db, Act(AK, T0), open_g, 1, "Heavier than we assumed.")
+    share_story(db, Act(AK, T0), closed, 1, "secret")
+    card = feed(db, "ml", "latest").cards[-1]  # story 1
+    assert card.threads == (CardThread(1, "TMT", 1, "ak", "Heavier than we assumed."),)
+    assert len(feed(db, "ak", "latest").cards[-1].threads) == 2
+    assert feed(db, "ml", "latest").cards[0].threads == ()
+
+
+def test_shared_filter_and_for_you_follow_membership(tmp_path):
+    db = team_db(tmp_path)
+    gid = create_group(db, Act(AK, T0), "TMT", "everyone", [])
+    share_story(db, Act(AK, T0), gid, 1, "look")
+    assert feed(db, "ml", "latest", shared=True).cards == ()
+    assert feed(db, "ml", "foryou").cards == ()
+    join(db, "ml", gid, T0)
+    assert [c.id for c in feed(db, "ml", "latest", shared=True).cards] == [1]
+    assert [c.id for c in feed(db, "ml", "foryou").cards] == [1]
+    assert [c.id for c in feed(db, "ak", "foryou").cards] == [1]
+    assert feed(db, "ak", "latest", shared=True).cards == ()
+    assert new_count(db, "ml", "foryou", 0) == 1 and new_count(db, "rd", "foryou", 0) == 0

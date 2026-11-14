@@ -13,7 +13,14 @@ from datetime import datetime, timedelta
 from typing import Literal
 
 from deploy_workflow.signal import feedview
-from deploy_workflow.signal.groups import Act, Forbidden, can_see, may_post, require_visible
+from deploy_workflow.signal.groups import (
+    VISIBLE,
+    Act,
+    Forbidden,
+    can_see,
+    may_post,
+    require_visible,
+)
 from deploy_workflow.signal.identity import User
 from deploy_workflow.signal.store import (
     StoreError,
@@ -65,6 +72,13 @@ class ThreadView:
     started_by: str | None
     comments: tuple[Comment, ...]
     can_post: bool
+
+
+@dataclass(frozen=True)
+class Unread:
+    replies: int
+    threads: int
+    by_group: dict[int, int]
 
 
 @dataclass(frozen=True)
@@ -443,3 +457,53 @@ def thread_list(
     )
     last = page[-1] if len(found) > PAGE else None
     return page, f"{last.last_activity_at},{last.id}" if last else None
+
+
+def mark_read(db: sqlite3.Connection, user_name: str, thread_id: int) -> None:
+    """Mark everything in the thread seen; the mark only ever rises."""
+    with _write_transaction(db):
+        _thread_row(db, user_name, thread_id)
+        newest = db.execute(
+            "SELECT COALESCE(MAX(id), 0) FROM comments WHERE thread_id=?", (thread_id,)
+        ).fetchone()[0]
+        db.execute(
+            "INSERT INTO read_marks(user_name, thread_id, seen_comment_id) VALUES(?, ?, ?)"
+            " ON CONFLICT(user_name, thread_id) DO UPDATE SET"
+            " seen_comment_id = MAX(seen_comment_id, excluded.seen_comment_id)",
+            (user_name, thread_id, newest),
+        )
+
+
+_UNREAD_THREADS = (
+    "SELECT t.group_id AS gid, COUNT(*) AS n FROM threads t"
+    " JOIN group_members m ON m.group_id = t.group_id AND m.user_name = ?"
+    " WHERE t.created_at >= m.joined_at AND t.started_by IS NOT NULL AND t.started_by <> ?"
+    " AND NOT EXISTS(SELECT 1 FROM read_marks r WHERE r.user_name = ? AND r.thread_id = t.id)"
+    " GROUP BY t.group_id"
+)
+_UNREAD_REPLIES = (
+    "SELECT t.group_id AS gid, COUNT(*) AS n FROM comments c"
+    " JOIN comments p ON p.id = c.parent_id JOIN threads t ON t.id = c.thread_id"
+    " JOIN groups g ON g.id = t.group_id"
+    " WHERE " + VISIBLE + " AND c.deleted_at IS NULL AND c.author <> ? AND p.author = ?"
+    " AND c.id > COALESCE((SELECT r.seen_comment_id FROM read_marks r"
+    "  WHERE r.user_name = ? AND r.thread_id = t.id), 0)"
+    " GROUP BY t.group_id"
+)
+
+
+def unread(db: sqlite3.Connection, user_name: str) -> Unread:
+    """New threads in the user's groups and replies to the user's comments, not yet read."""
+    with feedview._snapshot(db):
+        new_threads = db.execute(_UNREAD_THREADS, (user_name, user_name, user_name)).fetchall()
+        replies = db.execute(
+            _UNREAD_REPLIES, (user_name, user_name, user_name, user_name)
+        ).fetchall()
+    by_group: dict[int, int] = {}
+    for row in (*new_threads, *replies):
+        by_group[row["gid"]] = by_group.get(row["gid"], 0) + row["n"]
+    return Unread(
+        replies=sum(row["n"] for row in replies),
+        threads=sum(row["n"] for row in new_threads),
+        by_group=by_group,
+    )

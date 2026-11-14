@@ -29,7 +29,7 @@ class Forbidden(Exception):
 
 
 # A group the user can see: open to everyone, or the user is a member. Binds the user name once.
-_VISIBLE = (
+VISIBLE = (
     "(g.visibility = 'everyone' OR EXISTS("
     "SELECT 1 FROM group_members vm WHERE vm.group_id = g.id AND vm.user_name = ?))"
 )
@@ -104,7 +104,7 @@ def can_see(db: sqlite3.Connection, user_name: str, group_id: int) -> bool:
     if not in_range(group_id):
         return False
     row = db.execute(
-        "SELECT 1 FROM groups g WHERE g.id = ? AND " + _VISIBLE, (group_id, user_name)
+        "SELECT 1 FROM groups g WHERE g.id = ? AND " + VISIBLE, (group_id, user_name)
     ).fetchone()
     return row is not None
 
@@ -190,7 +190,7 @@ def list_groups(db: sqlite3.Connection, user_name: str) -> list[sqlite3.Row]:
         "  AS member,"
         " (SELECT COUNT(*) FROM group_members m WHERE m.group_id = g.id) AS members,"
         " (SELECT COUNT(*) FROM threads t WHERE t.group_id = g.id) AS threads"
-        " FROM groups g WHERE " + _VISIBLE + " ORDER BY g.name_key, g.id",
+        " FROM groups g WHERE " + VISIBLE + " ORDER BY g.name_key, g.id",
         (user_name, user_name),
     ).fetchall()
 
