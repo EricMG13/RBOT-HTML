@@ -115,14 +115,13 @@ def test_index_statistics() -> None:
     assert header == SCHEMA["index_columns"]
     assert len(rows) == SCHEMA["index_rows"]
     bounds = {k: v for k, v in SCHEMA["index_bounds"].items() if not k.startswith("_")}
-    delta_max = Decimal(str(SCHEMA["index_bounds"]["delta_abs_max"]))
     delta_cols = [c for c in header if c.startswith("\u0394")]
-    assert sorted(r["Index"].rsplit(": ", 1)[1] for r in rows) == sorted(
-        k for k in bounds if k != "delta_abs_max"
-    )
+    assert sorted(r["Index"].rsplit(": ", 1)[1] for r in rows) == sorted(bounds)
     for row in rows:
         suffix = row["Index"].rsplit(": ", 1)[1]
-        for col, (low, high) in bounds[suffix].items():
+        spec = dict(bounds[suffix])
+        delta_max = Decimal(str(spec.pop("delta_abs_max")))
+        for col, (low, high) in spec.items():
             assert Decimal(str(low)) <= Decimal(row[col]) <= Decimal(str(high)), (suffix, col)
         for col in delta_cols:
             assert abs(Decimal(row[col])) <= delta_max, (suffix, col)

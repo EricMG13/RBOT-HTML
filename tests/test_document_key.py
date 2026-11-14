@@ -1,8 +1,10 @@
 """guess_kind against the hand-written answer key tests/fixtures/run-expectations/document-key.json.
 
-Each entry whose file exists is paged exactly as the launcher pages it (the launcher's own
-``_pages``, called on the file's bytes) and the guess must equal the key's kind, executed flag and
-period end. The key is not edited here and the comparison is not loosened."""
+Each entry whose file exists is paged as the launcher pages it (the launcher's own ``_pages``,
+called on the file's bytes) and the guess must equal the key's kind, executed flag and period end:
+21 of the 25 present entries are checked that way. Four named files (KEY_PAGING_ONLY) are checked
+under the key's own paging instead. The key is not edited here and the comparison is not
+loosened."""
 
 from __future__ import annotations
 
@@ -12,18 +14,18 @@ from pathlib import Path
 import pytest
 
 from deploy_workflow.model.handoff import _pages
+from deploy_workflow.owners import cpos_launch
 from deploy_workflow.run_expectations import guess_kind
 
 ROOT = Path(__file__).resolve().parent.parent
 KEY = json.loads((ROOT / "tests/fixtures/run-expectations/document-key.json").read_text())
-FIRST_PAGES = 3  # cpos_launch FIRST_PAGES: the guess sees pages[:3].
+FIRST_PAGES = cpos_launch.FIRST_PAGES  # the guess sees the launcher's first pages
 
 # Keyed for pages split at '=== PAGE ===' with the banner dropped (the key's note); the launcher
 # pages a .txt as 12,000-character chunks, so 07 and 10 reach guess_kind as one page holding two
-# kinds' covers, and 18 and 19 carry the fixture banner line above the cover line, which _wraps
-# reads as a wrapped sentence tail. Those are paging mismatches between key and launcher, not
-# classifier defects: 21 of the 25 present keyed documents pass under launcher paging; the four
-# here are checked below under the key's own paging.
+# kinds' covers. For 18 and 19 the fixture banner line sits above the cover line under launcher
+# paging. 21 of the 25 present keyed documents pass under launcher paging; the four here are
+# checked below under the key's own paging.
 KEY_PAGING_ONLY = {
     "tests/fixtures/run-expectations/synthetic/07-combined-compliance-certificate-then-10q.txt": (
         "launcher gives one page holding a compliance certificate and a 10-Q cover"
@@ -32,15 +34,22 @@ KEY_PAGING_ONLY = {
         "launcher gives one page holding the release and a statements heading"
     ),
     "tests/fixtures/run-expectations/synthetic/18-market-quotes.txt": (
-        "under launcher paging the banner line sits above the cover line and _wraps reads the "
-        "cover line as a wrapped sentence tail"
+        "under launcher paging the banner line sits above the cover line and the classifier "
+        "reads the cover line as a wrapped sentence tail, so the result is unrecognised; whether "
+        "the classifier or the key's paging should change is an open owner decision"
     ),
     "tests/fixtures/run-expectations/synthetic/19-peer-data.txt": (
-        "under launcher paging the banner line sits above the cover line and _wraps reads the "
-        "cover line as a wrapped sentence tail"
+        "under launcher paging the banner line sits above the cover line and the classifier "
+        "reads the cover line as a wrapped sentence tail, so the result is unrecognised; whether "
+        "the classifier or the key's paging should change is an open owner decision"
     ),
 }
 ENTRIES = [e for e in KEY["entries"] if (ROOT / e["path"]).is_file()]
+
+
+def test_every_synthetic_entry_exists() -> None:
+    missing = [e["path"] for e in KEY["entries"] if e["origin"] == "synthetic" and e not in ENTRIES]
+    assert not missing, missing
 
 
 def _launcher_pages(path: Path) -> list[str]:
@@ -105,7 +114,8 @@ def test_wrapped_prose_does_not_add_a_second_kind() -> None:
 
 
 # Prose whose previous line holds a spaced hyphen or is upper case is still open prose: a bare
-# " - " or an all-caps line is not a banner label, so the wrapped tail stays skipped.
+# " - " or an all-caps line does not make the line below a title, so the wrapped tail stays
+# skipped.
 PROSE_ABOVE = [
     pytest.param(
         "dealer-commentary.txt",

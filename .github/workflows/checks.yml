@@ -36,6 +36,7 @@ jobs:
         run: |
           deselect=$(sed -e 's/#.*//' -e '/^\s*$/d' tests/known-failures.txt | awk '{print "--deselect=" $1}')
           uv run pytest -q -p no:cacheprovider -m "not live and not browser" $deselect \
+            tests/test_document_key.py tests/test_synthetic_market_data.py \
             tests/test_library_index.py tests/test_update_library.py \
             tests/test_issuer_library_packaging.py tests/test_reader_summary.py \
             tests/test_credit_os_catalogue.py tests/test_credit_os_store.py \
