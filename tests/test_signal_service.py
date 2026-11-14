@@ -722,6 +722,8 @@ def test_a_writer_creates_a_group_shares_a_story_and_a_reader_reads_the_thread_w
     assert status == 200
     assert thread["comments"][0]["text"] == "look"
     assert thread["can_post"] is False
+    status, _, rows = site.call("GET", "/api/groups/1/threads", cookie=RD_C)
+    assert status == 200 and rows["threads"][0]["source_kind"] == "regulator"
     status, _, page = site.call("GET", "/api/feed?view=latest", cookie=RD_C)
     card = next(c for c in page["cards"] if c["id"] == 1)
     expected = {"id": 1, "group": "TMT", "comments": 1, "shared_by": "ak", "note": "look"}

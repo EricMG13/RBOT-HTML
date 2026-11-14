@@ -16,6 +16,7 @@
     {key: 'check', emoji: '✅', name: 'Check'},
     {key: 'question', emoji: '❓', name: 'Question'},
   ];
+  const IDENTITY_NOTE = 'Names are not checked: anyone on this network can post under any name.';
   const ROLE_TAGS = {writer: 'Writer', owner: 'Owner'};
   const ICONS = {
     bookmark: 'M6 3h12v18l-6-4-6 4z',
@@ -87,6 +88,20 @@
     return e;
   }
 
+  // Kind of a story or source: the class key and the label shown in words.
+  function kindInfo(kind) {
+    const known = Object.prototype.hasOwnProperty.call(KINDS, kind);
+    return {key: known ? kind : 'other', label: known ? KINDS[kind] : String(kind || 'Story')};
+  }
+
+  // A story title as an external link when its address is safe, else as plain text.
+  function titleInto(doc, parent, link, title) {
+    const href = safeLink(link);
+    if (href) parent.appendChild(externalLink(doc, href, 'headline-link', title));
+    else parent.textContent = title;
+    return href;
+  }
+
   function monogram(source) {
     const words = String(source || '?').trim().split(/\s+/).filter(Boolean);
     const letters = words.length > 1 ? words[0][0] + words[1][0] : (words[0] || '?').slice(0, 2);
@@ -110,9 +125,8 @@
   }
 
   function card(doc, story, now, opts) {
-    const canShare = !opts || opts.canShare !== false;
-    const kind = Object.prototype.hasOwnProperty.call(KINDS, story.kind) ? story.kind : 'other';
-    const kindLabel = kind === 'other' ? String(story.kind || 'Story') : KINDS[kind];
+    const canShare = Boolean(opts && opts.canShare);
+    const {key: kind, label: kindLabel} = kindInfo(story.kind);
     const article = el(doc, 'article', 'card card-' + kind);
     article.setAttribute('data-id', String(story.id));
     article.setAttribute('tabindex', '-1');
@@ -122,10 +136,8 @@
     if (shared) article.appendChild(sharedLine(doc, shared));
     article.appendChild(el(doc, 'span', 'kind', kindLabel));
 
-    const href = safeLink(story.link);
     const h3 = el(doc, 'h3', 'headline');
-    if (href) h3.appendChild(externalLink(doc, href, 'headline-link', story.title));
-    else h3.textContent = story.title;
+    const href = titleInto(doc, h3, story.link, story.title);
     article.appendChild(h3);
 
     const meta = el(doc, 'p', 'meta');
@@ -295,10 +307,10 @@
     return wrap;
   }
 
-  // A comment. opts.canPost (default true) decides the Reply control and the add-reaction controls.
+  // A comment. opts.canPost (default false) decides the Reply control and the add-reaction controls.
   // Emits data-action reply | edit-comment | delete-comment | react | add-reaction, data-id = comment id.
   function comment(doc, c, now, opts) {
-    const canPost = !opts || opts.canPost !== false;
+    const canPost = Boolean(opts && opts.canPost);
     const box = el(doc, 'article', 'comment' + (c.removed ? ' removed' : ''));
     box.setAttribute('data-id', String(c.id));
     if (c.removed) {
@@ -353,15 +365,20 @@
     return dateText(t);
   }
 
+  // A day divider inside the comment list: a separator, not a list item of comments.
+  function divider(doc, label) {
+    const li = el(doc, 'li', 'day', label);
+    li.setAttribute('role', 'separator');
+    li.setAttribute('aria-label', label);
+    return li;
+  }
+
   function quoteBlock(doc, story) {
     const q = el(doc, 'div', 'quote');
-    const kind = Object.prototype.hasOwnProperty.call(KINDS, story.kind) ? KINDS[story.kind] : String(story.kind || 'Story');
-    q.appendChild(el(doc, 'span', 'quote-kind card-' + (Object.prototype.hasOwnProperty.call(KINDS, story.kind) ? story.kind : 'other'),
-      kind + ' · ' + story.source));
-    const href = safeLink(story.link);
+    const {key, label} = kindInfo(story.kind);
+    q.appendChild(el(doc, 'span', 'quote-kind card-' + key, label + ' \u00b7 ' + story.source));
     const title = el(doc, 'strong', 'quote-title');
-    if (href) title.appendChild(externalLink(doc, href, 'headline-link', story.title));
-    else title.textContent = story.title;
+    titleInto(doc, title, story.link, story.title);
     q.appendChild(title);
     return q;
   }
@@ -387,8 +404,7 @@
     label.setAttribute('for', 'reply-' + view.id);
     box.appendChild(label);
     box.appendChild(field);
-    box.appendChild(el(doc, 'p', 'identity-note',
-      'Names are not passwords: anyone who can reach this page can post as a writer.'));
+    box.appendChild(el(doc, 'p', 'identity-note', IDENTITY_NOTE));
     return box;
   }
 
@@ -409,7 +425,7 @@
     h.setAttribute('id', 'thread-title-' + view.id);
     h.setAttribute('tabindex', '-1');
     titles.appendChild(h);
-    titles.appendChild(el(doc, 'p', 'thead-sub', 'Thread · ' + plural(all.length, 'comment', 'comments')));
+    titles.appendChild(el(doc, 'p', 'thead-sub', 'Thread · ' + plural(all.filter(c => !c.removed).length, 'comment', 'comments')));
     head.appendChild(titles);
     const close = button(doc, 'icon-btn', null, 'close-thread', view.id);
     close.setAttribute('aria-label', 'Close thread');
@@ -447,7 +463,7 @@
       let previous = null;
       for (const c of tops) {
         const t = parseTime(c.created_at);
-        if (t && previous !== null && dayKey(t) !== previous) list.appendChild(el(doc, 'li', 'day', dayLabel(t, now)));
+        if (t && previous !== null && dayKey(t) !== previous) list.appendChild(divider(doc, dayLabel(t, now)));
         if (t) previous = dayKey(t);
         const item = el(doc, 'li', 'comment-item');
         item.appendChild(comment(doc, Object.assign({}, c, {parent_id: null}), now, {canPost}));
@@ -476,7 +492,12 @@
   function threadRow(doc, row, now) {
     const isStory = row.kind === 'story';
     const b = button(doc, 'thread-row ' + (isStory ? 'thread-story' : 'thread-note'), null, 'open-thread', row.id);
-    b.appendChild(el(doc, 'span', 'quote-kind', isStory ? String(row.source || 'Story') : 'Note'));
+    let label = 'Note';
+    if (isStory) {
+      const source = String(row.source || 'Story');
+      label = row.source_kind ? kindInfo(row.source_kind).label + ' \u00b7 ' + source : source;
+    }
+    b.appendChild(el(doc, 'span', 'quote-kind', label));
     b.appendChild(el(doc, 'strong', 'thread-row-title', row.title));
     const meta = el(doc, 'span', 'thread-row-meta');
     if (row.unread) {
@@ -545,7 +566,7 @@
   }
 
   return {
-    card, emptyState, relativeTime, safeLink, icon, fullTime, initials,
+    IDENTITY_NOTE, card, emptyState, relativeTime, safeLink, icon, fullTime, initials,
     linkify, comment, threadPanel, threadRow, groupItem, sharedLine, threadChips,
   };
 });

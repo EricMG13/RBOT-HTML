@@ -174,7 +174,7 @@ test('edit and delete appear only on my comments, edit only while editable', () 
   assert.equal(byAction(late, 'delete-comment')[0].getAttribute('data-id'), '1');
 });
 test('a reaction chip states its count and pressed state', () => {
-  const e = R.comment(doc, cm({reactions: [{key: 'eyes', count: 1, mine: false}, {key: 'up', count: 2, mine: true}, {key: 'check', count: 0, mine: false}]}), NOW);
+  const e = R.comment(doc, cm({reactions: [{key: 'eyes', count: 1, mine: false}, {key: 'up', count: 2, mine: true}, {key: 'check', count: 0, mine: false}]}), NOW, {canPost: true});
   const chips = byAction(e, 'react');
   assert.equal(chips.length, 2);
   assert.equal(chips[0].textContent, '👍 2');            // fixed order: up before eyes
@@ -185,6 +185,8 @@ test('a reaction chip states its count and pressed state', () => {
   assert.equal(chips[1].getAttribute('aria-pressed'), 'false');
   assert.equal(byAction(e, 'add-reaction').length, 2);   // check and question remain
   const reader = R.comment(doc, cm({reactions: [{key: 'up', count: 1, mine: false}]}), NOW, {canPost: false});
+  const forgot = R.comment(doc, cm({reactions: [{key: 'up', count: 1, mine: false}]}), NOW);
+  assert.equal(byAction(forgot, 'add-reaction').length + byAction(forgot, 'reply').length, 0);   // default is read-only
   assert.equal(byAction(reader, 'add-reaction').length, 0);
   assert.equal(byAction(reader, 'reply').length, 0);
 });
@@ -204,6 +206,7 @@ test('replies render under their parent, one level', () => {
   assert.ok(top[0].querySelector('ol.replies').textContent.includes('reply'));
   assert.equal(top[1].querySelectorAll('ol.replies').length, 0);
   assert.equal(byAction(top[0].querySelector('ol.replies'), 'reply').length, 0);
+  assert.equal(byAction(top[0], 'reply').length, 1);   // the panel passes can_post down
 });
 test('a reader gets the note in place of the reply box', () => {
   const r = R.threadPanel(doc, tview({can_post: false}), NOW);
@@ -247,8 +250,10 @@ test('a card shows who shared it where with the note and a chip per thread', () 
   assert.equal(chips.length, 2);
   assert.equal(chips[0].getAttribute('data-id'), '9');
   assert.ok(chips[0].textContent.includes('3'));
-  assert.equal(byAction(e, 'share')[0].getAttribute('data-id'), '5');
+  assert.equal(byAction(card(doc, story, NOW, {canShare: true}), 'share')[0].getAttribute('data-id'), '5');
   assert.equal(byAction(card(doc, story, NOW, {canShare: false}), 'share').length, 0);
+  assert.equal(byAction(card(doc, story, NOW), 'share').length, 0);       // default: no Share
+  assert.equal(byAction(card(doc, story, NOW, {canShare: true}), 'share').length, 1);
   assert.equal(card(doc, Object.assign({}, story, {threads: []}), NOW).querySelectorAll('.shared').length, 0);
 });
 test('markup in a group name, title, note or comment is text', () => {
@@ -293,4 +298,26 @@ test('a group item has its name, a lock when invited and an unread count', () =>
   const open = R.groupItem(doc, Object.assign({}, g, {visibility: 'everyone', unread: 0}));
   assert.ok(!open.textContent.includes('Invited group'));
   assert.equal(open.querySelectorAll('.badge').length, 0);
+});
+
+test('the identity note is the fixed sentence, exported once', () => {
+  assert.equal(R.IDENTITY_NOTE, 'Names are not checked: anyone on this network can post under any name.');
+  assert.ok(R.threadPanel(doc, tview({can_post: true}), NOW).textContent.includes(R.IDENTITY_NOTE));
+});
+test('the header counts live comments, not removed ones', () => {
+  const p = R.threadPanel(doc, tview({comments: [cm({id: 1}), cm({id: 2, removed: true}), cm({id: 3, removed: true})]}), NOW);
+  assert.ok(p.querySelector('.thead-sub').textContent.includes('1 comment'));
+  assert.ok(!p.querySelector('.thead-sub').textContent.includes('1 comments'));
+});
+test('day dividers are separators with the date as label, not list items of comments', () => {
+  const p = R.threadPanel(doc, tview({comments: [cm({id: 1, created_at: '2026-11-12T09:00:00Z'}), cm({id: 2, created_at: '2026-11-13T08:00:00Z'})]}), NOW);
+  const d = p.querySelector('.day');
+  assert.equal(d.getAttribute('role'), 'separator');
+  assert.equal(d.getAttribute('aria-label'), 'Today');
+});
+test('a story thread row shows the source kind in words as a card does', () => {
+  const row = {id: 4, kind: 'story', title: 'Deal', source: 'Authority', source_kind: 'regulator', started_by: 'ak', comments: 0, last_activity_at: '2026-11-13T11:15:00Z', unread: false};
+  assert.ok(R.threadRow(doc, row, NOW).textContent.includes('Regulator · Authority'));
+  const nokind = R.threadRow(doc, Object.assign({}, row, {source_kind: null}), NOW);
+  assert.ok(nokind.textContent.includes('Authority') && !nokind.textContent.includes('· Authority'));
 });
