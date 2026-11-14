@@ -98,8 +98,10 @@ written "to stop the model from self validation and calculation"; CP-OS runs non
   filters and sort?": "Take them out". For leverage, net leverage and interest cover, screening
   treats a figure that carries the adjusted label as not recorded: it passes no range and sorts
   where a missing value sorts. The figure is still displayed. The line "Leverage recorded for N
-  of M runs" therefore does not count an adjusted-only run whose figure is shown; its wording is
-  unchanged and is left for the owner.
+  of M runs" therefore does not count an adjusted-only run whose figure is shown. Owner, asked
+  whether to reword it: "Yes, reword it". The line now adds "· A on adjusted EBITDA, not
+  screened" when there are such runs, and the hidden-rows heading adds ", or a figure on
+  adjusted EBITDA" when a hidden run has one; with no such run both read as before.
 - On the Changes page a run on reported EBITDA against a run on adjusted EBITDA is "not
   comparable", with both labels in the reason; no difference is printed.
 - Instruction size. The method text CP-1 is sent was shortened by 5,851 characters (duplicate
