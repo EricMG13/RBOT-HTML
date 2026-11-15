@@ -46,8 +46,8 @@ This entry follows the one below and its checks supersede that entry's totals.
   `### Portfolio posture` (the library page shows it; settle after a paid run); `posture_issues`
   checks the first sentence only; no test pins that `OwnerWorkflow.open` refuses a retained
   JSON-lines run; no test runs `compose_delta`.
-- Checks on the merged branch: CI fast list 5,122 passed, 6 skipped, known failures deselected;
-  node page tests pass; quality gate 0 findings; `lint-imports` 3 contracts kept. GitHub Actions,
+- Checks on the final head: the CI fast list 4,631 passed, 6 skipped, known failures deselected;
+  node page tests 567 passed; quality gate 0 findings; `lint-imports` 3 contracts kept. GitHub Actions,
   full weekly suite on `7cba8c6` (before the removals): 5,956 passed, 1 failed, a test that read
   one packet of a two-write reply; the test now reads to the close.
 - Not verified: the full weekly suite on the final head (re-run requested); `Smoke-test.ps1` and
