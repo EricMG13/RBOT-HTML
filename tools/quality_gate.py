@@ -4,7 +4,8 @@
 
 Compares the working tree with ``--base`` and checks only the code that changed:
 every changed line, plus the whole body of every function a changed line falls in.
-New files are checked whole; a moved file is compared with the file it was moved from.
+New files are checked whole; a moved file is compared with the file it was moved from, and
+lines moved verbatim out of another file in the same change are not changed lines.
 The checks are ``ruff check`` with the rules in
 ``tools/ruff-gate.toml``, ``ruff format``, and strict ``mypy`` (tests excluded from
 mypy). A finding outside the changed code is not reported, so the gate holds new
@@ -35,6 +36,7 @@ DUPLICATE_MODULE = ("Duplicate module named", "Source file found twice")
 IMPORT_CONTRACTS = ".importlinter"
 BROKEN = re.compile(r"^(?P<name>.+) BROKEN(?: \(\d+ ignored imports?\))?$", re.MULTILINE)
 LINT_IMPORTS = "import sys; from importlinter.cli import lint_imports_command as c; sys.exit(c())"
+MOVED_RUN = 3  # fewest consecutive lines, the same in both files, that count as a moved block
 
 
 @dataclass(frozen=True)
@@ -123,6 +125,45 @@ def moved_lines(root: Path, base: str, source: str, path: str) -> set[int]:
     after = (root / path).read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
     headers = (line for line in difflib.unified_diff(before, after, n=0) if line.startswith("@@"))
     return hunk_lines("\n".join(headers), side=3)
+
+
+def removed_blocks(root: Path, base: str) -> dict[str, dict[int, str]]:
+    """``{path: {line in base: text}}`` for the lines each Python file lost since ``base``."""
+    names = git(root, "diff", "--name-only", "-z", "--diff-filter=MD", base, "--", "*.py")
+    blocks = {}
+    for name in filter(None, names.split("\0")):
+        before = git(root, "show", f"{base}:{name}").splitlines()
+        lost: dict[int, str] = {}
+        for header in git(root, "diff", "-U0", base, "--", name).splitlines():
+            match = HUNK.match(header)
+            count = 0 if match is None else int(match[2] or 1)
+            for number in range(int(match[1]), int(match[1]) + count) if match else ():
+                lost[number] = before[number - 1]
+        if lost:
+            blocks[name] = lost
+    return blocks
+
+
+def split_lines(source: str, changed: set[int], lost: dict[int, str]) -> set[int]:
+    """The changed lines of ``source`` that were not moved out of one other file.
+
+    A line is moved when it sits in a run of at least ``MOVED_RUN`` changed lines that stands,
+    line for line and in the same order, among consecutive lines ``lost`` by that file. Such a
+    run is existing code in a new place, as a renamed file is: an edit inside it is still a
+    changed line, and so brings the whole function it falls in into scope.
+    """
+    places: dict[str, list[int]] = {}
+    for number, text in lost.items():
+        places.setdefault(text, []).append(number)
+    moved: set[int] = set()
+    runs: dict[int, int] = {}  # lost line number -> length of the run that ends on it
+    for number, text in enumerate(source.splitlines(), 1):
+        found = places.get(text, []) if number in changed else []
+        runs = {place: runs.get(place - 1, 0) + 1 for place in found}
+        longest = max(runs.values(), default=0)
+        if longest >= MOVED_RUN:
+            moved.update(range(number - longest + 1, number + 1))
+    return changed - moved
 
 
 def function_spans(source: str) -> list[tuple[int, int]]:
@@ -267,6 +308,7 @@ def code_gate(root: Path, base: str, python: str = sys.executable) -> GateResult
     """Every finding of every code check that falls inside the changed code."""
     files = changed_files(root, base)
     moved = moved_sources(root, base)
+    removed = removed_blocks(root, base)
     owned = {}
     for name in files:
         source = (root / name).read_text(encoding="utf-8", errors="replace")
@@ -274,6 +316,11 @@ def code_gate(root: Path, base: str, python: str = sys.executable) -> GateResult
             changed: set[int] | None = moved_lines(root, base, moved[name], name)
         else:
             changed = changed_lines(root, base, name)
+        if changed is None:  # a new file: every line, less what was moved into it
+            changed = set(range(1, source.count("\n") + 2))
+        for other, lost in removed.items():
+            if other != name:
+                changed = split_lines(source, changed, lost)
         owned[name] = owned_lines(source, changed)
     findings = []
     if files:

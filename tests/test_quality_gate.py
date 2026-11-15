@@ -59,6 +59,43 @@ def test_a_moved_file_is_compared_with_the_file_it_was_moved_from(tmp_path):
     assert quality_gate.changed_lines(repo, "HEAD", "copy.py") == set(range(1, 21))
 
 
+def test_lines_split_out_of_a_file_are_not_changed_lines(tmp_path):
+    # Splitting a legacy file must not put the code that only moved in scope; an edit must.
+    repo = _repo(tmp_path)
+    one = "def one():\n    first = 1\n    second = 2\n    return first + second\n"
+    two = "def two():\n    third = 3\n    fourth = 4\n    return third + fourth\n"
+    stays = "def stays():\n    return 0\n"
+    (repo / "big.py").write_text(f"{one}\n\n{two}\n\n{stays}", encoding="utf-8")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "base")
+    (repo / "big.py").write_text(f"from part import one, two\n\n\n{stays}", encoding="utf-8")
+    edited = two.replace("fourth = 4", "fourth = 40")
+    part = f'"""Moved."""\n\n\n{one}\n\n{edited}\n\ndef added():\n    return 5\n'
+    (repo / "part.py").write_text(part, encoding="utf-8")
+    lost = quality_gate.removed_blocks(repo, "HEAD")
+    assert sorted(lost) == ["big.py"]
+    # big.py lost lines 1-10: one(), two blank lines, two(). The blank lines after two() stay.
+    assert sorted(lost["big.py"]) == list(range(1, 11))
+    every = set(range(1, part.count("\n") + 2))
+    changed = quality_gate.split_lines(part, every, lost["big.py"])
+    # part.py: 1 docstring, 4-7 one(), 10-13 two() with line 12 edited, 16-17 added().
+    # Lines 4-11 stand in big.py's lost lines 1-8 and moved; 12 is the edit, which ends the run,
+    # so 13 (one line after it) is not a block either.
+    assert changed == {1, 2, 3, 12, 13, 14, 15, 16, 17, 18}
+    assert quality_gate.owned_lines(part, changed) == {1, 2, 3, *range(10, 19)}
+    # The same text in a file that lost nothing is new code: nothing is taken out.
+    assert quality_gate.split_lines(part, every, {}) == every
+
+
+def test_a_short_run_or_lines_out_of_order_are_not_a_moved_block():
+    lost = {1: "a = 1", 2: "b = 2", 3: "c = 3", 9: "d = 4"}
+    assert quality_gate.split_lines("a = 1\nb = 2\n", {1, 2}, lost) == {1, 2}  # two lines
+    assert quality_gate.split_lines("c = 3\nb = 2\na = 1\n", {1, 2, 3}, lost) == {1, 2, 3}
+    assert quality_gate.split_lines("b = 2\nc = 3\nd = 4\n", {1, 2, 3}, lost) == {1, 2, 3}  # a gap
+    assert quality_gate.split_lines("a = 1\nb = 2\nc = 3\n", {1, 2, 3}, lost) == set()
+    assert quality_gate.split_lines("a = 1\nb = 2\nc = 3\n", {1, 3}, lost) == {1, 3}  # 2 unchanged
+
+
 SRC = Path(__file__).resolve().parents[1] / "src"
 CONTRACTS = Path(__file__).resolve().parents[1] / ".importlinter"
 ENGINE_CONTRACT = (
