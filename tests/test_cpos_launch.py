@@ -9129,3 +9129,23 @@ def test_the_check_lists_every_malformed_table_of_a_draft_in_one_review(tmp_path
         mine = [i for i in issues if f"table header at line {line}:" in i]
         assert len(mine) == 1, (line, issues)
     assert not [i for i in issues if i.startswith("The report adapter refused")], issues
+
+
+def test_an_adapter_refusal_that_is_only_a_prefix_of_a_listed_fault_is_still_named(tmp_path):
+    from deploy_workflow.owners.cpos import _checked_handoff
+
+    prepared, task, context = good_task(tmp_path, "CP-4")
+    good = answer(context, list(prepared.plan.layout.routes))
+    lines = good.split("\n")
+    at = lines.index("## Gaps")
+    group_a = ["", "| **Note table** |", "| A | B |", "|---|---|", "| 1 | 2", ""]
+    bad_a = at + 5
+    pad = 10 * bad_a - (at + len(group_a)) - 3
+    group_b = [*[""] * pad, "| A | B |", "|---|---|", "| 1 | 2", ""]
+    text = "\n".join([*lines[:at], *group_a, *group_b, *lines[at:]])
+    bad_b = text.split("\n").index("| 1 | 2", bad_a) + 1
+    assert str(bad_b).startswith(str(bad_a))
+    review = _checked_handoff(task, text.encode(), cpos_launch.checker(prepared.layout))
+    named = "boundary pipes: line "
+    assert sum(i.endswith(f"{named}{bad_a}") for i in review) == 1, review
+    assert sum(i.endswith(f"{named}{bad_b}") for i in review) == 1, review

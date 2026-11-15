@@ -12,19 +12,21 @@ functions, so it is not checked.
 T4.6 (`Metric | Comparison Basis | Prior Value | Current Value | Abs Change | % Change | ...`, or
 the SKILL's joined `Metric | Basis | Prior/Current | Abs/% | ...`): each row's % Change against
 `growth(Current Value, Prior Value)`. A joined row is read only when `Prior/Current` holds one
-`<prior> / <current>` (unit words may follow) and `Abs/%` ends in its one percentage (at most one
-absolute figure before it; `+608 (20.8%)` takes the absolute figure's sign); several pairs, other
-trailing words or a change in points are not checked. A figure followed only by `reported` or
-`calculated` is read as that figure (`20.6% reported`). T4.4 (`Line Item | Period
-1...N | YoY Change (Abs) | YoY Change (%) | ...`, or the SKILL's joined `YoY Abs/%`): each row's
-YoY % against the latest period and the same period one year before it, when the headers name
-both (`FY2024` and `FY2023`, `Q3 2024` and `Q3 2023`); otherwise not checked.
+`<prior> / <current>` (money unit words may follow) and `Abs/%` ends in its one percentage
+(at most one absolute figure before it; `+608 (20.8%)` takes the absolute figure's sign); several
+pairs, other trailing words, a change in points, or unit words that are not money (`%`, `x`,
+`times`, `bps`, `pp`, `points`) or name two scales or currencies are not checked. A figure
+followed only by `reported` or `calculated` is read as that figure (`20.6% reported`). T4.4
+(`Line Item | Period 1...N | YoY Change (Abs) | YoY Change (%) | ...`, or the SKILL's joined
+`YoY Abs/%`): each row's YoY % against the latest period and the same period one year before it,
+when the headers name both (`FY2024` and `FY2023`, `Q3 2024` and `Q3 2023`); otherwise not checked.
 
 Not checked: a metric whose values are percentages or multiples (a margin's change may be stated in
 percentage points or as a relative change, and the column does not say which), a change written in
 `pp` or `bps`, a prior below zero (a change on a negative base has more than one convention), values
-in different currencies or scales, a bare figure of 1 or less in a % column (it could be a decimal
-or a small percentage). A figure stated over a zero prior disagrees: the script gives none.
+in different currencies or scales (also those named by the unit words of a joined `Prior/Current`
+cell), a bare figure of 1 or less in a % column (it could be a decimal or a small percentage).
+A figure stated over a zero prior disagrees: the script gives none.
 """
 
 import re
@@ -54,6 +56,7 @@ from deploy_workflow.method_scripts import (
     scale_of,
     share,
 )
+from deploy_workflow.prose_checks import ISO_4217
 
 CREDIT_METRICS = ARCHIVE + "skills/cp-1-canonical-data-foundation/scripts/credit_metrics.py"
 # T4.4's cost lines (REF_CP-1B_05: COGS, SG&A, D&A, cash interest and taxes, capex) and any other.
@@ -87,8 +90,11 @@ _REPORTED = re.compile(r"(?<=\d%)\s+(?:reported|calculated)\s*$", re.IGNORECASE)
 _NUMBER = r"[-+−–]?\d[\d,]*(?:\.\d+)?"
 # T4.6's joined `Prior/Current`: one `<prior> / <current>`, then at most unit words.
 _PAIR = re.compile(
-    rf"^\s*(?P<prior>{_NUMBER}\s*[x×%]?)\s+/\s+(?P<current>{_NUMBER}\s*[x×%]?)\s*(?:,\s*[^\d/;]+)?$"
+    rf"^\s*(?P<prior>{_NUMBER}\s*[x×%]?)\s+/\s+(?P<current>{_NUMBER}\s*[x×%]?)\s*(?:,\s*(?P<unit>[^\d/;]+))?$"
 )
+# Unit words after the comma that make a joined row not one of money: a percentage or a multiple
+# (`%`, `x`, `times`), a change in points, or the two scales or currencies of a mixed pair.
+_UNIT_NOT_MONEY = re.compile(r"%|×|\b(?:x|times|bps?|pp|ppt|points?)\b", re.IGNORECASE)
 _QUALIFIER = r"(?:\s+(?:reported|calculated))?\s*$"
 # T4.6's joined `Abs/%`, read only when the percentage ends it: at most one absolute figure and a
 # separator before it, `reported` or `calculated` alone after it. `+608 (20.8%)` annotates the
@@ -229,6 +235,15 @@ def _t46(text: str) -> list[_Pair] | str:
     return [_joined(_plain(r[m]), r[pc], r[ap]) for r in table[1]]
 
 
+def _two_units(unit: str) -> bool:
+    """Whether unit words name more than one scale (`m` then `bn`) or currency (`USD`, `EUR`)."""
+    words = re.findall(r"[a-z]+", unit.casefold().replace("us$", " "))
+    scales = {core._SCALES[w] for w in words if w in core._SCALES}
+    codes = {c for c in re.findall(r"(?<![A-Za-z])[A-Z]{3}(?![A-Z])", unit) if c in ISO_4217}
+    codes |= {code for symbol, code in core._SYMBOLS.items() if symbol in unit.casefold()}
+    return len(scales) > 1 or len(codes) > 1
+
+
 def _joined(name: str, pair_cell: str, change_cell: str) -> _Pair:
     """A T4.6 row of the method's `Prior/Current` and `Abs/%` cells, read only when each holds one
     pair and one percentage; otherwise the row carries why it is not (never a guess)."""
@@ -243,6 +258,15 @@ def _joined(name: str, pair_cell: str, change_cell: str) -> _Pair:
             else "is not one `prior / current` pair"
         )
         return replace(row, skip=f"the Prior/Current cell {why}")
+    unit = found["unit"] or ""
+    if _UNIT_NOT_MONEY.search(unit):
+        return replace(
+            row, skip=f"the Prior/Current cell's unit words `{unit.strip()}` are not money"
+        )
+    if _two_units(unit):
+        return replace(
+            row, skip=f"the Prior/Current cell's unit words `{unit.strip()}` name two units"
+        )
     if re.search(r"\b(?:pp|bps?|ppt|points?)\b", _plain(change_cell), re.IGNORECASE):
         return replace(row, skip="the Abs/% cell states a change in points, not only a percentage")
     cell = _plain(change_cell)

@@ -1326,3 +1326,29 @@ def joined_1b(pair: str, change: str) -> ms.Outcome:
 )
 def test_cp1b_joined_abs_percent_is_read_only_when_the_percentage_ends_it(pair, change, status):
     assert joined_1b(pair, change).status == status
+
+
+@pytest.mark.parametrize(
+    ("metric", "pair", "change", "status"),
+    [
+        ("EBITDA margin", "52.3 / 53.0, %", "+0.7%", "not checked"),
+        ("EBITDA margin", "47.8 / 48.0, %", "+0.2; 0.2%", "not checked"),
+        ("Leverage", "6.27 / 6.53, x", "+0.26; 4.1%", "not checked"),
+        ("Leverage", "6.27 / 6.53, times", "+0.26; 4.1%", "not checked"),
+        ("Margin", "47.8 / 48.0, bps", "+20; 0.4%", "not checked"),
+        ("Margin", "47.8 / 48.0, pp", "+0.2; 0.4%", "not checked"),
+        ("Margin", "47.8 / 48.0, points", "+0.2; 0.4%", "not checked"),
+        ("Revenue", "950 / 1.2, USD m then USD bn", "+250; 26.3%", "not checked"),
+        ("Operating profit", "2923 / 3531, USD millions", "+608; 20.80%", "agreed"),
+    ],
+)
+def test_cp1b_joined_unit_words_after_the_comma_decide_whether_the_row_is_read(
+    metric, pair, change, status
+):
+    head = (
+        "### T4.6 Variance register\n\n| Metric | Basis | Prior/Current | Abs/% | Driver |"
+        " Source |\n|---|---|---|---|---|---|\n"
+    )
+    text = head + f"| {metric} | Annual YoY | {pair} | {change} | d | s |\n"
+    (outcome,) = [o for o in ms.run("CP-1B", text) if o.register == "T4.6"]
+    assert outcome.status == status, outcome

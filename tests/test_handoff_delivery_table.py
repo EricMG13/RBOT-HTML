@@ -116,3 +116,18 @@ def test_prose_lines_starting_with_a_pipe_and_lacking_a_closing_pipe_are_not_a_t
 def test_a_table_lists_its_faults_in_line_order() -> None:
     faults = table_faults(f"{HEAD}\n{SEP8}\n| 1 | 2 |\n")
     assert [f.split(" at line ")[1][:1] for f in faults] == ["1", "3"]
+
+
+def test_the_hint_is_only_given_when_a_blank_line_could_be_the_cause() -> None:
+    (fault,) = table_faults("| A | B |\n|--|--|\n| 1 | 2 |\n")
+    assert fault.startswith("Invalid Markdown table header at line 1: the second row is not made")
+    assert "blank line" not in fault
+
+
+def test_a_one_cell_title_row_above_a_good_table_is_prose() -> None:
+    assert table_faults("| Title |\n| A | B |\n|---|---|\n| 1 | 2 |\n") == ()
+
+
+def test_a_title_row_does_not_hide_a_fault_of_the_table_below_it() -> None:
+    (fault,) = table_faults("| Title |\n| A | B |\n|---|---|\n| 1 |\n")
+    assert fault.startswith("Markdown table row does not match its header at line 4")

@@ -358,12 +358,13 @@ def table(rows: list[tuple[int, str]]) -> tuple[list[str], list[tuple[int, str, 
 
 
 def table_faults(text: str) -> tuple[str, ...]:
-    """Every malformed pipe table in a handoff, each fault once, in the adapter's own wording:
-    a header whose cell count or dashes do not match its separator row, and each body row whose
-    cell count differs from its header. `table` stops at the first fault of one table; this
-    scans the whole text so one review can name them all. A table inside a fenced code block or
-    an HTML comment is not one, and a run of fewer than two pipe lines is not a table. Nothing
-    is repaired. An unclosed HTML comment gives no faults here: the adapter refuses it."""
+    """Every malformed pipe table in a handoff, each fault once, in the adapter's wording: a row
+    without its boundary pipes, a header whose cell count or dashes do not match its separator
+    row (with `BLANK_SPLITS` after it when its second row is not separator-like), and each body
+    row whose cell count differs from its header. `table` stops at the first fault of one table;
+    this scans the whole text so one review can name them all. A table inside a fenced code
+    block or an HTML comment is not one, and a run of fewer than two pipe lines is not a table.
+    Nothing is repaired. An unclosed HTML comment gives no faults here: the adapter refuses it."""
     try:
         lines = hide_fenced(hide_comments(physical_lines(text), "handoff"))
     except ValueError:
@@ -382,16 +383,26 @@ def table_faults(text: str) -> tuple[str, ...]:
 
 
 _SEPARATOR_LIKE = re.compile(r"\|[\s:|-]*-[\s:|-]*")
-_BLANK_SPLITS = (
+BLANK_SPLITS = (
     " (a blank line splits a table: remove it, or give these rows their own header and separator)"
 )
+
+
+def _separator_like(row: str) -> bool:
+    return _SEPARATOR_LIKE.fullmatch(row) is not None
 
 
 def _group_faults(group: list[tuple[int, str]]) -> list[str]:
     """The faults of one run of pipe lines, in line order: its header and separator, then each
     body row. A run whose second line is not separator-like and that has a line without its
     closing pipe is prose (`|x| rose`), not a table: no fault. A header whose second line is
-    not made of --- cells says why that may be (rows split from their table by a blank line)."""
+    not made of --- cells says why that may be (rows split from their table by a blank line), but
+    only when that second line is not separator-like. In a run whose first separator-like line
+    is at index 2 or later, the lines before the header (the one above it) are prose."""
+    if not _separator_like(group[1][1]):
+        group = group[
+            next((k - 1 for k in range(2, len(group)) if _separator_like(group[k][1])), 0) :
+        ]
     if _SEPARATOR_LIKE.fullmatch(group[1][1]) is None and not all(
         row.endswith("|") for _, row in group
     ):
@@ -408,7 +419,8 @@ def _group_faults(group: list[tuple[int, str]]) -> list[str]:
     if headers is None or separator is None:
         return [fault for _, fault in faults]
     if fault := header_fault(group[0][0], group[0][1], headers, separator):
-        hint = _BLANK_SPLITS if "not made of ---" in fault else ""
+        split = "not made of ---" in fault and not _separator_like(group[1][1])
+        hint = BLANK_SPLITS if split else ""
         faults.append((group[0][0], fault + hint))
     faults += [
         (line, fault)
