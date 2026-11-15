@@ -222,18 +222,36 @@ def _shock(
     return replace(outcome, stated=written, reason=outcome.reason + sign)
 
 
+_HEDGE_PAIR = _Where("CP-2E", RATE_FX, f"{HEDGED} against {GROSS}", "T2F.4")
+
+
+def _contradiction(exposure: _Exposure, error: ValueError) -> list[Outcome]:
+    """Hedged floating-rate debt above gross: the two rows contradict each other (the script:
+    "perimeters differ or a hedge is double-counted"). Sent back (owner, 2026-11-15:
+    "approved"); any other refusal of the script is only not checked."""
+    gross, hedged = _value(exposure, GROSS), _value(exposure, HEDGED)
+    over = gross is not None and hedged is not None and 0 <= gross < hedged
+    if not over or "exceeds gross floating-rate debt" not in str(error):  # the script's own words
+        return []
+    cells = {n: a.cell for n in (HEDGED, GROSS) if isinstance(a := exposure.amounts[n], Amount)}
+    stated = f"{HEDGED} `{cells[HEDGED]}` above {GROSS} `{cells[GROSS]}`"
+    return [_HEDGE_PAIR("contradicted", stated=stated, unit=exposure.unit, reason=str(error))]
+
+
 def check(text: str, loaded: Loaded) -> list[Outcome]:
     """Unhedged floating-rate debt and its share of total debt (T2F.4) and the +100 bps
     cash-interest impact (T2F.5), each recomputed by the script from T2F.4's own rows."""
     tables = loaded.tables
     try:
         exposure = _exposure(text, tables)
-        result = loaded.script.compute(_inputs(exposure))
     except _NotChecked as why:
         return [w("not checked", reason=str(why)) for w in (_UNHEDGED, _SHARE, _SHOCK)]
+    try:
+        result = loaded.script.compute(_inputs(exposure))
     except ValueError as error:  # the script refuses: hedged above gross, a negative amount
         cause = f"the script refused T2F.4's inputs: {error}"
-        return [w("not checked", reason=cause) for w in (_UNHEDGED, _SHARE, _SHOCK)]
+        refused = [w("not checked", reason=cause) for w in (_UNHEDGED, _SHARE, _SHOCK)]
+        return [*_contradiction(exposure, error), *refused]
     return [
         _unhedged(exposure, result, tables),
         _share(exposure, result, tables),

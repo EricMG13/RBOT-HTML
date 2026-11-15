@@ -64,7 +64,7 @@ module's mapping is `deploy_workflow.method_scripts_<module>`.
 | CP-3 | `recovery_waterfall.py` | a `### Recovery waterfall` table, if present | none (T3B.2, T3B.4, T3B.6 hold no input) | no: owner decision |
 | CP-2G | `credit_metrics.py` | T2H.4, T2H.5, T2H.6 | none (never cut) | yes |
 | CP-4 | `covenant_headroom.py` | T4C.4 | none | yes |
-| CP-1 | `credit_metrics.py` | T4.8 LTM rows, T4.9 free-name rows | none | no: `earnings_update` ceiling |
+| CP-1 | `credit_metrics.py` | T4.8 LTM rows, T4.9 free-name rows | none | yes (ceiling raised, owner) |
 
 Next in this document's order: row 4 (`completeness_check.py`), then CP-4C, CP-1C, CP-2H, CP-1B.
 

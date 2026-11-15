@@ -1474,12 +1474,15 @@ def test_the_lite_pathway_runs_end_to_end_to_a_verified_delivery_with_a_syntheti
 # 2026-11-15: credit_snapshot gains CP-3C, its required CP-2D and CP-6's portfolio debate block
 # (owner: "cp-3c ... part of full credit assessment"); measured 1,316,558 before and 1,460,205 after
 # on this file's input. Its ceiling is the owner's 1,340,000 plus that measured 143,647.
+# 2026-11-15: CP-1 is sent its method-script note (owner: "approved", ruling
+# 2026-11-15-method-script-checks.md); earnings_update measured 545,907 before and 546,407 after
+# on this file's input. Its ceiling is the owner's 546,000 plus that measured 500.
 INSTRUCTION_BUDGET = {
     "lite_credit_assessment": 420_000,
     "credit_snapshot": 1_483_647,
     "covenant_refinancing": 1_155_000,
     "distressed_restructuring": 1_186_500,
-    "earnings_update": 546_000,
+    "earnings_update": 546_500,
     "portfolio_decision": 955_500,
     "relative_value": 1_071_000,
     "short_snapshot": 157_500,
@@ -8737,6 +8740,12 @@ def test_cp2e_is_checked_by_its_script_on_its_restored_registers(tmp_path, pathw
     (issue,) = _checked_handoff(task, wrong.encode(), check)
     assert "T2F.4 row `Unhedged floating-rate debt` states 550 USD m" in issue
     assert "recomputes 500 USD m" in issue
+    # Hedged above gross is sent back as a contradiction (owner, 2026-11-15: "approved").
+    over = right.replace(
+        "| Hedged floating-rate debt | USD 300m |", "| Hedged floating-rate debt | USD 900m |"
+    )
+    (contradiction,) = _checked_handoff(task, over.encode(), check)
+    assert "refuses them" in contradiction and "double-counted" in contradiction
     # Without its registers the handoff is refused for them, as for any in-scope register.
     (missing,) = _checked_handoff(task, raw.encode(), check)
     assert "Missing registers: T2F.4, T2F.5." in missing
@@ -8832,9 +8841,13 @@ def test_cp4_is_checked_by_its_script(tmp_path, pathway):
     assert "T4C.4 row `Headroom: Net leverage` states 0.70 x" in added
 
 
-def test_cp1_free_name_rows_are_checked_by_its_script_without_a_note(tmp_path):
-    # CP-1 is sent no note (the earnings_update ceiling); the method's own T4.9 is read.
-    assert "CP-1" in method_scripts.CHECKS and "CP-1" not in method_scripts.NOTES
+def test_cp1_free_name_rows_are_checked_by_its_script(tmp_path):
+    # CP-1 is sent its note (owner: "approved"), in every pathway; the method's own T4.9 is read.
+    assert "CP-1" in method_scripts.CHECKS and "CP-1" in method_scripts.NOTES
+    (tmp_path / "texts").mkdir()
+    _, texts = all_instructions(tmp_path / "texts", "earnings_update")
+    head = texts["CP-1"].partition(cpos_launch.METHOD_MARK)[0]
+    assert head.count(method_scripts.NOTES["CP-1"]) == 1
     prepared, task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
     raw = answer(context, list(prepared.plan.layout.routes))
     check = checker(prepared.layout)
