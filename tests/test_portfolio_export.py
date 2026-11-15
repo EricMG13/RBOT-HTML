@@ -16,6 +16,7 @@ from decimal import Decimal
 import pytest
 from test_cpos_launch import context_file, issuer_folder
 
+from deploy_vii.inputs import portfolio_export as pe
 from deploy_vii.inputs.__main__ import main as self_check
 from deploy_vii.inputs.portfolio_export import Quantity, quantity, validate_export
 from deploy_workflow.owners.cpos_launch import _readiness, prepare
@@ -25,6 +26,7 @@ RUN_DATE = date(2025, 3, 31)
 REPORT = synth.EXPOSURE
 BOOK = synth.HOLDINGS
 MONITOR = synth.CONSTRAINTS
+FIT = synth.FIT_CONSTRAINTS
 
 
 def findings(spec: synth.Spec, run_date: date | None = RUN_DATE) -> list[tuple[str, ...]]:
@@ -53,9 +55,9 @@ def test_figures_keep_their_unit_and_are_never_coerced(text, expected):
 
 def test_the_clean_export_passes_and_says_what_the_holdings_give():
     report = validate_export(synth.files(synth.clean()), run_date=RUN_DATE)
-    assert report.lines() == ("OK: 5 files, 7 holdings",)
+    assert report.lines() == ("OK: 6 parts, 7 holdings",)
     assert [role for _, role in report.files] == [
-        *("mandate", "constraints", "constraints", "exposure", "holdings")
+        *("mandate", "constraints", "constraints", "exposure", "holdings", "market")
     ]
     # Par 20 + 10 + 15 + 10 + 25 + 10 + 10 = 100m; at mid 20 + 9.8 + 15 + 9.9 + 25 + 10.1 + 10.2.
     # Margin (20x300 + 10x350 + 15x400 + 10x325 + 25x275 + 10x600 + 10x450) / 100 = 361.25;
@@ -71,11 +73,50 @@ def test_the_clean_export_passes_and_says_what_the_holdings_give():
         "par-weighted margin: 361.25 bps",
         "par-weighted yield to maturity, values outside -10% to 100% left out: 8.61%",
     )
-    assert report.notes == ("not checked: WAL (4.82 yrs)",)
+    assert report.notes == (pe.BUCKET_RULE,)
+
+
+def test_the_reconciliation_table_puts_each_stated_headline_beside_the_holdings():
+    report = validate_export(synth.files(synth.broken("report-not-holdings")), run_date=RUN_DATE)
+    # Life: par-weighted (20 x 1552 + 10 x 1767 + 15 x 1096 + 10 x 1644 + 25 x 1917 + 10 x 2191
+    # + 10 x 1371) days / 365.25 / 100 = 4.52 years from 31 March 2025.
+    assert report.table[:5] == (
+        ("total par", "110,000,000", "100,000,000", "10,000,000"),
+        ("NAV / market value at mid", "USD 105,000,000", "100,000,000", "5,000,000"),
+        ("positions", "8", "7", "1"),
+        ("obligors (by borrower name)", "7", "6", "1"),
+        ("sectors", "4", "3", "1"),
+    )
+    assert report.table[-1] == ("weighted average life", "4.52 yrs", "4.52 yrs", "0.00 yrs")
+    lines = report.table_lines()
+    assert lines[0] == "Reconciliation, stated against the holdings:"
+    assert lines[2].split() == ["total", "par", "110,000,000", "100,000,000", "10,000,000"]
+
+
+def test_a_breach_the_report_hides_is_reported_first():
+    spec = synth.broken("hidden-breach")
+    synth.BROKEN["subtotals"](spec)
+    synth.BROKEN["identifiers"](spec)
+    found = findings(spec)
+    assert "a breach" in found[0][3]
+    kinds = [problem for _, _, _, problem in found]
+    first_total = next(i for i, p in enumerate(kinds) if "rows add to" in p)
+    first_cell = next(i for i, p in enumerate(kinds) if "FIGI" in p)
+    assert 0 < first_total < first_cell
+
+
+def test_the_same_export_as_sheets_of_one_workbook_gives_the_same_findings():
+    clean = validate_export(synth.workbook_files(synth.clean()), run_date=RUN_DATE)
+    assert clean.lines() == ("OK: 6 parts, 7 holdings",)
+    assert clean.files[0] == (f"{synth.BOOK} [Mandate File]", "mandate")
+    as_csv = findings(synth.broken("hidden-breach"))
+    report = validate_export(synth.workbook_files(synth.broken("hidden-breach")), run_date=RUN_DATE)
+    assert [(i.cell, i.problem) for i in report.issues] == [(c, p) for _, _, c, p in as_csv]
+    assert report.issues[0].file == f"{synth.BOOK} [Exposure Report]"
 
 
 EXPECTED = {
-    # Class 1. 105 / 110 x 100 = 95.4545...
+    # Class 1. Par and counts against the holdings; 105 / 110 x 100 = 95.4545...
     "report-not-holdings": [
         (
             REPORT,
@@ -83,8 +124,7 @@ EXPECTED = {
             "row 4",
             (
                 "total par is stated as 110,000,000; the holdings give 100,000,000, a difference "
-                "of "
-                "10,000,000"
+                "of 10,000,000"
             ),
         ),
         (
@@ -92,8 +132,8 @@ EXPECTED = {
             "A. Summary Metrics",
             "row 3",
             (
-                "NAV is stated as USD 105,000,000; the holdings give 100,000,000, a difference of "
-                "5,000,000"
+                "NAV is stated as USD 105,000,000; the holdings give 100,000,000, a difference "
+                "of 5,000,000"
             ),
         ),
         (
@@ -108,7 +148,7 @@ EXPECTED = {
             "row 6",
             (
                 "the number of obligors is stated as 7; the holdings give 6, a difference of 1 "
-                "(6 tickers)"
+                "(by borrower name; 6 tickers)"
             ),
         ),
         (
@@ -123,8 +163,7 @@ EXPECTED = {
             "row 8",
             (
                 "the weighted average price is stated as 100.00; the stated NAV over the stated "
-                "par is "
-                "95.455"
+                "par is 95.455"
             ),
         ),
     ],
@@ -144,14 +183,14 @@ EXPECTED = {
             "A. Summary Metrics",
             "row 12",
             (
-                "the ten largest issuers' share is stated as 95.00%; the holdings give 100.00%, a "
-                "difference of 5.00%"
+                "the ten largest issuers' share is stated as 95.00%; the holdings give 100.00%, "
+                "a difference of 5.00%"
             ),
         ),
         (
             REPORT,
             "D. Top 10 Holdings",
-            "row 34",
+            "row 35",
             (
                 "Aster Fictional Co: its market value is stated as 35,000,000; the holdings give "
                 "29,800,000, a difference of 5,200,000"
@@ -160,7 +199,7 @@ EXPECTED = {
         (
             REPORT,
             "D. Top 10 Holdings",
-            "row 34",
+            "row 35",
             (
                 "Aster Fictional Co: its share is stated as 35.00%; the holdings give 29.80%, a "
                 "difference of 5.20%"
@@ -169,39 +208,28 @@ EXPECTED = {
         (
             REPORT,
             "D. Top 10 Holdings",
-            "row 34",
+            "row 35",
             (
-                "Aster Fictional Co: its number of positions is stated as 3; the holdings give 2, "
-                "a "
-                "difference of 1"
+                "Aster Fictional Co: its number of positions is stated as 3; the holdings give "
+                "2, a difference of 1"
             ),
         ),
         (
             REPORT,
             "D. Top 10 Holdings",
-            "row 40",
+            "row 41",
             (
                 "Ghost Fictional Holdings is listed among the largest holdings but is not in the "
                 "holdings"
             ),
         ),
     ],
-    # Class 3. Software: 20 + 9.8 + 9.9 = 39.7m; Healthcare: 25 + 10.1 = 35.1m.
+    # Class 3, first because it is a breach: Software 20 + 9.8 + 9.9 = 39.7m against 35%.
     "hidden-breach": [
         (
             REPORT,
             "C. Top Sectors",
-            "row 25",
-            (
-                "Software: its share is stated as 34.70%; the holdings give 39.70%, a difference "
-                "of "
-                "5.00%"
-            ),
-        ),
-        (
-            REPORT,
-            "C. Top Sectors",
-            "row 25",
+            "row 26",
             (
                 "Software: the holdings give 39.70% against the limit ≤ 35.0% NAV, a breach; the "
                 "report states 34.70% and status Pass"
@@ -212,43 +240,57 @@ EXPECTED = {
             "C. Top Sectors",
             "row 26",
             (
-                "Healthcare: its share is stated as 40.10%; the holdings give 35.10%, a difference "
-                "of "
-                "5.00%"
+                "Software: its share is stated as 34.70%; the holdings give 39.70%, a difference "
+                "of 5.00%"
+            ),
+        ),
+        (
+            REPORT,
+            "C. Top Sectors",
+            "row 27",
+            (
+                "Healthcare: its share is stated as 40.10%; the holdings give 35.10%, a "
+                "difference of 5.00%"
             ),
         ),
     ],
-    # Class 4. Ratings 25.20 + 64.71 + 10.10 = 100.01 against 100.00: inside the rounding of
-    # four two-decimal figures (0.02), so no finding; issuers 2 + 3 + 1 = 6, not 7. Sectors
-    # 39.70 + 35.10 + 25.20 + 0.00 = 100.00 against 99.90: 0.10, over 5 x 0.005.
+    # Class 4. Ratings 100.01 against 100.00 is rounding (no finding); issuers 2 + 3 + 1 = 6,
+    # not 7; sectors 39.70 + 35.10 + 25.20 + 0.00 = 100.00 against 99.90, over 5 x 0.005.
     "subtotals": [
         (
             REPORT,
             "B. Rating Distribution",
-            "row 21",
+            "row 22",
             "Total states Issuers 7; its 3 rows add to 6, a difference of 1",
         ),
         (
             REPORT,
             "C. Top Sectors",
-            "row 30",
+            "row 31",
             (
                 "Total states % NAV 99.90%; its 4 rows add to 100.00, a difference of 0.10, more "
-                "than "
-                "their rounding (0.025)"
+                "than their rounding (0.025)"
             ),
         ),
     ],
-    # Class 5. Price: 100 at mid; margin 361.25; yield 8.6125; second lien 10.1m of 100m.
+    # Class 5. Margin 36125 / 100 = 361.25; yield 861.25 / 100 = 8.6125; second lien 10.1m.
     "summary-metrics": [
+        (
+            REPORT,
+            "A. Summary Metrics",
+            "row 14",
+            (
+                "the second-lien share is stated as 12.00%; the holdings give 10.10%, a "
+                "difference of 1.90%"
+            ),
+        ),
         (
             REPORT,
             "A. Summary Metrics",
             "row 8",
             (
                 "the weighted average price is stated as 101.00; the holdings give 100, a "
-                "difference "
-                "of 1"
+                "difference of 1"
             ),
         ),
         (
@@ -266,18 +308,7 @@ EXPECTED = {
             "row 10",
             (
                 "the weighted average yield to maturity is stated as 3.20%; the holdings give "
-                "8.6125, "
-                "a difference of 5.4125"
-            ),
-        ),
-        (
-            REPORT,
-            "A. Summary Metrics",
-            "row 13",
-            (
-                "the second-lien share is stated as 12.00%; the holdings give 10.10%, a difference "
-                "of "
-                "1.90%"
+                "8.6125, a difference of 5.4125"
             ),
         ),
         (
@@ -286,8 +317,7 @@ EXPECTED = {
             "row 8",
             (
                 "the weighted average price is stated as 101.00; the stated NAV over the stated "
-                "par is "
-                "100.000"
+                "par is 100.000"
             ),
         ),
         (
@@ -296,8 +326,7 @@ EXPECTED = {
             "row 10",
             (
                 "the weighted average yield to maturity is stated as 3.20%, below the stated "
-                "weighted "
-                "average margin of 375 bps over the base rate"
+                "weighted average margin of 375 bps over the base rate"
             ),
         ),
     ],
@@ -319,7 +348,79 @@ EXPECTED = {
             ),
         ),
     ],
+    # Class 7. Three maturities 100 years early (36,525 days each, so 100.00 years): life
+    # 4.5212 - (20 + 10 + 15) x 100 / 100 = -40.48 as given, 4.52 read as 20xx (not applied).
     "century-dates": [
+        (
+            REPORT,
+            "A. Summary Metrics",
+            "row 15",
+            (
+                "the weighted average life is stated as 4.52 yrs; the holdings give -40.48 yrs, "
+                "a difference of 45.00 yrs; with the 3 maturities before 1950 read as 20xx it "
+                "would be 4.52 yrs (not applied)"
+            ),
+        ),
+        (
+            REPORT,
+            "E. Maturity Profile",
+            "row 45",
+            (
+                "maturity bucket 2028: its share is stated as 25.20%; the holdings give 10.20%, "
+                "a difference of 15.00%; with the maturities before 1950 read as 20xx it would "
+                "be 25.20% (not applied)"
+            ),
+        ),
+        (
+            REPORT,
+            "E. Maturity Profile",
+            "row 45",
+            (
+                "maturity bucket 2028: its market value is stated as 25,200,000; the holdings "
+                "give 10,200,000, a difference of 15,000,000; with the maturities before 1950 "
+                "read as 20xx it would be 25,200,000 (not applied)"
+            ),
+        ),
+        (
+            REPORT,
+            "E. Maturity Profile",
+            "row 46",
+            (
+                "maturity bucket 2029: its share is stated as 29.90%; the holdings give 9.90%, a "
+                "difference of 20.00%; with the maturities before 1950 read as 20xx it would be "
+                "29.90% (not applied)"
+            ),
+        ),
+        (
+            REPORT,
+            "E. Maturity Profile",
+            "row 46",
+            (
+                "maturity bucket 2029: its market value is stated as 29,900,000; the holdings "
+                "give 9,900,000, a difference of 20,000,000; with the maturities before 1950 "
+                "read as 20xx it would be 29,900,000 (not applied)"
+            ),
+        ),
+        (
+            REPORT,
+            "E. Maturity Profile",
+            "row 47",
+            (
+                "maturity bucket 2030: its share is stated as 34.80%; the holdings give 25.00%, "
+                "a difference of 9.80%; with the maturities before 1950 read as 20xx it would be "
+                "34.80% (not applied)"
+            ),
+        ),
+        (
+            REPORT,
+            "E. Maturity Profile",
+            "row 47",
+            (
+                "maturity bucket 2030: its market value is stated as 34,800,000; the holdings "
+                "give 25,000,000, a difference of 9,800,000; with the maturities before 1950 "
+                "read as 20xx it would be 34,800,000 (not applied)"
+            ),
+        ),
         (
             BOOK,
             "Holdings",
@@ -333,16 +434,25 @@ EXPECTED = {
             "1 of 3 maturities falls in 1931 (row 2): two-digit years read as 19xx",
         ),
     ],
-    # Class 8. With row 3's -246.5: (160 - 2465 + 135 + 82.5 + 193.75 + 110 + 95) / 100 =
-    # -16.8875; without it 776.25 / 90 = 8.625, which then also misses the stated 8.61.
+    # Class 8. With -246.5: (160 - 2465 + 135 + 82.5 + 193.75 + 110 + 95) / 100 = -16.8875;
+    # without: 776.25 / 90 = 8.625 (shown half-even, 8.62%), which misses the stated 8.61.
     "impossible-values": [
+        (
+            REPORT,
+            "A. Summary Metrics",
+            "row 10",
+            (
+                "the weighted average yield to maturity is stated as 8.61%; the holdings give "
+                "8.625, a difference of 0.015"
+            ),
+        ),
         (
             BOOK,
             "Holdings",
             "Mid YTM",
             (
-                "Mid YTM lies outside -10% to 100% on row 3 (-246.5%); with them the par-weighted "
-                "yield is -16.89%, without them 8.62%"
+                "Mid YTM lies outside -10% to 100% on row 3 (-246.5%); with them the "
+                "par-weighted yield is -16.89%, without them 8.62%"
             ),
         ),
         (
@@ -351,26 +461,41 @@ EXPECTED = {
             "Mid 3Y DM",
             "Mid 3Y DM lies outside -1000 bps to 10000 bps on row 4 (27085 bps)",
         ),
+    ],
+    # Class 9. WR / NR on Birch reads as unrated: BB keeps Fern alone (10.2m, one issuer), and
+    # the report has no Unrated row for Birch's 15m.
+    "vendor-tokens": [
         (
             REPORT,
-            "A. Summary Metrics",
-            "row 10",
+            "B. Rating Distribution",
+            "row 19",
             (
-                "the weighted average yield to maturity is stated as 8.61%; the holdings give "
-                "8.625, "
-                "a difference of 0.015"
+                "rating bucket BB (BB): its share is stated as 25.20%; the holdings give 10.20%, "
+                "a difference of 15.00%"
             ),
         ),
-    ],
-    "vendor-tokens": [
+        (
+            REPORT,
+            "B. Rating Distribution",
+            "row 19",
+            (
+                "rating bucket BB (BB): its issuer count is stated as 2; the holdings give 1, a "
+                "difference of 1"
+            ),
+        ),
+        (
+            REPORT,
+            "B. Rating Distribution",
+            "rows",
+            "the report lists no Unrated row; the holdings put 15.00% (1 issuer) there",
+        ),
         (
             BOOK,
             "Holdings",
             "Δ 1M",
             (
-                "Δ 1M holds a vendor error token such as #N/A N/A on row 5; read as missing, never "
-                "as "
-                "zero"
+                "Δ 1M holds a vendor error token such as #N/A N/A on row 5; read as missing, "
+                "never as zero"
             ),
         ),
         (
@@ -378,12 +503,13 @@ EXPECTED = {
             "Holdings",
             "Mid 3Y DM",
             (
-                "Mid 3Y DM holds a vendor error token such as #N/A N/A on row 6; read as missing, "
-                "never as zero"
+                "Mid 3Y DM holds a vendor error token such as #N/A N/A on row 6; read as "
+                "missing, never as zero"
             ),
         ),
         (BOOK, "Holdings", "Ratings", "Ratings holds a vendor error token for an agency on row 2"),
     ],
+    # Class 10.
     "identifiers": [
         (BOOK, "Holdings", "FIGI", "1 FIGI is not 12 capital letters and digits (row 4)"),
         (
@@ -415,6 +541,7 @@ EXPECTED = {
             "rows below the header with only empty cells: 3 (rows 9, 10, 11)",
         ),
     ],
+    # Class 12.
     "units": [
         (
             MONITOR,
@@ -433,6 +560,123 @@ EXPECTED = {
             "Constraints",
             "row 4",
             "C-03: current value '10.10' has no unit; the limit '≤ 15.0% NAV' is in % NAV",
+        ),
+    ],
+    # A bid above its ask (the mid, 99, does not move).
+    "crossed-quote": [
+        (BOOK, "Holdings", "Bid", "the bid is above the ask on row 5 (row 5: bid 99.5, ask 98.5)"),
+    ],
+    # 25,000,000 par in a 20 million tranche.
+    "above-tranche": [
+        (
+            BOOK,
+            "Holdings",
+            "Holdings (par)",
+            "row 6 holds par 25,000,000 of a tranche of 20 million",
+        ),
+    ],
+    # The reverse of a ticker naming two borrowers.
+    "borrower-two-tickers": [
+        (
+            BOOK,
+            "Holdings",
+            "Ticker",
+            "borrower Aster Fictional Co has 2 tickers: ASTR (row 2); ASTR2 (row 3)",
+        ),
+    ],
+    # On Market Data, so no recomputed figure moves.
+    "wrong-kind": [
+        (BOOK, "Market Data", "Ratings", "Ratings on row 2 holds a ranking, '1st Lien'"),
+        (BOOK, "Market Data", "Loan Name", "Loan Name on row 3 holds a FIGI, 'BBG00SYN0102'"),
+    ],
+    # Moody's B2/B2/B3/B1 -> B (Aster, Cedar, Dune: 64.70, 3); Ba3/Ba2 -> BB (25.20, 2).
+    "rating-buckets": [
+        (
+            REPORT,
+            "B. Rating Distribution",
+            "row 19",
+            (
+                "rating bucket BB (BB): its share is stated as 30.20%; the holdings give 25.20%, "
+                "a difference of 5.00%"
+            ),
+        ),
+        (
+            REPORT,
+            "B. Rating Distribution",
+            "row 19",
+            (
+                "rating bucket BB (BB): its issuer count is stated as 3; the holdings give 2, a "
+                "difference of 1"
+            ),
+        ),
+        (
+            REPORT,
+            "B. Rating Distribution",
+            "row 20",
+            (
+                "rating bucket B (B): its share is stated as 59.70%; the holdings give 64.70%, a "
+                "difference of 5.00%"
+            ),
+        ),
+        (
+            REPORT,
+            "B. Rating Distribution",
+            "row 20",
+            (
+                "rating bucket B (B): its issuer count is stated as 2; the holdings give 3, a "
+                "difference of 1"
+            ),
+        ),
+    ],
+    # 2028: Birch 15 + Fern 10.2 = 25.2m; 2029: Aster 20 + Cedar 9.9 = 29.9m.
+    "maturity-buckets": [
+        (
+            REPORT,
+            "E. Maturity Profile",
+            "row 45",
+            (
+                "maturity bucket 2028: its share is stated as 30.20%; the holdings give 25.20%, "
+                "a difference of 5.00%"
+            ),
+        ),
+        (
+            REPORT,
+            "E. Maturity Profile",
+            "row 45",
+            (
+                "maturity bucket 2028: its market value is stated as 30,200,000; the holdings "
+                "give 25,200,000, a difference of 5,000,000"
+            ),
+        ),
+        (
+            REPORT,
+            "E. Maturity Profile",
+            "row 46",
+            (
+                "maturity bucket 2029: its share is stated as 24.90%; the holdings give 29.90%, "
+                "a difference of 5.00%"
+            ),
+        ),
+        (
+            REPORT,
+            "E. Maturity Profile",
+            "row 46",
+            (
+                "maturity bucket 2029: its market value is stated as 24,900,000; the holdings "
+                "give 29,900,000, a difference of 5,000,000"
+            ),
+        ),
+    ],
+    # First lien: 100 - 10.1 (Elm, second lien) = 89.9m.
+    "lien-split": [
+        (
+            REPORT,
+            "A. Summary Metrics",
+            "row 13",
+            (
+                "the first-lien share is stated as 85.00%; the holdings give 89.90%, a "
+                "difference of 4.90%"
+            ),
         ),
     ],
 }
@@ -470,7 +714,10 @@ def test_an_unpriced_position_is_missing_from_value_never_valued_at_zero_price()
         BOOK,
         "Holdings",
         "Bid",
-        "Bid holds a vendor error token such as #N/A N/A on row 8; read as missing, never as zero",
+        (
+            "Bid holds a vendor error token such as #N/A N/A on row 8; read as missing, never as "
+            "zero; par affected 10,000,000"
+        ),
     ) in found
     assert (
         REPORT,
@@ -516,19 +763,26 @@ def test_without_a_holdings_sheet_nothing_stated_can_be_verified():
     )
 
 
-def test_the_self_check_takes_the_exports_files_together(tmp_path, capsys):
-    paths = []
+def test_the_self_check_takes_a_folder_and_prints_the_table_first(tmp_path, capsys):
+    folder = tmp_path / "export"
+    folder.mkdir()
     for name, raw in synth.files(synth.clean()).items():
-        (tmp_path / name).write_bytes(raw)
-        paths.append(str(tmp_path / name))
-    assert self_check(["validate-input", "portfolio-export", *paths, "--as-of", "2025-03-31"]) == 0
-    assert capsys.readouterr().out == "OK: 5 files, 7 holdings\n"
+        (folder / name).write_bytes(raw)
+    (folder / "~$SYNTHETIC Holdings.xlsx").write_bytes(b"lock")  # Office's lock file: skipped
+    assert (
+        self_check(["validate-input", "portfolio-exports", str(folder), "--as-of", "2025-03-31"])
+        == 0
+    )
+    out = capsys.readouterr().out.splitlines()
+    assert out[0] == "Reconciliation, stated against the holdings:"
+    assert out[-1] == "OK: 6 parts, 7 holdings"
+    paths = sorted(str(p) for p in folder.iterdir() if not p.name.startswith("~$"))
     (tmp_path / "notes.csv").write_text("a,b\n1,2\n")
     assert (
         self_check(["validate-input", "portfolio-export", *paths, str(tmp_path / "notes.csv")]) == 1
     )
     assert "not recognised as the mandate" in capsys.readouterr().out
-    assert self_check(["validate-input", "portfolio-export", *paths, "--json"]) == 0
+    assert self_check(["validate-input", "portfolio-exports", *paths, "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["recomputed"][0].startswith("positions with a par")
     with pytest.raises(SystemExit) as stopped:
         self_check(["validate-input", "portfolio", *paths[:2]])
@@ -562,8 +816,11 @@ def test_a_full_assessment_with_a_clean_export_tells_cp0_cp3_and_cp6_what_the_ho
     assert told == ["CP-0", "CP-3", "CP-6"]
     for module in told:
         assert "The export passes every check." in texts[module]
+        assert (
+            "- total par: stated 100,000,000; holdings 100,000,000; difference 0" in texts[module]
+        )
         assert "- largest borrower: Aster Fictional Co, 29.80% of market value" in texts[module]
-        assert f"`{synth.HOLDINGS}` (holdings)" in texts[module]
+        assert f"`{synth.HOLDINGS} [Holdings]` (holdings)" in texts[module]
     assert not [i for i in items if "portfolio" in i]
     assert "Portfolio: " in _readiness(prepared, "sol-medium")
 
@@ -573,7 +830,7 @@ def test_a_full_assessment_with_a_hidden_breach_lists_it_and_is_limited(tmp_path
     told = texts["CP-6"].split("Portfolio export:")[1]
     assert "The export fails 3 checks, listed below as file, part and row" in told
     assert (
-        f"- {REPORT}, C. Top Sectors, row 25: Software: the holdings give 39.70% against the "
+        f"- {REPORT}, C. Top Sectors, row 26: Software: the holdings give 39.70% against the "
         "limit ≤ 35.0% NAV, a breach; the report states 34.70% and status Pass"
     ) in told
     assert items["CP-6:portfolio-workbook-fails-checks"]["outcome"] == "limited"

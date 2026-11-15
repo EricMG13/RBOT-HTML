@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 
-from openpyxl import Workbook  # type: ignore[import-untyped]
+from openpyxl import Workbook, load_workbook  # type: ignore[import-untyped]
 
 Row = list[object]
 
@@ -308,7 +308,7 @@ def clean(as_of: date = AS_OF) -> Spec:
                 "Info only",
                 "Soft",
                 "Indenture 7.5 (fictional)",
-                "4.82 yrs",
+                "4.52 yrs",
                 "",
                 "Pass",
                 stamp,
@@ -357,8 +357,9 @@ def clean(as_of: date = AS_OF) -> Spec:
             ["WA YTM", "8.61%", ""],
             ["Largest Issuer", "29.80%", "Aster Fictional Co"],
             ["Top 10 Issuers", "100.00%", ""],
+            ["1st Lien", "89.90%", ""],
             ["2nd Lien", "10.10%", ""],
-            ["WAL", "4.82 yrs", ""],
+            ["WAL", "4.52 yrs", ""],
             [],
             ["B. Rating Distribution"],
             ["Bucket", "% NAV", "Issuers"],
@@ -433,6 +434,35 @@ def files(spec: Spec) -> dict[str, bytes]:
         HOLDINGS: _workbook(spec),
     }
     return {**out, **spec.extra}
+
+
+BOOK = "SYNTHETIC Portfolio Export.xlsx"
+SHEETS = (
+    ("Mandate File", "mandate"),
+    ("Constraints Monitor", "constraints"),
+    ("CP-3C Constraints", "fit_constraints"),
+    ("Exposure Report", "exposure"),
+)
+
+
+def workbook_files(spec: Spec) -> dict[str, bytes]:
+    """The same export as one workbook: the reports as sheets beside Holdings and Market Data."""
+    book = Workbook()
+    book.remove(book.active)
+    for title, attribute in SHEETS:
+        sheet = book.create_sheet(title)
+        for row in getattr(spec, attribute):
+            sheet.append(row or [None])
+    source = load_workbook(io.BytesIO(_workbook(spec)))
+    for name in source.sheetnames:
+        target = book.create_sheet(name)
+        for row in source[name].iter_rows(values_only=True):
+            target.append(list(row))
+        for cells in target.iter_rows(min_row=2, min_col=11, max_col=11):
+            cells[0].number_format = "yyyy-mm-dd"
+    out = io.BytesIO()
+    book.save(out)
+    return {BOOK: out.getvalue()}
 
 
 def _find(rows: list[Row], first: str) -> Row:
@@ -532,6 +562,37 @@ def _units(spec: Spec) -> None:  # class 12
     _find(spec.constraints, "C-03")[6] = "10.10"
 
 
+def _crossed(spec: Spec) -> None:  # bid above ask; the mid (99) is unchanged
+    spec.holdings[3][11], spec.holdings[3][12] = 99.5, 98.5  # row 5
+
+
+def _above_tranche(spec: Spec) -> None:
+    spec.holdings[4][8] = 20  # row 6: 25,000,000 par in a 20 million tranche
+
+
+def _two_tickers(spec: Spec) -> None:
+    spec.holdings[1][0] = "ASTR2"  # row 3: Aster under a second ticker
+
+
+def _wrong_kind(spec: Spec) -> None:  # on Market Data, so no recomputed figure moves
+    spec.market[0][7] = "1st Lien"  # row 2: a ranking in Ratings
+    spec.market[1][4] = "BBG00SYN0102"  # row 3: a FIGI in Loan Name
+
+
+def _rating_buckets(spec: Spec) -> None:
+    _find(spec.exposure, "BB")[1:3] = ["30.20%", "3"]
+    _find(spec.exposure, "B")[1:3] = ["59.70%", "2"]
+
+
+def _maturity_buckets(spec: Spec) -> None:
+    _find(spec.exposure, "2028")[1:3] = ["30.20%", "30,200,000"]
+    _find(spec.exposure, "2029")[1:3] = ["24.90%", "24,900,000"]
+
+
+def _lien_split(spec: Spec) -> None:
+    _set(spec.exposure, "1st Lien", 1, "85.00%")
+
+
 BROKEN: dict[str, Callable[[Spec], None]] = {
     "report-not-holdings": _report_not_holdings,
     "concentration": _concentration,
@@ -545,6 +606,13 @@ BROKEN: dict[str, Callable[[Spec], None]] = {
     "unpriced-position": _unpriced,
     "identifiers": _identifiers,
     "units": _units,
+    "crossed-quote": _crossed,
+    "above-tranche": _above_tranche,
+    "borrower-two-tickers": _two_tickers,
+    "wrong-kind": _wrong_kind,
+    "rating-buckets": _rating_buckets,
+    "maturity-buckets": _maturity_buckets,
+    "lien-split": _lien_split,
 }
 
 

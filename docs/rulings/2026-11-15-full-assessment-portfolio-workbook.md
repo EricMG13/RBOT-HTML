@@ -132,8 +132,18 @@ Decisions:
   restriction as a failing workbook. The forecast items are the same four. On the run start page
   the analyst uploads every file of the export and chooses the holdings workbook as the portfolio
   workbook.
-- `uv run deploy-vii validate-input portfolio-export <files> --as-of <date>` checks the files
-  together.
+- `uv run deploy-vii validate-input portfolio-exports <folder or files> --as-of <date>` checks
+  the export together and prints a reconciliation table of the headline figures first.
+- Extended on the coordinating session's later request (branch
+  `claude/busy-dijkstra-bgex9m-s12b-portfolio-exports`): the parts may be CSV files or sheets of
+  one workbook; rating buckets with issuer counts (Moody's, else S&P), the lien split, the
+  par-weighted life and maturity buckets are recomputed, maturity figures as given with the 19xx
+  correction beside them and never applied; a bid above its ask, a holding above its tranche, a
+  borrower under two tickers, a value of another column's kind and the par a missing price leaves
+  out are reported; findings come breach first, then totals and balances, then contradicted
+  figures, then dates, then cell defects. Obligors are counted by borrower name. The owner noted
+  the same day: "no live run yet, and pathway will be restructured before live run"; nothing here
+  changes a pathway's module list.
 
 Open, for the owner: the export names one constraints sheet "CP-3C Portfolio Constraints". In this
 repository portfolio fit is CP-3B, inside CP-3; CP-3C is Refinancing & LME. The coordinating session
