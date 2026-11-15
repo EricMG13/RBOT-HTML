@@ -407,8 +407,11 @@ How the real layout is read (pinned by SYNTHETIC fixtures in `tools/synthetic_po
   `Min 1st Lien / Senior Secured` and `Max 2nd Lien / Unsecured` the lien split; `Max unrated
   exposure` the unrated bucket; `Max WAL` the life; `Min number of obligors` the borrower count. A
   parameter naming nothing the holdings give (a CCC row that includes Other, a WAR minimum, equity)
-  is listed as not checked, never matched to the nearest. `0% NAV` takes its direction from Max or
-  Min; `Info only` has no limit; an em dash is not applicable. Two constraints files are compared
+  is listed as not checked, never matched to the nearest. An exclusion row that lists its sectors
+  (`Excluded sectors (Tobacco, Weapons)`) is checked on their combined share; an exclusion word
+  inside brackets (`Single sector (excluding cash)`) does not make a row an exclusion. A limit
+  without a sign (`0% NAV`) takes its direction from Max or Min; with neither, an exclusion row or
+  a zero limit is "at most"; `Info only` has no limit; an em dash is not applicable. Two constraints files are compared
   row by row on limit, current value, headroom and status.
 - Summary cells holding a name and a figure (`<name> (2.37%)`) are read as both; the name is
   compared with the holdings' largest issuer or sector.
@@ -416,12 +419,20 @@ How the real layout is read (pinned by SYNTHETIC fixtures in `tools/synthetic_po
   whose issuer reads `Top 10 Total` is a total. A report name is matched to the holdings' borrowers
   by its words, ignoring case, punctuation and legal suffixes: exactly, by ticker, or as a
   whole-word prefix of the borrower name. Each match is listed; two or more borrowers is
-  ambiguous and not compared; none is a finding.
+  ambiguous and not compared; none is a finding, which names the borrowers that may be meant (a
+  ticker that begins with the name's first three letters, or the borrower's first word of four
+  letters or more inside the name) as possible and not compared, or says there is none.
 - Sector section: `Top 20 Subtotal` is checked against its rows and `Total` against the rows and
   `Other Sectors`; a count is not checked where a row states none, and that is said.
 - Ranking: the lien is the leading `1L`/`2L` token (or the words first/second lien, unsecured);
   a Ranking with none is reported as not classified, never counted as first lien.
 - Recomputed figures and differences are shown to the stated figure's places plus two.
+- Reconciliation table: a summary figure without a unit takes the unit its name states
+  (`Weighted Average Life (yrs)` = `4.82` is 4.82 yrs); a headline the summary does not state is
+  taken from the first constraints row that gives it, with that file and row named (`Max 2nd Lien
+  / Unsecured` as second lien and unsecured); the yield is the par-weighted figure on every row as
+  given, with the figure without values outside -10% to 100% in the finding; positions say how
+  many rows of the holdings had a readable par (`381 of 382 rows; 1 left out`).
 
 ```
 uv run deploy-vii validate-input portfolio-exports "<folder holding the export>" --as-of 2026-11-15

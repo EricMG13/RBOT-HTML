@@ -98,12 +98,13 @@ def test_the_reconciliation_table_puts_each_stated_headline_beside_the_holdings(
     assert report.table[:5] == (
         ("total par", "110,000,000", "100,000,000", "10,000,000"),
         ("NAV / market value at mid", "USD 105,000,000", "100,000,000", "5,000,000"),
-        ("positions (rows with a readable par)", "8", "7", "1"),
+        ("positions (rows with a readable par: 7 of 7 rows)", "8", "7", "1"),
         ("obligors (by borrower name)", "7", "6", "1"),
         ("sectors (by Index Sector)", "4", "3", "1"),
     )
     # Recomputed figures to the stated places plus two: life 4.5211 against a stated 4.52.
-    assert report.table[-4] == ("weighted average life", "4.52 yrs", "4.5211 yrs", "0.0011 yrs")
+    # The summary states it as `Weighted Average Life (yrs)` = `4.52`: read as 4.52 yrs.
+    assert report.table[-4] == ("weighted average life", "4.52", "4.5211 yrs", "0.0011 yrs")
     # The three largest sectors by the holdings, each beside the report's sector section; the
     # third is in Other Sectors, so not listed.
     assert report.table[-3:] == (
@@ -114,6 +115,76 @@ def test_the_reconciliation_table_puts_each_stated_headline_beside_the_holdings(
     lines = report.table_lines()
     assert lines[0] == "Reconciliation, stated against the holdings:"
     assert lines[2].split() == ["total", "par", "110,000,000", "100,000,000", "10,000,000"]
+
+
+def test_the_table_reads_figures_as_the_real_summary_labels_state_them():
+    # `Weighted Average Price` = `100.000` (market value equals par, so 100 at mid),
+    # `Weighted Average Life (yrs)` = `4.52` (the unit from the name) and the yield as given on
+    # every row, with its percent sign.
+    table = validate_export(synth.files(synth.clean()), run_date=RUN_DATE).table
+    assert ("weighted average price", "100.000", "100.00000", "0.00000") in table
+    assert ("weighted average life", "4.52", "4.5211 yrs", "0.0011 yrs") in table
+    assert ("weighted average yield, all rows", "8.61%", "8.6125%", "0.0025%") in table
+
+
+def test_a_headline_the_summary_omits_is_read_from_a_constraints_row():
+    spec = synth.clean()
+    spec.exposure = [row for row in spec.exposure if row[:1] != ["2nd Lien"]]
+    table = validate_export(synth.files(spec), run_date=RUN_DATE).table
+    # Elm, the one second-lien loan: 10m at 101 = 10.1m of 100m; no unsecured loan.
+    assert (
+        "second lien and unsecured (constraints: SYNTHETIC CP-3C Portfolio Constraints.csv, row 8)",
+        "10.10%",
+        "10.1000%",
+        "0.0000%",
+    ) in table
+
+
+def test_a_sector_limit_with_an_exclusion_in_brackets_is_still_the_largest_sector():
+    # Read as an exclusion, C-03 would compare its 39.70% with 0% held in a sector "excluding
+    # cash"; read as the largest sector it agrees with Software's 39.70%.
+    spec = synth.clean()
+    synth._set(spec.constraints, "C-03", 2, "Single sector concentration (excluding cash)")
+    assert findings(spec) == []
+
+
+def test_the_positions_line_states_the_row_total():
+    spec = synth.clean()
+    spec.holdings[6][-1] = "#N/A N/A"  # row 8: Fern's par
+    report = validate_export(synth.files(spec), run_date=RUN_DATE)
+    assert report.table[2] == (
+        "positions (rows with a readable par: 6 of 7 rows; 1 left out)",
+        "7",
+        "6",
+        "1",
+    )
+
+
+def test_an_exclusion_row_is_a_maximum_on_the_sectors_it_lists():
+    # The clean export's C-15 (Tobacco, Weapons; no holding in either) passes. Listing Software
+    # instead: 20 + 9.8 + 9.9 = 39.7m of 100m against at most 0%.
+    spec = synth.clean()
+    synth._set(spec.constraints, "C-15", 2, "Excluded sectors (Tobacco, Software)")
+    assert findings(spec) == [
+        (
+            MONITOR,
+            "Constraints",
+            "row 16",
+            (
+                "C-15: on the holdings' 39.70% (sectors Tobacco, Software) the limit 0% NAV is "
+                "breached; the status says Pass"
+            ),
+        ),
+        (
+            MONITOR,
+            "Constraints",
+            "row 16",
+            (
+                "C-15: the current value (sectors Tobacco, Software) is stated as 0%; the "
+                "holdings give 39.70%, a difference of 39.70%"
+            ),
+        ),
+    ]
 
 
 def test_a_breach_the_report_hides_is_reported_first():
@@ -166,7 +237,7 @@ EXPECTED = {
             "row 5",
             (
                 "the number of positions is stated as 8; the holdings give 7, a difference of 1 "
-                "(rows with a readable par; 0 rows left out)"
+                "(rows with a readable par: 7 of 7 rows)"
             ),
         ),
         (
@@ -192,13 +263,14 @@ EXPECTED = {
             "A. Summary Metrics",
             "row 8",
             (
-                "the weighted average price is stated as 100.00; the stated NAV over the stated "
+                "the weighted average price is stated as 100.000; the stated NAV over the stated "
                 "par is 95.455"
             ),
         ),
     ],
     # Class 2. Aster (a group name, matched as a prefix of Aster Fictional Co): 20m at 100 +
-    # 10m at 98 = 29.8m of 100m. Ghost matches no borrower.
+    # 10m at 98 = 29.8m of 100m. Ghost matches no borrower and no borrower may be meant: no
+    # ticker begins with GHO and no borrower's first word occurs in it.
     "concentration": [
         (
             REPORT,
@@ -246,7 +318,10 @@ EXPECTED = {
             REPORT,
             "D. Top 10 Holdings",
             "row 42",
-            "no borrower in the holdings matches Ghost, listed among the largest holdings",
+            (
+                "no borrower matches Ghost by exact name, ticker or prefix (no possible borrower "
+                "by ticker letters or name word); listed among the largest holdings"
+            ),
         ),
     ],
     # Class 3, first because it is a breach: Software 20 + 9.8 + 9.9 = 39.7m against 35%.
@@ -334,8 +409,8 @@ EXPECTED = {
             "A. Summary Metrics",
             "row 10",
             (
-                "the weighted average yield to maturity is stated as 3.20%; the holdings give "
-                "8.6125, a difference of 5.4125"
+                "the weighted average yield to maturity (all rows, as given) is stated as 3.20%; "
+                "the holdings give 8.6125%, a difference of 5.4125%"
             ),
         ),
         (
@@ -394,7 +469,7 @@ EXPECTED = {
             "A. Summary Metrics",
             "row 17",
             (
-                "the weighted average life is stated as 4.52 yrs; the holdings give -40.4789 "
+                "the weighted average life is stated as 4.52; the holdings give -40.4789 "
                 "yrs, a difference of 44.9989 yrs; with the 3 maturities before 1950 read as "
                 "20xx it would be 4.52 yrs (not applied)"
             ),
@@ -472,15 +547,17 @@ EXPECTED = {
             "1 of 3 maturities falls in 1931 (row 2): two-digit years read as 19xx",
         ),
     ],
-    # Class 8. Without row 3's -246.5 the yield is 776.25 / 90 = 8.625, which misses 8.61.
+    # Class 8. As given, with row 3's -246.5 on 10m, the yield is (776.25 - 2,465) / 100 =
+    # -16.8875; without it, 776.25 / 90 = 8.625, which also misses 8.61.
     "impossible-values": [
         (
             REPORT,
             "A. Summary Metrics",
             "row 10",
             (
-                "the weighted average yield to maturity is stated as 8.61%; the holdings give "
-                "8.6250, a difference of 0.0150"
+                "the weighted average yield to maturity (all rows, as given) is stated as 8.61%; "
+                "the holdings give -16.8875%, a difference of 25.4975%; without the values "
+                "outside -10% to 100% it would be 8.62% (not applied)"
             ),
         ),
         (
@@ -832,17 +909,56 @@ EXPECTED = {
         ),
     ],
     # Cedar's position held by 'Aster Sample LLC': 'Aster' matches two borrowers (a note, not
-    # compared) and 'Cedar' matches none (a finding).
+    # compared) and 'Cedar' matches none (a finding); its ticker CEDR begins with CED, so Aster
+    # Sample LLC is named as possible and not compared.
     "ambiguous-name": [
         (
             REPORT,
             "D. Top 10 Holdings",
             "row 41",
-            "no borrower in the holdings matches Cedar, listed among the largest holdings",
+            (
+                "no borrower matches Cedar by exact name, ticker or prefix (possible, not "
+                "compared: Aster Sample LLC (ticker CEDR begins with the same three letters)); "
+                "listed among the largest holdings"
+            ),
         ),
     ],
     # Birch's Ranking 'Sr. Secd' has no lien token: not classified, so first lien is
     # 89.9 - 15 = 74.9%, and the 85% minimum is breached on the holdings while both files say Pass.
+    # Three listed names no borrower matches by exact name, ticker or prefix, each with what may be
+    # meant: Birch's ticker BRCH begins with BRC; Dune, Dune Sample Corp's first word, is inside
+    # Sanddune; nothing points from Quill Holdings to a borrower. None is compared.
+    "brand-names": [
+        (
+            REPORT,
+            "D. Top 10 Holdings",
+            "row 37",
+            (
+                "no borrower matches Sanddune Health by exact name, ticker or prefix (possible, "
+                "not compared: Dune Sample Corp (Dune of the borrower's name occurs in the listed "
+                "name)); listed among the largest holdings"
+            ),
+        ),
+        (
+            REPORT,
+            "D. Top 10 Holdings",
+            "row 38",
+            (
+                "no borrower matches Brcknell Group by exact name, ticker or prefix (possible, "
+                "not compared: Birch Imaginary Inc (ticker BRCH begins with the same three "
+                "letters)); listed among the largest holdings"
+            ),
+        ),
+        (
+            REPORT,
+            "D. Top 10 Holdings",
+            "row 39",
+            (
+                "no borrower matches Quill Holdings by exact name, ticker or prefix (no possible "
+                "borrower by ticker letters or name word); listed among the largest holdings"
+            ),
+        ),
+    ],
     "unclassified-lien": [
         (
             FIT,
@@ -1086,7 +1202,16 @@ def test_a_limit_without_a_sign_takes_its_direction_from_the_parameter():
     assert zero == Quantity(Decimal(0), "% NAV")
     assert pe._with_direction(zero, "Max equity exposure").operator == "<="
     assert pe._with_direction(zero, "Min number of obligors").operator == ">="
-    assert pe._with_direction(zero, "Equity exposure").operator == ""
+    # An exclusion is a maximum, and a zero limit with no direction word is "at most 0%".
+    assert pe._with_direction(zero, "Excluded sectors (Tobacco, Weapons)").operator == "<="
+    assert pe._with_direction(zero, "Prohibited instruments").operator == "<="
+    assert pe._with_direction(zero, "Equity exposure").operator == "<="
+    five = quantity("5% NAV")
+    assert five is not None
+    assert pe._with_direction(five, "Excluded sectors (Tobacco)").operator == "<="
+    assert pe._with_direction(five, "Equity exposure").operator == ""
+    # An exclusion inside the brackets does not make a minimum a maximum.
+    assert pe._with_direction(five, "Min first lien (excluding cash)").operator == ">="
 
 
 def test_the_second_constraints_layout_is_recognised():

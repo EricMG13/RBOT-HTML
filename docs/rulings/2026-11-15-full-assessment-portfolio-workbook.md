@@ -152,6 +152,12 @@ Decisions:
   files compared; name-and-figure summary cells; the largest-holdings columns and total row; report
   names matched to legal borrower names on a stated basis; sector totals where Other states no
   count; figures shown to the stated places plus two. Each layout fact has a SYNTHETIC fixture.
+- Corrected after the second check on the owner's files: an exclusion row's `0% NAV` is a
+  maximum (and a zero limit with no direction word is "at most 0%"); the weighted average price,
+  a life stated in a `(yrs)` column name, and second lien from the constraints are now in the
+  reconciliation table, and the yield there carries its unit; a listed name no borrower matches
+  names the borrowers that may be meant, as possible and never compared; the positions line
+  states the row total.
 
 Open, for the owner: the export names one constraints sheet "CP-3C Portfolio Constraints". In this
 repository portfolio fit is CP-3B, inside CP-3; CP-3C is Refinancing & LME. The coordinating session
