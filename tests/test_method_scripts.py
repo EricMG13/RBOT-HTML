@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 
 from deploy_workflow import method_scripts as ms
+from deploy_workflow import method_scripts_completeness  # noqa: F401 - the shared check
 
 ROOT = Path(__file__).resolve().parents[1]
 CALCULATORS = (
@@ -1843,7 +1844,10 @@ def test_cp1_the_retained_tdg_excerpt_has_neither_register():
 
 def test_modules_without_a_script_check_get_none():
     assert ms.run("CP-0", cp2d()) == () and ms.issues("CP-5", "anything") == ()
-    assert ms.record("CP-0", b"x") is None
+    # Every module sent a SKILL.md gets the shared `completeness_check.py` record; CP-L10 and CP-8
+    # are sent none, so they get no record.
+    assert ms.record("CP-L10", b"x") is None and ms.record("CP-8", b"x") is None
+    assert {c["script"] for c in ms.record("CP-0", b"x")["checks"]} == {ms.SHARED + COMPLETE}
 
 
 def test_a_script_that_fails_becomes_not_checked(monkeypatch):
@@ -1871,13 +1875,17 @@ def test_the_record_holds_every_outcome_and_the_script_hash():
     record = ms.record("CP-2D", raw)
     assert record["kind"] == ms.RECORD_KIND
     assert record["response_sha256"] == hashlib.sha256(raw).hexdigest()
-    assert record["scripts"] == {ms.LIQUIDITY_BRIDGE: ms.registered()[ms.LIQUIDITY_BRIDGE]}
-    assert [(c["figure"], c["status"]) for c in record["checks"]] == [
+    shared = ms.SHARED + COMPLETE
+    assert record["scripts"] == {p: ms.registered()[p] for p in (ms.LIQUIDITY_BRIDGE, shared)}
+    own = [c for c in record["checks"] if c["script"] == ms.LIQUIDITY_BRIDGE]
+    assert [(c["figure"], c["status"]) for c in own] == [
         (ms.ENDING, "disagreed"),
         (ms.MTE, "agreed"),
     ]
+    assert record["checks"][: len(own)] == own  # the module's own check first
     json.dumps(record)  # it is written as JSON
     assert ms.record("CP-2D", b"\xff")["checks"][0]["reason"] == "not UTF-8"
 
 
 ENDING = ms.ENDING
+COMPLETE = "completeness_check.py"

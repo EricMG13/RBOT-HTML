@@ -53,6 +53,26 @@ branch, reviewed and merged here; counts are from the CI fast list unless stated
   compared where multiples should be, equal-ranking claims, fulcrum and heading wording, a
   decorated Blocked status (now one rule shared with the launcher's presence check). CP-3's
   instructions grow within the three ceilings; no pathway's module list or order changed.
+- Method scripts, the remaining modules (same ruling, sections from "`completeness_check.py`,
+  every module" on). `completeness_check.py` runs on every handoff: a declared column missing from
+  a register the presence check requires is sent back, for the ten scoped modules only; cut and
+  routing registers and columns, gap-only, row-written and blocked registers are never judged;
+  placeholders, short registers and the other modules' findings are recorded as `noted`. CP-4C
+  (`recovery_waterfall.py`, T4E.5 steps and T4E.6 fulcrum), CP-1C (`peer_statistics.py`, T4.6
+  under the N gates and T4.10; quartiles not checked, the convention is the owner's to choose),
+  CP-2H (`trigger_headroom`, T2R.4), CP-1B (`credit_metrics.growth`, T4.6 and T4.4; no note,
+  `earnings_update` lacks 342 characters). No register restored. Real evidence: the two retained
+  TransDigm CP-2E handoffs of 2026-11-13 send nothing back (7 placeholder cells noted, as the
+  script's own CLI reports); no handoff is retained for the other four. A third adversarial
+  review found seven false refusals or lost checks (a duration read as a range bound, mixed
+  scales reaching the fulcrum, an absolute metric taken for a multiple, below-gate wording, a
+  ranged column name, two routing columns demanded, an empty joined cell), fixed and tested,
+  with 50 generated handoffs (ten modules by five harmless header forms) giving no issue.
+  Known limit: a genuinely renamed column is sent back for the ten modules (one repair write).
+  `tests/test_method_scripts_rest.py` 214 tests; `tests/test_cpos_register_scope.py` joins the CI
+  fast list after twice catching a cut-register id that the list did not run.
+- Portfolio exports: an unmatched listed name shows what the holdings give each possible borrower
+  (never matched, never compared).
 - Portfolio inputs for the full credit assessment (ruling
   `docs/rulings/2026-11-15-full-assessment-portfolio-workbook.md`; owner: "wire in the portfolio
   workbook ... check data first likely incorrect sums and values"). `credit_snapshot` and

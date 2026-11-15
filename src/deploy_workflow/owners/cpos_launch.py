@@ -31,7 +31,11 @@ from typing import Any
 from deploy_vii.contracts import DEACTIVATED_MESSAGE, DEACTIVATED_PATHWAYS, PATHWAY_MODULES, Run
 from deploy_vii.registry import dependencies, modules, plan
 from deploy_vii.report_view import _spec_of, pathways
-from deploy_workflow import method_scripts, platform_io
+from deploy_workflow import (
+    method_scripts,
+    method_scripts_completeness,  # noqa: F401 - registers the shared check
+    platform_io,
+)
 from deploy_workflow.changes import (
     DELIVERED_WHOLE,
     PACK_NAME,
@@ -1299,6 +1303,7 @@ def checker(layout: MarkdownLayout) -> Check:
         issues += posture_issues(task.module_id, text)
         upstream = method_scripts.upstream_texts(task.handoffs)  # a copied figure is compared
         issues += method_scripts.issues(task.module_id, text, upstream)
+        issues += method_scripts.shared_issues(task.module_id, text)  # `completeness_check.py`
         return (*issues, *_forecast_issues(task, text))
 
     return check

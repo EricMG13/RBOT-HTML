@@ -67,6 +67,11 @@ module's mapping is `deploy_workflow.method_scripts_<module>`.
 | CP-1 | `credit_metrics.py` | T4.8 LTM rows, T4.9 free-name rows | none | yes (ceiling raised, owner) |
 
 Next in this document's order: row 4 (`completeness_check.py`), then CP-4C, CP-1C, CP-2H, CP-1B.
+Row 4 is wired (`method_scripts_completeness`, ruling section "`completeness_check.py`, every
+module"): only a declared column missing from a required register of the ten scoped modules is
+sent back; placeholders, short registers and every other module's findings are recorded. Rows 5
+to 8 are wired too (`method_scripts_cp4c`, `_cp1c`, `_cp2h`, `_cp1b`; ruling sections of the same
+names); CP-1B has no note (`earnings_update` has no room for it).
 
 ## The rest, in the order proposed
 

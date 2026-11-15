@@ -333,6 +333,258 @@ session reads 3 as the pathway part waiting; no pathway's modules or order chang
   cell, or the copy is not checked. `credit_snapshot` and `portfolio_decision` have no CP-1C until the restructure,
   so CP-3 states its own cases or none there.
 
+## `completeness_check.py`, every module (2026-11-15, row 4 of the scope)
+
+Harness `deploy_workflow.method_scripts_completeness`; registered with `register_shared`, so it runs
+on every module's handoff after the module's own script check. Its outcomes go into the same
+`<attempt>.method-checks.json` record; its issues reach the launcher through `shared_issues`.
+
+- What the script checks (cp-os b57a344, archived `scripts/completeness_check.py`, sha256
+  `a9841a74`): from the `## Output profile` of the module's SKILL.md, each required register's
+  declared columns, its `minimum_body_rows`, its critical columns against the blocklist
+  (`critical_cell_values_casefold`: empty, `n/a`, `tbd`, `[insufficient information]`, ...), and the
+  CP-MODEL interface tables. Its own `load_contract` reads the contract from the archived SKILL.md
+  the module is sent (sha256-pinned); its `is_template_column` reads `Period 1…N`.
+- Overlap with the launcher: `register_issues` already sends back an in-scope register that is
+  absent (ten modules). This check never repeats that: a register it cannot find as a table under
+  its heading is "not checked", whatever the reason.
+- Not contradicting the cuts: for the ten modules with a scope section only the registers
+  `cpos_launch.required_registers` requires are judged (scope cuts, routing registers and CP-0's
+  launcher-made P registers are recorded as "not required in this transport"). The CP-MODEL tables
+  are never read (ROUTING_RULES forbids them). A declared column naming a downstream or receiving
+  module (`downstream_use`, `Downstream Impact`, `downstream module`) is never required: ROUTING_RULES
+  tells every module not to map downstream dependencies.
+- Sent back (status `missing`), one issue per register: a declared column absent from every table
+  under a required register's heading, for the ten modules only. Header cells are read as labels
+  (emphasis, case, `_`, `.`, hyphens, `?` and a plural `s` aside; `&` and `+` as `and`; a trailing
+  bracketed unit such as `(USD m)` aside); a joined header holds each part (`Currency and scale`
+  holds `currency`); a joined declared name is present as its parts (`evidence/date` as two
+  columns); a header that starts with the name counts (`Principal amount`); extra columns and any
+  order are allowed. Not sent back: a register whose every row states a gap (`Not supplied:
+  <reason>` or `[Insufficient Information]` beside at most a label), a register written as rows
+  (a missing column's name is a row label), and a blocked module (`module_status: Blocked`).
+- Recorded, never sent back (status `noted`, new): a placeholder in a critical column (in this
+  transport an explicit gap is the required answer, so it classifies the run as not full
+  analytical), fewer rows than the method's minimum (CP-2's T2.12 asks for 8 triggers; the evidence
+  may support fewer, and the presence rule's gap form is one row), a template register with no
+  period column, a malformed contract list, and, for every module outside the ten, a missing
+  column: those modules have no presence check and no retained handoff to calibrate against.
+- Calibration (real): the two retained CP-2E handoffs (`tests/fixtures/esg/CP-2E-h3.md`, `-h4.md`,
+  TransDigm, 2026-11-13 Sol runs) send nothing back: 14 in-scope registers each with every declared
+  column; h3's 7 placeholder cells (T2F.3, T2F.5, T2F.6, T2G.4) are noted, the same cells the
+  script's own CLI reports. No other module has a retained full handoff in this repository, so the
+  column rule is unproven on real CP-0, CP-1A, CP-DR, CP-2, CP-2A, CP-2G, CP-3, CP-5 and CP-6 output.
+- Modules with no contract: CP-1's SKILL.md (caos-databricks) declares no Output profile (one "not
+  checked" outcome); CP-L10 and CP-8 are sent no SKILL.md (no record unless another check applies).
+- No note is sent: TRANSPORT_RULES already tells every module to do the completeness check itself,
+  and `earnings_update` has 93 characters left under its ceiling.
+- The launcher's synthetic integration answers for CP-2E (T2F.5) and CP-2G (T2H.4 to T2H.6) were
+  partial tables; they now carry every declared column (`Not supplied` where synthetic), since a
+  handoff without them would be sent back.
+
+## CP-4C, `recovery_waterfall.py` (2026-11-15)
+
+Mapping `deploy_workflow.method_scripts_cp4c`. Restored: none (CP-4C has no scope section).
+
+- What the method says: the SKILL names the script as the owner of "the claims waterfall,
+  per-class recovery percentages, the fulcrum, and the low/base/high sensitivity", claims
+  "consumed in the order you supply"; REF_CP-4C_D: "Allocate residual value by entity and class",
+  the fulcrum "the class receiving the marginal reorganised equity/value after senior claims", "a
+  fulcrum range" when uncertain, recoveries split into cash, reinstated debt, new debt, equity and
+  warrants with timing and discount. T4E.5's declared columns are the waterfall itself: `scenario;
+  entity; available value; priority claim; allocation; residual; currency and scale; legal evidence
+  ID`.
+- Checked, per T4E.5 row (each row is one step, so value by entity, a new collateral pool and a
+  deficiency at a lower rank stay readable): Allocation = the lesser of the row's Priority claim
+  and its Available value, Residual = Available value - Allocation, by the script's `waterfall` on
+  that one claim. An allocation written as an outflow (`-600`, `(600)`, as the value allocation
+  chart writes it) is compared by magnitude: the method fixes no sign. Per scenario, T4E.6's
+  `fulcrum class/range` against the script's fulcrum, only when the scenario's rows are one entity
+  and one chain (each available value the residual of the row before) and the cell names one
+  claim or none (`None`, `Equity`); a range is not compared.
+- Asked of CP-4C (`CP4C_NOTE`, 1,000 characters, 1,007 after the review fixes): Priority claim as `<class>: <amount>`; claims
+  ranking equally in one row; a collateral-limited secured claim as two rows (secured part, then
+  the deficiency at its rank); another entity's or pool's value as its own rows; an allocation the
+  governing evidence sets otherwise written with its reason after the figure (`300 (settlement)`),
+  then not checked. `distressed_restructuring` 1,167,756 to 1,168,756 of 1,186,500.
+- Not checked: a row whose claim states no amount (that scenario's fulcrum too, unless the row is
+  below every read claim, as an equity row is), a cell in another unit, T4E.7 recoveries (forms of
+  consideration and discounting the script does not model), the chart tables `recovery by class`
+  (Recovery % "as the owner states it", maybe on another basis) and `value allocation` (the
+  launcher reconciles its steps), T4E.3's enterprise value (multiple or discount in free text).
+- Evidence: none retained (no distressed run). Synthetic handoffs only, hand-worked.
+
+## CP-1C, `peer_statistics.py` (2026-11-15)
+
+Mapping `deploy_workflow.method_scripts_cp1c`. Restored: none (CP-1C has no scope section).
+
+- What the method says: the SKILL names the script as the owner of peer minimum, maximum, median,
+  quartiles and average "under CP-1C's per-statistic minimum-N gates (median 3, quartile 4, average
+  5, nothing below 2), the with- and without-outlier versions, implied EV Low/Median/High"; step 04D
+  builds T4.6 from T4.3 to T4.5 ("Min 3 for median, 4 quartile, 5 avg. <2 -> no stats. State N");
+  step 05: "if an outlier distorts peer statistics, recalculate excluding it and show both
+  versions"; 06C: "Low = minimum peer multiple x borrower metric; Median = median ...; High =
+  maximum ...". T4.6 is written in the step file's separate columns (`Peer Avg | Median | Min | Max
+  | Q1 | Q3`) or the SKILL's joined `Peer Avg/Median/Min/Max`; both are read.
+- Checked, per T4.6 metric: Peer Avg, Median, Min and Max by the script's `analyse` on the peer
+  rows of the one benchmark column named as the metric (T4.3, T4.4, T4.5, T4.8 or T4.9;
+  abbreviations such as `Net Lev` spelt out; a joined column such as `Total/Net/Sr Sec Leverage`
+  read part by part when every cell holds that many figures), with each row's Comp Status and Calc
+  Status read as the script's closed sets (`Comparable (size)` as `Comparable`; a peer stating a gap
+  left out, never zero) and T4.7's outliers flagged. The borrower's row is left out: the one marked
+  `borrower` or named as the front matter's issuer, else the row stating the Borrower Value. The
+  version (with or without outliers, with or without an unmarked borrower row) whose N is T4.6's N
+  is compared; none or two different is not checked. A figure stated where the gate gives none
+  disagrees (the SKILL fixes the gates); a null word where the script computes one is not checked
+  (the module may have suppressed it). Only values written with a unit (`x` or `%`, cell or header)
+  are compared. Per T4.10 row whose Method names a T4.6 multiple: Low, Median and High against T4.6's
+  Min, Median and Max times the row's one borrower-metric figure (a year in the cell is not a
+  figure), the implied EV and the metric in the same currency and scale.
+- Note (`CP1C_NOTE`, 696 characters), in `relative_value` (1,060,816 to 1,061,512 of 1,071,000)
+  and `distressed_restructuring` (1,168,756 to 1,169,452 of 1,186,500).
+- Not checked by design: Q1 and Q3 (below), N (it selects the peer set), absolute amounts (T4.6
+  states no scale), Borrower Position (words), standard deviation and range (not T4.6 columns).
+- Retained evidence: `tests/fixtures/sol_medium_run_2026_11_09/CP-1C-head.md` (TransDigm, run of
+  2026-11-09) stopped at its peer-data gate and has no T4.6: not checked. Synthetic proof only.
+- Decision for the owner: quartiles. The method names no quantile convention ("Quantile convention:
+  CP-1C does NOT specify one", the script's own docstring); the script uses the inclusive one (Excel
+  PERCENTILE.INC). On the test set of four multiples (9, 10, 12, 14) inclusive gives Q1 9.75 and Q3
+  12.5, the exclusive convention 9.25 and 13.5. Recommendation: adopt the script's inclusive
+  convention, tell CP-1C so in its note (about 60 characters) and check Q1 and Q3; until then they
+  are recorded as not checked.
+
+## CP-2H, `covenant_headroom.py` `trigger_headroom` (2026-11-15)
+
+Mapping `deploy_workflow.method_scripts_cp2h`. Restored: none (CP-2H has no scope section). The
+script is the same archived bytes CP-4's check runs.
+
+- What the method says: the SKILL: the script "owns T2R.4 signed trigger headroom via its
+  `trigger_headroom` entry point. The max-ratio vs min-ratio direction comes from the register's own
+  `trigger direction` column — required, never inferred"; REF_CP-2H_C: different formulas for a
+  maximum and a minimum trigger, "Where the agency supplies a range ... show distance to both
+  bounds", "a point-in-time breach is not automatically a trigger", no numerical headroom for a
+  qualitative trigger. T2R.4: `agency; rating type; trigger direction; metric; threshold;
+  case/period value; headroom; status`.
+- Checked, per row: Headroom (maximum: threshold - value; minimum: value - threshold; to each bound
+  of a range) and Status (Compliant, At threshold, Breached against the binding bound), by the
+  script's `trigger_headroom` on the row's own cells. The direction goes to the script's
+  `normalise_test_type` as written or its first word; `upgrade`, `downgrade`, `maintenance` and
+  `incurrence` name no ceiling or floor, so such a row is not checked. A threshold is one figure or
+  a range of two (`5.0x-5.5x`, `5.0x to 5.5x`); a comparator and a year (`FY2025E`) are not figures.
+  A value cell with several cases (`5.2x / 6.4x`) pairs with as many ` / ` parts in Headroom and
+  Status; otherwise the row is not checked. A stated headroom against a range agrees with the
+  distance to either bound, and each of two stated figures with one. Status read from its first
+  word (`Breach (point-in-time)` is Breached); not decided when the recomputed headroom is within
+  the inputs' rounding of zero (as CP-4). Threshold, value and headroom must be in one unit (`x`,
+  `%`, or one currency and scale).
+- Note (`CP2H_NOTE`, 667 characters), `distressed_restructuring` only: 1,169,452 to 1,170,119 of
+  1,186,500.
+- Not checked by design: whether a breach is sustained (the script needs the agency's ordered
+  observation window, `sustained_periods`, which no column holds), qualitative triggers.
+- Evidence: none retained (no distressed run). Synthetic proof only.
+
+## CP-1B, `credit_metrics.py` `growth` (2026-11-15)
+
+Mapping `deploy_workflow.method_scripts_cp1b`. Restored: none (CP-1B has no scope section).
+
+- Where the script is: CP-1B's SKILL names `./scripts/credit_metrics.py`, and the archive has no
+  CP-1B scripts folder. cp-os b57a344's `skills/cp-1b-earnings-delta/scripts/credit_metrics.py`, in
+  the staged byte copy this repository's history keeps at 86b9466 (its SHA256SUMS checked), is
+  byte-identical to the registered CP-1 copy (sha256 `8f90ad05`), so that file runs and the
+  manifest is unchanged. (Attaching cp-os to this session was not permitted; the staged copy is the
+  evidence.)
+- What the method says: the script "owns the numeric columns of T4.4/T4.6 — absolute and
+  percentage change". T4.6: `Metric | Comparison Basis | Prior Value | Current Value | Abs Change |
+  % Change | ...`; T4.4: `Line Item | Period 1...N | YoY Change (Abs) | YoY Change (%) | ...` (the
+  SKILL's profile joins them as `YoY Abs/%`). The script's functions give the percentage change only
+  (`growth`: current / prior - 1, none on a zero prior); the absolute change is not one of them, so
+  it is not checked.
+- Checked: each T4.6 % Change against `growth(Current Value, Prior Value)`; each T4.4 YoY % against
+  the latest period's column and the column one year before it (`FY2024`/`FY2023`, `Q3 2024`/`Q3
+  2023`, `FY24`/`FY23`, columns in any order), only when the headers name both. A figure over a zero
+  prior disagrees (the script gives none); a null word there agrees.
+- Not checked: a metric whose values are percentages or multiples (a margin's change may be stated
+  in points or as a relative change, and the column does not say which), a change written in `pp`
+  or `bps`, a negative prior (more than one convention), values in different currencies or scales, a
+  bare figure of 1 or less in a % column (decimal or small percentage), a null word where the
+  script computes a change.
+- No note is sent. CP-1B runs only in `earnings_update`, which measures 546,407 of its 546,500
+  ceiling; the note it would need (`CP1B_NOTE_UNSENT`, 435 characters) would take it to 546,842, 342
+  over. The check reads the method's own columns, so it runs without one.
+- Evidence: none retained. Synthetic proof only.
+
+## Review fixes for the second part (2026-11-15)
+
+Two independent adversarial reviews (the coordinating session's, on 6f21c4d, and this session's,
+about 150 correct variants and their wrong twins) found correct handoffs refused and two crash
+paths. Each was reproduced, fixed and given a hand-worked test (`tests/test_method_scripts_rest.py`).
+
+- CP-2H: a second figure in the threshold is a range bound only where a range marker joins them
+  (`5.0x-5.5x`, `to`, `between ... and`) and not when it counts something (`12-18 months`, `1-2
+  notches`, `for 2 consecutive quarters`); a figure with the trigger's unit is chosen over a bare
+  one, in the value cell too (`LTM (12 months): 1.8x`). An unsigned headroom is negative only with a
+  word that states a breach (`0.2x shortfall`, `Breach of 0.2x`), never with one that describes the
+  cushion (`0.8x to breach`, `no breach`, `short of trigger`). A `Compliant` status that reads a
+  point breach as not sustained is not decided (REF_CP-2H_C: a point-in-time breach is not
+  automatically a trigger). `(0.2x)` keeps its sign; `(12 months)` is a bracket.
+- CP-4C: the fulcrum is not computed when any row of the scenario is in another currency or scale
+  or its residual is unread. Rows that each repeat the pool as their available value are read as
+  one pool (each from what the rows above leave). At a class boundary within the inputs' rounding,
+  the last covered class, the first impaired one and none are each not decided. `TLB: 900; RCF:
+  600` in one row is one class of their sum (the note now gives that form, 1,007 characters). Rows
+  sharing one available value at the same partial share are claims ranking equally written apart:
+  not checked, so the module is never told to "repair" them to strict order. A negative available
+  value is refused by the script for that row only (it once stopped the whole check). `−600` and
+  `–7.3%` are minus signs.
+- CP-1C: T4.10's Method is matched to the T4.6 metric it names exactly (`EV/EBITDA trading comps`
+  is `EV/EBITDA`; `Transaction EV/EBITDA (T4.9)` and `... (ex-outliers)` are not), and the T4.6
+  statistics must be multiples (`x`). Below the gate only a stated figure disagrees: a cell that
+  states none (`n/a (N=4)`, `Suppressed`, `N<5`, `Not calculated: N below 5`) agrees if it is a null
+  word, else is not checked; `11.25x (indicative only)` disagrees (step 04D and the Peer Statistic
+  Rules allow no indicative figure below the gate). An empty cell in a joined column is one peer
+  with no value (it once raised and lost the whole check).
+- CP-1B: over a zero prior only a stated figure disagrees (`n.a.`, `NMF`, `New`, `N/A (zero base)`
+  do not); the joined `YoY Abs/%` cell splits at ` / ` only, so `n/m` stays whole. A cost line
+  (COGS, SG&A, interest, tax, capex, D&A) may carry the unfavourable sign: its magnitude is compared
+  (the method fixes no sign). An unread cell is that row's "not checked" (it once raised). A value
+  with a unit beside a bare one is not compared. T4.4 with two period kinds that both pair a year
+  earlier (`Q3` and `9M`) is not paired.
+- Completeness: a joined declared name is present as its natural parts (`gross/net leverage` as
+  `Gross leverage` and `Net leverage`, `opening debt/cash` as `Opening debt` and `Opening cash`); a
+  header holding the declared name as whole words counts (`Cash interest`, `Adjusted EBITDA`, `EBITDA
+  margin (%)`), as do a bracketed abbreviation (`Free cash flow (FCF)`), a unit after a comma, `(s)`,
+  a trailing range or scale (`Raw Score (1-5)`), `Gap #` and `Gap No.`, `or` as a joiner, footnote
+  marks and `<br>`. Routing columns checked mechanically against every declared column of the ten
+  modules: `Export Record` (CP-1A T2D.11, as a part), `dependency` (CP-2G T2H.8) and `Responsible
+  Module` (CP-2A T5.5) join the `downstream` columns as never required; `Module Status`, CP-5's
+  audited and originating `Module` and `independence_family` stay required. A gap row is one with
+  a cell in the transport's gap form (`Not supplied: ...`, `Not calculable: ...`) whatever its other
+  cells hold, or mostly placeholder cells. A register written under `####` sub-headings is read
+  whole. Retained h3's T2G.5 (every row `Not supplied`) is now "states a gap", not judged.
+- Proof: a parametrized test builds, for each of the ten enforced modules, a handoff from the
+  method's own register declarations (read by the script's `load_contract`) with headers written
+  five harmless other ways (title case and bold, spaced slashes and a unit, plurals and footnote
+  marks, line breaks and bracketed ranges, any order with an extra Source column): 50 cases, zero
+  issues, every register's columns judged.
+- Known limits, recorded: a renamed column (`Scenario` for `case`) is still sent back for the ten
+  modules (the issue says so; one repair write). CP-1C with an unmarked borrower row in a
+  benchmark table, a blank Borrower Value and a T4.7 outlier can pick the set that includes the
+  borrower; the note asks for the `(borrower)` mark.
+
+## Decisions for the owner from this second part
+
+1. CP-1C quartiles: the method names no quantile convention; the script's is inclusive (Excel
+   PERCENTILE.INC). Recommendation: adopt it, add about 60 characters to CP-1C's note, and check Q1
+   and Q3 (now recorded as not checked).
+2. CP-1B's note: raise the `earnings_update` ceiling by 435 characters (to 546,935) to send it, or
+   keep the check without a note. Recommendation: keep it without a note for now; the check reads
+   the method's own columns, and the note only helps a module that writes changes without `%` or
+   periods without years.
+3. `completeness_check.py` beyond the ten scoped modules: its missing-column finding is recorded,
+   not sent back, for CP-1, CP-1B, CP-1C, CP-1D, CP-2D, CP-2H, CP-3C, CP-3D, CP-4, CP-4C (no
+   presence check, no calibration). Recommendation: keep it recorded until a paid run shows their
+   real headers.
+
 ## Status
 
 Built and tested offline, module by module. Not accepted: no model has written a restored register
