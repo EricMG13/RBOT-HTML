@@ -8911,6 +8911,45 @@ def test_cp4c_is_checked_by_its_script(tmp_path):
     assert "T4E.5 row `Allocation: Senior secured TLB (Base, HoldCo)` states 550" in added
 
 
+# SYNTHETIC: EV/EBITDA peers 9.0, 10.0, 12.0, 14.0x, N = 4: median (10 + 12) / 2 = 11.0x, min
+# 9.0x, max 14.0x, no average (gate 5); worked in tests/test_method_scripts_rest.py.
+T48_T46 = """### T4.8 - Trading comps
+
+| Entity | EV/EBITDA | Comp Status |
+|---|---|---|
+| Peer A | 9.0x | Comparable |
+| Peer B | 10.0x | Comparable |
+| Peer C | 12.0x | Comparable |
+| Peer D | 14.0x | Comparable |
+
+### T4.6 - Summary statistics
+
+| Metric | Borrower Value | Peer Avg | Median | Min | Max | Q1 | Q3 | N | Borrower Position |
+|---|---|---|---|---|---|---|---|---|---|
+| EV/EBITDA | 10.5x | Not calculable | {median} | 9.0x | 14.0x | 9.75x | 12.5x | 4 | Below |
+
+"""
+
+
+@pytest.mark.parametrize("pathway", ["relative_value", "distressed_restructuring"])
+def test_cp1c_is_checked_by_its_script(tmp_path, pathway):
+    (tmp_path / "texts").mkdir()
+    _, texts = all_instructions(tmp_path / "texts", pathway)
+    head = texts["CP-1C"].partition(cpos_launch.METHOD_MARK)[0]
+    assert head.count(method_scripts.NOTES["CP-1C"]) == 1
+    prepared, task, context = good_task(tmp_path, "CP-1C", pathway)
+    raw = answer(context, list(prepared.plan.layout.routes))
+    check = checker(prepared.layout)
+    base = set(_checked_handoff(task, raw.encode(), check))
+    right, wrong = (
+        raw.replace("\n## Calculations", "\n" + T48_T46.format(median=m) + "## Calculations")
+        for m in ("11.0x", "12.0x")
+    )
+    assert set(_checked_handoff(task, right.encode(), check)) == base
+    (added,) = set(_checked_handoff(task, wrong.encode(), check)) - base
+    assert "T4.6 row `Peer Median: EV/EBITDA` states 12.0 x" in added
+
+
 def test_cp1_free_name_rows_are_checked_by_its_script(tmp_path):
     # CP-1 is sent its note (owner: "approved"), in every pathway; the method's own T4.9 is read.
     assert "CP-1" in method_scripts.CHECKS and "CP-1" in method_scripts.NOTES

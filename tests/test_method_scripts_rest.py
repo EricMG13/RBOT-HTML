@@ -441,3 +441,193 @@ def test_cp4c_a_trailing_equity_row_and_units_in_the_headers():
     text = cp4c("### T4E.5 - Waterfall\n\n" + head + body + "\n", low="x")
     assert ms.issues("CP-4C", text) == ()
     assert {o.status for o in cp4c_run(text) if o.figure.startswith("Allocation")} == {"agreed"}
+
+
+# --- CP-1C: peer_statistics.py on T4.6 and T4.10 -------------------------------------------------
+
+# SYNTHETIC. EBITDA margin, peers A to E Comparable (18.0, 20.0, 24.0, 26.0, 30.0 %), F Not
+# Comparable (15.0), the borrower 22.0. N = 5: average 118 / 5 = 23.6, median 24.0, min 18.0,
+# max 30.0. EV/EBITDA, peers A to D (9.0, 10.0, 12.0, 14.0 x): N = 4, median (10 + 12) / 2 = 11.0,
+# min 9.0, max 14.0, no average (the method's gate is 5). T4.10 on EBITDA USD 500m: Low 9.0 x 500
+# = 4,500, Median 11.0 x 500 = 5,500, High 14.0 x 500 = 7,000.
+T43 = """### T4.3 - Operating benchmark
+
+| Entity | Revenue | Rev Growth | Gross Margin | EBITDA | EBITDA Margin | EBIT Margin | Period \
+| Currency | Calc Status | Comp Status |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Borrower Co (borrower) | 1,000 | 5.0% | 40.0% | 220 | 22.0% | 15.0% | FY2024 | USD | Reported \
+| Comparable |
+| Peer A | 900 | 4.0% | 38.0% | 162 | 18.0% | 12.0% | FY2024 | USD | Reported | Comparable |
+| Peer B | 800 | 3.0% | 39.0% | 160 | 20.0% | 13.0% | FY2024 | USD | Reported | Comparable |
+| Peer C | 1,100 | 6.0% | 41.0% | 264 | 24.0% | 16.0% | FY2024 | USD | Calculated | Comparable \
+with Limitations |
+| Peer D | 1,200 | 7.0% | 42.0% | 312 | 26.0% | 17.0% | FY2024 | USD | Reported | Comparable |
+| Peer E | 1,000 | 8.0% | 45.0% | 300 | 30.0% | 20.0% | FY2024 | USD | Reported | Comparable |
+| Peer F | 700 | 1.0% | 30.0% | 105 | 15.0% | 9.0% | FY2024 | USD | Reported | Not Comparable |
+
+"""
+T48 = """### T4.8 - Trading comps
+
+| Entity | Mkt Cap | Mkt Cap Date | EV | EV/Rev | EV/EBITDA | Period Used | Metric Def \
+| Comp Status | Source |
+|---|---|---|---|---|---|---|---|---|---|
+| Peer A | 1,000 | 2024-09-30 | 1,458 | 1.6x | 9.0x | LTM | Reported | Comparable | S1 |
+| Peer B | 1,100 | 2024-09-30 | 1,600 | 2.0x | 10.0x | LTM | Reported | Comparable | S1 |
+| Peer C | 2,500 | 2024-09-30 | 3,168 | 2.9x | 12.0x | LTM | Reported | Comparable | S1 |
+| Peer D | 3,500 | 2024-09-30 | 4,368 | 3.6x | 14.0x | LTM | Reported | Comparable | S1 |
+
+"""
+T46 = """### T4.6 - Summary statistics
+
+| Metric | Borrower Value | Peer Avg | Median | Min | Max | Q1 | Q3 | N | Borrower Position |
+|---|---|---|---|---|---|---|---|---|---|
+| EBITDA Margin | 22.0% | {avg} | {median} | 18.0% | 30.0% | 20.0% | 26.0% | {n} | Below median |
+| EV/EBITDA | — | Not calculable (N=4) | 11.0x | 9.0x | 14.0x | 9.75x | 12.5x | 4 | n/a |
+
+"""
+T410 = """### T4.10 - Implied enterprise value
+
+| Method | Multiple Source/Value | Borrower Metric/Period | Low | Median | High | Calc Status \
+| Limitations |
+|---|---|---|---|---|---|---|---|
+| EV/EBITDA trading comps | T4.6 | EBITDA FY2024 USD 500m | USD 4,500m | USD 5,500m | {high} \
+| Calculated | Indicative only. |
+
+"""
+
+
+def cp1c(t46=None, extra="", high="USD 7,000m", **cells) -> str:
+    stats = {"avg": "23.6%", "median": "24.0%", "n": "5"} | cells
+    body = T43 + T48 + (t46 if t46 is not None else T46.format(**stats)) + T410.format(high=high)
+    return f"---\nissuer_name: Borrower Co\nmodule_id: CP-1C\n---\n\n## Findings\n\n{body}{extra}"
+
+
+def cp1c_by(text: str) -> dict[str, ms.Outcome]:
+    return {o.figure: o for o in ms.run("CP-1C", text)}
+
+
+def test_cp1c_all_right():
+    found = cp1c_by(cp1c())
+    margin = {k: o.status for k, o in found.items() if k.endswith("EBITDA Margin")}
+    assert margin == dict.fromkeys(
+        [f"Peer {s}: EBITDA Margin" for s in ("Avg", "Median", "Min", "Max")], "agreed"
+    ) | dict.fromkeys(["Peer Q1: EBITDA Margin", "Peer Q3: EBITDA Margin"], "not checked")
+    assert "quantile convention" in found["Peer Q1: EBITDA Margin"].reason
+    assert found["Peer Avg: EV/EBITDA"].status == "agreed"  # Not calculable at N = 4
+    assert found["Peer Median: EV/EBITDA"].status == "agreed"
+    for case in ("Low", "Base", "High"):
+        assert found[f"Implied EV {case}: EV/EBITDA trading comps"].status == "agreed", case
+    assert ms.issues("CP-1C", cp1c()) == ()
+
+
+def test_cp1c_the_outlier_free_version_is_read_when_n_says_so():
+    # T4.7 flags Peer E (30.0%): without it N = 4, median (20 + 24) / 2 = 22.0, no average.
+    t47 = "### T4.7 - Outliers\n\n| Entity | Metric | Value |\n|---|---|---|\n"
+    t47 += "| Peer E | EBITDA Margin | 30.0% |\n\n"
+    text = cp1c(avg="Not calculable", median="22.0%", n="4", extra=t47)
+    found = cp1c_by(text)
+    assert found["Peer Median: EBITDA Margin"].status == "agreed"
+    assert found["Peer Max: EBITDA Margin"].status == "disagreed"  # 30.0 stated; 26.0 without E
+    # with N = 5 the full set is read, and the stated 30.0 maximum agrees
+    assert ms.issues("CP-1C", cp1c(extra=t47)) == ()
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "why"),
+    [
+        (
+            "| Peer A | 900 | 4.0% | 38.0% | 162 | 18.0% |",
+            "| Peer A | 900 | 4.0% | 38.0% | 162 | 18.04% |",
+            "an input shown to two places",
+        ),
+        ("| Borrower Co (borrower) |", "| Borrower Co |", "the borrower named as the issuer"),
+        ("| Borrower Co (borrower) |", "| The Company |", "the borrower found by its value"),
+        ("| EBITDA Margin |", "| **EBITDA margin** |", "decorated metric"),
+        ("| 23.6% |", "| 23.60% |", "more places"),
+        (
+            "| USD | Reported | Not Comparable |\n",
+            "| USD | Provisional | Comparable |\n",
+            "Peer F a provisional figure, kept out of aggregates",
+        ),
+        ("| 5 | Below median |", "| 6 | Below median |", "N from another peer set: not checked"),
+    ],
+)
+def test_cp1c_correct_but_unusual_handoffs_are_not_sent_back(old, new, why):
+    text = cp1c()
+    assert old in text, why
+    assert ms.issues("CP-1C", text.replace(old, new, 1)) == (), why
+
+
+def test_cp1c_the_skills_joined_layout_and_a_joined_column():
+    joined = """### T4.6 - Summary statistics
+
+| Metric | Borrower Value | Peer Avg/Median/Min/Max | Q1/Q3 | N | Borrower Position |
+|---|---|---|---|---|---|
+| EBITDA Margin | 22.0% | 23.6% / 24.0% / 18.0% / 30.0% | 20.0% / 26.0% | 5 | Below |
+| Net Leverage | 4.0x | n.m. / 4.5x / 3.5x / 5.5x | — | 3 | Below |
+
+"""
+    t45 = """### T4.5 - Credit metrics
+
+| Entity | Total/Net/Sr Sec Leverage | Int/Adj Int Coverage | FFO/Debt | Liquidity | Period \
+| Currency | Calc/Comp Status |
+|---|---|---|---|---|---|---|---|
+| Peer A | 4.0x / 3.5x / 2.0x | 3.0x / 3.2x | 20.0% | 300 | FY2024 | USD | Reported / Comparable |
+| Peer B | 5.0x / 4.5x / 3.0x | 2.5x / 2.7x | 15.0% | 200 | FY2024 | USD | Reported / Comparable |
+| Peer C | 6.0x / 5.5x / 4.0x | 2.0x / 2.2x | 10.0% | 100 | FY2024 | USD | Reported / Comparable |
+
+"""
+    # Net leverage, N = 3: median 4.5, min 3.5, max 5.5, no average (gate 5).
+    found = cp1c_by(cp1c(t46=joined + t45))
+    for stat in ("Avg", "Median", "Min", "Max"):
+        assert found[f"Peer {stat}: Net Leverage"].status == "agreed", stat
+        assert found[f"Peer {stat}: EBITDA Margin"].status == "agreed", stat
+
+
+def test_cp1c_amounts_and_unread_cells_are_not_checked():
+    t46 = T46.format(avg="23.6%", median="24.0%", n="5") + (
+        "| Revenue | 1,000 | 940 | 900 | 800 | 1,200 | — | — | 5 | Above |\n"
+    )
+    text = cp1c(t46=t46.replace("|\n\n|", "|\n|"))
+    found = cp1c_by(text)
+    assert found["Peer Median: Revenue"].status == "not checked"  # no unit to compare in
+    assert ms.issues("CP-1C", text) == ()
+    (only,) = ms.run("CP-1C", "nothing")
+    assert only.status == "not checked"
+
+
+@pytest.mark.parametrize(
+    ("cells", "figure", "recomputed"),
+    [
+        ({"median": "22.0%"}, "Peer Median: EBITDA Margin", "0.24"),
+        ({"avg": "24.6%"}, "Peer Avg: EBITDA Margin", "0.236"),
+    ],
+)
+def test_cp1c_a_wrong_statistic_is_sent_back(cells, figure, recomputed):
+    (issue,) = ms.issues("CP-1C", cp1c(**cells))
+    assert f"`{figure}`" in issue
+
+
+def test_cp1c_an_average_below_the_gate_is_sent_back():
+    text = cp1c().replace("| Not calculable (N=4) |", "| 11.25x |")
+    (issue,) = ms.issues("CP-1C", text)
+    assert "`Peer Avg: EV/EBITDA`" in issue and "Not Calculable" in issue
+
+
+def test_cp1c_a_wrong_implied_ev_is_sent_back():
+    (issue,) = ms.issues("CP-1C", cp1c(high="USD 7,500m"))
+    assert "`Implied EV High: EV/EBITDA trading comps`" in issue and "recomputes 7000" in issue
+
+
+def test_cp1c_a_peer_gap_or_a_noted_status_is_read_as_the_method_reads_it():
+    # Peer F becomes Comparable but states no margin: left out, never zero (N stays 5).
+    gap = "| Peer F | 700 | 1.0% | 30.0% | 105 | Not supplied: not disclosed | 9.0% | FY2024 | USD "
+    gap += "| Reported | Comparable |\n"
+    text = cp1c().replace(
+        "| Peer F | 700 | 1.0% | 30.0% | 105 | 15.0% | 9.0% | FY2024 | USD | Reported "
+        "| Not Comparable |\n",
+        gap,
+    )
+    text = text.replace("| Comparable |\n| Peer B", "| Comparable (size gap) |\n| Peer B")
+    statuses = {o.figure: o.status for o in ms.run("CP-1C", text) if "Margin" in o.figure}
+    assert {v for k, v in statuses.items() if " Q" not in k} == {"agreed"}

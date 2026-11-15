@@ -414,6 +414,45 @@ Mapping `deploy_workflow.method_scripts_cp4c`. Restored: none (CP-4C has no scop
   launcher reconciles its steps), T4E.3's enterprise value (multiple or discount in free text).
 - Evidence: none retained (no distressed run). Synthetic handoffs only, hand-worked.
 
+## CP-1C, `peer_statistics.py` (2026-11-15)
+
+Mapping `deploy_workflow.method_scripts_cp1c`. Restored: none (CP-1C has no scope section).
+
+- What the method says: the SKILL names the script as the owner of peer minimum, maximum, median,
+  quartiles and average "under CP-1C's per-statistic minimum-N gates (median 3, quartile 4, average
+  5, nothing below 2), the with- and without-outlier versions, implied EV Low/Median/High"; step 04D
+  builds T4.6 from T4.3 to T4.5 ("Min 3 for median, 4 quartile, 5 avg. <2 -> no stats. State N");
+  step 05: "if an outlier distorts peer statistics, recalculate excluding it and show both
+  versions"; 06C: "Low = minimum peer multiple x borrower metric; Median = median ...; High =
+  maximum ...". T4.6 is written in the step file's separate columns (`Peer Avg | Median | Min | Max
+  | Q1 | Q3`) or the SKILL's joined `Peer Avg/Median/Min/Max`; both are read.
+- Checked, per T4.6 metric: Peer Avg, Median, Min and Max by the script's `analyse` on the peer
+  rows of the one benchmark column named as the metric (T4.3, T4.4, T4.5, T4.8 or T4.9;
+  abbreviations such as `Net Lev` spelt out; a joined column such as `Total/Net/Sr Sec Leverage`
+  read part by part when every cell holds that many figures), with each row's Comp Status and Calc
+  Status read as the script's closed sets (`Comparable (size)` as `Comparable`; a peer stating a gap
+  left out, never zero) and T4.7's outliers flagged. The borrower's row is left out: the one marked
+  `borrower` or named as the front matter's issuer, else the row stating the Borrower Value. The
+  version (with or without outliers, with or without an unmarked borrower row) whose N is T4.6's N
+  is compared; none or two different is not checked. A figure stated where the gate gives none
+  disagrees (the SKILL fixes the gates); a null word where the script computes one is not checked
+  (the module may have suppressed it). Only values written with a unit (`x` or `%`, cell or header)
+  are compared. Per T4.10 row whose Method names a T4.6 multiple: Low, Median and High against T4.6's
+  Min, Median and Max times the row's one borrower-metric figure (a year in the cell is not a
+  figure), the implied EV and the metric in the same currency and scale.
+- Note (`CP1C_NOTE`, 696 characters), in `relative_value` (1,060,816 to 1,061,512 of 1,071,000)
+  and `distressed_restructuring` (1,168,756 to 1,169,452 of 1,186,500).
+- Not checked by design: Q1 and Q3 (below), N (it selects the peer set), absolute amounts (T4.6
+  states no scale), Borrower Position (words), standard deviation and range (not T4.6 columns).
+- Retained evidence: `tests/fixtures/sol_medium_run_2026_11_09/CP-1C-head.md` (TransDigm, run of
+  2026-11-09) stopped at its peer-data gate and has no T4.6: not checked. Synthetic proof only.
+- Decision for the owner: quartiles. The method names no quantile convention ("Quantile convention:
+  CP-1C does NOT specify one", the script's own docstring); the script uses the inclusive one (Excel
+  PERCENTILE.INC). On the test set of four multiples (9, 10, 12, 14) inclusive gives Q1 9.75 and Q3
+  12.5, the exclusive convention 9.25 and 13.5. Recommendation: adopt the script's inclusive
+  convention, tell CP-1C so in its note (about 60 characters) and check Q1 and Q3; until then they
+  are recorded as not checked.
+
 ## Status
 
 Built and tested offline, module by module. Not accepted: no model has written a restored register
