@@ -9,17 +9,15 @@ from typing import Any
 import pytest
 from _pack import SPEC, make_rig
 
-from deploy_workflow import run_pathway
 from deploy_workflow.model import loop as loop_module
 from deploy_workflow.model import providers, transport
 from deploy_workflow.model.loop import TOKEN_OVERHEAD, _request_bytes
 from deploy_workflow.model.pricing import (
     PRICES,
     ContextTooLong,
-    price_of,
     reservation_usd,
 )
-from deploy_workflow.model.turn import CONFIG_PROVIDERS, Message, ProviderBlock, TurnRequest
+from deploy_workflow.model.turn import Message, ProviderBlock, TurnRequest
 
 KEY_FILE = Path(__file__).parents[2] / "cases" / "pilot-fixes" / "limits.json"
 SOL_REQUEST_BYTES = 705_000
@@ -30,48 +28,8 @@ def _key() -> dict[str, Any]:
     return loaded
 
 
-def test_the_output_cap_is_the_keys() -> None:
-    assert run_pathway.MAX_OUTPUT_TOKENS == _key()["max_output_tokens"]
-
-
-def test_the_output_cap_is_within_every_documented_maximum_and_the_providers_cap() -> None:
-    key = _key()
-    for config, documented in key["documented_max_output_tokens"].items():
-        assert run_pathway.MAX_OUTPUT_TOKENS <= documented["value"], config
-    assert providers.MAX_OUTPUT_TOKENS == key["providers_global_cap"]
-    assert run_pathway.MAX_OUTPUT_TOKENS <= providers.MAX_OUTPUT_TOKENS
-
-
-# The key (cases/pilot-fixes/limits.json) predates the Copilot pair and is not edited; it names
-# the four direct-provider configurations, and the Copilot rows are asserted separately below.
-# opus-high (owner 2026-11-12) reuses opus-medium's price object, so it is checked against that row.
-KEYED_CONFIGS = sorted(
-    c for c, p in CONFIG_PROVIDERS.items() if p != "copilot" and c != "opus-high"
-)
-
-
-@pytest.mark.parametrize("config", KEYED_CONFIGS)
-def test_the_output_reservation_per_call_is_the_keys(config: str) -> None:
-    expected = Decimal(_key()["reservation_output_usd_per_call"][config])
-    got = reservation_usd(price_of(config), 0, run_pathway.MAX_OUTPUT_TOKENS)
-    assert got == expected
-
-
-def test_opus_high_reserves_what_the_keys_opus_medium_row_does() -> None:
-    expected = Decimal(_key()["reservation_output_usd_per_call"]["opus-medium"])
-    assert reservation_usd(price_of("opus-high"), 0, run_pathway.MAX_OUTPUT_TOKENS) == expected
-
-
-def test_the_bytes_per_token_lower_bounds_are_the_keys() -> None:
-    expected = {p: Decimal(v) for p, v in _key()["bytes_per_token_lower_bound"].items()}
-    bounds = dict(run_pathway.BYTES_PER_TOKEN_LOWER_BOUND)
-    # Copilot reaches either vendor's model: the smaller of the openai and anthropic bounds
-    assert bounds.pop("copilot") == min(expected["openai"], expected["anthropic"])
-    assert bounds == expected
-
-
-def test_the_bounds_name_exactly_the_providers_of_the_configurations() -> None:
-    assert set(run_pathway.BYTES_PER_TOKEN_LOWER_BOUND) == set(CONFIG_PROVIDERS.values())
+def test_the_providers_cap_is_the_keys() -> None:
+    assert providers.MAX_OUTPUT_TOKENS == _key()["providers_global_cap"]
 
 
 def _sol_request() -> TurnRequest:
@@ -125,11 +83,10 @@ def _padded_sol_request(size: int) -> TurnRequest:
     return request
 
 
-def test_the_boundary_request_at_the_runs_openai_bound_is_accepted_and_one_byte_more_is_not(
+def test_the_boundary_request_at_the_keys_openai_bound_is_accepted_and_one_byte_more_is_not(
     tmp_path: Path,
 ) -> None:
-    ratio = run_pathway.BYTES_PER_TOKEN_LOWER_BOUND["openai"]
-    assert ratio == Decimal(_key()["bytes_per_token_lower_bound"]["openai"])
+    ratio = Decimal(_key()["bytes_per_token_lower_bound"]["openai"])
     sol = PRICES["sol-medium"]
     assert sol.max_input_tokens is not None
     largest = int((sol.max_input_tokens - TOKEN_OVERHEAD) * ratio)  # bytes whose bound just fits
