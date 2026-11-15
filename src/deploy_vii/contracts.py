@@ -42,6 +42,7 @@ PathwayId = Literal[
     "portfolio_decision",
     "short_snapshot",
     "lite_credit_assessment",
+    "deep_credit_assessment",
 ]
 # Requested module set per Pathway (decision 0009). Required producers are added when a view
 # or plan is built (registry.dependencies), so these list the modules the Front Page asks for.
@@ -78,8 +79,33 @@ _PRESETS: dict[PathwayId, tuple[str, ...]] = {
     # two downside blocks. No CP-MODEL, so no forecast is published; the chart strip and credit
     # metrics blocks are routed to CP-1 (ruling 2026-11-13).
     "lite_credit_assessment": ("CP-0", "CP-1", "CP-1A", "CP-2", "CP-2A"),
+    # Owner, 2026-11-15: "Deep = all" (ruling 2026-11-15-pathway-tiers-and-caps): the full credit
+    # assessment plus every specialist module, in the registry's planned order. CP-1C and CP-DR
+    # come before CP-2 and CP-3, so CP-3 reads CP-1C's peer multiples; CP-2H waits for CP-2G,
+    # CP-3D for CP-2H, CP-3C for CP-2D and CP-4C for CP-4, CP-2G, CP-2A and CP-3C.
+    "deep_credit_assessment": (
+        *("CP-0", "CP-1", "CP-MODEL", "CP-1A", "CP-1B", "CP-DR", "CP-1C", "CP-1D", "CP-2"),
+        *("CP-4", "CP-2A", "CP-2E", "CP-2D", "CP-2G", "CP-2H", "CP-3D", "CP-3C", "CP-4C"),
+        *("CP-3", "CP-5", "CP-6"),
+    ),
 }
 PATHWAY_MODULES: Mapping[PathwayId, tuple[str, ...]] = MappingProxyType(_PRESETS)
+# The provider cap per run folder, USD, by pathway: the one table the run start page, its summary,
+# the service's launches and the launcher's default read (owner, 2026-11-15: "restructure the
+# pathways: Deep max $40, Full $25 and Lite $15"; the five purpose pathways keep the USD 20 of
+# ruling 2026-11-11-run-start-submit). Ruling 2026-11-15-pathway-tiers-and-caps.
+_CAPS_USD: dict[PathwayId, Decimal] = {
+    "lite_credit_assessment": Decimal(15),
+    "credit_snapshot": Decimal(25),
+    "deep_credit_assessment": Decimal(40),
+    "earnings_update": Decimal(20),
+    "relative_value": Decimal(20),
+    "covenant_refinancing": Decimal(20),
+    "distressed_restructuring": Decimal(20),
+    "portfolio_decision": Decimal(20),
+    "short_snapshot": Decimal(20),
+}
+PATHWAY_CAP_USD: Mapping[PathwayId, Decimal] = MappingProxyType(_CAPS_USD)
 # Pathways that no longer take a new run. Their presets stay wired so retained runs still read and
 # their instructions still build; only the launch entry points refuse
 # (``cpos_launch.refuse_deactivated``).

@@ -128,18 +128,20 @@ The service refuses to start (exit code 2) when the provider key is missing from
 `docs/rulings/2026-11-11-run-start-submit.md` does not allow the config, when `<root>` is a network
 path or longer than 80 characters, or when another service already holds `_engine\watcher.lock`
 for that folder (the file keeps its old name so an old folder watcher and this service exclude each
-other). Use a folder on this machine's own disk, shared to analysts if needed: the USD 20 cap
+other). Use a folder on this machine's own disk, shared to analysts if needed: each run's cap
 depends on marker files that must not sit on a network or synced path. The provider key comes only
 from the environment of the account that runs the service; nothing reads a credential file.
 Press Ctrl-C to stop it; runs already started keep going, and a restarted service picks them up.
 Its log is `_engine\logs\watcher.log`. `--max-running` and `--max-per-day` change the two limits
-below; the USD 20 cap is the ruling's and cannot be raised.
+below; each run's cap is its pathway's, set by the ruling
+`docs/rulings/2026-11-15-pathway-tiers-and-caps.md` (Lite USD 15, Full 25, Deep 40, the five purpose
+pathways 20), and cannot be raised.
 
 ### There is no login
 
 Anyone who can reach the address can use the page. These limits stand in for a login:
 
-- USD 20 a run, at most 3 runs going at once and 30 started a day;
+- the pathway's cap a run (USD 15 to 40), at most 3 runs going at once and 30 started a day;
 - at most 30 submissions waiting for a slot, and 50 unfinished submissions open at once;
 - uploads of at most 50 MiB a file, 500 files and 512 MiB in total; an unsubmitted upload is
   deleted after 24 hours.
@@ -158,10 +160,12 @@ the run uses it, and a later step stays locked while an earlier one has an error
    as executed) and which files it will not read. Documents shows only what was read. Once a purpose
    is chosen, each kind the pathway uses and the folder lacks is listed from Purpose on, in the
    readiness column, as a limitation with the module it affects.
-2. **Purpose.** Pick one of `credit_snapshot`, `earnings_update`, `relative_value`,
-   `covenant_refinancing`, `distressed_restructuring`, `portfolio_decision` or
-   `lite_credit_assessment` (the Lite credit assessment: CP-0, CP-1, CP-1A, CP-2 and CP-2A; no
-   forecast is published). `credit_snapshot` is titled "Full credit assessment": CP-0, CP-1, CP-1A,
+2. **Purpose.** Pick one of `lite_credit_assessment`, `credit_snapshot`, `deep_credit_assessment`,
+   `earnings_update`, `relative_value`, `covenant_refinancing`, `distressed_restructuring` or
+   `portfolio_decision`; each row shows its cap. `lite_credit_assessment` is the Lite credit
+   assessment (CP-0, CP-1, CP-1A, CP-2 and CP-2A; no forecast is published).
+   `deep_credit_assessment` is the Deep credit assessment: the full one plus CP-1B, CP-1C, CP-1D,
+   CP-2H, CP-3D and CP-4C (ruling `docs/rulings/2026-11-15-pathway-tiers-and-caps.md`). `credit_snapshot` is titled "Full credit assessment": CP-0, CP-1, CP-1A,
    CP-DR, CP-2, CP-2A, CP-2D, CP-2E, CP-2G, CP-4, CP-3C, CP-3, CP-5 and CP-6 with the forecast;
    CP-6 runs its portfolio debate (CP-6A) on every run (owner, 2026-11-15, ruling
    `docs/rulings/2026-11-15-full-assessment-cp3c-cp6a.md`). The short credit
@@ -241,7 +245,7 @@ runs it recorded still load and show in Run activity. Every one it had queued (a
 submission) is marked failed, with the reason, the first time the service starts, and is never
 started; submit it again from the page.
 
-Run activity re-loads every 30 seconds while it is showing. Run activity does not show spend; the USD 20 cap is shown on the run start page before Submit, and a finished run's provider cap and settled amounts are on its Evidence page.
+Run activity re-loads every 30 seconds while it is showing. Run activity does not show spend; the run's cap is shown on the run start page, beside each pathway and before Submit, and a finished run's provider cap and settled amounts are on its Evidence page.
 A run waits when 3 are going or 30 have started today; Run activity lists it under Waiting and says why
 when the daily limit is the cause. After a restart, a run that was being started when the service
 stopped is shown as interrupted and is not started again; check whether its process is still
@@ -266,10 +270,11 @@ folder (read access only if they open `library.html` from it); only the service'
 - Whether the Relative value and Committee modules honour the new mode settings
   (`module_options`) is not proven until a paid run.
 - Two IDs for one issuer make two folders in `issuers\`.
-- A run can end slightly above USD 20 after one call overruns the cap.
+- A run can end slightly above its cap after one call overruns it.
 - A report leaves the library list after a method update (see "Which runs are listed" in the
   library README) but stays in `issuers\`.
-- Whether USD 20 covers a full pathway on `sol-medium` has not been measured.
+- Whether each pathway's cap covers it has not been measured on the current module lists; the
+  estimate is in `docs/rulings/2026-11-15-pathway-tiers-and-caps.md`.
 
 ## 4. Signal (news feed, command line only)
 

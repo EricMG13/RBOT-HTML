@@ -95,6 +95,31 @@ def test_the_prior_run_is_the_latest_listed_run_of_the_same_issuer_and_pathway_o
     assert prior("2025-03-31", folder="b-mar") == "a-dec"  # never the run itself
 
 
+def test_a_first_deep_run_is_not_compared_with_the_issuers_full_run(tmp_path):
+    """Ruling 2026-11-15-pathway-tiers-and-caps: CP-8 compares runs of one pathway. A Full run of
+    the issuer is no base for its first Deep run, nor a Deep run for a Full one; a later Deep run
+    compares with the earlier Deep run."""
+    make_run(tmp_path, "full-1", as_of="2024-12-31")  # credit_snapshot
+
+    def prior(pathway: str) -> str | None:
+        found = find_prior(
+            tmp_path,
+            folder="cur",
+            issuer_id="nbg",
+            **ME,
+            pathway=pathway,
+            as_of="2025-03-31",
+            method=method(),
+        )
+        return None if found is None else found[0].folder
+
+    assert prior("deep_credit_assessment") is None
+    assert prior("credit_snapshot") == "full-1"
+    make_run(tmp_path, "deep-1", as_of="2025-01-31", pathway="deep_credit_assessment")
+    assert prior("deep_credit_assessment") == "deep-1"
+    assert prior("credit_snapshot") == "full-1"  # the later Deep run does not displace it
+
+
 def test_runs_of_one_as_of_date_are_ordered_by_their_first_call(tmp_path):
     make_run(tmp_path, "x-early", as_of="2025-03-31", first_call="2026-11-01T09:00:00Z")
     make_run(tmp_path, "a-late", as_of="2025-03-31", first_call="2026-11-05T09:00:00Z")
@@ -247,7 +272,7 @@ def test_a_listed_prior_run_pins_its_handoffs_for_cp8_and_cp8_runs_last(tmp_path
     run_dir = make_run(workspace, PRIOR_ID, as_of="2024-12-31", pathway=PATHWAY)
     before = tree(run_dir)
     context, folder = snapshot_context(tmp_path)
-    prepared = prepare(context, folder, workspace / "runs/cur", config="sol-medium", cap="50")
+    prepared = prepare(context, folder, workspace / "runs/cur", config="sol-medium", cap="15")
     assert prepared.ordered == (*SNAPSHOT_MODULES, "CP-8")
     assert prepared.plan.run.requested_modules[-1] == "CP-8"
     (delivered,) = (run_dir / "deliveries").iterdir()
@@ -268,7 +293,7 @@ def test_no_earlier_run_means_no_cp8_and_a_recorded_first_run(tmp_path):
     (tmp_path / "ws/runs").mkdir(parents=True)
     make_run(tmp_path / "ws", "other-pathway", as_of="2024-12-31", pathway="earnings_update")
     context, folder = snapshot_context(tmp_path)
-    prepared = prepare(context, folder, tmp_path / "ws/runs/cur", config="sol-medium", cap="50")
+    prepared = prepare(context, folder, tmp_path / "ws/runs/cur", config="sol-medium", cap="15")
     assert prepared.ordered == SNAPSHOT_MODULES
     assert prepared.prior is None
     assert prepared.plan.changes_note == f"changes: {FIRST_RUN}"
@@ -277,7 +302,7 @@ def test_no_earlier_run_means_no_cp8_and_a_recorded_first_run(tmp_path):
 
 def test_a_run_folder_outside_a_runs_folder_says_nothing_was_compared(tmp_path):
     context, folder = snapshot_context(tmp_path)
-    prepared = prepare(context, folder, tmp_path / "out", config="sol-medium", cap="50")
+    prepared = prepare(context, folder, tmp_path / "out", config="sol-medium", cap="15")
     assert "CP-8" not in prepared.ordered
     assert prepared.plan.changes_note == (
         "changes: not compared: the run folder is not inside a runs folder"
@@ -293,7 +318,7 @@ def test_an_explicit_workspace_serves_a_run_folder_that_is_elsewhere(tmp_path):
         folder,
         tmp_path / "summary/run",
         config="sol-medium",
-        cap="50",
+        cap="15",
         workspace=workspace,
     )
     assert prepared.ordered[-1] == "CP-8"
@@ -307,7 +332,7 @@ def test_cp8_cannot_be_selected(tmp_path, capsys):
             folder,
             tmp_path / "out",
             config="sol-medium",
-            cap="50",
+            cap="15",
             modules=("CP-4", "CP-8"),
         )
     assert not (tmp_path / "out").exists()
@@ -317,7 +342,7 @@ def test_the_offline_cap_check_holds_cp8s_call_when_it_is_planned(tmp_path):
     workspace = tmp_path / "ws"
     make_run(workspace, PRIOR_ID, as_of="2024-12-31", pathway=PATHWAY)
     context, folder = snapshot_context(tmp_path)
-    prepared = prepare(context, folder, workspace / "runs/cur", config="sol-medium", cap="50")
+    prepared = prepare(context, folder, workspace / "runs/cur", config="sol-medium", cap="15")
     sizes = {
         m: (workspace / "runs/cur" / spec.path).stat().st_size
         for m, spec in prepared.plan.instructions.items()
@@ -334,10 +359,10 @@ def test_a_lite_run_with_an_earlier_lite_run_plans_cp8_last(tmp_path):
     workspace = tmp_path / "ws"
     make_run(workspace, PRIOR_ID, as_of="2024-12-31", pathway="lite_credit_assessment")
     context, folder = snapshot_context(tmp_path, "lite_credit_assessment")
-    prepared = prepare(context, folder, workspace / "runs/cur", config="sol-medium", cap="50")
+    prepared = prepare(context, folder, workspace / "runs/cur", config="sol-medium", cap="15")
     assert prepared.ordered == (*LITE_MODULES, "CP-8")
     assert prepared.prior is not None and prepared.prior.pathway == "lite_credit_assessment"
-    first = prepare(context, folder, tmp_path / "ws2/runs/cur", config="sol-medium", cap="50")
+    first = prepare(context, folder, tmp_path / "ws2/runs/cur", config="sol-medium", cap="15")
     assert first.ordered == LITE_MODULES
 
 
@@ -359,11 +384,11 @@ def test_a_second_lite_run_runs_cp8_last_and_the_changes_page_shows_the_comparis
     )
     context = context_file(tmp_path, "lite_credit_assessment")
     folder = issuer_folder(tmp_path)
-    preview = prepare(context, folder, tmp_path / "preview", config="sol-medium", cap="50")
+    preview = prepare(context, folder, tmp_path / "preview", config="sol-medium", cap="15")
     routes = list(preview.plan.layout.routes)
     argv = [
         *("--context", str(context), "--sources", str(folder)),
-        *("--config", "sol-medium", "--cap", "50", "--out", str(workspace / "runs/cur")),
+        *("--config", "sol-medium", "--cap", "15", "--out", str(workspace / "runs/cur")),
         *("--live", "--ruling", str(RULING)),
     ]
     provider.answer = lambda ctx: (
@@ -397,11 +422,11 @@ def two_priors(tmp_path):
 def test_the_run_the_approval_named_is_the_one_compared_with(tmp_path):
     workspace, context, folder = two_priors(tmp_path)
     named = prepare(
-        context, folder, workspace / "runs/cur", config="sol-medium", cap="50", prior="older"
+        context, folder, workspace / "runs/cur", config="sol-medium", cap="15", prior="older"
     )
     assert named.prior is not None
     assert named.prior.folder == "older"  # not "newer", which a search would find
-    searched = prepare(context, folder, workspace / "runs/cur2", config="sol-medium", cap="50")
+    searched = prepare(context, folder, workspace / "runs/cur2", config="sol-medium", cap="15")
     assert searched.prior is not None
     assert searched.prior.folder == "newer"
 
@@ -409,7 +434,7 @@ def test_the_run_the_approval_named_is_the_one_compared_with(tmp_path):
 def test_an_approval_that_named_no_earlier_run_is_a_first_run_whatever_is_listed_since(tmp_path):
     workspace, context, folder = two_priors(tmp_path)
     first = prepare(
-        context, folder, workspace / "runs/cur", config="sol-medium", cap="50", prior="none"
+        context, folder, workspace / "runs/cur", config="sol-medium", cap="15", prior="none"
     )
     assert first.prior is None
     assert "CP-8" not in first.ordered
@@ -419,7 +444,7 @@ def test_an_approval_that_named_no_earlier_run_is_a_first_run_whatever_is_listed
 def test_a_named_run_that_is_no_longer_available_goes_without_cp8_and_says_so(tmp_path):
     workspace, context, folder = two_priors(tmp_path)
     gone = prepare(
-        context, folder, workspace / "runs/cur", config="sol-medium", cap="50", prior="deleted"
+        context, folder, workspace / "runs/cur", config="sol-medium", cap="15", prior="deleted"
     )
     assert gone.prior is None
     assert "CP-8" not in gone.ordered
@@ -429,7 +454,7 @@ def test_a_named_run_that_is_no_longer_available_goes_without_cp8_and_says_so(tm
     # A named run that is listed but no longer passes the tests is as unavailable, with the reason.
     make_run(workspace, "subset", as_of="2025-01-31", pathway=PATHWAY, selection="explicit")
     out = prepare(
-        context, folder, workspace / "runs/cur2", config="sol-medium", cap="50", prior="subset"
+        context, folder, workspace / "runs/cur2", config="sol-medium", cap="15", prior="subset"
     )
     assert out.prior is None
     assert out.plan.changes_note == (
@@ -442,7 +467,7 @@ def test_a_named_run_that_is_no_longer_available_goes_without_cp8_and_says_so(tm
 def test_a_prior_that_is_not_a_run_folder_name_is_refused(tmp_path, name):
     workspace, context, folder = two_priors(tmp_path)
     with pytest.raises(LaunchRefused, match="--prior"):
-        prepare(context, folder, workspace / "runs/cur", config="sol-medium", cap="50", prior=name)
+        prepare(context, folder, workspace / "runs/cur", config="sol-medium", cap="15", prior=name)
 
 
 def test_the_launcher_takes_the_prior_flag_and_runs_as_it_names(tmp_path, capsys):
@@ -451,7 +476,7 @@ def test_the_launcher_takes_the_prior_flag_and_runs_as_it_names(tmp_path, capsys
     def launch(name: str, prior: str) -> str:
         argv = [
             *("--context", str(context), "--sources", str(folder)),
-            *("--config", "sol-medium", "--cap", "50", "--no-library"),
+            *("--config", "sol-medium", "--cap", "15", "--no-library"),
             *("--out", str(workspace / "runs" / name), "--prior", prior),
         ]
         assert main(argv) == 0
@@ -463,7 +488,7 @@ def test_the_launcher_takes_the_prior_flag_and_runs_as_it_names(tmp_path, capsys
 
 def test_the_selection_is_recorded_for_a_run_and_left_out_of_an_older_manifest(tmp_path):
     workspace, context, folder = two_priors(tmp_path)
-    preset = prepare(context, folder, workspace / "runs/a", config="sol-medium", cap="50")
+    preset = prepare(context, folder, workspace / "runs/a", config="sol-medium", cap="15")
     assert preset.plan.selection == "preset"
     assert json.loads((workspace / "runs/a/workflow.json").read_text())["selection"] == "preset"
     subset = prepare(
@@ -471,7 +496,7 @@ def test_the_selection_is_recorded_for_a_run_and_left_out_of_an_older_manifest(t
         folder,
         workspace / "runs/b",
         config="sol-medium",
-        cap="50",
+        cap="15",
         modules=("CP-0", "CP-1"),
     )
     assert subset.plan.selection == "explicit"
@@ -486,14 +511,14 @@ def test_the_scope_and_omitted_sections_do_not_say_what_changed_was_not_produced
     tmp_path,
 ):
     workspace, context, folder = two_priors(tmp_path)
-    with_cp8 = prepare(context, folder, workspace / "runs/a", config="sol-medium", cap="50")
+    with_cp8 = prepare(context, folder, workspace / "runs/a", config="sol-medium", cap="15")
     assert with_cp8.ordered[-1] == "CP-8"
     assert "what-changed" not in with_cp8.omitted
     assert "what-changed" not in with_cp8.layout.scope
     assert "CP-8's handoff, delivered whole" in with_cp8.layout.scope
     assert [r for r in with_cp8.layout.routes if r.module_id == "CP-8"] == []
     without = prepare(
-        context, folder, workspace / "runs/b", config="sol-medium", cap="50", prior="none"
+        context, folder, workspace / "runs/b", config="sol-medium", cap="15", prior="none"
     )
     assert "what-changed" in without.omitted
     assert "Sections not produced: what-changed" in without.layout.scope
@@ -531,7 +556,7 @@ def test_cp8s_instructions_carry_the_method_and_the_earlier_run(tmp_path):
     workspace = tmp_path / "ws"
     make_run(workspace, PRIOR_ID, as_of="2024-12-31", pathway=PATHWAY)
     context, folder = snapshot_context(tmp_path)
-    prepared = prepare(context, folder, workspace / "runs/cur", config="sol-medium", cap="50")
+    prepared = prepare(context, folder, workspace / "runs/cur", config="sol-medium", cap="15")
     text = (workspace / "runs/cur" / prepared.plan.instructions["CP-8"].path).read_text()
     assert "### What changed: the issuer" in text
     assert "### Limitations ledger" in text
@@ -549,7 +574,7 @@ def test_cp8s_instructions_state_its_basis_forms_and_no_other_module_does(tmp_pa
     workspace = tmp_path / "ws"
     make_run(workspace, PRIOR_ID, as_of="2024-12-31", pathway=PATHWAY)
     context, folder = snapshot_context(tmp_path)
-    prepared = prepare(context, folder, workspace / "runs/cur", config="sol-medium", cap="50")
+    prepared = prepare(context, folder, workspace / "runs/cur", config="sol-medium", cap="15")
     texts = {
         m: (workspace / "runs/cur" / spec.path).read_text()
         for m, spec in prepared.plan.instructions.items()
@@ -571,16 +596,16 @@ def test_a_resume_keeps_its_pins_when_a_newer_run_has_appeared(tmp_path):
     make_run(workspace, PRIOR_ID, as_of="2024-12-31", pathway=PATHWAY)
     context, folder = snapshot_context(tmp_path)
     out = workspace / "runs/cur"
-    first = prepare(context, folder, out, config="sol-medium", cap="50")
+    first = prepare(context, folder, out, config="sol-medium", cap="15")
     manifest = (out / "workflow.json").read_bytes()
     make_run(workspace, "newer", as_of="2025-02-28", pathway=PATHWAY)
-    again = prepare(context, folder, out, config="sol-medium", cap="50")  # not refused
+    again = prepare(context, folder, out, config="sol-medium", cap="15")  # not refused
     assert (out / "workflow.json").read_bytes() == manifest
     assert again.prior == first.prior
     assert again.prior is not None
     assert again.prior.folder == PRIOR_ID
     # A fresh run folder meets the newer run.
-    fresh = prepare(context, folder, workspace / "runs/cur2", config="sol-medium", cap="50")
+    fresh = prepare(context, folder, workspace / "runs/cur2", config="sol-medium", cap="15")
     assert fresh.prior is not None
     assert fresh.prior.folder == "newer"
 
@@ -590,10 +615,10 @@ def test_a_resume_refuses_a_pinned_copy_that_changed(tmp_path):
     make_run(workspace, PRIOR_ID, as_of="2024-12-31", pathway=PATHWAY)
     context, folder = snapshot_context(tmp_path)
     out = workspace / "runs/cur"
-    prepare(context, folder, out, config="sol-medium", cap="50")
+    prepare(context, folder, out, config="sol-medium", cap="15")
     (out / "prior/CP-1.md").write_bytes(b"changed")
     with pytest.raises(LaunchRefused, match="pinned earlier handoff prior/CP-1.md changed"):
-        prepare(context, folder, out, config="sol-medium", cap="50")
+        prepare(context, folder, out, config="sol-medium", cap="15")
 
 
 def test_an_issuer_file_cannot_take_a_prior_source_name(tmp_path):
@@ -603,14 +628,14 @@ def test_an_issuer_file_cannot_take_a_prior_source_name(tmp_path):
     (folder / "prior").mkdir()
     (folder / "prior/CP-1.md").write_text("Net sales were 100.")
     with pytest.raises(LaunchRefused, match="prior/CP-1.md"):
-        prepare(context, folder, workspace / "runs/cur", config="sol-medium", cap="50")
+        prepare(context, folder, workspace / "runs/cur", config="sol-medium", cap="15")
 
 
 def test_a_manifest_that_names_prior_sources_without_a_prior_run_is_refused(tmp_path):
     workspace = tmp_path / "ws"
     make_run(workspace, PRIOR_ID, as_of="2024-12-31", pathway=PATHWAY)
     context, folder = snapshot_context(tmp_path)
-    prepared = prepare(context, folder, workspace / "runs/cur", config="sol-medium", cap="50")
+    prepared = prepare(context, folder, workspace / "runs/cur", config="sol-medium", cap="15")
     document = json.loads(prepared.plan.model_dump_json())
     del document["prior"]
     with pytest.raises(ValueError, match="cpos_prior"):
@@ -1846,7 +1871,7 @@ def run_with_prior(tmp_path: Path) -> tuple[Path, Path, list[str]]:
     out = workspace / "runs/cur"
     argv = [
         *("--context", str(context), "--sources", str(folder)),
-        *("--config", "sol-medium", "--cap", "50", "--out", str(out)),
+        *("--config", "sol-medium", "--cap", "15", "--out", str(out)),
         *("--live", "--ruling", str(RULING), "--no-library"),
     ]
     provider.answer = lambda context: (
@@ -2039,7 +2064,7 @@ def test_a_first_run_delivers_no_pack_and_makes_no_cp8_call(tmp_path):
     provider.answer = lambda context: covenant_answer(context, routes)
     argv = [
         *("--context", str(context), "--sources", str(folder)),
-        *("--config", "sol-medium", "--cap", "50", "--out", str(out)),
+        *("--config", "sol-medium", "--cap", "15", "--out", str(out)),
         *("--live", "--ruling", str(RULING), "--no-library"),
     ]
     assert main(argv) == 0
@@ -2067,7 +2092,7 @@ def test_the_canned_launcher_delivers_the_pack_and_an_accepted_cp8_handoff(tmp_p
     out = workspace / "runs/cur"
     argv = [
         *("--context", str(context), "--sources", str(folder)),
-        *("--config", "sol-medium", "--cap", "50", "--out", str(out)),
+        *("--config", "sol-medium", "--cap", "15", "--out", str(out)),
         *("--live", "--ruling", str(RULING), "--no-library"),
     ]
     assert canned.main(argv) == 0

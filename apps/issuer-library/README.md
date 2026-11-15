@@ -131,20 +131,21 @@ the launcher's reading disagrees with are Limited for the whole run.
   limits. The finished report is filed as `issuers\<Issuer name> (<issuer_id>)\<as-of>
   <pathway>[-N].html` and `library.html` in `<root>` opens the library, which is built in
   `<root>\_engine\library`. A `<root>\inbox\` folder from the earlier folder watcher is never read.
-- **No login; the limits stand in for one:** USD 20 per run, `sol-medium`, 3 runs at once, 30 runs
+- **No login; the limits stand in for one:** the pathway's cap per run (Lite USD 15, Full 25, Deep
+  40, the five purpose pathways 20), `sol-medium`, 3 runs at once, 30 runs
   started per day (`--max-running`, `--max-per-day`), 30 submissions waiting, 50 unfinished
   submissions, and uploads of at most 50 MiB a file, 500 files and 512 MiB in total.
 - **Key and ruling:** the provider key comes only from the environment of the account that runs
   the service. Every live launch passes the standing ruling `2026-11-11-run-start-submit.md`: in
   the package at `engine\docs\rulings`, from a checkout at `docs\rulings`. The ruling lists `web-search`, so runs from the page search the web for CP-DR (queries use
-  public names only and go to OpenAI's search; the USD 20 cap counts the fees).
+  public names only and go to OpenAI's search; the run's cap counts the fees).
 - **One service, one machine:** it holds an operating-system file lock on `_engine\watcher.lock`
   (the name is kept so an old folder watcher and the service exclude each other) while it runs. A
   second one on the same root is refused with exit code 2 ("another run page service (or an old
   folder watcher) is running on this folder"). Run it on one machine only; the lock depends on the
   file system honouring file locks (a local disk does; do not rely on it across machines; on
   Windows the refusal reads "(no details)"). The root must be a folder on this machine's own disk,
-  shared to analysts if needed, because the USD 20 cap depends on marker files that must not sit on
+  shared to analysts if needed, because each run's cap depends on marker files that must not sit on
   a network or synced path; a root starting with `\\` or `//` is refused. The root path must be 80
   characters or fewer.
 - **Waiting runs:** a run waits when 3 are going or 30 have started today; Run activity lists it
@@ -158,12 +159,12 @@ the launcher's reading disagrees with are Limited for the whole run.
   key, running `Start run page.cmd <root> <address>`. Only the service's account writes `_engine\`,
   `issuers\` and `library.html`.
 - **Run activity** on the library page re-loads every 30 s while it is showing.
-  Run activity does not show spend; the USD 20 cap is shown on the run start page before Submit, and a finished run's provider cap and settled amounts are on its Evidence page.
+  Run activity does not show spend; the run's cap is shown on the run start page, beside each pathway and before Submit, and a finished run's provider cap and settled amounts are on its Evidence page.
 - **Known limits:** Windows and browsers other than Chrome are not verified; whether the Relative
   value and Committee modules honour the new mode settings is not proven until a paid run; two IDs
-  for one issuer make two folders; a run can end slightly above USD 20 after one overrunning call;
-  a report leaves the library list after a method update but stays in `issuers\`; whether USD 20
-  covers a full pathway on `sol-medium` is not measured.
+  for one issuer make two folders; a run can end slightly above its cap after one overrunning call;
+  a report leaves the library list after a method update but stays in `issuers\`; whether each
+  pathway's cap covers it is not measured on the current module lists.
 
 ## Which runs are listed
 

@@ -4,6 +4,45 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-15 — Lite, Full and Deep credit assessments; a cap per pathway (branch `claude/busy-dijkstra-bgex9m`)
+
+Scope is **offline only**. No provider or model was called and no run was made; no model has run
+Deep. Ruling `docs/rulings/2026-11-15-pathway-tiers-and-caps.md` (owner: "restructure the pathways:
+Deep max $40, Full $25 and Lite $15"; "Lite/Full as now, Deep = all"; "Keep alongside"; "Hard cap
+per pathway").
+
+- Deep (`deep_credit_assessment`): Full plus CP-1B, CP-1C, CP-1D, CP-2H, CP-3D, CP-4C in the
+  registry's planned order; CP-DR and CP-1C precede CP-3, which is sent CP-1C's handoff. Lite and
+  Full ids, modules and sections unchanged. Deep's 24 report sections are a build choice, not the
+  owner's.
+- Caps: one table (`PATHWAY_CAP_USD`): Lite 15, Full 25, Deep 40, the five purpose pathways 20.
+  Read by the run start page and summary, the service's launches, run activity and the launcher's
+  default. A record queued earlier launches at the lower of USD 20 and its pathway's cap; a summary
+  issued earlier is refused at Submit. The launcher refuses a `--cap` above the pathway's (a
+  tightening: the CLI took any cap before); summary and submit require the cap the page shows, so
+  a page left open from before is refused; start-up checks the table against a second, independent
+  copy of the ruled figures. An independent review found those three and no route to a run above
+  its pathway's cap through the service.
+- Preparation before and after (launcher CLI, no `--live`, one synthetic input): the six prepared
+  existing pathways' instruction files byte-identical; only `provider_cap_usd` differs (Full 25,
+  Lite 15). Deep measured 1,805,013 characters, ceiling 1,900,500; no other ceiling moved.
+- Synthetic proofs (fake provider, hand-written handoffs; wiring, not analysis): a Deep run
+  delivered and verified in the hand-written order; CP-3 checked against the T4.10 CP-1C wrote in
+  the same run (agreed copy accepted, mis-copy sent back and the run stopped at CP-3); the library
+  lists the run with all 20 handoffs and a forecast; a Full run is no CP-8 base for a Deep run.
+- Fidelity check, run start page (presentation change): at 1440 and 1000 px the eight pathway rows
+  keep the three-column and stacked layouts with no overflow and no console message; each row's
+  third column leads "Cap: USD n a run."; Lite, Full and Deep summaries show 15, 25 and 40 from the
+  service. Measured with Playwright's Chromium, not the suite's headless Chrome.
+- Estimate, not measured, GPT Sol Balanced with CP-8: Lite 3.1, Full 11.3, Deep 16.5 (a call holds
+  5.73). Claude Opus at the one measured run's ratio (2.26, `tdg-proof-snapshot-opus-002`): Full
+  about 23 to 25 against 25, Deep about 34 to 44 against 40; either can stop at the cap.
+- Checks on the merge: targeted suites 2,212 passed, 4 skipped; quality gate 0 findings; the
+  sub-branch's CI fast list 5,369 passed. Browser page tests on real Chrome in the build container:
+  library, changes, model shell and full assessment pass (50 passed, 1 skipped);
+  `tests/test_run_start_page.py` cannot run there (Chrome hangs when given a fresh profile, on
+  `main` too) and is left to GitHub's weekly suite on the PR head. Not run: any paid run.
+
 ## 2026-11-15 — After the restructure: journal harness retired, method scripts as acceptance checks, portfolio inputs (branch `claude/busy-dijkstra-bgex9m`, after PR #126)
 
 Scope is **offline only**. No provider or model was called; the owner has said no live run yet and
@@ -943,56 +982,3 @@ never spans lines, stripping is linear, the tool result tells the model how many
 marked text, check 9 covers `cite\s*turn\d+[a-z]+\d+` anywhere in the handoff and only U+E200-U+E202.
 Forecast riders: `~~~` fences are code, `\|` stays in its cell, working capital is the cell sign-reversed as CP-2G
 reads it (the base's test fixtures now print wc as `(10)`).
-
-## 2026-11-11 — Forecast from layer 1 (branch `claude/forecast-layer1`, decision M3)
-
-CP-MODEL (preset or `--modules`) means "publish the forecast"; it makes no model call. Without CP-2G,
-CP-1 gets a layer-1 variant of the forecast block (base operands as CP-1 prints them, run-rate drivers,
-no cases, no shock) and the forecast comes from it; with CP-2G the block, checks and files are unchanged.
-A bad or absent CP-1 block is not a CP-1 check: the model is withheld through the existing fail-open
-(stderr, `model_not_published` event, `forecast_failure` in the completion record). Published limits
-say "run-rate inputs the CP-1 handoff stated"; the library shows them under Model limitations, unchanged.
-Offline, synthetic handoffs only (no provider call, no run folder touched): new tests fail on the base
-and pass now. `uv run pytest tests/test_cpos_launch.py tests/test_handoff_loop.py tests/test_update_library.py
-tests/test_credit_os_store.py -q -m "not live and not browser"` 666 passed, exit 0; `uv run python
-tools/quality_gate.py` 0 findings, exit 0. Changed expectations: `--modules CP-MODEL` is no longer refused;
-earnings_update's report scope now names the run-rate forecast; the publish-failure stub takes a source
-argument.
-Fix round 1 (the operand-key row rule) was replaced in round 2 after re-review: CP-1 keeps its natural
-tables; each layer-1 base operand states `{"amount","reason":null,"row","period"}`, the exact first-cell
-label and period header it was read from, and Python reads that one cell (tables outside fences, `## Sources`,
-the block and the reader passages; trimmed and emphasis-stripped, case-sensitive; `1,000`, `-1,000`, `(1,000)`,
-U+2212 parse as signed; `1,000k`, `12%`, `n.a.` do not). Outflows (cp2g.OUTFLOWS) compare by magnitude, all
-others signed; zero, or several differing, cells refuse the operand by name (fail-open unchanged). CP-2G
-refuses a `row`/`period` and keeps its check byte for byte. The block still does not vouch for a reader
-figure in `figure_issues`. Probes `r2_m1_row_defeats.py`, `m3_layer1_operand.py`, `m3_block_vouches_reader.py`,
-`r2_m2_block_edges.py` exit 0 (the first two pass partly because the old-shape blocks they build carry no
-row/period and are refused; the accept/refuse cases are in the new tests). `uv run pytest tests/test_cpos_launch.py
-tests/test_prose_checks.py tests/test_handoff_loop.py tests/test_update_library.py -q -m "not live and not browser"`
-690 passed, exit 0; `uv run python tools/quality_gate.py` 0 findings, exit 0.
-Known limits: driver values are not checked against their anchors (the rationale is free text); runs
-interrupted before this change refuse to resume. Not verified: a real model writing the layer-1 block; the library on a layer-1 model beyond the
-store tests; `tests/test_financial_workflow.py`.
-
-## 2026-11-11 — Pathway presets: CP-DR and CP-2E everywhere (branch `claude/module-presets`)
-
-Decisions M1-M7 are recorded in `docs/rulings/2026-11-11-module-presets-and-changes.md` (a decision
-record; it does not lift the pause).
-
-(a) Live run facts, this dated case only (ruling `docs/rulings/2026-11-11-reader-format-live-test.md`): TDG
-FY2024 public files, context `runs/tdg-context-2024-09-30.json`, `credit_snapshot`, sol-medium, cap USD 15;
-run folder outside the repository. CP-0, CP-1, CP-1A, CP-2, CP-4, CP-3, CP-5 and CP-6 were all accepted and
-delivered; charged USD 3.20906590; two drafts were rejected and repaired within the retry limit (CP-1, CP-3).
-Reader check so far: only CP-6's reader passages were read by the controller: judgement first, sources on
-Basis lines, no codes in sentences. Remaining weakness: pipeline wording in reader text ("producer-owned
-corrections remain open", "canonical financial amount", "open producer QA findings") and dense prose.
-Not verified: the other seven modules' prose; a side-by-side against the VMO2 reference; analytical accuracy.
-
-(b) This change, offline only (no provider call, no run folder read or written): M1 and M2 presets, CP-2G
-added to credit_snapshot and covenant_refinancing, CP-8 removed from portfolio_decision, context-form
-copy. Gate results: `uv run pytest tests/test_cpos_launch.py
-tests/test_context_form.py tests/test_inbox_activity.py -q -m "not live and not browser"` 509 passed, exit 0;
-`tests/test_cp8_comparison.py tests/test_handoff_loop.py` 44 passed, exit 0; `uv run python
-tools/quality_gate.py` 0 findings, exit 0. Plans per pathway were prepared offline by the parametrised
-test (every pathway, four peer sources); `tests/test_financial_workflow.py` was not run (over the
-fast-test limit). M3-M7 are decided and not built here.

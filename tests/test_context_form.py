@@ -13,7 +13,7 @@ from typing import get_args
 import pytest
 
 from deploy_vii import cp3_relative_value
-from deploy_vii.contracts import DEACTIVATED_PATHWAYS, PATHWAY_MODULES
+from deploy_vii.contracts import DEACTIVATED_PATHWAYS, PATHWAY_CAP_USD, PATHWAY_MODULES
 from deploy_vii.registry import plan
 from deploy_vii.report_view import pathways
 from deploy_workflow.context import (
@@ -86,6 +86,30 @@ def test_the_pathways_offered_and_their_labels_are_the_active_ones() -> None:
     assert set(DEACTIVATED_PATHWAYS) <= set(lists("PATHWAYS"))
     defaults = dict(re.findall(r"(\w+):'(\w+)'", constant("PATH_DEFAULT_RUN")))
     assert set(defaults) == {pathway for pathway, _ in expected}
+
+
+def test_each_choice_shows_its_pathways_cap_and_the_summary_shows_the_services() -> None:
+    """Ruling 2026-11-15-pathway-tiers-and-caps: one cap table; the page copies it per choice and
+    states the summary's own cap (the service's answer), never a fixed USD 20."""
+    caps = dict(
+        re.findall(r"^  (\w+): \{label:'[^']+', cap:'(\d+)'", constant("PATHS"), re.MULTILINE)
+    )
+    assert caps == {
+        "lite_credit_assessment": "15",
+        "credit_snapshot": "25",
+        "deep_credit_assessment": "40",
+        "earnings_update": "20",
+        "relative_value": "20",
+        "covenant_refinancing": "20",
+        "distressed_restructuring": "20",
+        "portfolio_decision": "20",
+    }
+    assert caps == {p: str(c) for p, c in PATHWAY_CAP_USD.items() if p not in DEACTIVATED_PATHWAYS}
+    assert "Cap: USD ${d.cap} a run." in FORM
+    assert "['Cap', `USD ${SUMMARY.cap} for this run" in FORM
+    assert "USD 20" not in FORM
+    assert "It uses the paid model, up to the pathway's cap shown below." in FORM
+    assert len(CHANGED_BY_RULINGS) == 1
 
 
 @pytest.mark.parametrize("pathway", sorted(PATHWAY_MODULES))
@@ -313,7 +337,16 @@ class _VisibleText(HTMLParser):
 
 # What Rulings 6-9 of the redesign plan change in the markup after the step logic: nothing.
 # Ruling 6 (the title) and 9 (the group number) landed there; 8 (button labels) is script.
-CHANGED_BY_RULINGS: frozenset[str] = frozenset()
+# Sentences a later ruling changed. Ruling 2026-11-15-pathway-tiers-and-caps: the cap is the
+# pathway's (`PATHWAY_CAP_USD`), not one USD 20 for every run; the summary's lead says so.
+_CAP_LEAD = "It uses the paid model (USD 20 cap)."
+CHANGED_BY_RULINGS: frozenset[str] = frozenset(
+    sentence
+    for sentence in json.loads(
+        (ROOT / "tests/fixtures/run_start_sentences_a6eec82.json").read_text(encoding="utf-8")
+    )
+    if _CAP_LEAD in sentence
+)
 
 
 def test_the_redesigned_markup_keeps_every_sentence_of_the_step_logic_commit() -> None:

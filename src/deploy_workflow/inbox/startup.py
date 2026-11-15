@@ -6,10 +6,10 @@ import logging
 import os
 import socket
 import sys
-from decimal import Decimal
 from pathlib import Path
 from typing import IO
 
+from deploy_vii.contracts import PATHWAY_CAP_USD
 from deploy_workflow.inbox import runs
 from deploy_workflow.inbox.layout import Layout
 from deploy_workflow.model.adapter import (
@@ -33,13 +33,27 @@ _PAGE = (
 )
 
 
+# The caps the owner ruled, USD per run (docs/rulings/2026-11-15-pathway-tiers-and-caps.md),
+# written here a second time on purpose: start-up refuses a `PATHWAY_CAP_USD` entry above its
+# figure here (or with none), so raising a cap takes a ruling and two deliberate edits.
+RULED_CAPS_USD: dict[str, int] = {
+    "lite_credit_assessment": 15,
+    "credit_snapshot": 25,
+    "deep_credit_assessment": 40,
+    "earnings_update": 20,
+    "relative_value": 20,
+    "covenant_refinancing": 20,
+    "distressed_restructuring": 20,
+    "portfolio_decision": 20,
+    "short_snapshot": 20,
+}
+
+
 class StartupRefused(ValueError):
     """The service cannot launch runs, or another service already owns this folder."""
 
 
 PACKAGE_LOGGER = "deploy_workflow.inbox"
-# USD per run the standing ruling allows (docs/rulings/2026-11-11-run-start-submit.md; AGENTS.md).
-RULED_RUN_CAP = Decimal(20)
 # The one provider whose key start-up does not require: no key only makes its submissions refusable.
 OPTIONAL_KEY_PROVIDER = "anthropic"
 
@@ -81,17 +95,24 @@ def close_log(layout: Layout) -> None:
             handler.close()
 
 
-def check_launchable(ruling: Path, cap: Decimal) -> None:
+def check_launchable(ruling: Path) -> None:
     """Refuse start-up unless every launch the service can make is allowed by the standing ruling.
 
     All four configs of ``runs.LAUNCH_CONFIGS`` must be known and named by the ruling. The OpenAI
     key is required; the Anthropic key is optional (without it a Claude submission is refused, see
-    ``submissions.require_provider_key``)."""
-    if cap.is_nan() or cap > RULED_RUN_CAP:
-        raise StartupRefused(
-            f"cap {cap} is above USD {RULED_RUN_CAP} per run, the limit of the standing ruling "
-            "docs/rulings/2026-11-11-run-start-submit.md"
-        )
+    ``submissions.require_provider_key``). Each run's cap is its pathway's (``runs.cap_of``,
+    ruling 2026-11-15-pathway-tiers-and-caps), and no pathway's cap may pass the ruled figure
+    in ``RULED_CAPS_USD``."""
+    for pathway, cap in PATHWAY_CAP_USD.items():
+        ruled = RULED_CAPS_USD.get(pathway)
+        if ruled is None or not cap.is_finite() or cap > ruled:
+            raise StartupRefused(
+                f"the {pathway} cap USD {cap} is above the ruled USD {ruled} of "
+                "docs/rulings/2026-11-15-pathway-tiers-and-caps.md"
+                if ruled is not None
+                else f"the {pathway} cap USD {cap} has no ruled figure in "
+                "docs/rulings/2026-11-15-pathway-tiers-and-caps.md"
+            )
     if ruling.resolve() != STANDING_RULING.resolve():
         raise StartupRefused(
             f"the service runs only under its standing ruling {STANDING_RULING}, not {ruling}"

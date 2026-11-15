@@ -95,19 +95,15 @@ def test_snapshot_marks_a_silent_run_as_stalled(layout):
     record = Record(
         "id1", "credit_snapshot", "acme", "running", "t", started_at="2026-11-09T10:00:00Z"
     )
-    late = snapshot(
-        layout, [record], cap=Decimal(20), now=datetime(2026, 11, 9, 11, 0, 1, tzinfo=UTC)
-    )
-    soon = snapshot(
-        layout, [record], cap=Decimal(20), now=datetime(2026, 11, 9, 10, 59, 0, tzinfo=UTC)
-    )
+    late = snapshot(layout, [record], now=datetime(2026, 11, 9, 11, 0, 1, tzinfo=UTC))
+    soon = snapshot(layout, [record], now=datetime(2026, 11, 9, 10, 59, 0, tzinfo=UTC))
     assert late["runs"][0]["stalled"] is True and "stalled" not in soon["runs"][0]
 
 
 def test_snapshot_entry_carries_the_model_and_effort(layout):
     record = Record("m1", "credit_snapshot", "acme", "queued", "t", model="claude", effort="high")
     plain = Record("m2", "credit_snapshot", "acme", "queued", "t")
-    data = snapshot(layout, [record, plain], cap=Decimal(20), now=datetime(2026, 11, 9, tzinfo=UTC))
+    data = snapshot(layout, [record, plain], now=datetime(2026, 11, 9, tzinfo=UTC))
     by_id = {r["id"]: r for r in data["runs"]}
     assert (by_id["m1"]["model"], by_id["m1"]["effort"]) == ("claude", "high")
     assert (by_id["m2"]["model"], by_id["m2"]["effort"]) == ("gpt", "fast")
@@ -124,10 +120,12 @@ def test_snapshot_orders_runs_and_reads_each_run_folder(layout):
     ]
     (layout.runs / "4").mkdir()
     append_event(layout.runs / "4", "module_started", module="CP-0")
-    data = snapshot(layout, records, cap=Decimal(20), now=now, held="paused")
+    data = snapshot(layout, records, now=now, held="paused")
     assert [r["id"] for r in data["runs"]] == ["4", "3", "2", "1", "5"]
     by_id = {r["id"]: r for r in data["runs"]}
-    assert data["cap"] == "20" and data["held"] == "paused" and data["updated"].endswith("Z")
+    assert data["held"] == "paused" and data["updated"].endswith("Z") and "cap" not in data
+    # Each run shows its own cap; these records predate per-pathway caps: min(USD 20, Full's 25).
+    assert {r["cap"] for r in data["runs"]} == {"20"}
     assert dict(by_id["4"]["modules"])["CP-0"] == "running" and by_id["4"]["spent"] == "0"
     assert "modules" not in by_id["5"] and "modules" not in by_id["3"]
 
@@ -138,7 +136,7 @@ def test_unreadable_event_log_gives_waiting_and_unreadable_journal_gives_null_sp
     run = layout.runs / "9"
     (run / "events.jsonl").mkdir(parents=True)  # reading it as a file fails
     (run / "live").write_text("not a folder")
-    entry = snapshot(layout, [record], cap=Decimal(20), now=now)["runs"][0]
+    entry = snapshot(layout, [record], now=now)["runs"][0]
     assert entry["spent"] is None
     assert {s for _, s in entry["modules"]} == {"waiting"}
 
@@ -196,7 +194,7 @@ def test_a_zero_charge_is_shown_without_an_exponent(layout):
     budget.settle("a", Decimal("0E-8"))
     record = Record("z", "credit_snapshot", "x", "running", "t", started_at="2026-11-09T11:59:00Z")
     now = datetime(2026, 11, 9, 12, 0, 0, tzinfo=UTC)
-    assert snapshot(layout, [record], cap=Decimal(20), now=now)["runs"][0]["spent"] == "0.00000000"
+    assert snapshot(layout, [record], now=now)["runs"][0]["spent"] == "0.00000000"
 
 
 def test_write_does_not_follow_a_planted_temporary_name_and_leaves_no_temporary(layout):
@@ -223,22 +221,22 @@ def test_stall_check_accepts_other_time_formats_and_a_naive_now(layout):
         "t1", "credit_snapshot", "x", "running", "t", started_at="2026-11-09 09:00:00+00:00"
     )
     now = datetime(2026, 11, 9, 12, 0, 0, tzinfo=UTC)
-    assert snapshot(layout, [record], cap=Decimal(20), now=now)["runs"][0]["stalled"] is True
+    assert snapshot(layout, [record], now=now)["runs"][0]["stalled"] is True
     naive = datetime(2026, 11, 9, 12, 0, 0)
-    assert "runs" in snapshot(layout, [record], cap=Decimal(20), now=naive)
+    assert "runs" in snapshot(layout, [record], now=naive)
 
 
 def test_an_unparsable_time_is_logged_not_silent(layout, caplog):
     record = Record("t2", "credit_snapshot", "x", "running", "t", started_at="yesterday")
     now = datetime(2026, 11, 9, 12, 0, 0, tzinfo=UTC)
-    entry = snapshot(layout, [record], cap=Decimal(20), now=now)["runs"][0]
+    entry = snapshot(layout, [record], now=now)["runs"][0]
     assert "stalled" not in entry and "yesterday" in caplog.text
 
 
 def test_an_empty_start_time_and_no_events_is_not_stalled_and_logs_nothing(layout, caplog):
     record = Record("t3", "credit_snapshot", "x", "running", "t", started_at="")
     now = datetime(2026, 11, 9, 12, 0, 0, tzinfo=UTC)
-    entry = snapshot(layout, [record], cap=Decimal(20), now=now)["runs"][0]
+    entry = snapshot(layout, [record], now=now)["runs"][0]
     assert "stalled" not in entry and caplog.text == ""
 
 
@@ -251,7 +249,7 @@ def test_only_200_ended_records_are_kept_and_the_running_one_leads(layout):
     records.append(
         Record("r", "credit_snapshot", "f", "running", "t", started_at="2026-11-09T11:59:00Z")
     )
-    runs = snapshot(layout, records, cap=Decimal(20), now=now)["runs"]
+    runs = snapshot(layout, records, now=now)["runs"]
     assert len(runs) == 201 and runs[0]["id"] == "r"
 
 
@@ -263,7 +261,7 @@ def test_an_event_line_that_is_not_an_object_is_dropped_not_fatal(layout):
         '{"event": "module_started", "module": "CP-0"}\n[]\n"text"\n7\n', encoding="utf-8"
     )
     now = datetime(2026, 11, 9, 12, 0, 0, tzinfo=UTC)
-    [entry] = snapshot(layout, [record], cap=Decimal(20), now=now)["runs"]
+    [entry] = snapshot(layout, [record], now=now)["runs"]
     assert dict(entry["modules"])["CP-0"] == "running"
 
 
@@ -271,7 +269,7 @@ def test_l4_a_run_with_no_event_log_yet_is_waiting_and_logs_nothing(layout, capl
     record = Record("t4", "credit_snapshot", "x", "queued", "t")
     (layout.runs / "t4").mkdir()  # the offline step made the folder; no events yet
     now = datetime(2026, 11, 9, 12, 0, 0, tzinfo=UTC)
-    entry = snapshot(layout, [record], cap=Decimal(20), now=now)["runs"][0]
+    entry = snapshot(layout, [record], now=now)["runs"][0]
     assert {s for _, s in entry["modules"]} == {"waiting"}
     assert "event log unreadable" not in caplog.text
 
@@ -336,11 +334,11 @@ _NOW = datetime(2026, 11, 9, 12, 0, 0, tzinfo=UTC)
 def test_s1_an_ended_run_is_read_once_and_shows_the_same_entry(layout, reads, status):
     record = _ended(layout, status=status)
     kept: dict = {}
-    first = snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)
+    first = snapshot(layout, [record], now=_NOW, kept=kept)
     before = dict(reads)
-    second = snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)
+    second = snapshot(layout, [record], now=_NOW, kept=kept)
     assert reads == before and before["events"] == 1
-    assert second == first == snapshot(layout, [record], cap=Decimal(20), now=_NOW)
+    assert second == first == snapshot(layout, [record], now=_NOW)
 
 
 def test_s1_a_run_that_may_still_have_a_launcher_is_always_read_again(layout, reads):
@@ -348,9 +346,9 @@ def test_s1_a_run_that_may_still_have_a_launcher_is_always_read_again(layout, re
     kept: dict = {}
     for status in ("interrupted", "running", "queued"):
         record = _ended(layout, run_id=status, status=status, started_at="2026-11-09T11:59:00Z")
-        snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)
+        snapshot(layout, [record], now=_NOW, kept=kept)
         before = reads["events"]
-        snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)
+        snapshot(layout, [record], now=_NOW, kept=kept)
         assert reads["events"] == before + 1, status
     assert kept == {}
 
@@ -359,10 +357,8 @@ def test_s1_an_unreadable_journal_is_not_kept(layout, reads):
     record = _ended(layout, journal=False)
     (layout.runs / "k1" / "live").write_text("not a folder", encoding="utf-8")
     kept: dict = {}
-    assert (
-        snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)["runs"][0]["spent"] is None
-    )
-    snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)
+    assert snapshot(layout, [record], now=_NOW, kept=kept)["runs"][0]["spent"] is None
+    snapshot(layout, [record], now=_NOW, kept=kept)
     assert reads["events"] == 2 and kept == {}
 
 
@@ -370,33 +366,31 @@ def test_s1_an_unreadable_event_log_is_not_kept(layout, reads):
     record = _ended(layout)
     (layout.runs / "k1" / "events.jsonl").write_text("{broken\n{}\n", encoding="utf-8")
     kept: dict = {}
-    snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)
-    snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)
+    snapshot(layout, [record], now=_NOW, kept=kept)
+    snapshot(layout, [record], now=_NOW, kept=kept)
     assert reads["events"] == 2 and kept == {}
 
 
 def test_s1_a_changed_record_is_read_again(layout, reads):
     record = _ended(layout)
     kept: dict = {}
-    snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)
+    snapshot(layout, [record], now=_NOW, kept=kept)
     append_event(layout.runs / "k1", "module_started", module="CP-1")
     assert (
-        dict(
-            snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)["runs"][0]["modules"]
-        )["CP-1"]
+        dict(snapshot(layout, [record], now=_NOW, kept=kept)["runs"][0]["modules"])["CP-1"]
         == "waiting"
     )  # same record: kept
     changed = replace(record, status="failed", reason="later")
-    entry = snapshot(layout, [changed], cap=Decimal(20), now=_NOW, kept=kept)["runs"][0]
+    entry = snapshot(layout, [changed], now=_NOW, kept=kept)["runs"][0]
     assert entry["status"] == "failed" and dict(entry["modules"])["CP-1"] == "running"
 
 
 def test_s1_nothing_is_kept_for_a_record_no_longer_shown(layout):
     records = [_ended(layout, run_id=f"e{i:03}") for i in range(3)]
     kept: dict = {}
-    snapshot(layout, records, cap=Decimal(20), now=_NOW, kept=kept)
+    snapshot(layout, records, now=_NOW, kept=kept)
     assert set(kept) == {"e000", "e001", "e002"}
-    snapshot(layout, records[:1], cap=Decimal(20), now=_NOW, kept=kept)
+    snapshot(layout, records[:1], now=_NOW, kept=kept)
     assert set(kept) == {"e000"}
 
 
@@ -404,12 +398,12 @@ def test_s1_a_failed_run_started_but_with_no_saved_pid_is_read_again(layout, rea
     # "failed: could not be started" after Popen leaves a live paid child and no saved pid.
     record = _ended(layout, status="failed", pid=0, reason="could not be started")
     kept: dict = {}
-    snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)
+    snapshot(layout, [record], now=_NOW, kept=kept)
     append_event(layout.runs / "k1", "module_started", module="CP-1")
-    entry = snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)["runs"][0]
+    entry = snapshot(layout, [record], now=_NOW, kept=kept)["runs"][0]
     assert dict(entry["modules"])["CP-1"] == "running" and kept == {}
     never_started = replace(record, started_at="")  # refused before launch: nothing can change
-    snapshot(layout, [never_started], cap=Decimal(20), now=_NOW, kept=kept)
+    snapshot(layout, [never_started], now=_NOW, kept=kept)
     assert set(kept) == {"k1"}
 
 
@@ -418,10 +412,10 @@ def test_s1_a_settled_run_whose_folder_was_not_visible_is_read_again(layout):
     hidden = layout.runs / "k1-away"
     kept: dict = {}
     (layout.runs / "k1").rename(hidden)  # the share dropped for one poll
-    first = snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)["runs"][0]
+    first = snapshot(layout, [record], now=_NOW, kept=kept)["runs"][0]
     assert "modules" not in first and kept == {}
     hidden.rename(layout.runs / "k1")
-    second = snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)["runs"][0]
+    second = snapshot(layout, [record], now=_NOW, kept=kept)["runs"][0]
     assert second["modules"] and Decimal(second["spent"]) == 2
 
 
@@ -434,10 +428,10 @@ def test_s1_a_settled_run_first_read_without_its_log_or_journal_is_read_again(la
     away = path.with_name(hidden + ".away")
     kept: dict = {}
     path.rename(away)
-    snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)
+    snapshot(layout, [record], now=_NOW, kept=kept)
     assert kept == {}
     away.rename(path)
-    entry = snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)["runs"][0]
+    entry = snapshot(layout, [record], now=_NOW, kept=kept)["runs"][0]
     assert dict(entry["modules"])["CP-0"] == "done" and Decimal(entry["spent"]) == 2
     assert set(kept) == {"k1"}
 
@@ -457,12 +451,12 @@ def test_a_line_or_marker_nested_too_deep_to_parse_is_unreadable_not_fatal(layou
     (layout.runs / "k1" / "events.jsonl").write_text(deep + "\n{}\n", encoding="utf-8")
     marker = next((layout.runs / "k1" / "live").rglob("e" * 32 + "*"))
     marker.write_text(deep, encoding="utf-8")
-    [entry] = snapshot(layout, [record], cap=Decimal(20), now=_NOW)["runs"]
+    [entry] = snapshot(layout, [record], now=_NOW)["runs"]
     assert {state for _, state in entry["modules"]} == {"waiting"} and entry["spent"] is None
 
 
 def test_the_submitters_name_is_published_in_the_runs_entry(layout):
     record = Record("1", "credit_snapshot", "acme", "queued", "t", submitted_by="Dana Reyes")
     now = datetime(2026, 11, 9, 12, 0, 0, tzinfo=UTC)
-    [entry] = snapshot(layout, [record], cap=Decimal(20), now=now)["runs"]
+    [entry] = snapshot(layout, [record], now=now)["runs"]
     assert entry["submitted_by"] == "Dana Reyes"

@@ -505,6 +505,22 @@ class Pathway(Contract):
 # (``financials-credit-metrics``, ``capital-structure``) keep those spellings.
 _PRESETS: tuple[tuple[PathwayId, str, str, tuple[str, ...]], ...] = (
     (
+        "lite_credit_assessment",
+        "Lite credit assessment",
+        "What is the issuer's credit profile and how does it hold up under stress?",
+        (
+            "key-findings",
+            "company-operating-model",
+            "model-chart-strip",
+            "financials-credit-metrics",
+            "strengths-weaknesses",
+            "company-profile",
+            "transaction-summary",
+            "downside-stress",
+            "break-points",
+        ),
+    ),
+    (
         "credit_snapshot",
         "Full credit assessment",
         "Should we own this issuer, in which instrument, and why?",
@@ -523,20 +539,39 @@ _PRESETS: tuple[tuple[PathwayId, str, str, tuple[str, ...]], ...] = (
             "what-changed",
         ),
     ),
+    # Ruling 2026-11-15-pathway-tiers-and-caps: the full assessment's twelve sections, the lite
+    # one's two downside sections and one lead section for each module Full does not run or show
+    # (CP-1B, CP-1D, CP-1C, CP-2D, CP-2G, CP-2H, CP-4, CP-4C, CP-3C, CP-3D), each owned as in its
+    # purpose pathway. CP-DR and CP-2E keep no section, as in Full.
     (
-        "lite_credit_assessment",
-        "Lite credit assessment",
-        "What is the issuer's credit profile and how does it hold up under stress?",
+        "deep_credit_assessment",
+        "Deep credit assessment",
+        "Should we own this issuer, in which instrument, and why, with every specialist view?",
         (
             "key-findings",
             "company-operating-model",
             "model-chart-strip",
+            "capital-structure",
             "financials-credit-metrics",
+            "headline-results",
+            "earnings-quality",
+            "peer-positioning",
             "strengths-weaknesses",
-            "company-profile",
-            "transaction-summary",
             "downside-stress",
             "break-points",
+            "liquidity-runway",
+            "forward-credit-path",
+            "rating-triggers",
+            "covenant-tests-headroom",
+            "recovery-by-class",
+            "refinancing-paths",
+            "market-against-fundamentals",
+            "relative-value",
+            "company-profile",
+            "transaction-summary",
+            "portfolio-fit",
+            "committee-challenge",
+            "what-changed",
         ),
     ),
     (
@@ -642,7 +677,8 @@ _PRESETS: tuple[tuple[PathwayId, str, str, tuple[str, ...]], ...] = (
 
 
 def pathways() -> tuple[Pathway, ...]:
-    """The Pathway presets: Full and Lite credit assessments, FP 02 to FP 06, then the Short one."""
+    """The Pathway presets: Lite, Full and Deep credit assessments (the run start page offers them
+    in this order), FP 02 to FP 06, then the Short one."""
     return tuple(
         Pathway(
             id=pathway_id,
@@ -2664,7 +2700,7 @@ def call_state(report: ReportView) -> tuple[str, tuple[str, str] | None]:
 register_figure_producer(
     "financials-credit-metrics",
     _cp1_period_figures,
-    pathways=frozenset({"credit_snapshot", "lite_credit_assessment"}),
+    pathways=frozenset({"credit_snapshot", "lite_credit_assessment", "deep_credit_assessment"}),
 )
 
 # --- Stage 3 chart wiring W2, group b: RV.3 (CP-1C) and CR.1 (CP-4) -------------------------------
@@ -2964,9 +3000,16 @@ def _cr1_figures(
 
 
 # -- group b (RV.3, CR.1) --
-register_figure_producer("peer-positioning", _rv3_figures, pathways=frozenset({"relative_value"}))
+# Deep shows the same blocks, owned by the same modules (ruling 2026-11-15-pathway-tiers-and-caps).
 register_figure_producer(
-    "covenant-tests-headroom", _cr1_figures, pathways=frozenset({"covenant_refinancing"})
+    "peer-positioning",
+    _rv3_figures,
+    pathways=frozenset({"relative_value", "deep_credit_assessment"}),
+)
+register_figure_producer(
+    "covenant-tests-headroom",
+    _cr1_figures,
+    pathways=frozenset({"covenant_refinancing", "deep_credit_assessment"}),
 )
 
 
@@ -3110,7 +3153,9 @@ def _register_group_d() -> None:
 
     for block_id, producer in PRODUCERS:
         register_figure_producer(
-            block_id, producer, pathways=frozenset({"distressed_restructuring"})
+            block_id,
+            producer,
+            pathways=frozenset({"distressed_restructuring", "deep_credit_assessment"}),
         )
 
 

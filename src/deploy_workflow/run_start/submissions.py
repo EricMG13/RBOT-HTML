@@ -24,6 +24,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, BinaryIO, TypedDict
 
+from deploy_vii.contracts import PATHWAY_CAP_USD
 from deploy_workflow.context import load_context
 from deploy_workflow.inbox.filing import safe_name
 from deploy_workflow.inbox.layout import MAX_ISSUER_ID, Layout
@@ -660,16 +661,26 @@ def issued(layout: Layout, sid: str) -> str:
     return lines[0] if lines else ""
 
 
+_CAP_LINE = "cap="
+
+
 def issued_prior(layout: Layout, sid: str) -> str:
     """The earlier run the latest summary named (a run folder name, or ``none`` for a first run);
     empty when there is none. It is part of the issued digest."""
     lines = _issued_lines(layout, sid)
-    return lines[1] if len(lines) > 1 else ""
+    return lines[1] if len(lines) > 1 and not lines[1].startswith(_CAP_LINE) else ""
 
 
-def _record_issued(layout: Layout, sid: str, value: str, prior: str = "") -> None:
-    """Replace the submission's issued digest (and the earlier run it names) with ``value`` (none
-    when empty), under the lock."""
+def issued_cap(layout: Layout, sid: str) -> str:
+    """The USD cap the latest summary showed; empty when there is none (a summary made before
+    per-pathway caps records none, ruling 2026-11-15-pathway-tiers-and-caps)."""
+    lines = _issued_lines(layout, sid)
+    return next((x.removeprefix(_CAP_LINE) for x in lines[1:] if x.startswith(_CAP_LINE)), "")
+
+
+def _record_issued(layout: Layout, sid: str, value: str, prior: str = "", cap: str = "") -> None:
+    """Replace the submission's issued digest (and the earlier run and the cap the summary showed)
+    with ``value`` (none when empty), under the lock."""
     folder = _folder(layout, sid)
     with _LOCK:
         if not folder.is_dir():  # the scheduler's release removed it after the check above
@@ -680,16 +691,19 @@ def _record_issued(layout: Layout, sid: str, value: str, prior: str = "") -> Non
             return
         temp = folder / f".issued-{uuid.uuid4().hex}"
         try:
-            temp.write_text(value + "\n" + (prior + "\n" if prior else ""), encoding="ascii")
+            lines = (value, prior, _CAP_LINE + cap if cap else "")
+            temp.write_text("".join(f"{x}\n" for x in lines if x), encoding="ascii")
             os.replace(temp, path)
         finally:
             temp.unlink(missing_ok=True)
 
 
-def summary(layout: Layout, sid: str, answers: Answers, *, cap: Decimal) -> dict[str, Any]:
+def summary(layout: Layout, sid: str, answers: Answers) -> dict[str, Any]:
     """The launcher's own forecast for these files and answers, with the digest to approve.
 
-    The forecast is for the config the answers' model and effort launch with (``runs.config_for``).
+    The forecast is for the config the answers' model and effort launch with (``runs.config_for``)
+    and at the pathway's cap (``PATHWAY_CAP_USD``), which the answer names (``cap``) and the
+    submission records beside the digest; Submit refuses when the table gives another cap.
 
     The digest it returns is the one approval this service will accept for the submission: it is
     recorded in ``uploads/<id>/issued``, replaced by each later summary and removed when a summary
@@ -697,10 +711,12 @@ def summary(layout: Layout, sid: str, answers: Answers, *, cap: Decimal) -> dict
     one; both are under the state folder, never in the files, and both are removed. A refusal
     comes back as ``error`` with no digest, and so does a change to the documents while the
     forecast was being made."""
-    result = _summarise(layout, sid, answers, cap=cap)
+    result = _summarise(layout, sid, answers)
     digest_issued = result.get("digest", "")
     try:
-        _record_issued(layout, sid, digest_issued, result.get("prior_choice", ""))
+        _record_issued(
+            layout, sid, digest_issued, result.get("prior_choice", ""), result.get("cap", "")
+        )
     except Refused:
         if digest_issued:  # a digest was made for a submission that is not there: not possible
             raise
@@ -709,7 +725,7 @@ def summary(layout: Layout, sid: str, answers: Answers, *, cap: Decimal) -> dict
     return result
 
 
-def _summarise(layout: Layout, sid: str, answers: Answers, *, cap: Decimal) -> dict[str, Any]:
+def _summarise(layout: Layout, sid: str, answers: Answers) -> dict[str, Any]:
     try:
         answers = validated(answers)
         require_provider_key(answers)
@@ -729,6 +745,7 @@ def _summarise(layout: Layout, sid: str, answers: Answers, *, cap: Decimal) -> d
                     return {"error": _CHANGED}
                 run = load_context(context_bytes(answers))
                 refuse_deactivated(run.run.pathway)
+                cap = PATHWAY_CAP_USD[run.run.pathway]
                 if len(run.identity.issuer_id) > MAX_ISSUER_ID:
                     raise Refused(
                         f"issuer_id is {len(run.identity.issuer_id)} characters; "
@@ -786,6 +803,7 @@ def _summarise(layout: Layout, sid: str, answers: Answers, *, cap: Decimal) -> d
                 "lookup": list(_lookup_lines(prepared, "default", (), os.environ)),
                 "model": answers["model"],
                 "effort": answers["effort"],
+                "cap": str(cap),
             }
         finally:
             _remove(work)
