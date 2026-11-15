@@ -37,6 +37,12 @@ branch, reviewed and merged here; counts are from the CI fast list unless stated
   `tests/test_method_scripts.py` 126 passed; launcher offline preparation for the 7 pathways differs
   only in the wired modules' instructions and CP-5's upstream note; sizes within every ceiling.
   The quality gate leaves `docs/reuse/selected-methods/` out of its scope (owner: "ok").
+  Owner's later answers ("approved", "approved"): CP-1 is sent its note, with `earnings_update`'s
+  ceiling raised from 546,000 to 546,500 by the note's measured 500; CP-2E's hedged floating-rate
+  debt above gross is sent back as `contradicted`, every other script refusal stays not checked.
+  CP-3's enterprise value: the method has no link from CP-DR or CP-1C peer multiples to CP-3's
+  waterfall (CP-1C's T4.10 forbids recovery use; the cp-os TransDigm run of 2026-11-04 had no
+  enterprise value anywhere); put to the owner, nothing built.
 - Portfolio inputs for the full credit assessment (ruling
   `docs/rulings/2026-11-15-full-assessment-portfolio-workbook.md`; owner: "wire in the portfolio
   workbook ... check data first likely incorrect sums and values"). `credit_snapshot` and
@@ -48,10 +54,11 @@ branch, reviewed and merged here; counts are from the CI fast list unless stated
   findings. Run by hand on the owner's five files (not in the repository; data dated 2026-05-29):
   the command reproduces an independent hand reconciliation, among it par 634.0m stated against
   763.0m held, NAV 630.9m against 734.1m at mid, two sectors above the 10% limit (11.92%, 10.26%)
-  reported Pass, second lien 0.61% against 0.76%, 315 of 382 maturities in 1930 to 1933, and one
-  listed top-ten issuer with no holding. That is one fund's files on one date, not proof for
-  another layout.
-- Checks on `ec8464a`: targeted suites (method scripts, launcher, register scope, methodology
+  reported Pass, second lien 0.61% against 0.76%, and 315 of 382 maturities in 1930 to 1933. Three
+  listed top-ten issuers match no borrower by name, ticker or prefix; the command names a possible
+  borrower for each (never compared), which corrected the hand reconciliation's reading of one of
+  them as absent. That is one fund's files on one date, not proof for another layout.
+- Checks on the merges up to the PR head: targeted suites (method scripts, launcher, register scope, methodology
   selection, portfolio, run-start submissions) pass, 1,181 and 1,127 in the last two runs; quality
   gate 0 findings on each merge; import contracts kept. The sub-branches' CI fast list: 4,857
   passed, 6 skipped, 165 deselected. Not verified: the full weekly suite on this head; browser
