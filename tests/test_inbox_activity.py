@@ -95,12 +95,8 @@ def test_snapshot_marks_a_silent_run_as_stalled(layout):
     record = Record(
         "id1", "credit_snapshot", "acme", "running", "t", started_at="2026-11-09T10:00:00Z"
     )
-    late = snapshot(
-        layout, [record], now=datetime(2026, 11, 9, 11, 0, 1, tzinfo=UTC)
-    )
-    soon = snapshot(
-        layout, [record], now=datetime(2026, 11, 9, 10, 59, 0, tzinfo=UTC)
-    )
+    late = snapshot(layout, [record], now=datetime(2026, 11, 9, 11, 0, 1, tzinfo=UTC))
+    soon = snapshot(layout, [record], now=datetime(2026, 11, 9, 10, 59, 0, tzinfo=UTC))
     assert late["runs"][0]["stalled"] is True and "stalled" not in soon["runs"][0]
 
 
@@ -361,9 +357,7 @@ def test_s1_an_unreadable_journal_is_not_kept(layout, reads):
     record = _ended(layout, journal=False)
     (layout.runs / "k1" / "live").write_text("not a folder", encoding="utf-8")
     kept: dict = {}
-    assert (
-        snapshot(layout, [record], now=_NOW, kept=kept)["runs"][0]["spent"] is None
-    )
+    assert snapshot(layout, [record], now=_NOW, kept=kept)["runs"][0]["spent"] is None
     snapshot(layout, [record], now=_NOW, kept=kept)
     assert reads["events"] == 2 and kept == {}
 
@@ -383,9 +377,7 @@ def test_s1_a_changed_record_is_read_again(layout, reads):
     snapshot(layout, [record], now=_NOW, kept=kept)
     append_event(layout.runs / "k1", "module_started", module="CP-1")
     assert (
-        dict(
-            snapshot(layout, [record], now=_NOW, kept=kept)["runs"][0]["modules"]
-        )["CP-1"]
+        dict(snapshot(layout, [record], now=_NOW, kept=kept)["runs"][0]["modules"])["CP-1"]
         == "waiting"
     )  # same record: kept
     changed = replace(record, status="failed", reason="later")

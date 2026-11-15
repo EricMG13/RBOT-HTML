@@ -104,6 +104,13 @@ PATHWAY_MODULES = {
         *("CP-0", "CP-1", "CP-1A", "CP-DR", "CP-2", "CP-2E", "CP-3", "CP-5", "CP-6"),
     ),
     "lite_credit_assessment": ("CP-0", "CP-1", "CP-1A", "CP-2", "CP-2A"),
+    # Owner, 2026-11-15: "Deep = all". Worked out by hand from methodology.json's inputs: CP-1C
+    # after CP-DR, CP-1D after CP-1B, CP-2 after the CP-1 family, CP-2H after CP-2G, CP-3D after
+    # CP-2H, CP-3C after CP-2D, CP-4C after CP-4 and CP-3C, CP-3 after every specialist it reads.
+    "deep_credit_assessment": (
+        *("CP-0", "CP-1", "CP-1A", "CP-1B", "CP-DR", "CP-1C", "CP-1D", "CP-2", "CP-4", "CP-2A"),
+        *("CP-2E", "CP-2D", "CP-2G", "CP-2H", "CP-3D", "CP-3C", "CP-4C", "CP-3", "CP-5", "CP-6"),
+    ),
 }
 # The owner's preset answer key (2026-11-11), hand-written as sets: what each pathway requests.
 PRESET_ANSWER_KEY = {
@@ -127,6 +134,12 @@ PRESET_ANSWER_KEY = {
     # CP-2A's two downside blocks. No CP-MODEL (ruling 2026-11-13): the chart strip and credit
     # metrics are routed to CP-1 and no forecast is published.
     "lite_credit_assessment": "CP-0 CP-1 CP-1A CP-2 CP-2A",
+    # The deep credit assessment (owner, 2026-11-15, "Deep = all"): the full one plus CP-1B, CP-1C,
+    # CP-1D, CP-2H, CP-3D and CP-4C.
+    "deep_credit_assessment": (
+        "CP-0 CP-1 CP-MODEL CP-1A CP-DR CP-2 CP-2A CP-2D CP-2E CP-2G CP-4 CP-3C CP-3 CP-5 CP-6 "
+        "CP-1B CP-1C CP-1D CP-2H CP-3D CP-4C"
+    ),
 }
 SHORT_SNAPSHOT = ("CP-0", "CP-1", "CP-L10")
 # Run order of the lite pathway and its report blocks, written by hand from the Front Page: the
@@ -1491,7 +1504,11 @@ def test_the_lite_pathway_runs_end_to_end_to_a_verified_delivery_with_a_syntheti
 # 2026-11-15: CP-1 is sent its method-script note (owner: "approved", ruling
 # 2026-11-15-method-script-checks.md); earnings_update measured 545,907 before and 546,407 after
 # on this file's input. Its ceiling is the owner's 546,000 plus that measured 500.
+# 2026-11-15: deep_credit_assessment, a new pathway (owner: "Deep max $40, Full $25 and Lite $15",
+# "Deep = all"; ruling 2026-11-15-pathway-tiers-and-caps), measured 1,805,013 on this file's input:
+# rounded up to the next 10,000 plus 5%, 1,900,500. No other ceiling moved.
 INSTRUCTION_BUDGET = {
+    "deep_credit_assessment": 1_900_500,
     "lite_credit_assessment": 420_000,
     "credit_snapshot": 1_483_647,
     "covenant_refinancing": 1_155_000,
@@ -9061,7 +9078,10 @@ T410_SENT = """## Findings
 """
 
 
-@pytest.mark.parametrize("pathway", ["credit_snapshot", "relative_value", "portfolio_decision"])
+@pytest.mark.parametrize(
+    "pathway",
+    ["credit_snapshot", "relative_value", "portfolio_decision", "deep_credit_assessment"],
+)
 def test_cp3_is_asked_for_its_waterfall_and_checked_against_the_t410_it_was_sent(tmp_path, pathway):
     (tmp_path / "texts").mkdir()
     _, texts = all_instructions(tmp_path / "texts", pathway)
@@ -9082,6 +9102,61 @@ def test_cp3_is_asked_for_its_waterfall_and_checked_against_the_t410_it_was_sent
         sent = {**task.handoffs, "CP-1C": T410_SENT.format(low=low).encode()}
         issues = _checked_handoff(dataclasses.replace(task, handoffs=sent), cited.encode(), check)
         assert any("T4.10" in i and "recomputes 3.8 x" in i for i in issues) is sent_back, low
+
+
+@pytest.mark.parametrize(("low", "accepted"), [("420", True), ("380", False)])
+def test_in_the_deep_assessment_cp3_is_checked_against_the_t410_cp1c_wrote_in_the_run(
+    tmp_path, provider, capsys, low, accepted
+):
+    """Ruling 2026-11-15-pathway-tiers-and-caps: in Deep, CP-1C runs before CP-3 and the launcher
+    sends CP-3 the CP-1C handoff this run accepted, so the CP-3 check compares CP-3's T4.10 copy
+    with it. SYNTHETIC handoffs: CP-1C states Low `low`; CP-3 copies 4.2x (420 / 100) for every
+    case, so a Low of 380 (3.8x) is a mis-copy the check sends back."""
+    argv = launch(tmp_path, "--live", "--ruling", str(RULING), pathway="deep_credit_assessment")
+    routes = prepare_routes(tmp_path, "sol-medium", None)
+
+    def respond(context):
+        raw = answer(context, routes)
+        if context["module_id"] == "CP-2G":
+            return forecast_answer(context, routes, REAL_DECLINED_BLOCK)
+        if context["module_id"] == "CP-1C":
+            t410 = T410_SENT.format(low=low).removeprefix("## Findings\n\n")
+            return raw.replace("\n## Calculations", "\n" + t410 + "\n## Calculations", 1)
+        if context["module_id"] == "CP-3":
+            start = raw.index("### Recovery waterfall")
+            bare = (
+                raw[:start] + raw[raw.index("\n\n", raw.index("| Enterprise value", start)) + 2 :]
+            )
+            return bare.replace("\n## Calculations", "\n" + CP3_FROM_T410 + "## Calculations", 1)
+        return raw
+
+    provider.answer = respond
+    assert main(argv) == (0 if accepted else 1)
+    called = [c[0] for c in provider.calls]
+    assert called.index("CP-1C") < called.index("CP-3")
+    sent_back = "row `EV multiple (Low) from CP-1C T4.10` states 4.2 x, but the method's"
+    reviews = [
+        json.loads(path.read_text())["issues"]
+        for path in (tmp_path / "out/live/modules").glob("*/*.review.json")
+        if (path.parent / "invocation.json")
+        .read_text()
+        .startswith('{"messages":[{"role":"system","text":"# CP-3 for ')
+    ]
+    assert reviews  # CP-3's drafts were reviewed
+    flagged = [i for issues in reviews for i in issues if sent_back in i]
+    if accepted:
+        assert not flagged
+        (record,) = (tmp_path / "out/requests/CP-3").glob("*/1.method-checks.json")
+        copies = {
+            c["figure"]: c["status"]
+            for c in json.loads(record.read_text())["checks"]
+            if c["figure"].endswith("from CP-1C T4.10")
+        }
+        assert set(copies.values()) == {"agreed"} and len(copies) == 3, copies
+    else:  # each of CP-3's drafts is sent back for the mis-copy; the run stops at CP-3
+        assert len(flagged) == len(reviews) == 3
+        assert "recomputes 3.8 x" in flagged[0]
+        assert "Stopped: cpos_live_not_accepted: CP-3" in capsys.readouterr().err
 
 
 def test_each_attempt_keeps_its_method_script_checks_beside_its_review(tmp_path):

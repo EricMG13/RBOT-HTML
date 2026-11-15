@@ -274,7 +274,7 @@ def test_the_run_the_approval_named_is_kept_and_reaches_the_launcher(root, fake_
             record,
             Path("c.json"),
             launcher=("L",),
-                ruling=None,
+            ruling=None,
         )
         assert argv[argv.index("--prior") : argv.index("--prior") + 2] == ["--prior", named]
     w.close()
