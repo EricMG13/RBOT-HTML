@@ -1797,6 +1797,10 @@ CP1_RULING_KEY = [
     ("Interest cover", "EBITDA / interest (t-1)", "3813", "1160", "3.29", "agreed"),
     ("Ratio", "(a - 1) / b", "7940", "6585", "1.21", "agreed"),
     ("Leverage change", "Current leverage / prior leverage - 1", "6", "5", "0.20", "agreed"),
+    ("Sales uplift", "(Current sales / prior sales - 1) * 100", "7940", "6585", "20.6", "agreed"),
+    ("Interest cover", "EBITDA / interest (t - 1)", "3813", "1160", "3.29", "agreed"),
+    ("Revenue growth", "Sales change / prior sales (t - 1)", "1355", "6585", "0.21", "agreed"),
+    ("Ratio", "EBITDA / interest (FY2024-1)", "3813", "1160", "3.29", "agreed"),
 ]
 CP1_KEY = [("Revenue growth", *row) for row in CP1_CHANGE_KEY] + CP1_RULING_KEY
 
