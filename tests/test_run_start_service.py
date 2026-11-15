@@ -212,6 +212,13 @@ def _raw(svc: Service, request: bytes) -> bytes:
     return received
 
 
+def test_an_http_09_request_line_is_closed_without_a_reply_or_an_error(svc, caplog):
+    with caplog.at_level(logging.INFO, logger=service.log.name):
+        assert _raw(svc, b"GET /\r\n\r\n") == b""
+        assert svc.call("GET", "/").status == 200  # the service still answers
+    assert not [r for r in caplog.records if r.levelno >= logging.ERROR], caplog.text
+
+
 def test_a_body_without_content_length_is_refused(svc):
     head = (
         f"POST /api/submissions HTTP/1.1\r\nHost: {svc.host}\r\nOrigin: http://{svc.host}\r\n"

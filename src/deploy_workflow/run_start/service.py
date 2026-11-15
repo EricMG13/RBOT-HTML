@@ -22,6 +22,7 @@ specification. Every request is checked before any body byte is read:
 * A body needs ``Content-Length`` (else 411). JSON bodies are at most 1 MiB (else 413) and must be
   one JSON value (else 400). An upload's length is at most ``submissions.MAX_FILE`` (else 400,
   judged from the header). Every connection serves one request and closes.
+* An HTTP/0.9 request line (no version, so no headers) is closed without a reply.
 
 Requests. JSON answers carry ``Content-Type: application/json; charset=utf-8``. A refusal is
 ``{"error": "<plain sentence>"}`` with 400, an unknown submission or run is 404, an unexpected
@@ -167,6 +168,7 @@ class Handler(http_base.Handler):
     timeout = SOCKET_TIMEOUT
     server_version = "RunStart"
     logger = log
+    closes_http09 = True  # no headers to check, and no status line or headers could be sent
 
     # -- plumbing ---------------------------------------------------------------------------
 

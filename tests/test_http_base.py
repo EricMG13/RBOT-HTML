@@ -575,7 +575,7 @@ def test_an_own_address_or_no_address_is_not_a_wildcard(host):
 def test_the_run_start_service_passes_its_own_parameters():
     handler = run_start_service.Handler
     assert handler.response_headers == ()  # its policies differ per route, so none is global
-    assert handler.closes_http09 is False
+    assert handler.closes_http09 is True
     assert handler.connection_deadline is http_base.Handler.connection_deadline  # none
     assert handler.read_body is http_base.Handler.read_body  # a lost body is ClientGone
     assert handler.logger is run_start_service.log
