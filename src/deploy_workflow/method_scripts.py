@@ -276,12 +276,18 @@ _SCALES = {
 _SYMBOLS = {"us$": "USD", "€": "EUR", "£": "GBP"}
 
 
+# A cell that states a gap instead of a figure, by its first words: one vocabulary for every check.
+GAP_WORDS = (
+    *("not supplied", "not provided", "not available", "not disclosed"),
+    *("[insufficient information]", "insufficient"),
+)
+
+
 def blank(cell: str, tables: types.ModuleType) -> bool:
     """A cell that states no figure: the transport's `Not supplied: <reason>`, the method's
     `[Insufficient Information]` and the script's own null words. Never a zero."""
     text = _plain(cell).casefold()
-    stated_gap = text.startswith(("not supplied", "[insufficient information]", "insufficient"))
-    return stated_gap or bool(tables.is_null(text))
+    return text.startswith(GAP_WORDS) or bool(tables.is_null(text))
 
 
 NOT_MEANINGFUL = ("not calculable", "not meaningful", "n.m.", "n/m", "nm", "n.c.")
@@ -1002,18 +1008,19 @@ def upstream_texts(handoffs: Mapping[str, bytes]) -> dict[str, str]:
     return out
 
 
+_BLOCKED = re.compile(r"""module_status:\s*["']?blocked\b""", re.IGNORECASE)
+
+
 def blocked(text: str) -> bool:
-    """`module_status: Blocked` in the handoff's front matter: the method's own stop, after which
-    only the gate is owed (as the launcher's presence check reads it)."""
-    lines = text.splitlines()
+    """`module_status: Blocked` in the handoff's front matter (a byte-order mark, a note after the
+    word, `Blocked - gate failed`, or a `# comment` allowed): the method's own stop, after which
+    only the gate is owed. The one rule: the launcher's presence check reads it too."""
+    lines = text.lstrip("\ufeff").splitlines()
     if not lines or lines[0].strip() != "---":
         return False
-    head = lines[1:]
+    head = [h.strip() for h in lines[1:]]
     head = head[: head.index("---")] if "---" in head else head
-    return any(
-        re.fullmatch(r"""module_status:\s*["']?blocked["']?\s*""", h.strip(), re.IGNORECASE)
-        for h in head
-    )
+    return any(_BLOCKED.match(h) for h in head)
 
 
 def record(

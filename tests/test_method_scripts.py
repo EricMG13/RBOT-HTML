@@ -864,45 +864,79 @@ def test_cp3_is_asked_for_the_table_with_the_owners_limitation():
         assert words in note, words
 
 
+def copies(outcomes):
+    return [o for o in outcomes if o.figure.endswith("from CP-1C T4.10")]
+
+
 def test_cp3_t410_used_and_right():
+    # T4.10's multiples are its implied EV over its borrower metric: 200 / 100 = 2.0x,
+    # 420 / 100 = 4.2x, 700 / 100 = 7.0x, the multiples CP-3 states.
     outcomes = ms.run("CP-3", cp3(FROM_T410), {"CP-1C": t410()})
     assert {o.status for o in outcomes} == {"agreed"}
-    copies = [o for o in outcomes if o.figure.endswith("from CP-1C T4.10")]
-    assert [o.recomputed for o in copies] == [200.0, 420.0, 700.0]
+    assert [o.recomputed for o in copies(outcomes)] == pytest.approx([2.0, 4.2, 7.0])
+    # 0.1 (`4.2`), plus T4.10's own rounding: (0.5 + 4.2 x 0.5) / 100 = 0.026.
+    assert copies(outcomes)[1].tolerance == pytest.approx(0.1 + (0.5 + 4.2 * 0.5) / 100)
 
 
-def test_cp3_a_mis_copied_t410_figure_is_sent_back():
-    # T4.10's median is 450; CP-3 wrote 420 (with a 4.2x it also wrote): its own arithmetic agrees,
-    # the copy does not.
-    outcomes = {o.figure: o for o in ms.run("CP-3", cp3(FROM_T410), {"CP-1C": t410(median="450")})}
-    assert outcomes["Enterprise value (Base)"].status == "agreed"
-    copy = outcomes["Enterprise value (Base) from CP-1C T4.10"]
-    assert (copy.status, copy.recomputed) == ("disagreed", 450.0)
-    (issue,) = ms.issues("CP-3", cp3(FROM_T410), {"CP-1C": t410(median="450")})
-    assert "states 420 USD m" in issue and "recomputes 450 USD m" in issue and "T4.10" in issue
-
-
-def test_cp3_a_t410_figure_with_no_unit_is_only_agreed_never_refused():
-    # Unitless T4.10: 420 agrees (the same figure); 450 may be another scale, so not checked.
-    agreed = ms.run("CP-3", cp3(FROM_T410), {"CP-1C": t410(unit="")})
-    assert {o.status for o in agreed} == {"agreed"}
-    outcomes = {
-        o.figure: o
-        for o in ms.run("CP-3", cp3(FROM_T410), {"CP-1C": t410("200", "450", "700", "")})
-    }
-    assert outcomes["Enterprise value (Base) from CP-1C T4.10"].status == "not checked"
-
-
-def test_cp3_citing_a_t410_that_states_none_disagrees():
-    rows = edited("EV basis", low=T410_BASIS.replace("EV/EBITDA", "EV/Revenue"))
+def test_cp3_a_mis_copied_multiple_is_sent_back():
+    # Base 4.5x on EBITDA 100 = 450: its own arithmetic agrees, but T4.10's median is 4.2x.
+    rows = edited(
+        "EV multiple", rows=edited("Enterprise value", rows=FROM_T410, base="450"), base="4.5x"
+    )
     outcomes = {o.figure: o for o in ms.run("CP-3", cp3(rows), {"CP-1C": t410()})}
-    copy = outcomes["Enterprise value (Low) from CP-1C T4.10"]
-    assert copy.status == "disagreed" and copy.recomputed_label == "none in T4.10"
+    assert outcomes["Enterprise value (Base)"].status == "agreed"
+    copy = outcomes["EV multiple (Base) from CP-1C T4.10"]
+    assert (copy.status, copy.recomputed) == ("disagreed", pytest.approx(4.2))
+    issues = ms.issues("CP-3", cp3(rows), {"CP-1C": t410()})
+    assert any("EV multiple (Base) from CP-1C T4.10" in i and "states 4.5 x" in i for i in issues)
+
+
+def test_cp3_t410_multiples_on_another_metric_are_a_right_copy():
+    # Review case: T4.10's 2.0x, 4.2x, 7.0x applied to CP-3's own EBITDA 120: 240, 504, 840.
+    rows = edited("EV metric", rows=FROM_T410, low="120", base="120", high="120")
+    rows = edited("Enterprise value", rows=rows, low="240", base="504", high="840")
+    outcomes = ms.run("CP-3", cp3(rows), {"CP-1C": t410()})
+    evs = [o for o in outcomes if o.figure.startswith(("Enterprise value", "EV multiple"))]
+    assert {o.status for o in evs} == {"agreed"}
+
+
+def test_cp3_a_basis_that_only_mentions_t410_is_not_a_copy():
+    # Review case: CP-3's own 4.2x, T4.10 named only to say it is not used, or as a comparison.
+    for basis in (
+        (
+            "own 4.2x EV/EBITDA on FY2024 EBITDA from evidence S4; CP-1C T4.10 EV/EBITDA is "
+            "Not Calculable (N=2) so not used"
+        ),
+        "own multiple from evidence S4; CP-1C T4.10's median 4.2x shown for comparison",
+    ):
+        rows = edited("EV basis", low=basis, base=basis, high=basis)
+        sent = {"CP-1C": t410("Not Calculable", "Not Calculable", "Not Calculable")}
+        outcomes = ms.run("CP-3", cp3(rows), sent)
+        assert copies(outcomes) == [] and ms.issues("CP-3", cp3(rows), sent) == ()
+
+
+def test_cp3_a_copy_of_a_t410_that_states_none_is_not_checked():
+    sent = {"CP-1C": t410("Not Calculable", "Not Calculable", "Not Calculable")}
+    outcomes = ms.run("CP-3", cp3(FROM_T410), sent)
+    assert {o.status for o in copies(outcomes)} == {"not checked"}
+    assert "states no figure for Low" in copies(outcomes)[0].reason
+    assert ms.issues("CP-3", cp3(FROM_T410), sent) == ()  # CP-3's own arithmetic stands
+
+
+def test_cp3_t410_headed_base_and_combined_layouts_are_read():
+    sent = t410().replace("Median (USD m)", "Base (USD m)")
+    assert {o.status for o in copies(ms.run("CP-3", cp3(FROM_T410), {"CP-1C": sent}))} == {"agreed"}
+    combined = """### T4.10 — Implied EV
+| Method | Multiple Source/Value | Borrower Metric/Period | Implied EV/Low/Median/High | Status |
+|---|---|---|---|---|
+| Peer EV/EBITDA | T4.8, 4.2x | EBITDA 100 | 420 / 200 / 420 / 700 | Calculated |
+"""
+    outcomes = copies(ms.run("CP-3", cp3(FROM_T410), {"CP-1C": combined}))
+    assert [o.status for o in outcomes] == ["agreed"] * 3
 
 
 def test_cp3_citing_t410_without_cp1c_is_not_checked():
-    outcomes = {o.figure: o for o in ms.run("CP-3", cp3(FROM_T410))}
-    copy = outcomes["Enterprise value (Low) from CP-1C T4.10"]
+    copy = copies(ms.run("CP-3", cp3(FROM_T410)))[0]
     assert copy.status == "not checked" and "was not sent CP-1C's handoff" in copy.reason
 
 
@@ -937,13 +971,40 @@ def test_cp3_no_supportable_ev_is_recorded_not_refused():
     assert ms.issues("CP-3", cp3(rows)) == ()
 
 
+NO_TABLE = (
+    "## Request\nSYNTHETIC handoff.\n## Findings\n### Bottom line\nNo waterfall.\n## Gaps\nNone."
+)
+
+
 def test_cp3_a_missing_table_is_sent_back_unless_blocked_at_its_gate():
-    (absent,) = ms.run("CP-3", cp3(heading="### Recovery analysis"))
+    (absent,) = ms.run("CP-3", NO_TABLE)
     assert absent.status == "missing"
-    (issue,) = ms.issues("CP-3", cp3(heading="### Recovery analysis"))
+    (issue,) = ms.issues("CP-3", NO_TABLE)
     assert "Write `### Recovery waterfall`" in issue and "Not supplied: <reason>" in issue
-    blocked = cp3(heading="### Recovery analysis", front="---\nmodule_status: Blocked\n---")
-    assert [o.status for o in ms.run("CP-3", blocked)] == ["not checked"]
+    # Review: the gate's stop is read with a note after the word, a comment or a byte-order mark.
+    for front in (
+        "---\nmodule_status: Blocked\n---",
+        "---\nmodule_status: Blocked - gate failed\n---",
+        "---\nmodule_status: Blocked # no legal documents\n---",
+        "\ufeff---\nmodule_status: Blocked\n---",
+    ):
+        assert [o.status for o in ms.run("CP-3", front + "\n" + NO_TABLE)] == ["not checked"]
+    assert not ms.blocked("---\nmodule_status: Not blocked\n---\n")
+
+
+def test_cp3_the_table_is_found_under_any_heading_that_names_it():
+    # Review cases: each was "missing" although the table is there.
+    for heading in (
+        "### Recovery Waterfall (indicative)",
+        "### Recovery waterfall:",
+        "### 3.2 Recovery waterfall",
+        "### Recovery waterfall — indicative",
+        "## Recovery waterfall",
+        "**Recovery waterfall**",
+        "### Recoveries",  # no heading names it: the table is found by its columns
+    ):
+        statuses_ = {o.status for o in ms.run("CP-3", cp3(heading=heading))}
+        assert statuses_ == {"agreed"}, heading
 
 
 def test_cp3_one_recovery_wrong():
@@ -1040,10 +1101,74 @@ def test_cp3_a_malformed_table_is_not_checked():
     assert outcome.status == "not checked" and "a row of 8 cells under 7 columns" in outcome.reason
 
 
-def test_cp3_a_row_the_check_does_not_read_is_not_compared():
-    rows = [*WATERFALL[:5], ("Tax leakage", "5", "—", "—", "—", "USD", "m"), *WATERFALL[5:]]
+def test_cp3_a_row_the_check_does_not_read_is_named_and_the_rest_checked():
+    rows = [*WATERFALL[:5], ("Total claims", "550", "—", "—", "—", "USD", "m"), *WATERFALL[5:]]
+    outcomes = ms.run("CP-3", cp3(rows))
+    assert outcomes[0].figure == "Row: Total claims" and outcomes[0].status == "not checked"
+    assert {o.status for o in outcomes[1:]} == {"agreed"}
+    # A row with recoveries is perhaps a claim not marked `Claim:`: nothing is compared.
+    rows = [
+        *WATERFALL[:5],
+        ("Senior notes", "200", "0%", "25%", "100%", "USD", "m"),
+        *WATERFALL[5:],
+    ]
     (outcome,) = ms.run("CP-3", cp3(rows))
-    assert outcome.status == "not checked" and "`Tax leakage`" in outcome.reason
+    assert outcome.status == "not checked" and "`Senior notes`" in outcome.reason
+
+
+def test_cp3_claims_that_rank_equally_share_one_row():
+    # Review case: two pari passu claims of 300 on 400 of value. One row of 600: 400 / 600 =
+    # 66.7% each (the script's class recovery); EV 420 less cost 20 leaves 400.
+    rows = [
+        ("Enterprise value", "—", "—", "420", "—", "USD", "m"),
+        ("EV multiple", "—", "—", "4.2x", "—", "—", "—"),
+        ("EV metric", "—", "—", "100", "—", "USD", "m"),
+        ("EV basis", "—", "—", OWN_BASIS, "—", "—", "—"),
+        ("Cost: Administrative claims", "20", "—", "—", "—", "USD", "m"),
+        ("Claim: Notes A + Notes B (pari passu)", "600", "—", "66.7%", "—", "USD", "m"),
+        ("Fulcrum", "—", "—", "Notes A + Notes B", "—", "—", "—"),
+        ("Residual to equity", "—", "—", "0", "—", "USD", "m"),
+    ]
+    base = by_case(ms.run("CP-3", cp3(rows)), "Base")
+    assert {o.status for o in base.values()} == {"agreed"}
+    assert base["Recovery: Notes A + Notes B (pari passu)"].recomputed == pytest.approx(
+        66.6667, abs=1e-3
+    )
+
+
+def test_cp3_a_fulcrum_is_read_as_the_claim_it_names():
+    # Review cases. High has no fulcrum: `Not applicable` and `Equity` say so. Base's fulcrum is
+    # the notes, written several ways; a name that is no claim is not checked, never disagreed.
+    for cell in ("Not applicable", "Equity", "None"):
+        assert (
+            by_case(ms.run("CP-3", cp3(edited("Fulcrum", high=cell))), "High")["Fulcrum"].status
+            == "agreed"
+        )
+    for cell in ("Claim: Senior Notes", "Senior Notes - 25% recovery", "Senior Notes (25.0%)"):
+        assert (
+            by_case(ms.run("CP-3", cp3(edited("Fulcrum", base=cell))), "Base")["Fulcrum"].status
+            == "agreed"
+        )
+    unread = by_case(ms.run("CP-3", cp3(edited("Fulcrum", base="the mezzanine"))), "Base")[
+        "Fulcrum"
+    ]
+    assert unread.status == "not checked"
+
+
+def test_cp3_lesser_review_cases_keep_checking():
+    # A `—` currency on the residual row takes the table's unit.
+    rows = edited("Residual to equity", currency="—", scale="—")
+    assert {o.status for o in ms.run("CP-3", cp3(rows))} == {"agreed"}
+    # `4.2×` and `4.2x (peer median)` are 4.2.
+    for multiple in ("4.2×", "4.2x (peer median)"):
+        ev = by_case(ms.run("CP-3", cp3(edited("EV multiple", base=multiple))), "Base")
+        assert ev["Enterprise value"].status == "agreed", multiple
+    # `Not available` and `Not provided: x` are a gap for that case, like `Not supplied`.
+    for gap in ("Not available", "Not provided: no valuation"):
+        outcomes = ms.run("CP-3", cp3(edited("Enterprise value", base=gap)))
+        base = by_case(outcomes, "Base")
+        assert "can be supported" in base["Enterprise value"].reason, gap
+        assert by_case(outcomes, "Low")["Enterprise value"].status == "agreed", gap
 
 
 # --- CP-2G --------------------------------------------------------------------------------------

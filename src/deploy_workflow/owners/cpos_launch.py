@@ -169,6 +169,10 @@ from deploy_workflow.owners.cpos_launch_tables import (
     _owner_tables,
     chart_issues,
 )
+from deploy_workflow.portfolio_workbook import NOT_COLLECTED, PortfolioCheck
+from deploy_workflow.portfolio_workbook import check as portfolio_check
+from deploy_workflow.portfolio_workbook import instructions as portfolio_instructions
+from deploy_workflow.portfolio_workbook import readiness_lines as portfolio_lines
 from deploy_workflow.prose_checks import (
     DATA_MODULES,
     READER_HEADINGS,
@@ -179,10 +183,6 @@ from deploy_workflow.prose_checks import (
 )
 from deploy_workflow.research.intake import effective_cutoff
 from deploy_workflow.research.weblookup import USER_AGENT_ENV, bare_host_problem, usable_user_agent
-from deploy_workflow.portfolio_workbook import NOT_COLLECTED, PortfolioCheck
-from deploy_workflow.portfolio_workbook import check as portfolio_check
-from deploy_workflow.portfolio_workbook import instructions as portfolio_instructions
-from deploy_workflow.portfolio_workbook import readiness_lines as portfolio_lines
 from deploy_workflow.run_expectations import Item, edges_for, expectations, guess_kind
 from deploy_workflow.workflow import _put
 
@@ -591,7 +591,6 @@ ROUTING_REGISTERS = (
 )
 _REQUIRED_KEY = re.compile(r"^(\s*)- \*\*required_register_ids\*\*:(.*)$")
 _REGISTER_ID = re.compile(r"[A-Za-z]\w*(?:\.\w+)*")
-_BLOCKED = re.compile(r"""^module_status:\s*["']?blocked["']?\s*$""", re.IGNORECASE)
 _MISSING_REGISTERS = (
     "Missing registers: {ids}. The method requires each of them and CP-OS does not cut them. "
     "Write each as its own register: a `###` heading that starts with its id (`### {first} - "
@@ -646,13 +645,9 @@ def required_registers(module: str) -> tuple[str, ...]:
 
 def _blocked_at_gate(text: str) -> bool:
     """`module_status: Blocked` in the front matter: the method's own stop ("Module Status =
-    Blocked, STOP"); the retained CP-4 handoff writes its source gate and nothing else."""
-    lines = text.splitlines()
-    if not lines or lines[0].strip() != "---":
-        return False
-    head = lines[1:]
-    head = head[: head.index("---")] if "---" in head else head
-    return any(_BLOCKED.match(line.strip()) for line in head)
+    Blocked, STOP"); the retained CP-4 handoff writes its source gate and nothing else. One rule
+    with the method-script checks (`method_scripts.blocked`)."""
+    return method_scripts.blocked(text)
 
 
 def _has_register(text: str, ident: str) -> bool:

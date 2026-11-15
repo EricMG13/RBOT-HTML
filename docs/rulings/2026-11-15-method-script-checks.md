@@ -294,17 +294,43 @@ session reads 3 as the pathway part waiting; no pathway's modules or order chang
   gate, `module_status: Blocked`), and an EV figure with no `EV basis`.
 - Checked per case: EV = multiple x metric by CP-1C's own `peer_statistics.implied_ev` (none on a
   metric at or below zero), within the stated place plus the product's rounding bound; where the
-  basis names T4.10, the EV against the T4.10 CP-3 was actually sent (the checker passes each
-  module the upstream handoffs it was sent): a mis-copied figure disagrees when T4.10 states its
-  currency and scale; with none stated, only agreement is recorded (a different figure may be a
-  different scale); a T4.10 that states no figure for the case, cited anyway, disagrees; CP-1C not
+  basis begins `CP-1C T4.10`, the multiple against the T4.10 CP-3 was actually sent (the checker
+  passes each module the upstream handoffs it was sent; see the review fixes below); CP-1C not
   sent is not checked. Then the waterfall as before.
-- Instruction size: CP-3 only, +1,274 characters in each of `credit_snapshot` (1,464,554 to
-  1,465,828 of 1,483,647), `relative_value` (1,059,482 to 1,060,756 of 1,071,000) and
-  `portfolio_decision` (940,681 to 941,955 of 955,500). No ceiling moved.
+- Instruction size: CP-3 only, +1,274 characters (then 1,334 after the review fixes) in each of
+  `credit_snapshot`, `relative_value` and `portfolio_decision`, each within its ceiling. No
+  ceiling moved.
+- Review fixes (second adversarial review, about 150 handoffs; each case reproduced first):
+  - The copy is claimed by the basis's leading token only: an `EV basis` beginning `CP-1C T4.10`
+    (optionally its method, `EV/EBITDA`). A basis that mentions T4.10 to set it aside, or as a
+    comparison, is CP-3's own case. The copy compares multiples, not values: CP-3's `EV multiple`
+    against T4.10's implied EV for the case over its borrower metric (needs no unit; CP-3 may
+    apply T4.10's multiples to its own metric). A T4.10 that states no figure for the case leaves
+    the copy not checked; CP-3's own arithmetic stands or falls by itself. T4.10's median may be
+    headed `Base`.
+  - Claims that rank equally: `recovery_waterfall.py` allocates strictly by row, so two pari passu
+    claims cannot be stated truthfully as two rows. CP-3's note asks for them in one `Claim:` row
+    naming them all; the script's class recovery is then each member's. Neither CP-3A's text nor
+    the script defines a tie.
+  - A fulcrum cell is read as the claim it names: a leading `Claim:` and a trailing note (after a
+    dash or in brackets) are not the name; `Not applicable`, `Equity`, `none`, `n/a` say no debt
+    claim is the fulcrum; a cell naming no claim is not checked, never a disagreement.
+  - The table is found under any heading (any level) or bold line whose words include "recovery
+    waterfall", numbering and a trailing note aside, else as the one table with its columns;
+    `missing` means it is not in the handoff.
+  - `module_status: Blocked` is one rule (`method_scripts.blocked`) for this check and the
+    launcher's presence check (`_blocked_at_gate` now calls it): a note after the word, a `#`
+    comment and a byte-order mark are read; `Not blocked` is not blocked.
+  - Lesser: a row the check does not read (a total) is named in the record and the rest checked,
+    unless it states recoveries (it may be a claim not marked `Claim:`); a money row with `—` for
+    currency and scale takes the table's unit; `8.5×` and `8.5x (peer median)` read as 8.5; one
+    gap vocabulary for every check (`Not supplied`, `Not provided`, `Not available`, `Not
+    disclosed`, `[Insufficient Information]`).
+  - CP-3's note: 1,334 characters (from 1,274); `credit_snapshot` 1,465,888, `relative_value`
+    1,060,816, `portfolio_decision` 942,015, each within its ceiling.
 - Known limits: T4.10's own layout (the SKILL's combined `Implied EV/Low/Median/High` or the step
-  file's separate columns) is read either way, but its units are the method's to state; CP-1C is
-  not asked for them. `credit_snapshot` and `portfolio_decision` have no CP-1C until the restructure,
+  file's separate columns) is read either way; its borrower metric must be one figure in its
+  cell, or the copy is not checked. `credit_snapshot` and `portfolio_decision` have no CP-1C until the restructure,
   so CP-3 states its own cases or none there.
 
 ## Status
