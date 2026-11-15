@@ -31,7 +31,7 @@ from typing import Any
 from deploy_vii.contracts import DEACTIVATED_MESSAGE, DEACTIVATED_PATHWAYS, PATHWAY_MODULES, Run
 from deploy_vii.registry import dependencies, modules, plan
 from deploy_vii.report_view import _spec_of, pathways
-from deploy_workflow import platform_io
+from deploy_workflow import method_scripts, platform_io
 from deploy_workflow.changes import (
     DELIVERED_WHOLE,
     PACK_NAME,
@@ -69,6 +69,7 @@ from deploy_workflow.model.adapter import (
     check_ruling,
 )
 from deploy_workflow.model.budget import Budget
+from deploy_workflow.model.configs import CONFIGS
 from deploy_workflow.model.handoff import (
     BYTES_PER_TOKEN_BOUND,
     REQUEST_OVERHEAD,
@@ -89,7 +90,6 @@ from deploy_workflow.model.pricing import (
     web_search_usd,
 )
 from deploy_workflow.model.turn import MODEL_EFFORTS, dump_json
-from deploy_workflow.model_testing.configs import CONFIGS
 from deploy_workflow.owners import cpos_forecast
 from deploy_workflow.owners.cpos import (
     WEB_SEARCH_GRANT,
@@ -169,6 +169,10 @@ from deploy_workflow.owners.cpos_launch_tables import (
     _owner_tables,
     chart_issues,
 )
+from deploy_workflow.portfolio_workbook import NOT_COLLECTED, PortfolioCheck
+from deploy_workflow.portfolio_workbook import check as portfolio_check
+from deploy_workflow.portfolio_workbook import instructions as portfolio_instructions
+from deploy_workflow.portfolio_workbook import readiness_lines as portfolio_lines
 from deploy_workflow.prose_checks import (
     DATA_MODULES,
     READER_HEADINGS,
@@ -334,6 +338,7 @@ class Prepared:
     expectations: tuple[Item, ...] = ()  # What the run is expected to do (offline forecast).
     prior: PriorRun | None = None  # The earlier run CP-8 compares with, when one is listed.
     changes: str = ""  # The one line the run records about that comparison.
+    portfolio: PortfolioCheck = NOT_COLLECTED  # The portfolio workbook found and its checks.
 
 
 def _sha(raw: bytes) -> str:
@@ -436,6 +441,20 @@ def _documents(
         for key, g in guesses.items()
     )
     return guesses, rows
+
+
+def _portfolio_files(pinned: Mapping[str, HandoffInput], folder: Path) -> dict[str, bytes]:
+    """The bytes of each pinned `.xlsx` and `.csv` source (its name is its path in the issuer
+    folder), as pinned: a file changed since it was hashed refuses the launch rather than be
+    checked in a state the run would not read."""
+    found: dict[str, bytes] = {}
+    for name, pin in pinned.items():
+        if name.lower().endswith((".xlsx", ".csv")):
+            raw = (folder / name).read_bytes()
+            if _sha(raw) != pin.sha256:
+                raise LaunchRefused(f"--sources: {name} changed while it was read; try again")
+            found[name] = raw
+    return found
 
 
 def read_documents(folder: Path) -> Reading:
@@ -572,7 +591,6 @@ ROUTING_REGISTERS = (
 )
 _REQUIRED_KEY = re.compile(r"^(\s*)- \*\*required_register_ids\*\*:(.*)$")
 _REGISTER_ID = re.compile(r"[A-Za-z]\w*(?:\.\w+)*")
-_BLOCKED = re.compile(r"""^module_status:\s*["']?blocked["']?\s*$""", re.IGNORECASE)
 _MISSING_REGISTERS = (
     "Missing registers: {ids}. The method requires each of them and CP-OS does not cut them. "
     "Write each as its own register: a `###` heading that starts with its id (`### {first} - "
@@ -627,13 +645,9 @@ def required_registers(module: str) -> tuple[str, ...]:
 
 def _blocked_at_gate(text: str) -> bool:
     """`module_status: Blocked` in the front matter: the method's own stop ("Module Status =
-    Blocked, STOP"); the retained CP-4 handoff writes its source gate and nothing else."""
-    lines = text.splitlines()
-    if not lines or lines[0].strip() != "---":
-        return False
-    head = lines[1:]
-    head = head[: head.index("---")] if "---" in head else head
-    return any(_BLOCKED.match(line.strip()) for line in head)
+    Blocked, STOP"); the retained CP-4 handoff writes its source gate and nothing else. One rule
+    with the method-script checks (`method_scripts.blocked`)."""
+    return method_scripts.blocked(text)
 
 
 def _has_register(text: str, ident: str) -> bool:
@@ -1039,6 +1053,12 @@ def _prepare(  # noqa: PLR0913, PLR0915 - `prepare`'s body: one keyword per sett
         raise LaunchRefused(
             f"--sources: {', '.join(clash)} would be taken for an earlier run's handoff; rename it"
         )
+    portfolio = portfolio_check(
+        _portfolio_files(pinned, folder),
+        pathway=settings.run.pathway,
+        declared=settings.attachments.portfolio_workbook,
+        run_date=run.as_of,
+    )
     aliases = tuple(a for a in settings.identity.aliases if a.strip())
     forecast = "CP-1" in ordered and (model_wanted or "CP-2G" in ordered)
     layout, omitted = _layout(run, ordered, aliases, config, forecast=forecast)
@@ -1076,6 +1096,12 @@ def _prepare(  # noqa: PLR0913, PLR0915 - `prepare`'s body: one keyword per sett
         ),
         ("CP-6", CP6A_BLOCK, True),
         ("CP-6", DEEP_DEBATE_BLOCK, options.cp6_deep_debate),
+        *((m, note, True) for m, note in method_scripts.NOTES.items()),
+        *(
+            (told, text, bool(text))
+            for told in ("CP-0", "CP-3", "CP-6")
+            for text in (portfolio_instructions(portfolio, told, run.as_of),)
+        ),
         (
             "CP-8",
             CP8_BLOCK.format(prior=describe_run(prior)) if prior is not None else "",
@@ -1087,7 +1113,12 @@ def _prepare(  # noqa: PLR0913, PLR0915 - `prepare`'s body: one keyword per sett
             texts[module] = head + block.encode() + mark + method
     guesses, documents = _documents(covers)
     items = expectations(
-        ordered, tuple(guesses.values()), settings, edges_for(ordered), omitted=omitted
+        ordered,
+        tuple(guesses.values()),
+        settings,
+        edges_for(ordered),
+        omitted=omitted,
+        portfolio=portfolio,
     )
     request = HandoffPlan(
         run=run,
@@ -1154,6 +1185,7 @@ def _prepare(  # noqa: PLR0913, PLR0915 - `prepare`'s body: one keyword per sett
         tuple(items),
         prior,
         note or "",
+        portfolio,
     )
 
 
@@ -1265,6 +1297,8 @@ def checker(layout: MarkdownLayout) -> Check:
         issues += _owned_issues(task.module_id, routes, text)
         issues += register_issues(task.module_id, text)
         issues += posture_issues(task.module_id, text)
+        upstream = method_scripts.upstream_texts(task.handoffs)  # a copied figure is compared
+        issues += method_scripts.issues(task.module_id, text, upstream)
         return (*issues, *_forecast_issues(task, text))
 
     return check
@@ -1587,6 +1621,7 @@ def _readiness(
             f"Modules:  {', '.join(prepared.ordered)}",
             f"Sources:  {', '.join(names)}",
             f"Ignored:  {', '.join(prepared.ignored) or 'none'}",
+            *portfolio_lines(prepared.portfolio),
             f"Report:   {', '.join(prepared.layout.blocks)}",
             f"Omitted:  {', '.join(prepared.omitted) or 'none'}",
             f"Changes:  {prepared.changes.removeprefix('changes: ') or 'not recorded'}",

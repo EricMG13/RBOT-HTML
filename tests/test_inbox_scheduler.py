@@ -49,7 +49,7 @@ from deploy_workflow.inbox.runs import Record, alive, load_all
 from deploy_workflow.inbox.scheduler import Scheduler, Settings, StartupRefused
 from deploy_workflow.inbox.startup import STANDING_RULING
 from deploy_workflow.model.adapter import KEY_VARIABLES
-from deploy_workflow.model_testing.configs import CONFIGS
+from deploy_workflow.model.configs import CONFIGS
 from deploy_workflow.owners import cpos_launch
 from deploy_workflow.owners.cpos_launch import update_library_at
 from deploy_workflow.run_start import submissions

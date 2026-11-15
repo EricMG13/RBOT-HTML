@@ -253,6 +253,48 @@ def test_the_summary_is_the_launchers_forecast(layout, tmp_path):
     assert s["digest"] == submissions.bound(digest(layout, sid, answers), "none")
 
 
+def full_assessment_summary(layout, tmp_path, workbook: bytes | None) -> dict[str, object]:
+    """The summary of a full credit assessment, with the portfolio workbook chosen when given."""
+    sid, _ = upload_issuer(layout, tmp_path)
+    answers = answers_for(tmp_path)
+    answers["context"]["run"]["pathway"] = "credit_snapshot"  # type: ignore[index]
+    if workbook is not None:
+        put(layout, sid, "SYNTHETIC-portfolio.xlsx", workbook)
+        answers["context"]["attachments"]["portfolio_workbook"] = True  # type: ignore[index]
+    return summary(layout, sid, answers, cap=Decimal(20))
+
+
+def test_a_full_assessment_summary_without_the_workbook_adds_no_tick(layout, tmp_path):
+    result = full_assessment_summary(layout, tmp_path, None)
+    assert result["error"] == ""
+    ours = [i for i in result["items"] if "portfolio" in i["id"]]  # type: ignore[union-attr]
+    # One information row: no tick (the page ticks gap, limited, will-refuse and fixable checks).
+    assert [(i["id"], i["outcome"], i["counted"]) for i in ours] == [
+        ("CP-6:portfolio-workbook-none", "information", False)
+    ]
+
+
+def test_a_full_assessment_summary_lists_a_workbook_that_fails_its_checks(layout, tmp_path):
+    from tools import synthetic_portfolio_workbooks as synth
+
+    raw = synth.workbook_bytes(synth.broken("maturity-sum-over"))
+    result = full_assessment_summary(layout, tmp_path, raw)
+    assert result["error"] == ""
+    assert "SYNTHETIC-portfolio.xlsx" in [d["source"] for d in result["documents"]]  # type: ignore[union-attr]
+    ours = [i for i in result["items"] if "portfolio" in i["id"]]  # type: ignore[union-attr]
+    assert [(i["id"], i["outcome"]) for i in ours] == [
+        ("CP-6:portfolio-workbook-fails-checks", "limited")
+    ]
+    assert ours[0]["reason"].endswith(
+        "SYNTHETIC-portfolio.xlsx: 1 finding; first: Maturity_Profile!B2:B6: pct_nav of the 5 "
+        "rows sums to 102.0, outside 99.0 to 101.0 (2.0 more than 100)."
+    )
+    clean = synth.workbook_bytes(synth.clean())
+    shutil.rmtree(tmp_path / "issuer")
+    passed = full_assessment_summary(layout, tmp_path, clean)
+    assert not [i for i in passed["items"] if "portfolio" in i["id"]]  # type: ignore[union-attr]
+
+
 SEC_AGENT = "DEPLOY_WORKFLOW_SEC_USER_AGENT"
 
 

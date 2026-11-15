@@ -43,6 +43,7 @@ from deploy_vii.preparation import xlsx_content
 from deploy_vii.registry import modules
 from deploy_workflow.model.adapter import AdapterReply, ModelAdapter
 from deploy_workflow.model.budget import Budget, OverrunStop, exact_sum
+from deploy_workflow.model.configs import CONFIGS
 from deploy_workflow.model.copilot import COMPACTION_SHARE, near_limit, prompt_tokens_estimate
 from deploy_workflow.model.loop import _caught, redacted_request, redacted_turn
 from deploy_workflow.model.pricing import (
@@ -56,6 +57,7 @@ from deploy_workflow.model.providers import WEB_SEARCH_BLOCK, web_searches
 from deploy_workflow.model.record import CallLog, CallRecord, CompactionRecord, arguments_sha256
 from deploy_workflow.model.redact import Redactor
 from deploy_workflow.model.reply_classes import ADAPTER_ERROR
+from deploy_workflow.model.run_lock import _single_writer
 from deploy_workflow.model.turn import (
     MODEL_EFFORTS,
     Compaction,
@@ -69,7 +71,6 @@ from deploy_workflow.model.turn import (
     hosted_web_search,
     turn_to_json,
 )
-from deploy_workflow.model_testing.configs import CONFIGS
 from deploy_workflow.prose_checks import lost_values
 from deploy_workflow.research.contracts import ResearchError
 from deploy_workflow.research.weblookup import (
@@ -108,8 +109,9 @@ REDACTION_FAILED = "redaction failed; the failure detail is withheld"
 # tdg-all-001 (2026-11-10) stopped CP-5 at one byte per token ("1105073 input-token bound is over
 # the 1050000 supported") though that request was about 240,000 tokens. Measured: at least 4.11
 # request bytes per input token over 817 retained CP-OS live calls (median 4.44), and 2.51 at the
-# lowest in the structured runtime's financials calls (run_pathway.py, PF-R12). Two stays below
-# every measurement. The hold itself does not depend on it: a Sol call holds the whole context.
+# lowest in the structured runtime's financials calls (PF-R12, the retired run_pathway.py). Two
+# stays below every measurement. The hold itself does not depend on it: a Sol call holds the
+# whole context.
 BYTES_PER_TOKEN_BOUND = 2
 REQUEST_OVERHEAD = 4096
 FAILED_NO_USAGE = (
@@ -1243,8 +1245,6 @@ class HandoffExecutor:
         return (WEB_PAGES_UNREADABLE,) if unreadable and issues else issues
 
     def __call__(self, task: HandoffTask) -> bytes:
-        from deploy_workflow.run_pathway import _single_writer
-
         with _single_writer(self.directory):
             # Reload only after acquiring the writer lock: a second executor may
             # have been constructed before the preceding module settled its spend.

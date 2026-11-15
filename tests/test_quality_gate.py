@@ -31,6 +31,20 @@ def test_changed_files_keeps_names_with_spaces_and_accents(tmp_path):
     assert quality_gate.changed_lines(tmp_path, "HEAD", "new file.py") is None
 
 
+def test_the_method_archive_is_not_changed_code(tmp_path):
+    """Archived method scripts are byte copies pinned by sha256; the gate never asks to edit
+    them. Code beside the archive is still in scope."""
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "test@example.com")
+    _git(tmp_path, "config", "user.name", "test")
+    _git(tmp_path, "commit", "-q", "--allow-empty", "-m", "base")
+    archived = tmp_path / quality_gate.ARCHIVE / "skills/cp-x/scripts/calc.py"
+    archived.parent.mkdir(parents=True)
+    archived.write_text("import os\n", encoding="utf-8")  # an unused import: F401 elsewhere
+    (tmp_path / "docs/reuse/other.py").write_text("x = 1\n", encoding="utf-8")
+    assert quality_gate.changed_files(tmp_path, "HEAD") == ["docs/reuse/other.py"]
+
+
 def _repo(tmp_path: Path) -> Path:
     _git(tmp_path, "init", "-q")
     _git(tmp_path, "config", "user.email", "t@example.invalid")

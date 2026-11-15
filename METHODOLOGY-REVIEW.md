@@ -196,7 +196,7 @@ An S classification does not mean the code is absent or that the model failed.
 | CP-4 / CP-4A / CP-4B / CP-4D | S. Current legal owner has executed synthetic positive/gap/definition cases. | Keep clause/definition evidence checks; actual legal interpretation quality and onward use remain unverified. |
 | CP-4C | S. Scripted waterfall runs bind CP-2A, CP-2G and CP-4. | Preserve scenario and priority assumptions. Synthetic recoveries are not issuer recovery conclusions. |
 | CP-5 / CP-5A | S. Synthetic support judgments exercise settlement; targeted tests passed in this review. | Separate mechanical checks from model assessment of support/contradiction. That judgment quality is unmeasured. |
-| CP-6 / CP-6A | S. Committee owner, renderer and promotion-test path exist; authored Neutral/Medium and no-market-evidence examples. From 2026-11-15 CP-OS asks CP-6 for CP-6A's registers (T6E.4, T6E.6, T6E.7, T6E.11) and its posture section and checks both; offline proof only. | Keep action bias separate from confidence. Do not claim full historical bull/bear/committee breadth from the shorter slice. CP-6A's sizing rests on mandate and exposure data no pathway but `portfolio_decision` asks for. |
+| CP-6 / CP-6A | S. Committee owner, renderer and promotion-test path exist; authored Neutral/Medium and no-market-evidence examples. From 2026-11-15 CP-OS asks CP-6 for CP-6A's registers (T6E.4, T6E.6, T6E.7, T6E.11) and its posture section and checks both; offline proof only. | Keep action bias separate from confidence. Do not claim full historical bull/bear/committee breadth from the shorter slice. CP-6A's sizing rests on mandate and exposure data; from 2026-11-15 the full assessment asks for the portfolio workbook as `portfolio_decision` does, and the launcher checks its sums and values first. |
 | CP-8 | S. Current code and targeted tests confirm the single-decision pathway. | Calibration needs three decisions, but this step accepts one; outcomes are always Interim. Narrow the capability description or extend inputs if full calibration is requested. |
 | CP-L10 / CP-L20 / CP-L23 / CP-L30 / CP-L40 | S. Executed synthetic change-screen owner; only TL10.1–TL10.5 produced. | Expose the bounded screen. The other aliases do not establish their full historical analytical coverage. |
 | CP-MODEL | D. HTML/calculation JSON and bounded synthetic Model/chart delivery evidence. | Reuse HTML Model, charts and calculation JSON. Workbook output is excluded; Excel is an analytical input format only. |
@@ -878,6 +878,85 @@ mandate and exposure data missing and its own rules then withhold a sized postur
 fit registers (CP-3B, T3C.1 to T3C.3 and T3C.5 to T3C.9), which CP-6A's gate names, stay cut.
 Selected source revision: the ruling above. Limit: offline proof only until a paid run.
 
+**Method scripts as acceptance checks, 2026-11-15 (owner: "scope it now, wire the scripts in as
+checks. every module has a scripts folder tied to it"; "missing scripts will be in deploy V or
+Vx").** The methods' scripts are selected as Python-run checks, never sent to a model; this
+supersedes "Not archived: the skills' scripts" above. Selected source revision: cp-os `b57a344`
+for every script; each is byte-identical to Deploy V `c4d2e35` except `completeness_check.py`
+(cp-os adds template columns and a bracket-aware `;` split), checked against a Deploy V clone
+on 2026-11-15. Newly archived, one copy each (`manifest.json` `scripts_note`): the shared
+`scripts/cp_tables.py`, `validate_handoff.py` and `completeness_check.py`, and the calculators
+`liquidity_bridge.py` (CP-2D, also CP-2G's), `funding_gap.py` (CP-3C, also CP-4C's),
+`credit_metrics.py` (CP-1, also CP-1B's and CP-2G's) and `rate_fx_sensitivity.py` (CP-2E); the
+four calculators archived earlier (`peer_statistics.py`, `covenant_headroom.py`,
+`bond_analytics.py`, `recovery_waterfall.py`) are unchanged. `deploy_workflow.method_scripts`
+runs a script only from its registered bytes. Wired: CP-2D (`liquidity_bridge.py` on T2E.5 and
+T2E.6: Ending accessible liquidity and Months to Empty) and CP-3C (`funding_gap.py` on T3D.2 and
+a `### Funding gap` table CP-OS now asks of CP-3C, because no CP-3C register holds the horizon,
+cash, facility terms or the gap the script owns); a disagreement is sent back for repair, a
+figure that cannot be checked is recorded with its reason. The method texts are unchanged; the
+two modules' instructions gain a note before the method block. Limit: synthetic proof only; no
+model output has been checked by a script until a paid run. The order for the other modules is
+in `docs/sweeps/2026-11-15-method-scripts/scope.md`.
+
+**Method script checks, next modules, 2026-11-15 (owner, shown CP-2D and CP-3C: the new table
+"confirmed", the archive outside the gate's scope "ok", and on the modules whose inputs the
+2026-11-13 scope rule cut: "restore the cut tables"; ruling
+`docs/rulings/2026-11-15-method-script-checks.md`).** No method text is newly selected and no
+archived file changed; the scripts are the selection above (cp-os `b57a344`). Each module's mapping
+is its own module beside the harness (`deploy_workflow.method_scripts_<module>`). CP-2E:
+`rate_fx_sensitivity.py` on T2F.4 (Total debt, Gross, Hedged and Unhedged floating-rate debt,
+Unhedged debt percentage) and T2F.5 (the +100 bps cash-interest impact); the project-written
+`CPOS_REGISTER_SCOPE.md § CP-2E` no longer names T2F.4 and T2F.5, so CP-2E writes them and the
+presence check requires them; T2F.2, T2F.8 and T2F.9 stay cut. CP-3: `recovery_waterfall.py`
+reads a `### Recovery waterfall` table only when a handoff has one; no CP-3 register holds an
+enterprise value or a stated recovery (T3B.2's Amount is carrying value, T3B.6 a label), so nothing
+is restored and CP-3 is not asked for the table until the owner decides. CP-2G:
+`credit_metrics.py` on T2H.4 to T2H.6 (never cut): leverage, coverage and FCF/debt per period and
+case, and the opening-to-prior-closing and debt roll-forward of T2H.5. CP-4:
+`covenant_headroom.py` on T4C.4, signed headroom and status by the stated test type (never
+inferred). CP-1: `credit_metrics.py` on T4.8's LTM rows and T4.9's free-name quotients; the six
+fixed T4.9 rows stay with `owners/cpos_cp1_check.py`, which binds their operands; CP-1 is sent a
+note, its `earnings_update` size ceiling raised by the note's length (owner: "approved"). CP-3
+(owner: "1. yes 2. yes 3. yes"): asked for `### Recovery waterfall`, its enterprise-value cases
+CP-1C's T4.10 range where it receives CP-1C (overriding CP-1C's step 06C and Valuation Discipline 8
+for CP-3's use only; CP-1C's text unchanged) or its own cases with their basis, or `Not supplied`
+where none can be supported; checked with `recovery_waterfall.py` and CP-1C's `peer_statistics.py`. Limit: synthetic proof only, and the retained TDG excerpts
+of 2026-11-13 hold none of these registers.
+
+**CP-3's portfolio-fit registers restored (2026-11-15; owner: "restore the CP-3 portfolio-fit
+tables"; ruling `docs/rulings/2026-11-15-method-script-checks.md`).** No method text is newly
+selected and no archived method file changed. The project-written `CPOS_REGISTER_SCOPE.md § CP-3`
+no longer names CP-3B's T3C.1 to T3C.3 and T3C.5 to T3C.9, so CP-3 writes them in every pathway
+that runs it and the presence check requires them; CP-3B's own gate (`REF_CP-3B_01`: it "always
+executes", and with portfolio inputs missing gives generic portfolio-fit logic and withholds a
+numeric size) governs what they hold when no workbook is supplied. This answers the open CP-3B
+item of `2026-11-15-full-assessment-portfolio-workbook.md`. No script checks them. T3.1, T3.4,
+T3.5, T3.7, T3.9, T3.10 and the T3B registers other than T3B.1 stay cut. Limit: offline proof only.
+
+**Full credit assessment collects the portfolio workbook (owner, 2026-11-15: "yes, wire in the
+portfolio workbook." and "check data first likely incorrect sums and values"; ruling
+`docs/rulings/2026-11-15-full-assessment-portfolio-workbook.md`).** No method text is newly
+selected and no method file changed. `credit_snapshot` now asks for the workbook the
+`portfolio_decision` pathway asks for (`deploy_vii/inputs/portfolio.py`, template
+`docs/templates/portfolio.template.xlsx`); it is not required. CP-6A's own source gate
+(`REF_CP-6A_01`: "If using the consolidated workbook, validate its Mandate, Exposure Report and
+Compliance Monitor sheets against portfolio/legal vehicle, measurement basis and as-of") and its
+SKILL ("mismatched or stale rows create a gap and cannot become a live constraint or exposure")
+are what the launcher's check serves: it runs the template's checks, now with sums, shares, units,
+signs and dates, and tells CP-0, CP-3 and CP-6 each finding. Without a workbook CP-6 is told so and
+states it in its Portfolio posture section, as the gate's "Mandate/portfolio constraints missing →
+exact constraint = [Insufficient Information]" asks. Unchanged: CP-3's portfolio-fit registers
+(T3C.1 to T3C.3, T3C.5 to T3C.9) stay cut in every pathway, the portfolio decision's included, so
+CP-6A's gate still finds CP-3B's registers absent and runs Ready with Limitations; restoring them is
+an owner decision (cost and instruction size; the 2026-11-13 cut found no consumer).
+`REF_CP-6A_Portfolio_Debate_Inputs.xlsx` stays unarchived; the analyst's own workbook takes its
+place. The fund's own export (mandate, constraints and exposure report CSVs and a holdings
+workbook) is accepted beside the template and checked with the holdings as the authority, twelve
+classes of defect, and never converted into the template (the method surfaces conflicts instead
+of choosing). Selected source revision: the ruling above. Limit: offline proof only; no model has
+read a workbook or export under these instructions and the owner's own files have not been read.
+
 ## Appendix: selected method files
 
 One row per file CP-OS sends as a module's method (`METHODS` in
@@ -900,7 +979,7 @@ on 2026-11-15 were fixed that day (owner: "fix"); a difference accepted later go
 - `shared` rows are sent by section: `CANON_SHARED.md § CP_CONFIDENCE_SCORE.md` to every module
   sent a skill, its reader-layer sections to every prose module, and `CPOS_REGISTER_SCOPE.md
   § <module>` to the ten modules it names.
-- Registered, not sent: `manifest.json` registers 91 further files that CP-OS does not send (schema
+- Registered, not sent: `manifest.json` registers 98 further files that CP-OS does not send (schema
   and system references, unsent companions, the CP-L10 change-screen skill and others), kept on purpose (owner,
   2026-11-10: keep a copy of the methodology in the repo). Its `project_files` list registers the three
   sent method files that live outside the archive (`prompts/CP-1.md`, `cpl10.md`, `cp8.md`).
@@ -973,4 +1052,4 @@ on 2026-11-15 were fixed that day (owner: "fix"); a difference accepted later go
 | CP-DR | `docs/reuse/selected-methods/skills/cp-dr-deep-research/references/REF_CP-DR_STEPS.md` | cp-os | yes | b57a344, c746ad67 | `cab435618c7f` |
 | CP-DR | `docs/reuse/selected-methods/skills/cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md` | cp-os | no | b57a344 | `5028a6476cdf` |
 | shared | `docs/reuse/selected-methods/CANON_SHARED.md` | cp-os | no | b57a344 | `1ab484c5072a` |
-| shared | `docs/reuse/selected-methods/CPOS_REGISTER_SCOPE.md` | this repo | no | this repo | `617c887c18dd` |
+| shared | `docs/reuse/selected-methods/CPOS_REGISTER_SCOPE.md` | this repo | no | this repo | `0f97542230b3` |

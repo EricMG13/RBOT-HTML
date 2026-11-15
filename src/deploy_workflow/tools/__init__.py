@@ -1,4 +1,4 @@
-"""Supported analytical tools. Upstream tools are imported from their own leaf."""
+"""Supported analytical tools."""
 
 from deploy_workflow.tools.source import SourceError, SourceTools
 

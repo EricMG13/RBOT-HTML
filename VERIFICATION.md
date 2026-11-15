@@ -4,6 +4,76 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-15 — After the restructure: journal harness retired, method scripts as acceptance checks, portfolio inputs (branch `claude/busy-dijkstra-bgex9m`, after PR #126)
+
+Scope is **offline only**. No provider or model was called; the owner has said no live run yet and
+that the pathways will be restructured first. No model has written a restored register, a note's
+layout or a handoff with portfolio inputs under these instructions. Each part was built on its own
+branch, reviewed and merged here; counts are from the CI fast list unless stated.
+
+- Journal chain, stages retired (ruling `docs/rulings/2026-11-15-journal-chain-retired.md`; owner:
+  "retire it", then "keep the module files for now"): `model_testing`, `run_pathway`, `replay`,
+  `owner_rendering`, and code nothing imports (`rendering`, `financial_rendering`,
+  `tools/upstream`, `prompts` rules and digest, `cpos_status`); `CONFIGS` and the run-folder lock
+  moved into `model`. 5,282 lines removed in 37 files, 8 tests removed with their subjects (4,631 to
+  4,623 passed), default library build unchanged. Kept: the per-module `owners/cp*.py` files,
+  `owner_workflow` and `model.loop`.
+- Method scripts as acceptance checks (ruling `docs/rulings/2026-11-15-method-script-checks.md`,
+  scope `docs/sweeps/2026-11-15-method-scripts/scope.md`; owner: "wire the scripts in as checks",
+  "restore the cut tables", "restore the CP-3 portfolio-fit tables"). The method's own scripts are
+  registered from cp-os `b57a344` with their sha256 and loaded from those bytes; after a module
+  answers, Python recomputes the figures from the handoff's own rows. Agreed, disagreed (an
+  acceptance issue) or not checked with its reason; never zero for missing. Wired: CP-2D
+  (`liquidity_bridge.py`), CP-3C (`funding_gap.py`, new `### Funding gap` table, owner: "confirmed"),
+  CP-2E (`rate_fx_sensitivity.py`; T2F.4 and T2F.5 restored), CP-2G and CP-1 (`credit_metrics.py`),
+  CP-4 (`covenant_headroom.py`), CP-3 (`recovery_waterfall.py`, reads a table CP-3 is not yet asked
+  for). CP-3's T3C.1 to T3C.3 and T3C.5 to T3C.9 restored; no script checks them. An independent
+  review ran adversarial handoffs: mappings, missing against zero, units and exception handling
+  correct; four false refusals fixed (null words with an explanation, a denominator at or below
+  zero, a cost written as an outflow, and a tolerance that now adds the bound the inputs' displayed
+  rounding puts on the result, in every check). Known limit: a CP-2G definition id that does not
+  name its basis in words is compared as closing debt over EBITDA. Synthetic handoffs only; the
+  retained TransDigm excerpts of 2026-11-13 hold none of these registers ("not checked").
+  `tests/test_method_scripts.py` passes (126 then, more since); launcher offline preparation for the 7 pathways differs
+  only in the wired modules' instructions and CP-5's upstream note; sizes within every ceiling.
+  The quality gate leaves `docs/reuse/selected-methods/` out of its scope (owner: "ok").
+  Owner's later answers ("approved", "approved"): CP-1 is sent its note, with `earnings_update`'s
+  ceiling raised from 546,000 to 546,500 by the note's measured 500; CP-2E's hedged floating-rate
+  debt above gross is sent back as `contradicted`, every other script refusal stays not checked.
+  CP-3's enterprise value: the method has no link from CP-DR or CP-1C peer multiples to CP-3's
+  waterfall (CP-1C's T4.10 forbids recovery use; the cp-os TransDigm run of 2026-11-04 had no
+  enterprise value anywhere). Owner, shown that: "1. yes 2. yes 3. yes", and "correct, pathway part
+  waits for the restructure". CP-3 is asked for `### Recovery waterfall`: enterprise-value cases
+  from CP-1C's T4.10 where it was sent (overriding CP-1C's step 06C and Valuation Discipline 8 for
+  CP-3's use only), else its own with their basis, else `Not supplied: <reason>` (recorded, never
+  refused). Checked: EV = multiple x metric, the multiple against the T4.10 CP-3 was actually sent,
+  then recoveries, fulcrum and residual. A table absent with no statement, or an EV with no basis,
+  is sent back (`missing`). A second adversarial review (about 150 synthetic handoffs, no crash)
+  found false refusals, fixed: a basis that mentions T4.10 without using it, enterprise values
+  compared where multiples should be, equal-ranking claims, fulcrum and heading wording, a
+  decorated Blocked status (now one rule shared with the launcher's presence check). CP-3's
+  instructions grow within the three ceilings; no pathway's module list or order changed.
+- Portfolio inputs for the full credit assessment (ruling
+  `docs/rulings/2026-11-15-full-assessment-portfolio-workbook.md`; owner: "wire in the portfolio
+  workbook ... check data first likely incorrect sums and values"). `credit_snapshot` and
+  `portfolio_decision` collect the template workbook or the fund's own export (mandate, constraints,
+  exposure report, holdings; CSVs or sheets), checked before CP-0, CP-3 and CP-6 are told of it and
+  never converted: the holdings are the authority and each stated figure a claim. Command:
+  `uv run deploy-vii validate-input portfolio-exports <folder> --as-of <date>`. Fixtures are
+  SYNTHETIC (`tools/synthetic_portfolio_exports.py`), 71 export tests with hand-written expected
+  findings. Run by hand on the owner's five files (not in the repository; data dated 2026-05-29):
+  the command reproduces an independent hand reconciliation, among it par 634.0m stated against
+  763.0m held, NAV 630.9m against 734.1m at mid, two sectors above the 10% limit (11.92%, 10.26%)
+  reported Pass, second lien 0.61% against 0.76%, and 315 of 382 maturities in 1930 to 1933. Three
+  listed top-ten issuers match no borrower by name, ticker or prefix; the command names a possible
+  borrower for each (never compared), which corrected the hand reconciliation's reading of one of
+  them as absent. That is one fund's files on one date, not proof for another layout.
+- Checks on the merges up to the PR head: targeted suites (method scripts, launcher, register scope, methodology
+  selection, portfolio, run-start submissions) pass, 1,181 and 1,127 in the last two runs; quality
+  gate 0 findings on each merge; import contracts kept. The sub-branches' CI fast list: 4,857
+  passed, 6 skipped, 165 deselected. Not verified: the full weekly suite on this head; browser
+  page tests here (Chrome hangs in this container); any model output.
+
 ## 2026-11-15 — Restructure, second part: removals, method provenance, CP-3C and CP-6A, review (branch `claude/busy-dijkstra-bgex9m`, PR #126)
 
 Scope is **offline only**. No provider or model was called. No model has written a CP-3C or CP-6A
@@ -906,46 +976,3 @@ tests/test_context_form.py tests/test_inbox_activity.py -q -m "not live and not 
 tools/quality_gate.py` 0 findings, exit 0. Plans per pathway were prepared offline by the parametrised
 test (every pathway, four peer sources); `tests/test_financial_workflow.py` was not run (over the
 fast-test limit). M3-M7 are decided and not built here.
-
-## 2026-11-11 — Runs on earlier methods are listed and marked (branch `claude/list-earlier-method-runs`)
-
-Scope: offline, macOS; synthetic fixtures only (`tests/library_fixtures.py`, the fake launcher run). No
-model call, no run folder under `runs/` read or changed. Owner decision 2026-11-11: a run whose module
-methods changed since it ran is listed with `method_changes` and shown as "Earlier methods" (Report history
-status, run label; Run record lists the changes). Other refusals are unchanged. Real TDG runs were not
-rebuilt here.
-- Gates: `uv run pytest tests/test_library_index.py tests/test_update_library.py tests/test_credit_os_catalogue.py -q` 90 passed, exit 0; `node --test` static, reader, calendar 257 pass, exit 0; `uv run python tools/quality_gate.py` 0 findings, exit 0.
-
-## 2026-11-11 — Issuer library presentation to the reader ruling (branch `claude/library-layout-637b87`)
-
-Owner waiver 2026-11-11: the 800-line PR limit is waived for #47 (5,969 changed lines).
-
-Scope: offline, macOS, headless Chrome; the library app (`apps/issuer-library`) only. No provider was
-called, no run was started, no stored handoff or run folder was changed (retained runs were read through
-a symlinked `runs` folder in a scratch workspace). No run in the new handoff format exists yet: the new
-format was seen only on a hand-made synthetic fixture (`apps/issuer-library/fixtures/synthetic-new-format/`,
-built into a scratch workspace by `fixtures/build_synthetic_run.py`); the earlier format on the three
-listed retained TDG runs (`cpos-tdg-sol-high-001`, `cpos-tdg-sol-high-cp2-001`,
-`cpos-tdg-copilot-sol-medium-002`). This is not the reader check against the September VMO2 reference
-that AGENTS.md requires for a presentation change: that needs a real new-format run and stays open.
-- Built (decisions 3-7, 9, 10, 12, 14; H1, H3, H4, H5, H7): rail without Reports; per issuer Report
-  history, Overview, Modules, Forecast, Evidence with a run label; delivered report view, its adapter and
-  the Calendar tab retired; Overview selects passages only (CP-6 else CP-2 lead, bottom lines, limitations
-  de-duplicated by the check-7 normalisation, key charts, nearest dates); flat Modules navigator of the
-  modules that ran; figures and a quiet Basis link open the inspector; earlier-format trailing citations
-  move verbatim behind Basis; Evidence's four lists with handoff and instruction copies under
-  `library/downloads/`; Run activity shows live runs only.
-- Gates (HEAD of the branch at push): `node --test` reader/static/calendar 245 pass, exit 0; `uv run
-  pytest -m "not live and not browser"` on the eight library test files 348 passed, exit 0;
-  `tests/test_library_page_browser.py` 38 passed; `uv run python tools/quality_gate.py` 0 findings, exit 0.
-  `tests/test_library_reader_refs.py` asserts every Basis item and Source cell of each synthetic handoff is
-  reachable from the rendered page, with hand-written counts.
-- Walk-through at 1440 px and 375 px on both libraries: every page renders with no console error except
-  the pre-existing missing `../activity.js` when opened outside the run start service; a figure opens the
-  inspector by keyboard (Enter) and Esc returns focus; no horizontal overflow at 375 px.
-- Known limits: the inspector shows a source page's excerpt for a Basis item only once the engine's
-  `credit_os_chips` change (PR #46) is merged; earlier-format dates written as text cannot feed Nearest
-  dates; document dates of source files are not recorded anywhere, so Evidence shows "Not recorded";
-  key charts are selected per module from the catalogue (rows carry no chart identity);
-  `src/deploy_workflow/run_start/service.py` still links finished runs to `library/reports/`, which this
-  branch no longer writes (fixed on the engine branch).

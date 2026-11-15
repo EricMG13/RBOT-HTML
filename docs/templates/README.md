@@ -175,9 +175,16 @@ information-only rows belong on `Exposure_Summary` as metrics. Known limitation:
 ### Check the file
 
 ```
-deploy-vii validate-input portfolio path/to/portfolio.xlsx          # one line per issue, then a summary
-deploy-vii validate-input portfolio path/to/portfolio.xlsx --json   # the report as JSON
+uv run deploy-vii validate-input portfolio path/to/portfolio.xlsx                      # one line per issue, then a summary
+uv run deploy-vii validate-input portfolio path/to/portfolio.xlsx --as-of 2026-11-15   # also check its dates against the run's as-of date
+uv run deploy-vii validate-input portfolio path/to/portfolio.xlsx --json               # the report as JSON
 ```
+
+`--as-of` is the run's as-of date: the Mandate `as_of` must then be on or before it and at most 30
+days before it, and no `last_checked` after it. The launcher runs the same check with the run's
+as-of date on every portfolio workbook among a full credit assessment's or portfolio decision's
+documents and tells CP-0, CP-3 and CP-6 each finding (ruling
+`docs/rulings/2026-11-15-full-assessment-portfolio-workbook.md`).
 
 The command exits 0 when the file passes and 1 otherwise. A passing file ends
 `OK: <n> sheets, <m> compliance rows` (the template prints `OK: 8 sheets, 5 compliance rows`;
@@ -268,6 +275,40 @@ has an issue. These are the fixes it can print:
 | `market_value` empty | enter the market value as a plain number |
 | `seniority` empty | enter the seniority, e.g. 1st Lien |
 
+The checks of sums and values (owner, 2026-11-15: "check data first likely incorrect sums and
+values"). Arithmetic is exact. Shares are stored to two decimals, so a share recomputed from
+amounts is compared to within 0.01 and a sum of n stored shares to within n x 0.005; a figure
+missing or already reported is never taken as 0, and the rule that needs it is skipped.
+
+| Finding | Fix printed |
+| --- | --- |
+| `Maturity_Profile` `pct_nav` sum outside 99.0 to 101.0 | correct the percentages, or add a row Unknown with the remainder of NAV |
+| `Rating_Distribution` or `Maturity_Profile` sum between 0.99 and 1.01 (shares entered as fractions) | enter each share in percent of NAV: 2.5 means 2.5 % NAV, not 0.025 |
+| `Sector_Exposure`, `Top_Holdings` or `Holdings_Detail` `pct_nav` sum above 101.0 | correct the percentages: these rows are parts of NAV and cannot add to more than all of it |
+| `Holdings_Detail` `pct_nav` not `market_value` / Mandate `nav` x 100 (to within 0.01) | enter market_value / nav x 100, or correct market_value or the Mandate nav (both in the same unit and currency) |
+| `Holdings_Detail` `market_value` per 100 of `par` outside 1 to 150 | enter par and market_value in the same unit and currency (both in units, not thousands) |
+| `par` or `market_value` not above 0 | enter a number above 0 |
+| `limit`, `current_value` or `limit_pct_nav` below 0 | enter a number of at least 0: a limit or an exposure is never negative |
+| `Top_Holdings` ranked out of size order (a holding larger than the one ranked above it) | rank the holdings from the largest share of NAV down |
+| `Top_Holdings` two rows with the same `issuer` and `instrument` | keep one row per issuer and instrument, or correct the repeated value |
+| `Top_Holdings` `pct_nav` not the `Holdings_Detail` rows of the same issuer and instrument | enter the same share of NAV on Top_Holdings and Holdings_Detail, or correct the one that is wrong |
+| `Exposure_Summary` `top10_pct_nav` below the ten largest holdings, or (ten listed) above them | correct top10_pct_nav or the Top_Holdings percentages: the ten largest holdings add to top10_pct_nav |
+| `Holdings_Detail` rows of a sector adding to more than its `Sector_Exposure` `pct_nav` | correct the sector's pct_nav or the holdings' sector or pct_nav: the holdings in a sector cannot add to more than the sector |
+| `SECTOR` row's `current_value` or `limit` not the `pct_nav` or `limit_pct_nav` of the one sector its `parameter` names | enter the same figure on Compliance_Monitor and Sector_Exposure, or correct the one that is wrong |
+| A currency-unit `current_value` above the Mandate `nav` | enter the current value in the Mandate nav_currency and the same unit as nav (units, not thousands), or correct it |
+| An `Exposure_Summary` amount in another currency than the Mandate `nav_currency` | enter the amount in the Mandate nav_currency, or move it to another workbook: an amount in another currency is not comparable with NAV |
+| An `Exposure_Summary` `as_of` other than the Mandate `as_of` | enter the metric as at the Mandate as_of date, or correct the date |
+| A `last_checked` before the Mandate `as_of` | check the row again at the Mandate as_of date and enter that date |
+| A `Holdings_Detail` `maturity` before the Mandate `as_of` | delete the matured position, or correct its maturity date |
+| With `--as-of`: the Mandate `as_of` or a `last_checked` after the run's as-of date | enter the date the figures were measured, on or before the run's as-of date |
+| With `--as-of`: the Mandate `as_of` more than 30 days before it | supply the workbook as at a date at most 30 days before the run's as-of date |
+
+Not checkable from the template's columns, so not checked: limit utilisation (no utilisation
+column), par times price (no price column; the 1 to 150 range above catches a unit mix-up only),
+issuer counts against `obligors` (an issuer can sit in two rating buckets), and `headroom` on
+currency rows (stated, never used for room). A formula is refused outright, so a cached value that
+disagrees with its operands is never read.
+
 ### How the file reaches the Portfolio Fit module
 
 1. **Pack.** List the workbook as one source in your `prepare` request, with `media_type`
@@ -292,6 +333,113 @@ has an issue. These are the fixes it can print:
 
 Keep real portfolio files out of Git. They belong in your environment's pack root, not in this
 repository.
+
+## Portfolio export (the fund's own files, beside the template)
+
+Owner, 2026-11-15 (ruling `docs/rulings/2026-11-15-full-assessment-portfolio-workbook.md`, "The
+export shape"). A fund's systems export the same facts as CSVs and a workbook. They are accepted as
+they are, checked, and never converted into the template: converting would mean choosing between
+figures that disagree, which the CP-6A method says to surface instead. The launcher finds the files
+by their headers among a full credit assessment's or portfolio decision's documents
+(`src/deploy_vii/inputs/portfolio_export.py`).
+
+| File | Recognised by |
+| --- | --- |
+| Mandate (CSV) | first row `Section`, `Field`, `Value` (and `Notes`); capital structure rows under a `Capital Structure` section with a `Total` row; an `As of` field |
+| Constraints (CSV, one or more) | a header with `Parameter`, `Limit` and `Current Value` (optional `ID`, `Constraint Category`, `Breach Type`, `Source Document`, `Headroom`, `Status`, `Last Checked`, `Checked By`) |
+| Exposure report (CSV) | sections stacked in one sheet, each a title row (one cell), a header row and data rows: summary metrics, rating distribution, sectors, largest holdings, maturity profile, recognised by the title's words; `Total`, `Subtotal` and `Other` rows |
+| Any of the above as a workbook sheet | the same first rows, on a sheet of any name |
+| Holdings (XLSX) | a `Holdings` sheet whose header has a borrower column (also `Ticker`, `Index Sector`, `Loan Name`, `FIGI`, `Ranking`, `Ratings`, `Margin`, `Maturity`, `Bid`, `Ask`, `Δ 1M`, `Δ YTD`, `Mid YTM`, `Mid 3Y DM` and `Holdings` = par); an optional `Market Data` sheet |
+
+Values keep their unit: `≤ 2.5% NAV`, `≥ Caa1 (numeric ≤ 17)`, `B1 (14.3)`, `313 bps`, `4.82 yrs`,
+`2.7 notches`, `USD 300,000,000`, `14.95m`. A value that cannot be read with its unit, an
+approximate value (`~100%`) or a vendor token (`#N/A N/A`) is missing, never zero, and reported.
+
+The holdings are the authority: par, market value at mid ((bid + ask) / 2 x par / 100), position,
+borrower, ticker and sector counts, issuer, sector and second-lien shares of that market value, and
+par-weighted price, margin and yield (yields outside -10 % to 100 % left out) are recomputed from
+them. The classes of defect checked:
+
+| Class | Check |
+| --- | --- |
+| 1 | Stated par, NAV, positions, obligors and sectors against the holdings (par and counts exact; NAV to within 0.5 % plus rounding, because the fund marks it and the check prices at mid; positions with no price are named) |
+| 2 | The largest issuer, the ten largest issuers and each listed holding (present, market value, share, positions) against the holdings |
+| 3 | Each listed sector's share against the holdings', and its limit on the holdings' share: a breach the stated share hides |
+| 4 | Every Total and Subtotal row against its rows: shares and amounts to within the rounding of the figures added (half a unit in each one's last place), counts exactly |
+| 5 | Average price, margin, yield and second-lien share against the holdings; the stated price against stated NAV over par; a stated yield below the stated margin |
+| 6 | The capital structure's tranches against its stated total, and the total against the collateral NAV (95 % to 105 %) |
+| 7 | Maturities before 1950: two-digit years read as 19xx; maturities before the as-of date |
+| 8 | Yields outside -10 % to 100 % and discount margins outside -1,000 to 10,000 bps, with the average with and without them |
+| 9 | Vendor error tokens in numeric columns and ratings (withdrawn ratings and watch flags are notes, not defects) |
+| 10 | FIGIs not 12 characters, a FIGI on two rows, a ticker naming two borrowers, damaged names, a rating in Ranking, rows of empty cells |
+| 11 | Dates after the run's as-of date or more than 30 days before it |
+| 12 | Limits and values that cannot be read with their unit, approximate values, a value without the limit's unit; status and headroom against limit and value; each constraint the holdings can recompute (largest issuer, largest sector, second lien) against them |
+
+Also recomputed and compared: rating buckets and their issuer counts (Moody's, else S&P: Baa3/BBB-
+or better IG, Ba BB, B B, Caa1/CCC+ or worse CCC, no rating Unrated; a bucket the holdings fill but
+the report omits is reported; Other is not recomputed), the lien split, the par-weighted life (days
+/ 365.25 from the report's as-of date) and maturity buckets (a calendar year such as `2028`, or a
+range of years to maturity such as `1-2 Years`, `< 1 Year`, `> 7 Years`). Maturity figures are
+compared as given; where maturities fall before 1950 the figure with those years read as 20xx is
+given beside it, labelled "not applied", never substituted. Further cell checks: a bid above its
+ask, a holding larger than its tranche (Size ($Mn)), a borrower under two tickers, a ranking in
+Ratings or a FIGI in a name, and the par a missing price leaves out. Obligors are counted by
+borrower name; the ticker count is shown beside it.
+
+Findings come most consequential first: a breach a wrong figure hides, then totals and balances
+that do not reconcile (and files that cannot be read), then stated figures the holdings
+contradict, then stale or future dates, then cell defects. Before them the command prints a
+reconciliation table of the headline figures (par, NAV, counts, largest issuer, top ten, liens,
+average price, margin, yield and life), stated against the holdings with the difference.
+
+Not recomputed, and listed as not checked: rating factors (WARF), and any metric whose unit is not
+the one its name implies.
+
+How the real layout is read (pinned by SYNTHETIC fixtures in `tools/synthetic_portfolio_exports.py`):
+
+- Capital structure: each row's leading amount (`$280,000,000 — SOFR + 130bps` is 280,000,000; the
+  spread is a note); the row whose field holds "Total" (`Total Liabilities + Equity`) is the total.
+- Constraints: either layout (`Limit`/`Current Value` with ID and dates, or `Limit / Guideline`/
+  `Current Exposure` without). A parameter is checked against what it says: `Aggregate top 10
+  issuers` the ten largest; `Max single issuer exposure (largest: <name>)` the largest issuer, and
+  the name against the holdings' largest; `Max single sector (largest: <sector>)` and `2nd largest
+  sector: <sector>` that named sector's share, and the name against the holdings' n-th largest;
+  `Min 1st Lien / Senior Secured` and `Max 2nd Lien / Unsecured` the lien split; `Max unrated
+  exposure` the unrated bucket; `Max WAL` the life; `Min number of obligors` the borrower count. A
+  parameter naming nothing the holdings give (a CCC row that includes Other, a WAR minimum, equity)
+  is listed as not checked, never matched to the nearest. An exclusion row that lists its sectors
+  (`Excluded sectors (Tobacco, Weapons)`) is checked on their combined share; an exclusion word
+  inside brackets (`Single sector (excluding cash)`) does not make a row an exclusion. A limit
+  without a sign (`0% NAV`) takes its direction from Max or Min; with neither, an exclusion row or
+  a zero limit is "at most"; `Info only` has no limit; an em dash is not applicable. Two constraints files are compared
+  row by row on limit, current value, headroom and status.
+- Summary cells holding a name and a figure (`<name> (2.37%)`) are read as both; the name is
+  compared with the holdings' largest issuer or sector.
+- Largest holdings: `Rank, Issuer, # Positions, ...`; the issuer column is the name and the row
+  whose issuer reads `Top 10 Total` is a total. A report name is matched to the holdings' borrowers
+  by its words, ignoring case, punctuation and legal suffixes: exactly, by ticker, or as a
+  whole-word prefix of the borrower name. Each match is listed; two or more borrowers is
+  ambiguous and not compared; none is a finding, which names the borrowers that may be meant (a
+  ticker that begins with the name's first three letters, or the borrower's first word of four
+  letters or more inside the name) as possible and not compared, or says there is none.
+- Sector section: `Top 20 Subtotal` is checked against its rows and `Total` against the rows and
+  `Other Sectors`; a count is not checked where a row states none, and that is said.
+- Ranking: the lien is the leading `1L`/`2L` token (or the words first/second lien, unsecured);
+  a Ranking with none is reported as not classified, never counted as first lien.
+- Recomputed figures and differences are shown to the stated figure's places plus two.
+- Reconciliation table: a summary figure without a unit takes the unit its name states
+  (`Weighted Average Life (yrs)` = `4.82` is 4.82 yrs); a headline the summary does not state is
+  taken from the first constraints row that gives it, with that file and row named (`Max 2nd Lien
+  / Unsecured` as second lien and unsecured); the yield is the par-weighted figure on every row as
+  given, with the figure without values outside -10% to 100% in the finding; positions say how
+  many rows of the holdings had a readable par (`381 of 382 rows; 1 left out`).
+
+```
+uv run deploy-vii validate-input portfolio-exports "<folder holding the export>" --as-of 2026-11-15
+uv run deploy-vii validate-input portfolio-exports <mandate>.csv <constraints>.csv <exposure>.csv <holdings>.xlsx --as-of 2026-11-15
+```
+
+`tools/synthetic_portfolio_exports.py` builds a SYNTHETIC clean export and one per class.
 
 ## Run context form (`context-form.html`, `context.json`, schema `context/1`)
 
