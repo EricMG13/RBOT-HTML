@@ -56,7 +56,8 @@ class ScriptRefused(ValueError):
 class Outcome:
     """One figure's check: the script that recomputed it, where the handoff states it, and what
     came of it. ``reason`` is the formula in words for a disagreement and the cause for a figure
-    not checked."""
+    not checked. ``recomputed_label`` is the script's result when it is a name, not a figure (a
+    fulcrum class)."""
 
     module: str
     script: str
@@ -69,6 +70,7 @@ class Outcome:
     tolerance: float | None = None
     unit: str | None = None
     reason: str = ""
+    recomputed_label: str | None = None
 
 
 @dataclass(frozen=True)
@@ -373,6 +375,27 @@ def _judged(claim: _Claim, tables: types.ModuleType) -> Outcome:
         )
         return where("not checked", **values, reason=cause)
     return where("disagreed", **values, reason=claim.formula)
+
+
+DECIMAL_STEP = 1e-6  # the scripts round a share or a recovery, a decimal, to six places
+
+
+def share(
+    where: _Where, cell: str, decimal: float, formula: str, tables: types.ModuleType
+) -> Outcome:
+    """A share stated with `%`, or as a decimal no larger than 1 (the methods store percentages as
+    decimals), against the script's decimal; a bare figure above 1 has no readable unit."""
+    text = _plain(cell)
+    percent = text.endswith("%")
+    read = figure(cell, tables)
+    if not percent and not isinstance(read, str) and abs(read[0]) > 1:
+        reason = f"`{cell}` has no `%` and is above 1, so it is not a decimal share"
+        return where("not checked", stated=cell, reason=reason)
+    scale, unit = (100.0, "%") if percent else (1.0, "")
+    stated = text.removesuffix("%").strip()
+    return _judged(
+        _Claim(where, stated, decimal * scale, DECIMAL_STEP * scale, unit, formula), tables
+    )
 
 
 # --- CP-2D: liquidity_bridge.py on T2E.5 and T2E.6 ---------------------------------------------
@@ -765,12 +788,14 @@ NOTES = {"CP-2D": CP2D_NOTE, "CP-3C": CP3C_NOTE}
 
 
 def register(
-    module: str, script: str, check: Callable[[str, Loaded], list[Outcome]], note: str
+    module: str, script: str, check: Callable[[str, Loaded], list[Outcome]], note: str | None
 ) -> None:
-    """Add a module's check and its note: each later module's mapping is its own sibling module
+    """Add a module's check and its note (None: the module is not told; the check reads only what
+    it writes unasked). Each later module's mapping is its own sibling module
     (`method_scripts_<module>.py`), imported at the end of this one."""
     CHECKS[module] = (script, check)
-    NOTES[module] = note
+    if note is not None:
+        NOTES[module] = note
 
 
 def run(module: str, text: str) -> tuple[Outcome, ...]:
@@ -793,6 +818,7 @@ def issue(outcome: Outcome) -> str:
     value = outcome.recomputed
     shown = "" if value is None else f"{value:.6f}".rstrip("0").rstrip(".")
     recomputed = "Not Calculable" if value is None else f"{shown}{unit}"
+    recomputed = outcome.recomputed_label or recomputed
     return (
         f"{outcome.register} row `{outcome.row}` states {outcome.stated}{unit}, but the method's "
         f"`{Path(outcome.script).name}` recomputes {recomputed} from the handoff's own rows. "
@@ -826,4 +852,4 @@ def record(module: str, raw: bytes) -> dict[str, Any] | None:
 
 
 # The per-module mappings register themselves when imported; imported last, after all they use.
-from deploy_workflow import method_scripts_cp2e  # noqa: F401
+from deploy_workflow import method_scripts_cp2e, method_scripts_cp3  # noqa: F401

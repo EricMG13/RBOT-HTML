@@ -58,6 +58,32 @@ file's manifest sha256 and note, the METHODOLOGY-REVIEW.md appendix row, the mod
   zero unhedged exposure; under the harness rule a refusal is "not checked", so such a handoff is
   recorded, not sent back. Whether that should be an acceptance issue is for the owner.
 
+### CP-3, `recovery_waterfall.py`
+
+- Restored: none. Checked against the method, the three registers the scope document named do not
+  hold the script's inputs or figures: T3B.2's Amount is carrying value (CP-3A runbook: "every
+  instrument Amount uses the canonical carrying-value debt basis"; the retained medium run titled it
+  "Carrying-value capital structure dashboard"), not the claim a waterfall allocates; T3B.4's
+  Structural Rank is an ordinal; T3B.6's Recovery Sensitivity is a label (Low, Moderate, High,
+  Binary, Insufficient Information), and step 6 says "Do not infer recovery values unless supported
+  by provided evidence". No CP-3 register holds an enterprise value. So restoring them would cost
+  output and check nothing. They stay cut, with T3B.3, T3B.5, T3B.7, T3B.8, T3B.10, T3B.11 and every
+  T3C register (CP-3B's portfolio fit is handled elsewhere).
+- What the check needs: one new table, `### Recovery waterfall` (rows `Enterprise value` by case,
+  `Cost: <label>`, `Claim: <instrument>` in waterfall order with its claim and its recovery % per
+  case, `Fulcrum`, `Residual to equity`; columns `Line | Amount | Low | Base | High | Currency |
+  Scale`). That is a new model output the owner has not approved for CP-3, so CP-3 is NOT asked for
+  it: no note is sent and its instructions are unchanged. The check
+  (`deploy_workflow.method_scripts_cp3`) reads the table when a handoff has one, and otherwise
+  records every figure as not checked.
+- Checked when the table is present: each claim's recovery in each case, the fulcrum in each case,
+  the residual to equity in each case (value the claims do not absorb must not be left
+  unallocated). A claim listed twice (a guarantee at two entities) is refused by the script as
+  double recovery: not checked. The script allocates one pool; it does not split value by entity.
+- Decision for the owner: ask CP-3 for the table (its instructions gain a note of about 900
+  characters in `credit_snapshot`, `relative_value` and `portfolio_decision`), or leave CP-3
+  unchecked.
+
 ## Status
 
 Built and tested offline, module by module. Not accepted: no model has written a restored register

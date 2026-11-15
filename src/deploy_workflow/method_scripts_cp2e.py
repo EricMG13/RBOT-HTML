@@ -32,6 +32,7 @@ from deploy_workflow.method_scripts import (
     figure,
     register_table,
     scale_of,
+    share,
 )
 
 RATE_FX = ARCHIVE + "skills/cp-2e-macro-fx-hedging-sensitivity/scripts/rate_fx_sensitivity.py"
@@ -42,7 +43,6 @@ UNHEDGED = "Unhedged floating-rate debt"
 SHARE = "Unhedged debt percentage"
 SHOCK = "+100 bps cash-interest impact"
 EXPOSURE_ROWS = (TOTAL, GROSS, HEDGED, UNHEDGED, SHARE)  # REF_CP-2E_04 instruction 2
-SHARE_STEP = 1e-6  # the script rounds the share, a decimal, to six places
 UNHEDGED_FORMULA = (
     "Unhedged floating-rate debt = Gross floating-rate debt - Hedged floating-rate debt "
     "(REF_CP-2E_04)"
@@ -193,15 +193,7 @@ def _share(exposure: _Exposure, result: dict[str, Any], tables: types.ModuleType
     if recomputed is None:
         reason = "Total debt is zero, so the script gives no percentage"
         return _SHARE("not checked", stated=cell, reason=reason)
-    percent = _plain(cell).endswith("%")
-    read = figure(cell, tables)
-    if not percent and not isinstance(read, str) and abs(read[0]) > 1:
-        reason = f"`{cell}` has no `%` and is above 1, so it is not the method's decimal share"
-        return _SHARE("not checked", stated=cell, reason=reason)
-    scale, unit = (100.0, "%") if percent else (1.0, "")
-    stated = _plain(cell).removesuffix("%").strip()
-    claim = _Claim(_SHARE, stated, recomputed * scale, SHARE_STEP * scale, unit, SHARE_FORMULA)
-    return _judged(claim, tables)
+    return share(_SHARE, cell, recomputed, SHARE_FORMULA, tables)
 
 
 def _shock_cell(text: str, tables: types.ModuleType) -> _Amount:

@@ -694,6 +694,173 @@ def test_cp2e_a_repeated_input_row_is_not_checked():
     assert "two `Hedged floating-rate debt` rows" in outcomes[0].reason
 
 
+# --- CP-3 (the table is proposed to the owner; CP-3 is not asked for it) ------------------------
+
+# SYNTHETIC, USD millions. Claims in row order RCF 50, Term Loan B 300, Senior Notes 200; admin
+# cost 20 comes off the top of each enterprise value.
+# Low, EV 200: 180 left. RCF 50 of 50 (100%); 130 left, Term Loan B 130 of 300 = 43.33% (the first
+# partial: the fulcrum); Senior Notes 0%. Residual 0.
+# Base, EV 420: 400 left. RCF 100%; Term Loan B 300 of 300 (100%); 50 left, Senior Notes 50 of
+# 200 = 25.0% (fulcrum). Residual 0.
+# High, EV 700: 680 left. All three whole (100%); 680 - 550 = 130 to equity; no fulcrum.
+WATERFALL = [
+    ("Enterprise value", "—", "200", "420", "700", "USD", "m"),
+    ("Cost: Administrative claims", "20", "—", "—", "—", "USD", "m"),
+    ("Claim: RCF", "50", "100%", "100%", "100%", "USD", "m"),
+    ("Claim: Term Loan B", "300", "43.3%", "100%", "100%", "USD", "m"),
+    ("Claim: Senior Notes", "200", "0%", "25.0%", "100%", "USD", "m"),
+    ("Fulcrum", "—", "Term Loan B", "Senior Notes", "None", "—", "—"),
+    ("Residual to equity", "—", "0", "0", "130", "USD", "m"),
+]
+CP3_CLAIMS = ("RCF", "Term Loan B", "Senior Notes")
+
+
+def cp3(rows=None, heading="### Recovery waterfall"):
+    rows = WATERFALL if rows is None else rows
+    return "\n".join(
+        [
+            "## Request",
+            "SYNTHETIC handoff.",
+            "## Findings",
+            "### Bottom line",
+            "Senior Notes are the fulcrum in the base case.",
+            heading,
+            "| Line | Amount | Low | Base | High | Currency | Scale |",
+            "|---|---|---|---|---|---|---|",
+            *("| " + " | ".join(row) + " |" for row in rows),
+            "## Gaps",
+            "None.",
+        ]
+    )
+
+
+def edited(line, **cells):
+    names = ("amount", "low", "base", "high", "currency", "scale")
+    return [
+        (r[0], *(cells.get(n, r[i + 1]) for i, n in enumerate(names))) if r[0] == line else r
+        for r in WATERFALL
+    ]
+
+
+def by_case(outcomes, case):
+    return {
+        o.figure.removesuffix(f" ({case})"): o for o in outcomes if o.figure.endswith(case + ")")
+    }
+
+
+def test_cp3_all_figures_right():
+    outcomes = ms.run("CP-3", cp3())
+    assert len(outcomes) == 15 and {o.status for o in outcomes} == {"agreed"}
+    low = by_case(outcomes, "Low")
+    assert low["Recovery: Term Loan B"].recomputed == pytest.approx(43.333333, abs=1e-4)
+    assert low["Recovery: Term Loan B"].tolerance == pytest.approx(0.1)
+    assert low["Fulcrum"].recomputed_label == "Term Loan B"
+    high = by_case(outcomes, "High")
+    assert high["Residual to equity"].recomputed == 130.0
+    assert high["Fulcrum"].recomputed_label == "no fulcrum"
+    assert ms.issues("CP-3", cp3()) == ()
+
+
+def test_cp3_is_not_asked_for_the_table():
+    assert "CP-3" in ms.CHECKS and "CP-3" not in ms.NOTES
+
+
+def test_cp3_one_recovery_wrong():
+    text = cp3(edited("Claim: Senior Notes", base="30.0%"))
+    wrong = [o for o in ms.run("CP-3", text) if o.status == "disagreed"]
+    assert [o.figure for o in wrong] == ["Recovery: Senior Notes (Base)"]
+    (issue,) = ms.issues("CP-3", text)
+    assert "`### Recovery waterfall` row `Recovery: Senior Notes (Base)` states 30.0 %" in issue
+    assert "recomputes 25 %" in issue and "recovery_waterfall.py" in issue
+
+
+def test_cp3_a_wrong_fulcrum_names_the_scripts_fulcrum():
+    rows = edited("Fulcrum", base="Term Loan B")
+    (issue,) = ms.issues("CP-3", cp3(rows))
+    assert "row `Fulcrum (Base)` states Term Loan B" in issue
+    assert "recomputes Senior Notes from the handoff's own rows" in issue
+
+
+def test_cp3_unallocated_value_is_a_disagreement():
+    # High: 130 reaches equity. Stating 0 leaves it unallocated.
+    outcome = by_case(ms.run("CP-3", cp3(edited("Residual to equity", high="0"))), "High")
+    assert outcome["Residual to equity"].status == "disagreed"
+    assert "not left unallocated" in outcome["Residual to equity"].reason
+
+
+def test_cp3_a_sign_error_is_a_disagreement():
+    outcome = by_case(ms.run("CP-3", cp3(edited("Residual to equity", high="(130)"))), "High")
+    assert outcome["Residual to equity"].status == "disagreed"
+
+
+def test_cp3_a_claim_guaranteed_at_two_entities_is_refused_by_the_script():
+    # The notes listed once per guarantor entity would recover twice: the script refuses.
+    rows = [
+        *WATERFALL[:5],
+        ("Claim: Senior Notes", "200", "0%", "0%", "0%", "USD", "m"),
+        *WATERFALL[5:],
+    ]
+    (outcome,) = ms.run("CP-3", cp3(rows))
+    assert outcome.status == "not checked" and "double-counts recovery" in outcome.reason
+
+
+def test_cp3_a_missing_enterprise_value_is_not_checked_and_never_zero():
+    outcomes = ms.run("CP-3", cp3(edited("Enterprise value", base="Not supplied: no valuation")))
+    base = by_case(outcomes, "Base")
+    assert {o.status for o in base.values()} == {"not checked"}
+    assert "states no Enterprise value for Base (missing, not zero)" in base["Fulcrum"].reason
+    assert {o.status for o in by_case(outcomes, "Low").values()} == {"agreed"}
+
+
+def test_cp3_a_claim_without_an_amount_stops_the_claims_below_it():
+    outcomes = by_case(
+        ms.run("CP-3", cp3(edited("Claim: Term Loan B", amount="[Insufficient Information]"))),
+        "Base",
+    )
+    assert outcomes["Recovery: RCF"].status == "agreed"
+    for name in (
+        "Recovery: Term Loan B",
+        "Recovery: Senior Notes",
+        "Fulcrum",
+        "Residual to equity",
+    ):
+        assert outcomes[name].status == "not checked", name
+    assert "not established" in outcomes["Fulcrum"].reason
+
+
+def test_cp3_a_blank_cost_stops_the_case_and_a_zero_cost_is_a_figure():
+    blank = ms.run(
+        "CP-3", cp3(edited("Cost: Administrative claims", amount="Not supplied: none disclosed"))
+    )
+    assert {o.status for o in blank} == {"not checked"}
+    assert "has no supported amount" in blank[0].reason
+    # Cost 0: Base has 420; RCF 50, Term Loan B 300, 70 left, Senior Notes 70 / 200 = 35.0%.
+    zero = by_case(ms.run("CP-3", cp3(edited("Cost: Administrative claims", amount="0"))), "Base")
+    assert zero["Recovery: Senior Notes"].recomputed == pytest.approx(35.0)
+
+
+def test_cp3_a_scale_mismatch_or_two_currencies_are_not_compared():
+    for cells in ({"scale": "bn"}, {"currency": "EUR"}):
+        (outcome,) = ms.run("CP-3", cp3(edited("Claim: RCF", **cells)))
+        assert (
+            outcome.status == "not checked" and "different or unread currencies" in outcome.reason
+        )
+
+
+def test_cp3_an_absent_or_malformed_table_is_not_checked():
+    (absent,) = ms.run("CP-3", cp3(heading="### Recovery analysis"))
+    assert absent.reason == "the handoff has no `### Recovery waterfall` table"
+    broken = cp3().replace("| Claim: RCF | 50 |", "| Claim: RCF | 50 | 9 |")
+    (outcome,) = ms.run("CP-3", broken)
+    assert "a row of 8 cells under 7 columns" in outcome.reason
+
+
+def test_cp3_a_row_the_check_does_not_read_is_not_compared():
+    rows = [*WATERFALL[:2], ("Tax leakage", "5", "—", "—", "—", "USD", "m"), *WATERFALL[2:]]
+    (outcome,) = ms.run("CP-3", cp3(rows))
+    assert outcome.status == "not checked" and "`Tax leakage`" in outcome.reason
+
+
 # --- the policy -----------------------------------------------------------------------------------
 
 

@@ -908,7 +908,11 @@ is its own module beside the harness (`deploy_workflow.method_scripts_<module>`)
 `rate_fx_sensitivity.py` on T2F.4 (Total debt, Gross, Hedged and Unhedged floating-rate debt,
 Unhedged debt percentage) and T2F.5 (the +100 bps cash-interest impact); the project-written
 `CPOS_REGISTER_SCOPE.md § CP-2E` no longer names T2F.4 and T2F.5, so CP-2E writes them and the
-presence check requires them; T2F.2, T2F.8 and T2F.9 stay cut. Limit: synthetic proof only.
+presence check requires them; T2F.2, T2F.8 and T2F.9 stay cut. CP-3: `recovery_waterfall.py`
+reads a `### Recovery waterfall` table only when a handoff has one; no CP-3 register holds an
+enterprise value or a stated recovery (T3B.2's Amount is carrying value, T3B.6 a label), so nothing
+is restored and CP-3 is not asked for the table until the owner decides. Limit: synthetic proof
+only.
 
 ## Appendix: selected method files
 
