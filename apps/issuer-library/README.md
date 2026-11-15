@@ -59,7 +59,7 @@ uv run deploy-vii validate-input portfolio "<path to the workbook>.xlsx" --as-of
 ```
 
 The fund's own export is accepted beside the template: its mandate, constraints and exposure report
-CSVs (the report in five stacked sections A to E, each a title row, a header row and data rows) and
+(CSV files, or sheets of one workbook) (the report in five stacked sections A to E, each a title row, a header row and data rows) and
 its holdings workbook (a `Holdings` sheet, optionally `Market Data`). The holdings are the
 authority: par, market value at mid, counts, issuer, sector and second-lien shares and par-weighted
 price, margin and yield are recomputed from them, and every figure the report, the constraints and
@@ -68,7 +68,7 @@ the mandate state is checked against them and against their own totals (twelve c
 portfolio workbook. Check them together before uploading:
 
 ```
-uv run deploy-vii validate-input portfolio-export "<mandate>.csv" "<constraints>.csv" "<exposure report>.csv" "<holdings>.xlsx" --as-of <the run's as-of date, YYYY-MM-DD>
+uv run deploy-vii validate-input portfolio-exports "<folder holding the export's files>" --as-of <the run's as-of date, YYYY-MM-DD>
 ```
 
 **Where audit material is drawn.** Source references, file names, hashes, ids, calculation ids,

@@ -185,7 +185,7 @@ the run uses it, and a later step stays locked while an earlier one has an error
    (mandate, constraints and exposure report CSVs and a holdings workbook) is accepted beside the
    template and checked with the holdings as the authority; upload all its files and choose the
    holdings workbook. Check before uploading: `uv run deploy-vii validate-input portfolio <file>
-   --as-of <as-of date>`, or `... validate-input portfolio-export <files> --as-of <as-of date>`.
+   --as-of <as-of date>`, or `... validate-input portfolio-exports <folder or files> --as-of <as-of date>`.
 4. **More context.** Standard and Advanced (at Basic only for a primary run, a held answer, an error
    or "Answer this now"): market and ratings; peers, valuation and module modes (the peer source,
    your own peers, the Relative value mode and Deep Debate for the Committee module); research
