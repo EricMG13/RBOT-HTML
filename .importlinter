@@ -40,9 +40,9 @@ exhaustive_ignores =
 layers =
     run_start : inbox : signal
     owners.cpos_launch : owners.cpos_launch_methods : owners.cpos_launch_prompts : owners.cpos_launch_review : owners.cpos_launch_tables : owners.cpos : run_pathway : replay : model_testing
-    library_index : changes : changes_check : credit_os_catalogue : credit_os_chips : markdown_delivery : handoff_delivery : model_handoff_delivery : owner_rendering : rendering : financial_rendering : reader_summary : owners.cpos_cp1_check
+    library_index : changes : changes_check : credit_os_catalogue : credit_os_chips : markdown_delivery : handoff_delivery : model_handoff_delivery : owner_rendering : reader_summary : owners.cpos_cp1_check
     owner_workflow : earnings_workflow : earnings : financial_workflow : owners.cp0_attachments : owners.cp1a : owners.cp1b : owners.cp1c : owners.cp1d : owners.cp2 : owners.cp2a : owners.cp2d : owners.cp2e : owners.cp2g : owners.cp2h : owners.cp3 : owners.cp3c : owners.cp3d : owners.cp4 : owners.cp4c : owners.cp5 : owners.cp6 : owners.cp8 : owners.cpdr : owners.cpl10 : owners.cpos_forecast : owners.cpos_facilities : owners.cpos_periods : owners.blank : owners.valuation_basis : owners.period_basis : host : workflow : model : prompts : research : tools : run_inputs : run_events
-    confidence : context : context_cites : context_periods : cpos_status : docx_text : html_text : http_base : identity_check : inline_xbrl : pdf_headers : platform_io : prose_checks : run_expectations : run_scopes : statement_compose : statement_lines : unit_maps : trailing_period : financial_series : liquidity_series : restructuring_series : owners.pins
+    confidence : context : context_cites : context_periods : docx_text : html_text : http_base : identity_check : inline_xbrl : pdf_headers : platform_io : prose_checks : run_expectations : run_scopes : statement_compose : statement_lines : unit_maps : trailing_period : financial_series : liquidity_series : restructuring_series : owners.pins
 ignore_imports =
     ; Index reads CP-OS's request fingerprint: move request_fingerprint out of owners.cpos into a
     ; delivery or engine module both import.

@@ -1136,55 +1136,6 @@ def run_comparison(
         return receipt
 
 
-def run_live_comparison(
-    manifest: Path,
-    directory: Path,
-    *,
-    ruling: Path,
-    check: Callable[[HandoffTask, bytes], tuple[str, ...]],
-    environ: Mapping[str, str] | None = None,
-    max_turns: int = 24,
-    max_output_tokens: int = 16000,
-) -> Path:
-    """Explicit bounded CP-8 execution over the existing verified bundle exchange."""
-    import os
-
-    from deploy_workflow.model.handoff import HandoffExecutor
-    from deploy_workflow.model.redact import Redactor
-    from deploy_workflow.model_testing.configs import CONFIGS
-
-    request = ComparisonPlan.model_validate_json(manifest.read_bytes())
-    if request.execution != "live-provider":
-        raise ValueError("cpos_live_mode: manifest must explicitly declare live-provider")
-
-    def checked_response(task: HandoffTask, raw: bytes) -> tuple[str, ...]:
-        # Supply dimension feedback inside the paid repair loop, before outer publication.
-        # This validation's files are discarded; run_comparison binds the published input hashes.
-        try:
-            comparison_files(task.run, raw, {})
-        except ValueError as error:
-            if str(error).startswith("cp8_dimensions:"):
-                return (str(error),)
-            raise
-        return check(task, raw)
-
-    environment = os.environ if environ is None else environ
-    adapter = live_adapter_for(CONFIGS["sol-medium"], ruling, environment, None)
-    try:
-        executor = HandoffExecutor(
-            directory / "live",
-            adapter=adapter,
-            cap_usd=request.provider_cap_usd,
-            check=checked_response,
-            redactor=Redactor.from_environ(environment),
-            max_turns=max_turns,
-            max_output_tokens=max_output_tokens,
-        )
-        return run_comparison(manifest, directory, execute=executor, check=checked_response)
-    finally:
-        _release(adapter)
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="CP-OS retained-handoff replay and deliverable comparison; no providers"
