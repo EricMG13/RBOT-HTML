@@ -1814,6 +1814,92 @@ def test_cp1_the_formula_decides_growth_or_ratio(name, formula, operands, stated
     assert cp1_by(cp1(row))[f"{name} (FY2024)"].status == status
 
 
+# Ruling (whole-branch review, brief task-D part 1): a delta sign, a subtraction numerator and
+# words after the closing - 1. (Metric Name, Formula, N, D, stated, status).
+CP1_REVIEW_KEY = [
+    ("Revenue growth", "\u0394 Sales / prior sales", "1355", "6585", "0.21", "agreed"),
+    ("Revenue growth", "\u0394Sales / prior sales", "1355", "6585", "0.21", "agreed"),
+    ("EBITDA growth", "\u0394 EBITDA / prior EBITDA", "665", "3148", "0.21", "agreed"),
+    ("Revenue growth", "\u2206 Sales / prior sales", "1355", "6585", "0.21", "agreed"),
+    (
+        "Revenue growth",
+        "(Current sales \u2212 prior sales) / prior sales",
+        "1355",
+        "6585",
+        "0.21",
+        "agreed",
+    ),
+    (
+        "Revenue growth",
+        "(FY2024 sales - FY2023 sales) / FY2023 sales",
+        "1355",
+        "6585",
+        "20.6%",
+        "agreed",
+    ),
+    (
+        "EBITDA growth",
+        "(Current \u2212 Prior EBITDA) / Prior EBITDA",
+        "665",
+        "3148",
+        "0.21",
+        "agreed",
+    ),
+    (
+        "Revenue growth",
+        "(Current sales \u2212 prior sales) / prior sales",
+        "1355",
+        "6585",
+        "-0.79",
+        "disagreed",
+    ),
+    (
+        "Revenue growth",
+        "YoY change = current sales / prior sales \u2212 1 (fraction)",
+        "7940",
+        "6585",
+        "0.21",
+        "agreed",
+    ),
+    (
+        "Revenue growth",
+        "Change: current sales / prior sales \u2212 1 (FY2024 on FY2023)",
+        "7940",
+        "6585",
+        "0.21",
+        "agreed",
+    ),
+    (
+        "Revenue growth",
+        "Current sales over prior sales (YoY change)",
+        "7940",
+        "6585",
+        "0.21",
+        "agreed",
+    ),
+    (
+        "Sales uplift",
+        "Current sales / prior sales \u2212 1, as a percentage",
+        "7940",
+        "6585",
+        "20.6%",
+        "agreed",
+    ),
+    ("Sales uplift", "(Current sales / prior sales \u2212 1) %", "7940", "6585", "20.6%", "agreed"),
+    ("Sales uplift", "Current sales / prior sales \u2212 1.0", "7940", "6585", "0.21", "agreed"),
+    ("Sales uplift", "Current sales / prior sales \u2013 1", "7940", "6585", "0.21", "agreed"),
+    ("Ratio", "(a - 1) / b", "7940", "6585", "1.21", "agreed"),
+    ("Interest cover", "EBITDA / interest (t-1)", "3813", "1160", "3.29", "agreed"),
+    ("Revenue growth", "Current sales / prior sales", "7940", "6585", "1.21", "disagreed"),
+]
+
+
+@pytest.mark.parametrize("key", CP1_REVIEW_KEY)
+def test_cp1_the_formula_reading_after_branch_review(key):
+    name, *row, status = key
+    assert cp1_by(cp1({name: tuple(row)}))[f"{name} (FY2024)"].status == status
+
+
 def test_cp1_the_rejected_live_draft_t49_table_has_no_disagreed_row():
     table = (Path(__file__).parent / "fixtures" / "cp1_earnings_update_draft1_t49.md").read_text()
     outcomes = [o for o in ms.run("CP-1", table) if o.register == "T4.9"]
