@@ -333,6 +333,55 @@ session reads 3 as the pathway part waiting; no pathway's modules or order chang
   cell, or the copy is not checked. `credit_snapshot` and `portfolio_decision` have no CP-1C until the restructure,
   so CP-3 states its own cases or none there.
 
+## `completeness_check.py`, every module (2026-11-15, row 4 of the scope)
+
+Harness `deploy_workflow.method_scripts_completeness`; registered with `register_shared`, so it runs
+on every module's handoff after the module's own script check. Its outcomes go into the same
+`<attempt>.method-checks.json` record; its issues reach the launcher through `shared_issues`.
+
+- What the script checks (cp-os b57a344, archived `scripts/completeness_check.py`, sha256
+  `a9841a74`): from the `## Output profile` of the module's SKILL.md, each required register's
+  declared columns, its `minimum_body_rows`, its critical columns against the blocklist
+  (`critical_cell_values_casefold`: empty, `n/a`, `tbd`, `[insufficient information]`, ...), and the
+  CP-MODEL interface tables. Its own `load_contract` reads the contract from the archived SKILL.md
+  the module is sent (sha256-pinned); its `is_template_column` reads `Period 1…N`.
+- Overlap with the launcher: `register_issues` already sends back an in-scope register that is
+  absent (ten modules). This check never repeats that: a register it cannot find as a table under
+  its heading is "not checked", whatever the reason.
+- Not contradicting the cuts: for the ten modules with a scope section only the registers
+  `cpos_launch.required_registers` requires are judged (scope cuts, routing registers and CP-0's
+  launcher-made P registers are recorded as "not required in this transport"). The CP-MODEL tables
+  are never read (ROUTING_RULES forbids them). A declared column naming a downstream or receiving
+  module (`downstream_use`, `Downstream Impact`, `downstream module`) is never required: ROUTING_RULES
+  tells every module not to map downstream dependencies.
+- Sent back (status `missing`), one issue per register: a declared column absent from every table
+  under a required register's heading, for the ten modules only. Header cells are read as labels
+  (emphasis, case, `_`, `.`, hyphens, `?` and a plural `s` aside; `&` and `+` as `and`; a trailing
+  bracketed unit such as `(USD m)` aside); a joined header holds each part (`Currency and scale`
+  holds `currency`); a joined declared name is present as its parts (`evidence/date` as two
+  columns); a header that starts with the name counts (`Principal amount`); extra columns and any
+  order are allowed. Not sent back: a register whose every row states a gap (`Not supplied:
+  <reason>` or `[Insufficient Information]` beside at most a label), a register written as rows
+  (a missing column's name is a row label), and a blocked module (`module_status: Blocked`).
+- Recorded, never sent back (status `noted`, new): a placeholder in a critical column (in this
+  transport an explicit gap is the required answer, so it classifies the run as not full
+  analytical), fewer rows than the method's minimum (CP-2's T2.12 asks for 8 triggers; the evidence
+  may support fewer, and the presence rule's gap form is one row), a template register with no
+  period column, a malformed contract list, and, for every module outside the ten, a missing
+  column: those modules have no presence check and no retained handoff to calibrate against.
+- Calibration (real): the two retained CP-2E handoffs (`tests/fixtures/esg/CP-2E-h3.md`, `-h4.md`,
+  TransDigm, 2026-11-13 Sol runs) send nothing back: 14 in-scope registers each with every declared
+  column; h3's 7 placeholder cells (T2F.3, T2F.5, T2F.6, T2G.4) are noted, the same cells the
+  script's own CLI reports. No other module has a retained full handoff in this repository, so the
+  column rule is unproven on real CP-0, CP-1A, CP-DR, CP-2, CP-2A, CP-2G, CP-3, CP-5 and CP-6 output.
+- Modules with no contract: CP-1's SKILL.md (caos-databricks) declares no Output profile (one "not
+  checked" outcome); CP-L10 and CP-8 are sent no SKILL.md (no record unless another check applies).
+- No note is sent: TRANSPORT_RULES already tells every module to do the completeness check itself,
+  and `earnings_update` has 93 characters left under its ceiling.
+- The launcher's synthetic integration answers for CP-2E (T2F.5) and CP-2G (T2H.4 to T2H.6) were
+  partial tables; they now carry every declared column (`Not supplied` where synthetic), since a
+  handoff without them would be sent back.
+
 ## Status
 
 Built and tested offline, module by module. Not accepted: no model has written a restored register

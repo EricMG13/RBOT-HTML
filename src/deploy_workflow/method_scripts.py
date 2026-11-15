@@ -28,7 +28,7 @@ import types
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, replace
-from functools import cache
+from functools import cache, partial
 from pathlib import Path
 from typing import Any, Literal
 
@@ -50,7 +50,10 @@ RECORD_SUFFIX = ".method-checks.json"  # beside a request folder's `<attempt>.re
 # above gross: "approved"). Every other refusal is "not checked".
 # `missing`: a table the module is asked for is absent, with no statement in its place (owner,
 # 2026-11-15, CP-3's recovery waterfall: "yes"); sent back. Every other gap is "not checked".
-Status = Literal["agreed", "disagreed", "not checked", "contradicted", "missing"]
+# `noted`: a finding recorded and not sent back (a placeholder in a column the method calls
+# critical, a register shorter than the method's minimum): in this transport an explicit gap is the
+# required answer for missing evidence, so such a cell classifies the run, it does not refuse it.
+Status = Literal["agreed", "disagreed", "not checked", "contradicted", "missing", "noted"]
 SENT_BACK = ("disagreed", "contradicted", "missing")
 # The handoffs a module was sent, by module id, as text: a check may read what it copied from.
 Upstream = Mapping[str, str]
@@ -945,6 +948,19 @@ CHECKS: dict[str, tuple[str, Check]] = {
 NOTES = {"CP-2D": CP2D_NOTE, "CP-3C": CP3C_NOTE}
 
 
+# Checks every module's handoff gets (`completeness_check.py`): (module, handoff) -> outcomes, none
+# when the check has nothing to read for the module. `method_scripts_completeness` reads the
+# launcher's method lists, so it sits in the orchestration layer and registers itself when the
+# launcher or CP-OS imports it (`.importlinter`), not from here.
+Shared = Callable[[str, str], list[Outcome]]
+SHARED_CHECKS: dict[str, Shared] = {}
+
+
+def register_shared(script: str, check: Shared) -> None:
+    """Add a check that runs on every module's handoff, after the module's own."""
+    SHARED_CHECKS[script] = check
+
+
 def register(module: str, script: str, check: Check, note: str | None) -> None:
     """Add a module's check and its note (None: the module is not told; the check reads only what
     it writes unasked). Each later module's mapping is its own sibling module
@@ -955,14 +971,27 @@ def register(module: str, script: str, check: Check, note: str | None) -> None:
 
 
 def run(module: str, text: str, upstream: Upstream | None = None) -> tuple[Outcome, ...]:
-    """Every check the module's method scripts make on this handoff (``upstream``: the handoffs
-    it was sent, by module id); none for a module without one. A script that cannot be loaded or
-    that fails is one "not checked" outcome, never a raise."""
+    """Every check the module's own method scripts make on this handoff (``upstream``: the
+    handoffs it was sent, by module id); none for a module without one. A script that cannot be
+    loaded or that fails is one "not checked" outcome, never a raise."""
     if module not in CHECKS:
         return ()
     path, check = CHECKS[module]
+    return _guarded(module, path, lambda: check(text, _loaded(path), upstream or {}))
+
+
+def shared(module: str, text: str) -> tuple[Outcome, ...]:
+    """Every shared check's outcomes on this handoff (`completeness_check.py`), guarded as
+    `run`'s."""
+    out: list[Outcome] = []
+    for path, check in SHARED_CHECKS.items():
+        out += _guarded(module, path, partial(check, module, text))
+    return tuple(out)
+
+
+def _guarded(module: str, path: str, check: Callable[[], list[Outcome]]) -> tuple[Outcome, ...]:
     try:
-        return tuple(check(text, _loaded(path), upstream or {}))
+        return tuple(check())
     except Exception as error:  # noqa: BLE001 - a script failure must never stop a run
         cause = f"the check could not run: {type(error).__name__}: {error}"
         return (Outcome(module, path, "all", "", "", "not checked", reason=cause),)
@@ -997,6 +1026,11 @@ def issues(module: str, text: str, upstream: Upstream | None = None) -> tuple[st
     return tuple(issue(o) for o in run(module, text, upstream) if o.status in SENT_BACK)
 
 
+def shared_issues(module: str, text: str) -> tuple[str, ...]:
+    """The shared checks' acceptance issues (a required register's declared column absent)."""
+    return tuple(issue(o) for o in shared(module, text) if o.status in SENT_BACK)
+
+
 def upstream_texts(handoffs: Mapping[str, bytes]) -> dict[str, str]:
     """The handoffs a module was sent, as text (one that is not UTF-8 is left out)."""
     out = {}
@@ -1026,15 +1060,18 @@ def blocked(text: str) -> bool:
 def record(
     module: str, raw: bytes, upstream: Mapping[str, bytes] | None = None
 ) -> dict[str, Any] | None:
-    """Every check's outcome for one response, for the run's files; None for a module without a
-    method-script check."""
-    if module not in CHECKS:
-        return None
+    """Every check's outcome for one response, for the run's files; None when no check applies to
+    the module."""
     try:
-        outcomes = run(module, raw.decode("utf-8"), upstream_texts(upstream or {}))
+        text = raw.decode("utf-8")
+        outcomes = (*run(module, text, upstream_texts(upstream or {})), *shared(module, text))
     except UnicodeDecodeError:
+        if module not in CHECKS:
+            return None
         path = CHECKS[module][0]
         outcomes = (Outcome(module, path, "all", "", "", "not checked", reason="not UTF-8"),)
+    if not outcomes:
+        return None
     hashes = registered()
     return {
         "kind": RECORD_KIND,

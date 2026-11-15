@@ -8721,9 +8721,11 @@ T2F4_T2F5 = """### T2F.4 - Unhedged Exposure Table
 
 ### T2F.5 - Rate Sensitivity Table
 
-| Sensitivity | Formula | Estimated Cash Impact | Status | Source Trace |
-|---|---|---|---|---|
-| +100 bps cash-interest impact | Unhedged x 1% | USD 5.0m | Calculated | S1 |
+| Sensitivity | Formula | Source Inputs | Estimated Cash Impact | FCF / Liquidity Implication \
+| Status | Source Trace |
+|---|---|---|---|---|---|---|
+| +100 bps cash-interest impact | Unhedged x 1% | T2F.4 | USD 5.0m | Synthetic. | Calculated \
+| S1 |
 
 """
 
@@ -8765,6 +8767,27 @@ def test_cp2e_is_checked_by_its_script_on_its_restored_registers(tmp_path, pathw
     assert "Missing registers: T2F.4, T2F.5." in missing
 
 
+def test_a_required_registers_missing_column_is_sent_back_by_the_launcher(tmp_path):
+    """`completeness_check.py` through the launcher's checker: T2F.4 written without the method's
+    `Credit Implication` column is sent back once, naming it; with it, nothing is added (SYNTHETIC,
+    ruling 2026-11-15-method-script-checks.md)."""
+    prepared, task, context = good_task(tmp_path, "CP-2E", "credit_snapshot")
+    raw = _without_placeholders(answer(context, list(prepared.plan.layout.routes)), ("T2F.4",))
+    check = checker(prepared.layout)
+    full = T2F4_T2F5.format(unhedged="500").split("### T2F.5")[0]
+    lacking = full.replace(" Credit Implication |", "").replace(" Synthetic. |", "")
+    lacking = lacking.replace("|---|---|---|---|---|---|", "|---|---|---|---|---|")
+    base = set(
+        _checked_handoff(
+            task, raw.replace("\n## Calculations", "\n" + full + "## Calculations").encode(), check
+        )
+    )
+    assert not any("lacks the method's" in i for i in base)
+    wrong = raw.replace("\n## Calculations", "\n" + lacking + "## Calculations")
+    (added,) = set(_checked_handoff(task, wrong.encode(), check)) - base
+    assert added.startswith("T2F.4 lacks the method's column `Credit Implication`")
+
+
 def _without_placeholders(raw: str, idents: tuple[str, ...]) -> str:
     """The synthetic answer less its `Not supplied` placeholder for each named register."""
     for ident in idents:
@@ -8780,22 +8803,25 @@ def _without_placeholders(raw: str, idents: tuple[str, ...]) -> str:
 # (worked in tests/test_method_scripts.py).
 T2H456 = """### T2H.4 - Operating forecast outputs
 
-| period | case | EBITDA (USD m) | FCF (USD m) | evidence/assumption IDs |
-|---|---|---|---|---|
-| FY2025 | Base | 1,000 | 300 | A1 |
+| period | case | revenue (USD m) | EBITDA (USD m) | margin | CFO (USD m) | capex (USD m) \
+| FCF (USD m) | evidence/assumption IDs |
+|---|---|---|---|---|---|---|---|---|
+| FY2025 | Base | Not supplied: synthetic | 1,000 | Not supplied: synthetic \
+| Not supplied: synthetic | Not supplied: synthetic | 300 | A1 |
 
 ### T2H.5 - Financing and liquidity outputs
 
 | period | case | opening debt/cash (USD m) | issuance (USD m) | repayment (USD m) \
-| interest (USD m) | closing debt/cash (USD m) |
-|---|---|---|---|---|---|---|
-| FY2025 | Base | 5,000 / 400 | 0 | 200 | 350 | 4,800 / 500 |
+| interest (USD m) | closing debt/cash (USD m) | accessible liquidity (USD m) |
+|---|---|---|---|---|---|---|---|
+| FY2025 | Base | 5,000 / 400 | 0 | 200 | 350 | 4,800 / 500 | Not supplied: synthetic |
 
 ### T2H.6 - Credit metrics outputs
 
-| period | case | gross/net leverage | coverage | FCF/debt | definition IDs |
-|---|---|---|---|---|---|
-| FY2025 | Base | {gross} / 4.3x | 2.9x | 6.25% | EBITDA / cash interest |
+| period | case | gross/net leverage | coverage | FCF/debt | liquidity runway | definition IDs |
+|---|---|---|---|---|---|---|
+| FY2025 | Base | {gross} / 4.3x | 2.9x | 6.25% | Not supplied: synthetic \
+| EBITDA / cash interest |
 
 """
 
@@ -8939,6 +8965,8 @@ def test_each_attempt_keeps_its_method_script_checks_beside_its_review(tmp_path)
     _handoff(task, tmp_path / "run", lambda _task: next(answers), check, 2)
     (folder,) = (tmp_path / "run/requests/CP-2D").iterdir()
     records = [json.loads((folder / f"{n}.method-checks.json").read_text()) for n in (1, 2)]
+    for r in records:  # the module's own script; `completeness_check.py`'s outcomes follow
+        r["checks"] = [c for c in r["checks"] if c["script"].endswith("liquidity_bridge.py")]
     assert [r["response_sha256"] for r in records] == [
         hashlib.sha256(first).hexdigest(),
         hashlib.sha256(second).hexdigest(),
@@ -8947,9 +8975,9 @@ def test_each_attempt_keeps_its_method_script_checks_beside_its_review(tmp_path)
         ["disagreed", "not checked"],  # no T2E.6: Months to Empty is not checked
         ["agreed", "not checked"],
     ]
-    # A module without a method-script check keeps its review only (CP-0: CP-1 is checked since
-    # 2026-11-15, ruling 2026-11-15-method-script-checks.md).
+    # A module no check applies to keeps its review only (CP-L10: no script of its own and no
+    # SKILL.md for `completeness_check.py`; ruling 2026-11-15-method-script-checks.md).
     (tmp_path / "other").mkdir()
-    _, other, _ = good_task(tmp_path / "other", "CP-0", "credit_snapshot")
+    _, other, _ = good_task(tmp_path / "other", "CP-L10", "short_snapshot")
     _handoff(other, tmp_path / "run1", lambda _task: shell.format("").encode(), lambda *_: (), 1)
     assert not list((tmp_path / "run1").rglob("*.method-checks.json"))
