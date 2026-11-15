@@ -53,6 +53,21 @@ whose figure still disagrees after them fails acceptance like any other unresolv
 script failure or an unreadable register is "not checked" and costs nothing. The two notes add
 2,029 characters to each of `credit_snapshot`, `relative_value` and `covenant_refinancing`.
 
+## Wired next (2026-11-15, second part)
+
+Ruling `docs/rulings/2026-11-15-method-script-checks.md` (owner: "restore the cut tables"). Each
+module's mapping is `deploy_workflow.method_scripts_<module>`.
+
+| Module | Script | Registers read | Restored | Note sent |
+|---|---|---|---|---|
+| CP-2E | `rate_fx_sensitivity.py` | T2F.4, T2F.5 | T2F.4, T2F.5 | yes |
+| CP-3 | `recovery_waterfall.py` | a `### Recovery waterfall` table, if present | none (T3B.2, T3B.4, T3B.6 hold no input) | no: owner decision |
+| CP-2G | `credit_metrics.py` | T2H.4, T2H.5, T2H.6 | none (never cut) | yes |
+| CP-4 | `covenant_headroom.py` | T4C.4 | none | yes |
+| CP-1 | `credit_metrics.py` | T4.8 LTM rows, T4.9 free-name rows | none | no: `earnings_update` ceiling |
+
+Next in this document's order: row 4 (`completeness_check.py`), then CP-4C, CP-1C, CP-2H, CP-1B.
+
 ## The rest, in the order proposed
 
 Pathways from `PATHWAY_MODULES` (`short_snapshot` deactivated). Evidence: the two retained Sol

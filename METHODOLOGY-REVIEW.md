@@ -899,6 +899,37 @@ two modules' instructions gain a note before the method block. Limit: synthetic 
 model output has been checked by a script until a paid run. The order for the other modules is
 in `docs/sweeps/2026-11-15-method-scripts/scope.md`.
 
+**Method script checks, next modules, 2026-11-15 (owner, shown CP-2D and CP-3C: the new table
+"confirmed", the archive outside the gate's scope "ok", and on the modules whose inputs the
+2026-11-13 scope rule cut: "restore the cut tables"; ruling
+`docs/rulings/2026-11-15-method-script-checks.md`).** No method text is newly selected and no
+archived file changed; the scripts are the selection above (cp-os `b57a344`). Each module's mapping
+is its own module beside the harness (`deploy_workflow.method_scripts_<module>`). CP-2E:
+`rate_fx_sensitivity.py` on T2F.4 (Total debt, Gross, Hedged and Unhedged floating-rate debt,
+Unhedged debt percentage) and T2F.5 (the +100 bps cash-interest impact); the project-written
+`CPOS_REGISTER_SCOPE.md § CP-2E` no longer names T2F.4 and T2F.5, so CP-2E writes them and the
+presence check requires them; T2F.2, T2F.8 and T2F.9 stay cut. CP-3: `recovery_waterfall.py`
+reads a `### Recovery waterfall` table only when a handoff has one; no CP-3 register holds an
+enterprise value or a stated recovery (T3B.2's Amount is carrying value, T3B.6 a label), so nothing
+is restored and CP-3 is not asked for the table until the owner decides. CP-2G:
+`credit_metrics.py` on T2H.4 to T2H.6 (never cut): leverage, coverage and FCF/debt per period and
+case, and the opening-to-prior-closing and debt roll-forward of T2H.5. CP-4:
+`covenant_headroom.py` on T4C.4, signed headroom and status by the stated test type (never
+inferred). CP-1: `credit_metrics.py` on T4.8's LTM rows and T4.9's free-name quotients; the six
+fixed T4.9 rows stay with `owners/cpos_cp1_check.py`, which binds their operands; no note is sent
+(the `earnings_update` size ceiling). Limit: synthetic proof only, and the retained TDG excerpts
+of 2026-11-13 hold none of these registers.
+
+**CP-3's portfolio-fit registers restored (2026-11-15; owner: "restore the CP-3 portfolio-fit
+tables"; ruling `docs/rulings/2026-11-15-method-script-checks.md`).** No method text is newly
+selected and no archived method file changed. The project-written `CPOS_REGISTER_SCOPE.md § CP-3`
+no longer names CP-3B's T3C.1 to T3C.3 and T3C.5 to T3C.9, so CP-3 writes them in every pathway
+that runs it and the presence check requires them; CP-3B's own gate (`REF_CP-3B_01`: it "always
+executes", and with portfolio inputs missing gives generic portfolio-fit logic and withholds a
+numeric size) governs what they hold when no workbook is supplied. This answers the open CP-3B
+item of `2026-11-15-full-assessment-portfolio-workbook.md`. No script checks them. T3.1, T3.4,
+T3.5, T3.7, T3.9, T3.10 and the T3B registers other than T3B.1 stay cut. Limit: offline proof only.
+
 **Full credit assessment collects the portfolio workbook (owner, 2026-11-15: "yes, wire in the
 portfolio workbook." and "check data first likely incorrect sums and values"; ruling
 `docs/rulings/2026-11-15-full-assessment-portfolio-workbook.md`).** No method text is newly
@@ -1017,4 +1048,4 @@ on 2026-11-15 were fixed that day (owner: "fix"); a difference accepted later go
 | CP-DR | `docs/reuse/selected-methods/skills/cp-dr-deep-research/references/REF_CP-DR_STEPS.md` | cp-os | yes | b57a344, c746ad67 | `cab435618c7f` |
 | CP-DR | `docs/reuse/selected-methods/skills/cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md` | cp-os | no | b57a344 | `5028a6476cdf` |
 | shared | `docs/reuse/selected-methods/CANON_SHARED.md` | cp-os | no | b57a344 | `1ab484c5072a` |
-| shared | `docs/reuse/selected-methods/CPOS_REGISTER_SCOPE.md` | this repo | no | this repo | `617c887c18dd` |
+| shared | `docs/reuse/selected-methods/CPOS_REGISTER_SCOPE.md` | this repo | no | this repo | `0f97542230b3` |

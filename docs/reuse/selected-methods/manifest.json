@@ -1094,9 +1094,9 @@
       "consumed_path": "docs/reuse/selected-methods/CPOS_REGISTER_SCOPE.md",
       "archive_path": "docs/reuse/selected-methods/CPOS_REGISTER_SCOPE.md",
       "exact_copy_found_at": null,
-      "sha256": "617c887c18dd294e5fd36b411b0418c21ce46b637c0b81cf94fb4a67f89cff01",
+      "sha256": "0f97542230b333ed6f5bbf8777f6361a4f1c926143119d9527433966d387db24",
       "use": "project-written (owner, 2026-11-13, T4): one section per measured module naming the registers it does not write in this transport, each with its method id and the method's own title; sent as the last section of that module's method block (CP-0, CP-1A, CP-DR, CP-2, CP-2A, CP-2E, CP-2G, CP-3, CP-5, CP-6); not a copy of any Deploy V file",
-      "note": "ruling docs/rulings/2026-11-13-appendix-and-routing-scope.md; the lists are the registers classified CUT in every inventory row of both retained Sol runs (docs/sweeps/2026-11-13-optimisation-review/appendix-inventory.md); CP-6's list no longer names T6E.4, T6E.6, T6E.7 and T6E.11 (owner, 2026-11-15, ruling docs/rulings/2026-11-15-full-assessment-cp3c-cp6a.md)"
+      "note": "ruling docs/rulings/2026-11-13-appendix-and-routing-scope.md; the lists are the registers classified CUT in every inventory row of both retained Sol runs (docs/sweeps/2026-11-13-optimisation-review/appendix-inventory.md); CP-6's list no longer names T6E.4, T6E.6, T6E.7 and T6E.11 (owner, 2026-11-15, ruling docs/rulings/2026-11-15-full-assessment-cp3c-cp6a.md); CP-2E's list no longer names T2F.4 and T2F.5, the inputs of its method script check (owner, 2026-11-15: \"restore the cut tables\"; ruling docs/rulings/2026-11-15-method-script-checks.md); CP-3's list no longer names T3C.1 to T3C.3 and T3C.5 to T3C.9 (owner, 2026-11-15: \"restore the CP-3 portfolio-fit tables\"; same ruling)"
     },
     {
       "consumed_path": "skills/cp-2d-liquidity-cash-flow-bridge/scripts/liquidity_bridge.py",

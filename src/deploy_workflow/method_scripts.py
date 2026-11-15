@@ -56,7 +56,8 @@ class ScriptRefused(ValueError):
 class Outcome:
     """One figure's check: the script that recomputed it, where the handoff states it, and what
     came of it. ``reason`` is the formula in words for a disagreement and the cause for a figure
-    not checked."""
+    not checked. ``recomputed_label`` is the script's result when it is a name, not a figure (a
+    fulcrum class)."""
 
     module: str
     script: str
@@ -69,6 +70,7 @@ class Outcome:
     tolerance: float | None = None
     unit: str | None = None
     reason: str = ""
+    recomputed_label: str | None = None
 
 
 @dataclass(frozen=True)
@@ -375,6 +377,82 @@ def _judged(claim: _Claim, tables: types.ModuleType) -> Outcome:
     return where("disagreed", **values, reason=claim.formula)
 
 
+class _NotChecked(Exception):
+    """A figure that cannot be checked, and why."""
+
+
+# --- money cells in a register with no currency or scale column ------------------------------
+
+_CODE = re.compile(r"(?<![A-Za-z])[A-Z]{3}(?![A-Za-z])|US\$|[€£$]")
+_SCALE_WORD = re.compile(
+    r"(?<=[\d\s)])(?:m|mn|mm|bn|k|million|millions|billion|billions|thousand|thousands)\.?$",
+    re.IGNORECASE,
+)
+
+
+@dataclass(frozen=True)
+class Amount:
+    """A money cell as read: its figure (None when it states none) and its unit."""
+
+    value: float | None
+    unit: str | None  # `<currency> <scale>`; None for a cell that states no figure
+    cell: str
+
+
+def column(table: Table, name: str, where: str) -> tuple[int, str]:
+    """The column named ``name`` (its header may add a unit: `Amount (USD m)`) and the header."""
+    found = [
+        i
+        for i, c in enumerate(table[0])
+        if re.fullmatch(rf"{re.escape(_label(name))}\b.*", _label(c))
+    ]
+    if len(found) != 1:
+        raise _NotChecked(f"{where} has {len(found) or 'no'} `{name}` column{'s' * (found != [])}")
+    return found[0], table[0][found[0]]
+
+
+def money(cell: str, header: str, tables: types.ModuleType) -> Amount:
+    """A money cell: its unit is the cell's own currency and scale, else the column header's."""
+    if blank(cell, tables):
+        return Amount(None, None, cell)
+    text = _plain(cell)
+    own = (currency_of(text), scale_of(text))
+    head = (currency_of(header), scale_of(header))
+    currency, scale = own[0] or head[0], own[1] or head[1]
+    if currency is None or scale is None:
+        raise _NotChecked(f"`{cell}` states no currency and scale, nor does its column")
+    read = figure(bare(cell), tables)
+    if isinstance(read, str):
+        raise _NotChecked(read)
+    return Amount(read[0], f"{currency} {scale}", cell)
+
+
+def bare(cell: str) -> str:
+    """A money cell's figure without its currency and scale (`USD 1,250m` -> `1,250`)."""
+    return _SCALE_WORD.sub("", _CODE.sub("", _plain(cell))).strip()
+
+
+DECIMAL_STEP = 1e-6  # the scripts round a share or a recovery, a decimal, to six places
+
+
+def share(
+    where: _Where, cell: str, decimal: float, formula: str, tables: types.ModuleType
+) -> Outcome:
+    """A share stated with `%`, or as a decimal no larger than 1 (the methods store percentages as
+    decimals), against the script's decimal; a bare figure above 1 has no readable unit."""
+    text = _plain(cell)
+    percent = text.rstrip(") ").endswith("%")  # `(4.2%)` is a negative percentage
+    read = figure(cell, tables)
+    if not percent and not isinstance(read, str) and abs(read[0]) > 1:
+        reason = f"`{cell}` has no `%` and is above 1, so it is not a decimal share"
+        return where("not checked", stated=cell, reason=reason)
+    scale, unit = (100.0, "%") if percent else (1.0, "")
+    stated = text.replace("%", "").strip()
+    return _judged(
+        _Claim(where, stated, decimal * scale, DECIMAL_STEP * scale, unit, formula), tables
+    )
+
+
 # --- CP-2D: liquidity_bridge.py on T2E.5 and T2E.6 ---------------------------------------------
 
 # The script's input field -> the T2E.5 row names the method gives it (REF_CP-2D_05 step 2 and
@@ -522,10 +600,6 @@ def _mte_result(text: str) -> str:
             "bridge's net outflow over its 12 months"
         )
     return rows[0][cols["Result"]]
-
-
-class _NotChecked(Exception):
-    """A figure that cannot be checked, and why."""
 
 
 def _months(
@@ -764,6 +838,17 @@ CHECKS: dict[str, tuple[str, Callable[[str, Loaded], list[Outcome]]]] = {
 NOTES = {"CP-2D": CP2D_NOTE, "CP-3C": CP3C_NOTE}
 
 
+def register(
+    module: str, script: str, check: Callable[[str, Loaded], list[Outcome]], note: str | None
+) -> None:
+    """Add a module's check and its note (None: the module is not told; the check reads only what
+    it writes unasked). Each later module's mapping is its own sibling module
+    (`method_scripts_<module>.py`), imported at the end of this one."""
+    CHECKS[module] = (script, check)
+    if note is not None:
+        NOTES[module] = note
+
+
 def run(module: str, text: str) -> tuple[Outcome, ...]:
     """Every check the module's method scripts make on this handoff; none for a module without
     one. A script that cannot be loaded or that fails is one "not checked" outcome, never a
@@ -784,6 +869,7 @@ def issue(outcome: Outcome) -> str:
     value = outcome.recomputed
     shown = "" if value is None else f"{value:.6f}".rstrip("0").rstrip(".")
     recomputed = "Not Calculable" if value is None else f"{shown}{unit}"
+    recomputed = outcome.recomputed_label or recomputed
     return (
         f"{outcome.register} row `{outcome.row}` states {outcome.stated}{unit}, but the method's "
         f"`{Path(outcome.script).name}` recomputes {recomputed} from the handoff's own rows. "
@@ -814,3 +900,13 @@ def record(module: str, raw: bytes) -> dict[str, Any] | None:
         "scripts": {path: hashes.get(path) for path in sorted({o.script for o in outcomes})},
         "checks": [asdict(o) for o in outcomes],
     }
+
+
+# The per-module mappings register themselves when imported; imported last, after all they use.
+from deploy_workflow import (  # noqa: F401
+    method_scripts_cp1,
+    method_scripts_cp2e,
+    method_scripts_cp2g,
+    method_scripts_cp3,
+    method_scripts_cp4,
+)

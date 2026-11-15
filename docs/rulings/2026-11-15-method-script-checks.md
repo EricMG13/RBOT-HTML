@@ -1,0 +1,219 @@
+# Method script checks for the next modules, and the cut tables they need restored
+
+by: user
+date: 2026-11-15
+
+This is a decision record. It does not lift the paid-run pause and carries no `lifts:` or `configs:`
+line; paid execution still needs its own explicit action. No run has been made with this change.
+
+Owner's words, 2026-11-15: "scope it now, wire the scripts in as checks" (the scope is
+`docs/sweeps/2026-11-15-method-scripts/scope.md`; CP-2D and CP-3C were wired first). Shown those two
+and the open points, the owner answered: CP-3C's new `### Funding gap` table, "confirmed"; leaving
+the method archive out of the quality gate's changed-code scope, "ok"; and, on the modules whose
+script inputs live only in registers the 2026-11-13 scope rule cut
+(`2026-11-13-appendix-and-routing-scope.md`): "restore the cut tables".
+
+Scope: offline only. No provider was called. Evidence is synthetic handoffs written by hand in the
+transport's layout, and, where named, the retained TransDigm excerpts of 2026-11-13.
+
+## What a check is
+
+As for CP-2D and CP-3C (`deploy_workflow.method_scripts`): after a module answers, Python runs the
+method's own script, from its registered bytes, on the inputs the handoff's registers state, and
+compares the script's result with the figure the handoff states. Currency and scale are read from
+the register and must agree; a figure agrees within one unit of its last displayed place (or the
+script's own rounding, if coarser). Only a disagreement is an acceptance issue, naming the register,
+row, both values and the formula. A missing input, an unread cell, a unit mismatch, an absent or
+malformed register, or the script refusing its inputs is "not checked", with its reason, recorded
+beside the attempt; never zero, never a pass, never a refusal. Each checked module's instructions
+gain one note naming the figures Python recomputes and the rows it needs. Each module's mapping is
+its own module beside the harness (`deploy_workflow.method_scripts_<module>`).
+
+## Restoring a cut table
+
+A restored register is removed from that module's section of the project-written
+`docs/reuse/selected-methods/CPOS_REGISTER_SCOPE.md`, so the module writes it and the presence check
+requires it (as CP-6A's were, `2026-11-15-full-assessment-cp3c-cp6a.md`). Each is restored because
+the check reads it, and only then; every other register the 2026-11-13 rule cut stays cut. The
+file's manifest sha256 and note, the METHODOLOGY-REVIEW.md appendix row, the module's method pin
+(past runs are marked "Earlier methods" for it) and CP-5's upstream note follow.
+
+## Per module
+
+### CP-2E, `rate_fx_sensitivity.py`
+
+- Restored: T2F.4 Unhedged Exposure Table (its rows Total debt, Gross floating-rate debt, Hedged
+  floating-rate debt are the script's inputs; Unhedged floating-rate debt and Unhedged debt
+  percentage are two of its figures) and T2F.5 Rate Sensitivity Table (the +100 bps cash-interest
+  impact is the third). Both were written by both retained Sol runs before the cut.
+- Stays cut: T2F.2 Debt & Rate Exposure Register (the instrument list behind T2F.4's gross figure;
+  the script does not read it), T2F.8 and T2F.9.
+- Checked: Unhedged floating-rate debt = Gross - Hedged; Unhedged debt percentage = Unhedged /
+  Total debt (a `%` figure, or a decimal as the method's rule 8 stores it); +100 bps cash-interest
+  impact = Unhedged x 1.00%. T2F.4 has no currency or scale column: each amount states its own
+  (`USD 1,250m`) or the amount column's header does (`Amount (USD m)`).
+- Not checked by design: FX and commodity sensitivities (net exposure and adverse move are free text
+  in T2F.6 and T2F.7, not columns) and so the combined impact. Hedged above gross floating-rate
+  debt: the script refuses it ("perimeters differ or a hedge is double-counted") rather than report
+  zero unhedged exposure; under the harness rule a refusal is "not checked", so such a handoff is
+  recorded, not sent back. Whether that should be an acceptance issue is for the owner.
+
+### CP-3, `recovery_waterfall.py`
+
+- Restored: none. Checked against the method, the three registers the scope document named do not
+  hold the script's inputs or figures: T3B.2's Amount is carrying value (CP-3A runbook: "every
+  instrument Amount uses the canonical carrying-value debt basis"; the retained medium run titled it
+  "Carrying-value capital structure dashboard"), not the claim a waterfall allocates; T3B.4's
+  Structural Rank is an ordinal; T3B.6's Recovery Sensitivity is a label (Low, Moderate, High,
+  Binary, Insufficient Information), and step 6 says "Do not infer recovery values unless supported
+  by provided evidence". No CP-3 register holds an enterprise value. So restoring them would cost
+  output and check nothing. They stay cut, with T3B.3, T3B.5, T3B.7, T3B.8, T3B.10, T3B.11 and every
+  T3C register (CP-3B's portfolio fit is handled elsewhere).
+- What the check needs: one new table, `### Recovery waterfall` (rows `Enterprise value` by case,
+  `Cost: <label>`, `Claim: <instrument>` in waterfall order with its claim and its recovery % per
+  case, `Fulcrum`, `Residual to equity`; columns `Line | Amount | Low | Base | High | Currency |
+  Scale`). That is a new model output the owner has not approved for CP-3, so CP-3 is NOT asked for
+  it: no note is sent and its instructions are unchanged. The check
+  (`deploy_workflow.method_scripts_cp3`) reads the table when a handoff has one, and otherwise
+  records every figure as not checked.
+- Checked when the table is present: each claim's recovery in each case, the fulcrum in each case,
+  the residual to equity in each case (value the claims do not absorb must not be left
+  unallocated). A claim listed twice (a guarantee at two entities) is refused by the script as
+  double recovery: not checked. The script allocates one pool; it does not split value by entity.
+- Decision for the owner: ask CP-3 for the table (its instructions would gain a note like
+  CP-3C's, which is 1,088 characters, in `credit_snapshot`, `relative_value` and
+  `portfolio_decision`), or leave CP-3 unchecked.
+
+### CP-2G, `credit_metrics.py`
+
+- Restored: none needed. T2H.4, T2H.5 and T2H.6 were never cut (only T2H.1, T2H.2 and T2H.9 are).
+- Inputs: T2H.4 `EBITDA`, `FCF`; T2H.5 `opening debt/cash`, `issuance`, `repayment`, `interest`,
+  `closing debt/cash`; matched to T2H.6 by period and case. T2H.4 and T2H.5 have no currency or
+  scale column: each money column's header states it (`EBITDA (USD m)`) or each cell does.
+- Rule for combined cells (decided here): a column whose name joins two figures with `/` holds two
+  figures separated by `/`, in the name's order (`4,500 / 300`, `4.5x / 4.2x`). A gap for the whole
+  cell is a gap for both; a gap on one side is a gap for that side only; a cell that is not two
+  parts states neither figure (not checked, never guessed).
+- Checked per T2H.6 row: gross leverage (closing debt / EBITDA) and net leverage ((closing debt -
+  closing cash) / EBITDA), both against a positive EBITDA and only for annual periods; coverage
+  (EBITDA / |interest|), a disagreement only when the row's definition names EBITDA over interest,
+  otherwise not checked, because the method allows fixed-charge coverage, which no column can
+  recompute; FCF/debt (annual periods). A multiple stated against non-positive EBITDA disagrees
+  with the script's Not Calculable. Per T2H.5 row: opening debt and opening cash against the same
+  case's prior closing (consecutive annual years only), a disagreement otherwise; closing debt =
+  opening + issuance - repayment, agreed when it rolls, otherwise not checked with the residual
+  (the method allows a residual it logs, and T2H.5 has no column for PIK, FX or accretion).
+- Not checked by design: the cash roll-forward (dividends and other cash uses are not columns),
+  accessible liquidity and liquidity runway (not script figures).
+- The owner module `owners/cp2g.py` (the Deploy VII journal path, not wired in) computes the same
+  ratios in Decimal from its own forecast (closing debt and cash, EBITDA, interest as a positive
+  figure) and rolls cash with dividends, which T2H.5 does not carry.
+- Retained evidence: `tests/fixtures/tdg_sol_high_2026_11_13/CP-2G-forecast-block.md` (TransDigm,
+  run of 2026-11-13) is the forecast-inputs block only; it has no T2H register, so the check
+  records "not checked: the handoff has no T2H.4 register". The full CP-2G handoffs, which wrote
+  T2H.4 to T2H.6, are not in this repository.
+
+### CP-4, `covenant_headroom.py`
+
+- Restored: none needed. CP-4 has no register-scope section; T4C.4 is required as the method
+  lists it.
+- Inputs: T4C.4 `Test`, `Test Type`, `Threshold`, `Current Basis`, `Headroom`, `Status`
+  (REF_CP-4A_04). The script is the CP-2H copy registered in the archive (the same bytes CP-4's
+  SKILL names).
+- Checked per test: Headroom (max-ratio: Threshold - Current Basis; min-ratio: Current Basis -
+  Threshold) and Status (Compliant, At threshold, Breached), by the script's own `headroom`.
+- Test Type: passed to the script's own `normalise_test_type` as written, or its first word
+  (`max-ratio (leverage ceiling)`); a row whose type is blank or that the script does not read is
+  not checked, never guessed. Two of the script's aliases are refused here: a bare `maintenance`
+  or `incurrence` says when a test applies, not whether it is a ceiling or a floor (a maintenance
+  interest-cover test is a floor; the script would read it as max-ratio).
+- Units: Threshold, Current Basis and Headroom must each be one figure in one unit, a ratio
+  (`5.00x` or a bare figure), a percentage or an amount with its currency and scale; otherwise not
+  checked. A comparator before the threshold (`≤ 5.00x`) is read. Status is compared only when it
+  states one of the script's three words.
+- Not checked by design: maximum additional debt and T4C.5 basket capacity (their inputs are free
+  text in `Formula` and `Current Input`), severity (the analyst's).
+- Retained evidence: none. CP-4 was blocked at its source gate in both Sol runs (no legal
+  documents); synthetic proof only.
+
+### CP-1, `credit_metrics.py`
+
+- Restored: none needed. CP-1 has no register-scope section.
+- How the work divides with `owners/cpos_cp1_check.py`: that check already recomputes the six fixed
+  T4.9 rows (`Total debt / EBITDA`, `Net debt / EBITDA`, `EBITDA / cash interest` and their
+  adjusted twins), binding each operand to the figure it must be (debt from `Net debt data`,
+  EBITDA and cash interest from the statements) and the two-place print. The script check leaves
+  those six rows to it (a test pins the two lists equal) and takes the rest: T4.9 rows with a free
+  `Metric Name` whose `Formula` is a quotient (`Calculated Value` against the script's `ratio` of
+  the row's own `Numerator Value` and `Denominator Value`, as a ratio or in percent, or its
+  `growth`, n / d - 1, for a change; on a disagreement the form nearest the stated figure is
+  reported), and T4.8 rows whose `Derived Period Type` is LTM (`Derived Value` against the script's
+  `derive_periods`: Full-Year Component + Current Stub - Prior-Year Stub).
+- The operand-identity trap: for a free-name row only the arithmetic is bound, not which debt or
+  EBITDA the operands are. On the retained TransDigm figures (FY2024, USD millions), a row of
+  principal 25,068 over EBITDA 3,813 stating 6.57 agrees with its own division, although the
+  method's debt is carrying value (24,880, giving 6.53); the same row stating 6.57 over 24,880
+  disagrees. The fixed rows, where the operand is bound, are `cpos_cp1_check`'s.
+- Units: T4.9's `Currency` and `Unit` must be stated (they describe both operands). T4.8 has no
+  currency or scale column: an LTM row is compared only when its cells or column headers state
+  one, and the same one; otherwise not checked. Not checked by design: other derived types (Q2, Q3,
+  Q4, YTD; T4.8's three component columns do not say which periods they hold), and free-name rows
+  that are sums or differences.
+- No note: CP-1 runs in every pathway, and `earnings_update`'s instructions measure 545,907 of its
+  546,000-character ceiling. The smallest useful note (500 characters, below) would take them to
+  546,407, 407 over. The ceiling is not raised; the owner decides. Without the note the check reads
+  the method's own registers as written, and T4.8 rows will usually be not checked (no units).
+  Proposed note: "Python checks two kinds of your figures after you answer, with the method's own
+  `credit_metrics.py` (you cannot run it): each T4.8 LTM Derived Value (Full-Year Component +
+  Current Stub - Prior-Year Stub) and each free-name T4.9 Calculated Value (Numerator Value /
+  Denominator Value, or the change n / d - 1). State T4.8's currency and scale in each cell or
+  column header (`USD 1,250m`). A figure that disagrees is sent back for repair; one whose input
+  is missing is not checked, never read as zero."
+- Retained evidence: `tests/fixtures/tdg_sol_high_2026_11_13/CP-1-tables.md` (TransDigm, run of
+  2026-11-13) is the older CP-1 layout, written before T4.8 and T4.9: the check records both as not
+  checked (no register). Its key-metrics row `Total debt / unadjusted EBITDA` 6.57 is principal
+  25,068 / EBITDA 3,813 (carrying value 24,880 gives 6.53): a basis difference from the method's
+  carrying-value rule, in a layout that predates it, not an arithmetic error.
+
+## CP-3's portfolio-fit registers, restored on the owner's instruction (not for a script check)
+
+Owner, 2026-11-15, relayed by the coordinating session: "restore the CP-3 portfolio-fit tables".
+This answers the CP-3B item left open by `2026-11-15-full-assessment-portfolio-workbook.md` (not
+edited here).
+
+- Restored: T3C.1 Portfolio Input Gate + Module Status, T3C.2 Portfolio Fit Register, T3C.3
+  Position Sizing Posture Table, T3C.5 Concentration and Correlation Register, T3C.6 Liquidity and
+  Implementation Assessment, T3C.7 Downside Budget and Recovery Sensitivity, T3C.8 Monitoring
+  Triggers (portfolio), T3C.9 Gaps Ledger (portfolio): every T3C id the 2026-11-13 rule cut (T3C.4
+  was never cut). Both retained Sol runs wrote all eight before the cut; the inventory classes each
+  CUT (no consumer then), so rule R1 alone would still cut them.
+- Unconditional, per module, in every pathway that runs CP-3 (`credit_snapshot`, `relative_value`,
+  `portfolio_decision`), whether or not a workbook is supplied. The method agrees: CP-3B's gate
+  (`REF_CP-3B_01`) "Always executes", and with portfolio inputs missing it gives "generic
+  portfolio-fit logic, retain[s] the gaps and avoid[s] a numeric sizing recommendation"; its
+  discipline forbids inventing mandate limits or holdings. So without a workbook the registers hold
+  that generic logic and the gaps, not sizing.
+- What stays cut for CP-3: T3.1, T3.4, T3.5, T3.7, T3.9, T3.10 and T3B.2 to T3B.8, T3B.10, T3B.11
+  (none restored for a script check; see CP-3 above).
+- No script checks them; this is a restore only. The presence check now requires them (a CP-3
+  handoff without one is sent back once, naming it, unless CP-3 is blocked at its gate).
+- Instruction size: CP-3's scope section and CP-5's upstream note each shorten by 322 characters in
+  the three pathways (`credit_snapshot` 1,464,698 to 1,464,054 of 1,483,647; `relative_value`
+  1,059,626 to 1,058,982 of 1,071,000; `portfolio_decision` 940,825 to 940,181 of 955,500). Output
+  grows instead: the two retained Sol runs wrote these eight registers in 9,367 (medium) and 12,314
+  (high) characters, about 2,500 to 3,300 more output tokens for CP-3, and CP-5 and CP-6 (and CP-8
+  when listed) read that much more of CP-3's handoff. Not measured under these instructions.
+
+## Decisions for the owner
+
+1. CP-3: ask CP-3 for the `### Recovery waterfall` table (a new model output), or leave CP-3
+   unchecked. Nothing was restored for CP-3.
+2. CP-1: raise `earnings_update`'s ceiling by at least 407 characters for CP-1's note, or leave
+   CP-1 without a note.
+3. CP-2E: hedged floating-rate debt above gross is refused by the script and so recorded as not
+   checked; whether it should be sent back as an acceptance issue.
+
+## Status
+
+Built and tested offline, module by module. Not accepted: no model has written a restored register
+under these instructions; that needs the owner's paid run.
