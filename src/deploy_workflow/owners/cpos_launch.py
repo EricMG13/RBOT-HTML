@@ -21,19 +21,17 @@ import re
 import sys
 import tempfile
 import textwrap
-from collections import Counter
-from collections.abc import Collection, Mapping, Sequence
-from dataclasses import dataclass, replace
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Any, TextIO, cast, get_args
+from typing import Any
 
-from deploy_vii.business_context import Category
 from deploy_vii.contracts import DEACTIVATED_MESSAGE, DEACTIVATED_PATHWAYS, PATHWAY_MODULES, Run
 from deploy_vii.registry import dependencies, modules, plan
 from deploy_vii.report_view import _spec_of, pathways
-from deploy_workflow import confidence, platform_io
+from deploy_workflow import platform_io
 from deploy_workflow.changes import (
     DELIVERED_WHOLE,
     PACK_NAME,
@@ -43,12 +41,10 @@ from deploy_workflow.changes import (
     describe_run,
     find_prior,
     prior_sources,
-    same_period,
     workspace_of,
 )
 from deploy_workflow.changes_check import cp8_issues
 from deploy_workflow.context import CONTEXT_SOURCE_ID, RunContext, load_context
-from deploy_workflow.credit_os_catalogue import chart_row, period_order
 from deploy_workflow.credit_os_chips import MODULE_NAMES
 from deploy_workflow.docx_text import docx_text
 from deploy_workflow.handoff_delivery import (
@@ -72,14 +68,13 @@ from deploy_workflow.model.adapter import (
     LivePauseInForce,
     check_ruling,
 )
-from deploy_workflow.model.budget import Budget, exact_sum
+from deploy_workflow.model.budget import Budget
 from deploy_workflow.model.handoff import (
     BYTES_PER_TOKEN_BOUND,
     REQUEST_OVERHEAD,
     WEB_LOOKUP_MODULES,
     WEB_SEARCH_CALLS_PER_TURN,
     WEB_SEARCH_CASE_KINDS,
-    FAILED_NO_USAGE,
     Check,
     _pages,
     recorded_web_lookup,
@@ -95,18 +90,18 @@ from deploy_workflow.model.pricing import (
 )
 from deploy_workflow.model.turn import MODEL_EFFORTS, dump_json
 from deploy_workflow.model_testing.configs import CONFIGS
-from deploy_workflow.owners import cp2g, cpos_cp1_check as cp1_check, cpos_forecast
-from deploy_workflow.owners.cpos_cp1_check import cp1_issues as _cp1_issues, money_unit
+from deploy_workflow.owners import cpos_forecast
 from deploy_workflow.owners.cpos import (
     WEB_SEARCH_GRANT,
     HandoffPlan,
     HandoffTask,
-    review_line,
     run_live_handoffs,
     web_search_ruled,
     web_search_run,
     with_notes,
 )
+from deploy_workflow.owners.cpos_cp1_check import cp1_issues as _cp1_issues
+from deploy_workflow.owners.cpos_cp1_check import money_unit
 from deploy_workflow.owners.cpos_launch_methods import (
     _APPENDIX,
     _SCORE,
@@ -173,7 +168,6 @@ from deploy_workflow.owners.cpos_launch_tables import (
 )
 from deploy_workflow.prose_checks import (
     DATA_MODULES,
-    ISO_4217,
     READER_HEADINGS,
     figure_issues,
     key_figures_issues,
@@ -181,7 +175,6 @@ from deploy_workflow.prose_checks import (
 )
 from deploy_workflow.research.intake import effective_cutoff
 from deploy_workflow.research.weblookup import USER_AGENT_ENV, bare_host_problem, usable_user_agent
-from deploy_workflow.run_events import EVENTS, read_events
 from deploy_workflow.run_expectations import Item, edges_for, expectations, guess_kind
 from deploy_workflow.workflow import _put
 
@@ -215,6 +208,7 @@ __all__ = [
     "MAP_TEXT_RULE",
     "METHODS",
     "METHOD_MARK",
+    "MODULE_NAMES",
     "MONEY",
     "NET_DEBT",
     "NO_MONEY",
