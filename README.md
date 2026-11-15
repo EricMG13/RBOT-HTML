@@ -181,8 +181,11 @@ the run uses it, and a later step stays locked while an earlier one has an error
    checks it before the run: its sums, shares, units and dates against the run's as-of date; CP-0,
    CP-3 and CP-6 are told each finding, and a workbook that fails is a Limited item to tick. With
    none, CP-6's portfolio posture states that the fund's limits were not supplied (a Note, no
-   tick, in the full assessment; the portfolio decision's Gap is unchanged). Check a workbook
-   before uploading it: `uv run deploy-vii validate-input portfolio <file> --as-of <as-of date>`.
+   tick, in the full assessment; the portfolio decision's Gap is unchanged). The fund's own export
+   (mandate, constraints and exposure report CSVs and a holdings workbook) is accepted beside the
+   template and checked with the holdings as the authority; upload all its files and choose the
+   holdings workbook. Check before uploading: `uv run deploy-vii validate-input portfolio <file>
+   --as-of <as-of date>`, or `... validate-input portfolio-export <files> --as-of <as-of date>`.
 4. **More context.** Standard and Advanced (at Basic only for a primary run, a held answer, an error
    or "Answer this now"): market and ratings; peers, valuation and module modes (the peer source,
    your own peers, the Relative value mode and Deep Debate for the Committee module); research

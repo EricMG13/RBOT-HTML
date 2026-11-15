@@ -916,8 +916,11 @@ exact constraint = [Insufficient Information]" asks. Unchanged: CP-3's portfolio
 CP-6A's gate still finds CP-3B's registers absent and runs Ready with Limitations; restoring them is
 an owner decision (cost and instruction size; the 2026-11-13 cut found no consumer).
 `REF_CP-6A_Portfolio_Debate_Inputs.xlsx` stays unarchived; the analyst's own workbook takes its
-place. Selected source revision: the ruling above. Limit: offline proof only; no model has read a
-workbook under these instructions and the owner's own workbook has not been read.
+place. The fund's own export (mandate, constraints and exposure report CSVs and a holdings
+workbook) is accepted beside the template and checked with the holdings as the authority, twelve
+classes of defect, and never converted into the template (the method surfaces conflicts instead
+of choosing). Selected source revision: the ruling above. Limit: offline proof only; no model has
+read a workbook or export under these instructions and the owner's own files have not been read.
 
 ## Appendix: selected method files
 
