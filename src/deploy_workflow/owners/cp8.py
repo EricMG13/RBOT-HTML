@@ -4,7 +4,7 @@ Stage 1 of the owner core (lease ``docs/CP8-OWNER-LEASE.md`` rev 4, oracle ``cas
 pure functions over the analyst's ``decision_ledger`` submission, the prepared pack and the
 CP-0 (and, when bound, CP-6) upstream. Python parses every quoted figure and date and decides
 each variance, breach, count and status in exact Decimal; the analyst supplies only verbatim
-quotes and judgments. The G1-X seams (store, RULES, submit, probe, reader) come in later stages.
+quotes and judgments. The G1-X seams (store, RULES, submit, probe) come in later stages.
 
 Wording beyond the lease and the oracle comes from LEAD's rulings
 (``docs/rulings/2026-10-28-stage1.md``: round 5 "CP-8", 8-1 to 8-20; round 6c, 8-24; round 6h,
@@ -52,7 +52,6 @@ from deploy_vii.execution import (
     Attempt,
     Execution,
     ExecutionSnapshot,
-    Head,
     Qualification,
     StepValidation,
 )
@@ -2441,65 +2440,4 @@ def submit(
     return Submitted(attempt, normal, resolved, (), (), None)
 
 
-# --- the consumer reader (D3 is OPEN: this pins what a consumer reads, it does not claim consumption)
-
-
-@dataclass(frozen=True)
-class Cp8Head:
-    """What a consumer may read from a settled CP-8 head (``expected.json#consumption``)."""
-
-    head_sha256: str
-    status: str
-    overall_label: str
-    overall_process_sound: str
-    directions: Mapping[str, str | None]  # metric -> Higher / Lower / Unchanged; None: missing
-    magnitudes: Mapping[str, Decimal | None]  # leverage and cover in x, loan_mid in bp
-    window_days: Decimal | None  # None: no realized outcome
-    hit_rate: Decimal | None  # None: not calculable (hit_rate_absence says why)
-    hit_rate_absence: str | None
-    decisions_recorded: int
-    decisions_required: int
-    # The settled module's own list, as ``execution.settle`` wrote it: a synthetic run's
-    # "Synthetic case; not real issuer qualification" line is included. Not the inherited set.
-    limitations: tuple[str, ...]
-
-
-def _fact(facts: Mapping[str, Fact], fact_id: str) -> Fact:
-    if fact_id not in facts:
-        raise ValueError(f"The CP-8 head carries no {fact_id}")
-    return facts[fact_id]
-
-
-def _count(fact: Fact) -> int:
-    if fact.amount is None or fact.amount != fact.amount.to_integral_value():
-        raise ValueError(f"The CP-8 head states no whole count in {fact.fact_id}")
-    return int(fact.amount)
-
-
-def cp8_reader(store: Execution, head: Head) -> Cp8Head:
-    """Read a settled CP-8 head. A cell the head states as missing reads as None (never 0).
-    ``limitations`` is the settled own list: the oracle's own list, then, for a synthetic run,
-    "Synthetic case; not real issuer qualification" (deduplicated); never the inherited set."""
-    if head.module_id != MODULE_ID:
-        raise ValueError(f"{head.module_id} is not a CP-8 head")
-    module = store.head_module(head)
-    facts = {fact.fact_id: fact for fact in module.facts}
-    overall = _fact(facts, "T7.5.overall.label").text
-    sound = _fact(facts, "T7.5.overall.process_sound").text
-    if overall is None or sound is None:
-        raise ValueError("The CP-8 head states no overall attribution")
-    window, hit = _fact(facts, "T7.3.window.realized_value"), _fact(facts, "T7.7.hit_rate.value")
-    return Cp8Head(
-        head_sha256=head.result_sha256,
-        status=head.status,
-        overall_label=overall,
-        overall_process_sound=sound,
-        directions={m: _fact(facts, f"T7.4.{m}.direction").text for m in METRICS},
-        magnitudes={m: _fact(facts, f"T7.4.{m}.magnitude").amount for m in METRICS},
-        window_days=window.amount,
-        hit_rate=hit.amount,
-        hit_rate_absence=None if hit.status == "known" else hit.limitation,
-        decisions_recorded=_count(_fact(facts, "T7.6.gate.decisions_recorded")),
-        decisions_required=_count(_fact(facts, "T7.6.gate.decisions_required")),
-        limitations=module.limitations,
-    )
+# The consumer reader (`cp8_reader`, `Cp8Head`) that followed here was removed: nothing called it.

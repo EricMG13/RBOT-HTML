@@ -27,9 +27,6 @@ ATTACHMENT_IDS: dict[str, str] = {
     "prior_case": "prior_case",
     "management_bridge": "bridge",
 }
-# The attachment rules (three attachments and the legal rule) give at most this many issues.
-# `Context refused` lines are one per problem and are bounded only by `bounded_issues`.
-MAX_ISSUES = 4
 CONTEXT_REFUSED = "Context refused: "
 LEGAL_EXECUTED_MISSING = (
     "attachments.legal_documents: 'executed' documents are declared but no source is assessed "

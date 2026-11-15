@@ -46,7 +46,6 @@ from deploy_vii.execution import (
     Attempt,
     Execution,
     ExecutionSnapshot,
-    Head,
     Qualification,
     StepValidation,
     clipped,
@@ -130,7 +129,6 @@ QUARTERS = (
         "the fourth quarter of 2025",
     ),
 )
-PERIODS = tuple(q.period for q in QUARTERS)
 
 
 @dataclass(frozen=True)
@@ -169,7 +167,6 @@ def topics_in(currency: CurrencyBasis) -> tuple[Topic, ...]:
 
 
 TOPIC_IDS = tuple(t.topic_id for t in TOPICS)
-OPERAND_LABELS = tuple(f"{q.column} · {t.cp1_metric}" for t in TOPICS for q in QUARTERS)
 
 # Column field order per table (amendment 1 F1; column labels are the product's, L3).
 COLUMNS: dict[str, tuple[str, ...]] = {
@@ -1619,66 +1616,4 @@ def probe(store: Execution, snapshot: ExecutionSnapshot, attempt: Attempt) -> No
     probe_one_step(store, snapshot, attempt, validate=_validate_step, build=_candidate)
 
 
-# --- D3 (OPEN): the reader pins what a consumer reads; no consumer core exists ------------------
-
-
-@dataclass(frozen=True)
-class TopicRead:
-    topic_id: str
-    materiality: str
-    evidence: str
-    disposition: str
-    rank: int
-    change: Decimal | None
-
-
-@dataclass(frozen=True)
-class Cpl10Head:
-    status: str
-    result_sha256: str
-    topics: tuple[TopicRead, ...]
-    counts: Mapping[str, int]
-
-
-def cpl10_reader(store: Execution, head: Head) -> Cpl10Head:
-    """What a consumer reads of a settled CP-L10 head (lease D3, expected.consumption): status,
-    per topic id, materiality, evidence, disposition, rank and change, and the counts, all read
-    from the settled facts. Consumption is OPEN: no consumer core reads this yet."""
-    if head.module_id != MODULE_ID:
-        raise ValueError(f"{head.module_id} is not a CP-L10 head")
-    module = store.head_module(head)
-    if module.status == "blocked":  # a blocked head carries no tables: status and hash only
-        return Cpl10Head(module.status, head.result_sha256, (), {})
-    facts = {f.fact_id: f for f in module.facts}
-
-    def fact(table: str, row: str, field: str) -> Fact:
-        found = facts.get(f"{table}.{row}.{field}")
-        if found is None:
-            raise ValueError(f"CP-L10 head lacks {table}.{row}.{field}")
-        return found
-
-    def text(row: str, field: str) -> str:
-        value = fact("TL10.2", row, field).text
-        if value is None:
-            raise ValueError(f"CP-L10 fact TL10.2.{row}.{field} has no text")
-        return value
-
-    def number(table: str, row: str, field: str) -> Decimal:
-        value = fact(table, row, field).amount
-        if value is None:
-            raise ValueError(f"CP-L10 fact {table}.{row}.{field} has no amount")
-        return value
-
-    topics = tuple(
-        TopicRead(
-            topic_id=t,
-            materiality=text(t, "materiality"),
-            evidence=text(t, "evidence_status"),
-            disposition=text(t, "disposition"),
-            rank=int(number("TL10.2", t, "priority_rank")),
-            change=fact("TL10.2", t, "change").amount,
-        )
-        for t in TOPIC_IDS
-    )
-    counts = {key: int(number("TL10.5", "total", key)) for key, _ in _COUNTS}
-    return Cpl10Head(module.status, head.result_sha256, topics, counts)
+# The consumer reader (`cpl10_reader`, `Cpl10Head`) that followed here was removed: nothing used it.

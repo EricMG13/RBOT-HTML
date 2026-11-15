@@ -13,7 +13,7 @@ or a ruling fixes; an input state no ruling settles raises ValueError rather tha
 The Stage 1 calculation does no I/O and touches no store, host, session or renderer. The Stage 2
 section at the end connects it (G1-X protocol section 2): the store adapter over the bound CP-1
 and CP-2D heads (CP-2D read through `cp2d_reader`), validation, the composed module, the exact
-`read_inputs` view, the journal seams and the consumer reader the lease pins.
+`read_inputs` view and the journal seams.
 """
 
 import hashlib
@@ -51,7 +51,6 @@ from deploy_vii.execution import (
     Attempt,
     Execution,
     ExecutionSnapshot,
-    Head,
     Qualification,
     StepValidation,
     bounded_issues,
@@ -633,13 +632,6 @@ def months_from(balance_date: date, maturity: date) -> int:
     is 6)."""
     months = (maturity.year - balance_date.year) * 12 + (maturity.month - balance_date.month)
     return months - 1 if _add_months(balance_date, months) > maturity else months
-
-
-def wall_position(*, balance_date: date, maturity: date, horizon_months: int) -> tuple[int, bool]:
-    """CP-2D's whole-month rule: (months from D0, inside the horizon); inside when the maturity
-    is on or before D0 + horizon."""
-    inside = maturity <= _add_months(balance_date, horizon_months)
-    return months_from(balance_date, maturity), inside
 
 
 _SECURED_RANK = {"SECURED": 0, "UNSECURED": 1}
@@ -2132,7 +2124,6 @@ def fact_bindings(basis: PeriodBasis = DEFAULT_BASIS) -> Mapping[str, cp2d.FactB
     return MappingProxyType({name: cp2d.bind410(name, basis) for name in CP1_METRICS})
 
 
-FACT_BINDINGS: Mapping[str, cp2d.FactBinding] = fact_bindings(DEFAULT_BASIS)
 # T4.18: the QUARTER period at the latest period end wins over its FY alias; the alias must agree
 # on every term; one row per facility_id. Names are `<facility_id>.<term>`.
 SCHEDULE_PERIOD = DEFAULT_BASIS.schedule_period
@@ -2550,14 +2541,6 @@ def _inputs_from(
         offered={ref: name for name, ref in selection.refs},
         basis=basis,
     )
-
-
-def _inputs(
-    store: Execution, attempt: Attempt, submission: RefinancingRiskSubmission
-) -> Cp3cInputs:
-    upstream = cp3c_upstream(store=store, attempt=attempt)
-    basis = cp2d.run_basis(store.pack(), upstream.cp1)
-    return _inputs_from(upstream, select(upstream, basis), submission, basis)
 
 
 # --- validation -------------------------------------------------------------------------------
@@ -2999,80 +2982,4 @@ def submit(
     return Submitted(journal, normalised, resolved, (), (), None)
 
 
-# --- the consumer reader (lease Public API; expected.json#consumption.cp3c_consumed_by) ----------
-
-
-@dataclass(frozen=True)
-class NeedRow:
-    """One facility's refinancing need (T3D.1 column 9); None is a gap with its reason."""
-
-    facility: str
-    need: Decimal | None
-    missing: str | None
-
-
-@dataclass(frozen=True)
-class Cp3cHead:
-    """What `cp3c_reader` exposes of a settled CP-3C head: total principal payable at maturity,
-    the refinancing need or why it is missing, the per-facility need rows, the added annual cash
-    interest or why it is missing, the claims at or ahead of the most junior facility (Base), the
-    path feasibility judgments, the own limitations, the head hash and status. A head that is
-    not accepted or restricted (blocked, stale) exposes its status and hash and no figures."""
-
-    status: str
-    head_sha256: str
-    total_principal_payable: Decimal | None = None
-    need: Decimal | None = None
-    need_missing: str | None = None
-    need_rows: tuple[NeedRow, ...] = ()
-    added_interest: Decimal | None = None
-    added_interest_missing: str | None = None
-    base_claims: Decimal | None = None
-    paths: tuple[tuple[PathKind, str], ...] = ()
-    own_limitations: tuple[str, ...] = ()
-
-
-def cp3c_reader(store: Execution, head: Head) -> Cp3cHead:
-    """The consumer reader the lease pins (no consumer binds it yet)."""
-    if head.module_id != MODULE_ID:
-        raise ValueError("CP-3C reader: not a CP-3C head")
-    if head.status not in ("accepted", "restricted"):
-        return Cp3cHead(head.status, head.result_sha256)
-    module = store.head_module(head)
-    facts = {f.fact_id: f for f in module.facts}
-    tables = {t.table_id: t for t in module.tables}
-
-    def read(fact_id: str) -> Fact:
-        if fact_id not in facts:
-            raise ValueError(f"CP-3C head has no fact {fact_id}")
-        return facts[fact_id]
-
-    def missing(fact: Fact) -> str | None:
-        return None if fact.amount is not None else fact.limitation
-
-    def feasibility(row_id: str) -> str:
-        text = read(f"T3D.6.{row_id}.c1").text
-        if text is None:
-            raise ValueError(f"CP-3C head: the feasibility of path {row_id} is not stated")
-        return text
-
-    need, added = read("T3D.2.r03"), read("T3D.3.r06")
-    kinds = {label: kind for kind, label in KIND_LABEL.items()}
-    return Cp3cHead(
-        status=head.status,
-        head_sha256=head.result_sha256,
-        total_principal_payable=read("T3D.2.r01").amount,
-        need=need.amount,
-        need_missing=missing(need),
-        need_rows=tuple(
-            NeedRow(
-                r.label, read(f"T3D.1.{r.row_id}.c9").amount, missing(read(f"T3D.1.{r.row_id}.c9"))
-            )
-            for r in tables["T3D.1"].rows
-        ),
-        added_interest=added.amount,
-        added_interest_missing=missing(added),
-        base_claims=read("T3D.5.r01.c1").amount,
-        paths=tuple((kinds[r.label], feasibility(r.row_id)) for r in tables["T3D.6"].rows),
-        own_limitations=module.limitations,
-    )
+# The consumer reader (`cp3c_reader`, `Cp3cHead`) that followed here was removed: nothing called it.

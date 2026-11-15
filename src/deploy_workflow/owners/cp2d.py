@@ -11,7 +11,7 @@ is never read as zero, and nothing that passes ``submission_issues`` raises.
 
 Stage 2, the connection (the last section of this file): the G1-X seams (`QUALIFICATION`,
 `STEP_IDS`, `SCHEMAS`, `view`, `probe`, `submit`, `ENTRY_VALIDATOR`), the one store adapter that
-turns the settled CP-1 head into ``Cp2dInputs`` (`_inputs`), the composition of the calculation
+turns the settled CP-1 head into ``Cp2dInputs`` (`_checked`), the composition of the calculation
 into a ``Module`` (`liquidity_bridge`, `cp2d_module`) and the consumer reader `cp2d_reader`.
 """
 
@@ -219,7 +219,7 @@ class Cp2dInputs:
     # Of those, the T4.18 maturity_date fact ids (ruling D-5).
     maturity_date_refs: frozenset[str]
     # The context file pins the horizon and minimum cash, so the limitations state they are
-    # user-supplied. The pins themselves are checked by `validate_liquidity_bridge`, not the core;
+    # user-supplied. The pins themselves are checked by `_checked`, not the core;
     # `liquidity_bridge` sets this once that validator has accepted the context.
     pinned: bool = False
     # The run's period and currency strings (Phase 8); the 2025 USD literals without a context.
@@ -1775,25 +1775,9 @@ def _judgments(b: Bridge, submission: LiquidityBridgeSubmission) -> Ledger:
     return Ledger("T2E.6", "Analyst judgments", "Judgment", ("value", "Value"), rows)
 
 
-def compute(inputs: Cp2dInputs) -> Cp2dResult:
-    """Tables T2E.1-T2E.7, own limitations, claims and status.
-
-    Raises ValueError only for a submission that ``submission_issues`` refuses; every missing
-    operand, facility term, currency or cross-check difference settles as gaps and limitations.
-    """
-    issues = submission_issues(
-        submission=inputs.submission,
-        offered_refs=inputs.offered_refs,
-        maturity_date_refs=inputs.maturity_date_refs,
-    )
-    if issues:
-        raise ValueError("; ".join(issues))
-    return _computed(inputs)
-
-
 def _computed(inputs: Cp2dInputs) -> Cp2dResult:
-    """`compute` of inputs whose submission issues are already known to be none (one validation
-    per step, S06-cp2-ade-C06)."""
+    """The composition of inputs whose submission issues are already known to be none (one
+    validation per step, S06-cp2-ade-C06)."""
     o = inputs.operands
     bridge = bridge_of(inputs)
     limitations = (
@@ -2050,7 +2034,6 @@ def fact_bindings(basis: PeriodBasis = DEFAULT_BASIS) -> Mapping[str, FactBindin
     )
 
 
-FACT_BINDINGS: Mapping[str, FactBinding] = fact_bindings(DEFAULT_BASIS)
 # T4.18: the QUARTER period at the latest period end wins over its FY alias; the alias must agree
 # on every term; one row per facility_id.
 SCHEDULE_PERIOD = DEFAULT_BASIS.schedule_period
@@ -2062,7 +2045,6 @@ FACILITY_FIELDS = (
     "annual_amortisation",
 )
 _FACILITY_TERMS = ("facility_name", "currency", *FACILITY_FIELDS)
-BINDING_NAMES: tuple[str, ...] = (*FACT_BINDINGS, *(f"T4.18 {f}" for f in FACILITY_FIELDS))
 # The names Operands carries; the others are offered to the analyst and traced (T2E.9) only.
 OPERAND_NAMES = tuple(f.name for f in dataclasses_fields(Operands) if f.name != "facilities")
 _RATIO_NAMES = frozenset({"liquidity_to_debt"})
@@ -2340,12 +2322,6 @@ def run_basis(pack: PreparedPack, cp1: Module) -> PeriodBasis:
     return shared_run_basis(context_facts(pack), cp1.facts)
 
 
-def _inputs_from(
-    upstream: Upstream, submission: LiquidityBridgeSubmission, basis: PeriodBasis = DEFAULT_BASIS
-) -> Cp2dInputs:
-    return _inputs_of(select_cp1(upstream.cp1, basis), submission, basis)
-
-
 def _inputs_of(
     selection: Selection, submission: LiquidityBridgeSubmission, basis: PeriodBasis
 ) -> Cp2dInputs:
@@ -2357,15 +2333,6 @@ def _inputs_of(
         maturity_date_refs=selection.maturity_date_refs,
         basis=basis,
     )
-
-
-def _inputs(
-    store: Execution, attempt: Attempt, submission: LiquidityBridgeSubmission
-) -> Cp2dInputs:
-    """The store adapter: the settled CP-1 head bound by `attempt` -> the Stage 1 input object.
-    `submit`, `probe` and `view` all reach CP-1 through this selection."""
-    upstream = cp2d_upstream(store=store, attempt=attempt)
-    return _inputs_from(upstream, submission, run_basis(store.pack(), upstream.cp1))
 
 
 # --- validation of a submission against the bound upstream ------------------------------------
@@ -2439,22 +2406,13 @@ def _pin_lines(pack: PreparedPack, submission: LiquidityBridgeSubmission) -> tup
         return (_context_issue(error),)
 
 
-def validate_liquidity_bridge(
-    *, pack: PreparedPack, submission: LiquidityBridgeSubmission, upstream: Upstream
-) -> tuple[str, ...]:
-    """Staleness, provenance, the calculation-level issues of `submission_issues` over the
-    facts the bound CP-1 head offers, then the pin lines. Empty when the submission can be
-    composed. The one issue set of the step validator and the composer gate."""
-    return _checked(pack, submission, upstream)[1]
-
-
 def _checked(
     pack: PreparedPack, submission: LiquidityBridgeSubmission, upstream: Upstream
 ) -> tuple[Cp2dInputs | None, tuple[str, ...]]:
-    """`validate_liquidity_bridge`'s issues and, when there are none, the core inputs they were
-    found over (the run's basis and its CP-1 selection), so a caller composes without validating
-    again. A refused context is always an issue (`_pin_lines`), so accepted inputs are on the
-    run's basis."""
+    """The submission's issues and, when there are none, the core inputs they were found over
+    (the run's basis and its CP-1 selection), so a caller composes without validating again. A
+    refused context is always an issue (`_pin_lines`), so accepted inputs are on the run's
+    basis."""
     issues = [*_stale_issues(upstream), *_provenance_issues(upstream)]
     try:
         basis = run_basis(pack, upstream.cp1)

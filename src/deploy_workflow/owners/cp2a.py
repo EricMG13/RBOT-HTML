@@ -4,7 +4,7 @@ The analyst submits judgment only (`DownsideSubmission`): the base period, the s
 their shock sizes, the watch levels, an assessment and gaps. Python reads the base operands
 from settled CP-1 `T4.10` facts (`BaseOperands.from_cp1`), stresses them (`stress`), finds the
 break points (`break_points`) and composes the nine `T2B` tables, the `cp1_references` copies,
-the claims and the own limitations (`compute`). Zero, missing and not applicable stay distinct:
+the claims and the own limitations (`_composed`). Zero, missing and not applicable stay distinct:
 a missing CP-1 operand is never 0, and a ratio is calculable only where CP-1's own ratio for the
 base period is known (CP-1's twelve-month gate; a quarter is never annualised).
 
@@ -56,7 +56,6 @@ from deploy_vii.execution import (
     ExecutionSnapshot,
     Qualification,
     StepValidation,
-    bounded_issues,
     clipped,
     current_inputs,
     inherited_limitations,
@@ -87,7 +86,6 @@ from deploy_workflow.trailing_period import states_trailing_period
 
 MODULE_ID = "CP-2A"
 STEP_ID = "downside_pathway"
-SCHEMA_VERSION = "downside-pathway/1"
 
 DECLINE_PATTERN = r"^(0|1|0\.\d{1,4}|1\.0{1,4})$"
 LEVEL_PATTERN = r"^[0-9]{1,6}(\.[0-9]{1,4})?$"
@@ -313,15 +311,6 @@ NOT_POSITIVE_DEBT = "Not calculable: debt is zero or negative (ZERO_OR_NEGATIVE_
 NO_STRESSED_FCF = "Not calculable: stressed free cash flow is missing"
 NO_INTEREST_FOR_INCREASE = (
     "Not calculable: base cash interest is missing, so an interest increase cannot be applied"
-)
-STRESSED_FIELDS = (
-    "ebitda",
-    "interest",
-    "fcf",
-    "total_leverage",
-    "net_leverage",
-    "interest_coverage",
-    "fcf_to_debt",
 )
 
 
@@ -1445,17 +1434,9 @@ def _limitations(
     return limits
 
 
-def compute(inputs: Inputs) -> Result:
-    """The composed CP-2A content of a valid submission; raises ValueError on any issue."""
-    issues = validate(inputs)
-    if issues:
-        raise ValueError("; ".join(bounded_issues(issues)))
-    return _composed(inputs)
-
-
 def _composed(inputs: Inputs) -> Result:
-    """`compute` of inputs whose issues are already known to be none (one validation per step,
-    S06-cp2-ade-C06)."""
+    """The composition of inputs whose issues are already known to be none (one validation per
+    step, S06-cp2-ade-C06)."""
     sub = inputs.submission
     base = BaseOperands.from_cp1(inputs.cp1_facts, period=sub.base_period)
     bound = prose.bind(referencable(inputs.cp1_facts))
@@ -1635,8 +1616,8 @@ def _inputs(
 ) -> Inputs:
     """The store adapter: the settled CP-1 head's offered T4.10 facts (in the head's order), the
     offered periods and the issuer name, as the Stage 1 `Inputs` the core reads. Submit, probe and
-    the entry validator reach the core only through this. It reads no context: `downside_report`
-    sets `Inputs.pinned` once `validate_downside` has accepted the context."""
+    the entry validator reach the core only through this. It reads no context: `_report`
+    sets `Inputs.pinned` once `_checked` has accepted the context."""
     bases = offered_bases(upstream.cp1, currency)
     chosen = {f.fact_id for base in bases for f in base.facts}
     return Inputs(
@@ -1710,16 +1691,6 @@ def _checked(
         dict.fromkeys([*_stale_issues(upstream), *validate(inputs), *_pin_lines(pack, submission)])
     )
     return (None if issues else inputs), issues
-
-
-def downside_report(
-    *, pack: PreparedPack, submission: DownsideSubmission, upstream: Upstream
-) -> DownsideReport:
-    """The composed report of a valid submission; raises ValueError on any issue."""
-    inputs, issues = _checked(pack, submission, upstream)
-    if inputs is None:
-        raise ValueError("; ".join(bounded_issues(issues)))
-    return _report(pack, submission, inputs)
 
 
 def _report(pack: PreparedPack, submission: DownsideSubmission, inputs: Inputs) -> DownsideReport:
