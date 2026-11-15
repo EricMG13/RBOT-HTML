@@ -2,7 +2,10 @@
 
 Plain ``http.server``; no framework. The service has no login and may be reachable from other
 machines, so every request is hostile input. The rules are those of the run start page's service,
-written again here. Every request is checked before any body byte is read:
+implemented once in ``deploy_workflow.http_base`` for both; what Signal adds or sets differently
+(the per-address ceiling, the connection deadline, the HTTP/0.9 close, the page policy on every
+response, the JSON object rule) is passed to that base here. Every request is checked before any
+body byte is read:
 
 * ``Host`` must be exactly ``<host>:<port>`` as started (and ``localhost:<port>`` when the host is
   ``127.0.0.1``); otherwise 403. On port 80 the port may be left out of ``Host`` and ``Origin``.
@@ -36,11 +39,8 @@ A refusal is ``{"error": "<plain sentence>"}``; an unexpected failure is 500
 from __future__ import annotations
 
 import dataclasses
-import ipaddress
-import json
 import logging
 import re
-import socket
 import sqlite3
 import sys
 import threading
@@ -48,10 +48,14 @@ import urllib.parse
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, cast
 
+from deploy_workflow import http_base
+from deploy_workflow.http_base import WILDCARD_MESSAGE
+from deploy_workflow.http_base import Reply as _Reply
+from deploy_workflow.http_base import refuse as _refuse
 from deploy_workflow.signal import feedview, identity, ingest, store, topics
 from deploy_workflow.signal.ingest import FetchFn
 
@@ -72,12 +76,7 @@ _POLICY = (
     "img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'; "
     "frame-ancestors 'none'"
 )
-_JSON = "application/json; charset=utf-8"
-_FAILED = "the service failed; see its log"
 _NEEDS_NAME = "choose a display name first"
-WILDCARD_MESSAGE = (
-    "--host: pass this machine's own address, not 0.0.0.0 (no Host header would match)"
-)
 
 _WEB = Path(__file__).resolve().parent / "web"
 
@@ -117,16 +116,6 @@ STATIC: dict[str, tuple[Path, str]] = {
 
 class StartError(Exception):
     """The service cannot start: a page or brand file it serves is missing."""
-
-
-class _Reply(Exception):  # control flow: it carries the response, not a failure
-    def __init__(self, status: int, body: Any, headers: dict[str, str] | None = None) -> None:
-        super().__init__(status)
-        self.status, self.body, self.headers = status, body, headers or {}
-
-
-def _refuse(status: int, text: str) -> _Reply:
-    return _Reply(status, {"error": text})
 
 
 class Loop:
@@ -311,53 +300,12 @@ _ROUTES = (
 )
 
 
-class _Server(ThreadingHTTPServer):
-    daemon_threads = True
+class _Server(http_base.Server):
     root: Path
-    allowed_hosts: frozenset[str]
-    advertised_port: int = 0
     loop: Loop | None = None
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        self.active_connections = 0
-        self._per_address: dict[str, int] = {}
-        self._count = threading.Lock()
-        super().__init__(*args, **kwargs)
-
-    def verify_request(self, request: Any, client_address: Any) -> bool:
-        with self._count:
-            address = str(client_address[0])
-            if (
-                self.active_connections >= MAX_CONNECTIONS
-                or self._per_address.get(address, 0) >= MAX_PER_ADDRESS
-            ):
-                return False  # closed by the server loop with no handler thread
-            self.active_connections += 1
-            self._per_address[address] = self._per_address.get(address, 0) + 1
-        return True
-
-    def _release(self, client_address: Any) -> None:
-        address = str(client_address[0])
-        with self._count:
-            self.active_connections -= 1
-            if self._per_address[address] <= 1:
-                del self._per_address[address]
-            else:
-                self._per_address[address] -= 1
-
-    def process_request(self, request: Any, client_address: Any) -> None:
-        try:
-            super().process_request(request, client_address)
-        except BaseException:
-            # the handler thread never ran (the OS refused it), so it cannot release
-            self._release(client_address)
-            raise
-
-    def process_request_thread(self, request: Any, client_address: Any) -> None:
-        try:
-            super().process_request_thread(request, client_address)
-        finally:
-            self._release(client_address)
+    def connection_limits(self) -> tuple[int, int | None]:
+        return MAX_CONNECTIONS, MAX_PER_ADDRESS
 
 
 def _params(query: str) -> dict[str, str]:
@@ -374,146 +322,40 @@ def _params(query: str) -> dict[str, str]:
 def _static(path: str) -> _Reply:
     """The page for ``/`` or the allowlisted file for ``/static/<name>``; the path is compared with
     the allowlist's names and never joined to a directory."""
-    entry = (PAGE, _HTML) if path == "/" else STATIC.get(path[len("/static/") :])
-    if entry is None:
-        raise _refuse(404, "not found")
-    return _Reply(
-        200, entry[0].read_bytes(), {"Content-Type": entry[1], "Cache-Control": "no-cache"}
+    return http_base.listed_file(
+        (PAGE, _HTML) if path == "/" else STATIC.get(path[len("/static/") :])
     )
 
 
-class Handler(BaseHTTPRequestHandler):
+class Handler(http_base.Handler):
     timeout = SOCKET_TIMEOUT
     server_version = "Signal"
-    sys_version = ""
-    _deadline: threading.Timer | None = None
+    logger = log
+    # The page policy on every response, the replies http.server writes itself included.
+    response_headers = (("Content-Security-Policy", _POLICY), ("X-Frame-Options", "DENY"))
+    closes_http09 = True
 
-    def setup(self) -> None:
-        super().setup()
-        # The absolute limit on this connection: the socket timeout is per read and a trickling
-        # client never reaches it, so a timer shuts the socket down 2 * SOCKET_TIMEOUT after accept.
-        self._deadline = threading.Timer(
-            2 * SOCKET_TIMEOUT, self._expire, args=(self.connection, self.client_address[0])
-        )
-        self._deadline.daemon = True
-        self._deadline.start()
-
-    @staticmethod
-    def _expire(connection: socket.socket, client: str) -> None:
-        try:
-            connection.shutdown(socket.SHUT_RDWR)
-        except OSError:  # already closed by the handler or the peer: nothing left to cut
-            return
-        log.info("%s connection deadline reached", client)
-
-    def finish(self) -> None:
-        if self._deadline is not None:
-            self._deadline.cancel()
-        super().finish()
+    def connection_deadline(self) -> float:
+        return 2 * SOCKET_TIMEOUT
 
     @property
     def _service(self) -> _Server:
         return cast(_Server, self.server)
 
-    def log_message(self, format: str, *args: Any) -> None:
-        log.info("%s %s", self.address_string(), format % args)
-
     def do_GET(self) -> None:
-        self._serve()
+        self.serve_request(self._dispatch)
 
     do_POST = do_DELETE = do_PUT = do_PATCH = do_HEAD = do_OPTIONS = do_GET
 
-    def _serve(self) -> None:
-        if self.request_version == "HTTP/0.9":
-            self.close_connection = True  # no headers exist to check and none can be sent
-            log.info("%s: HTTP/0.9 request closed", self.address_string())
-            return
+    def read_body(self, length: int) -> bytes:
         try:
-            if not self.path.startswith("/"):
-                raise _refuse(400, "the request target must be a path")
-            self._check_origin()
-            if self.headers.get("Transfer-Encoding") is not None:
-                raise _refuse(411, "a body needs Content-Length")
-            self._send(self._dispatch(urllib.parse.urlsplit(self.path)))
-        except _Reply as reply:
-            self._send(reply)
-        except Exception:
-            # The one catch-all of a request, documented: whatever a handler raises becomes a 500
-            # with fixed text. The traceback goes to the log; neither it nor the exception text
-            # reaches the client. KeyboardInterrupt and SystemExit (BaseException) are not caught.
-            log.exception("%s %s", self.command, self.path)
-            self._send(_refuse(500, _FAILED))
-
-    def _check_origin(self) -> None:
-        hosts = self.headers.get_all("Host") or []
-        if len(hosts) != 1 or hosts[0] not in self._service.allowed_hosts:
-            raise _refuse(403, "this address is not the one the service was started on")
-        site = self.headers.get_all("Sec-Fetch-Site")
-        if site is not None and site not in (["same-origin"], ["none"]) and not self._navigation():
-            raise _refuse(403, "the request came from another site")
-        origins = self.headers.get_all("Origin") or []
-        acceptable = [f"http://{hosts[0]}"]
-        if self._service.advertised_port == 80 and hosts[0].endswith(":80"):
-            acceptable.append(f"http://{hosts[0][:-3]}")  # browsers leave the default port out
-        if (self.command != "GET" or origins) and not (
-            len(origins) == 1 and origins[0] in acceptable
-        ):
-            raise _refuse(403, "the request did not come from the service's own page")
-
-    def _navigation(self) -> bool:
-        """A top-level navigation to a document: only a GET with both fetch-metadata values."""
-        return (
-            self.command == "GET"
-            and self.headers.get_all("Sec-Fetch-Mode") == ["navigate"]
-            and self.headers.get_all("Sec-Fetch-Dest") == ["document"]
-        )
-
-    def end_headers(self) -> None:
-        # Here, not in _send, so the replies http.server writes itself (501, 400, 414) carry them.
-        self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("Cross-Origin-Resource-Policy", "same-origin")
-        self.send_header("Content-Security-Policy", _POLICY)
-        self.send_header("X-Frame-Options", "DENY")
-        super().end_headers()
-
-    def _send(self, reply: _Reply) -> None:
-        if isinstance(reply.body, bytes):
-            data, headers = reply.body, reply.headers
-        else:
-            data = json.dumps(reply.body, ensure_ascii=False).encode("utf-8")
-            headers = {"Content-Type": _JSON, "Cache-Control": "no-store", **reply.headers}
-        try:
-            self.send_response(reply.status)
-            self.send_header("Content-Length", str(len(data)))
-            for name, value in headers.items():
-                self.send_header(name, value)
-            self.end_headers()
-            if self.command != "HEAD":
-                self.wfile.write(data)
-        except OSError as error:  # the peer went away or stalled: nothing more can be said to it
-            log.info("%s %s: reply not delivered (%s)", self.command, self.path, error)
-
-    def _json_body(self) -> dict[str, Any]:
-        values = self.headers.get_all("Content-Length") or []
-        if not values:
-            raise _refuse(411, "a body needs Content-Length")
-        text = values[0].strip()
-        if len(values) != 1 or not (text.isascii() and text.isdigit()) or len(text) > 15:
-            raise _refuse(400, "Content-Length is not a length")
-        length = int(text)
-        if length > MAX_JSON:
-            raise _refuse(413, f"a request body is at most {MAX_JSON // 1024} KiB")
-        try:
-            data = self.rfile.read(length)
+            return self.rfile.read(length)
         except OSError as error:  # the body stalled past the socket timeout or the peer reset
             log.info("%s %s: request body did not arrive (%s)", self.command, self.path, error)
             raise _refuse(400, "the request body did not arrive") from None
-        if len(data) != length:
-            raise _refuse(400, "the request body ended early")
-        try:
-            body = json.loads(data.decode("utf-8"))
-        except (ValueError, RecursionError):  # bad UTF-8, bad JSON, or nesting past the parser
-            raise _refuse(400, "the request body is not valid JSON") from None
+
+    def _json_body(self) -> dict[str, Any]:
+        body = self.json_body(MAX_JSON)
         if not isinstance(body, dict):
             raise _refuse(400, "the request body must be a JSON object")
         return body
@@ -549,30 +391,6 @@ class Handler(BaseHTTPRequestHandler):
             db.close()
 
 
-def _wildcard(host: str) -> bool:
-    """True when ``host`` is empty or resolves to an address that means every interface."""
-    if not host:
-        return True
-    try:
-        found = socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)
-    except (socket.gaierror, UnicodeError):
-        return False  # not an address: binding it fails with its own message
-    for *_, sockaddr in found:
-        address = ipaddress.ip_address(str(sockaddr[0]).partition("%")[0])
-        mapped = getattr(address, "ipv4_mapped", None)
-        if address.is_unspecified or (mapped is not None and mapped.is_unspecified):
-            return True
-    return False
-
-
-def _hosts(host: str, port: int) -> frozenset[str]:
-    names = [host, "localhost"] if host == "127.0.0.1" else [host]
-    allowed = {f"{name}:{port}" for name in names}
-    if port == 80:
-        allowed.update(names)  # a browser leaves the default port out of Host
-    return frozenset(allowed)
-
-
 def _require_files() -> None:
     missing = [str(path) for path, _ in [(PAGE, ""), *STATIC.values()] if not path.is_file()]
     if missing:
@@ -585,13 +403,11 @@ def make_server(
     """A server bound to ``host:port`` (port 0 picks one); not yet serving.
 
     Raises ValueError for a wildcard host and StartError for a missing page file, before binding."""
-    if _wildcard(host):
+    if http_base.wildcard(host):
         raise ValueError(WILDCARD_MESSAGE)
     _require_files()
     server = _Server((host, port), Handler)
-    port = server.server_address[1]
-    server.root, server.allowed_hosts, server.advertised_port = root, _hosts(host, port), port
-    server.loop = loop
+    server.root, server.loop = root, loop
     return server
 
 
