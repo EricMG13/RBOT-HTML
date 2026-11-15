@@ -878,6 +878,27 @@ mandate and exposure data missing and its own rules then withhold a sized postur
 fit registers (CP-3B, T3C.1 to T3C.3 and T3C.5 to T3C.9), which CP-6A's gate names, stay cut.
 Selected source revision: the ruling above. Limit: offline proof only until a paid run.
 
+**Method scripts as acceptance checks, 2026-11-15 (owner: "scope it now, wire the scripts in as
+checks. every module has a scripts folder tied to it"; "missing scripts will be in deploy V or
+Vx").** The methods' scripts are selected as Python-run checks, never sent to a model; this
+supersedes "Not archived: the skills' scripts" above. Selected source revision: cp-os `b57a344`
+for every script; each is byte-identical to Deploy V `c4d2e35` except `completeness_check.py`
+(cp-os adds template columns and a bracket-aware `;` split), checked against a Deploy V clone
+on 2026-11-15. Newly archived, one copy each (`manifest.json` `scripts_note`): the shared
+`scripts/cp_tables.py`, `validate_handoff.py` and `completeness_check.py`, and the calculators
+`liquidity_bridge.py` (CP-2D, also CP-2G's), `funding_gap.py` (CP-3C, also CP-4C's),
+`credit_metrics.py` (CP-1, also CP-1B's and CP-2G's) and `rate_fx_sensitivity.py` (CP-2E); the
+four calculators archived earlier (`peer_statistics.py`, `covenant_headroom.py`,
+`bond_analytics.py`, `recovery_waterfall.py`) are unchanged. `deploy_workflow.method_scripts`
+runs a script only from its registered bytes. Wired: CP-2D (`liquidity_bridge.py` on T2E.5 and
+T2E.6: Ending accessible liquidity and Months to Empty) and CP-3C (`funding_gap.py` on T3D.2 and
+a `### Funding gap` table CP-OS now asks of CP-3C, because no CP-3C register holds the horizon,
+cash, facility terms or the gap the script owns); a disagreement is sent back for repair, a
+figure that cannot be checked is recorded with its reason. The method texts are unchanged; the
+two modules' instructions gain a note before the method block. Limit: synthetic proof only; no
+model output has been checked by a script until a paid run. The order for the other modules is
+in `docs/sweeps/2026-11-15-method-scripts/scope.md`.
+
 ## Appendix: selected method files
 
 One row per file CP-OS sends as a module's method (`METHODS` in
@@ -900,7 +921,7 @@ on 2026-11-15 were fixed that day (owner: "fix"); a difference accepted later go
 - `shared` rows are sent by section: `CANON_SHARED.md § CP_CONFIDENCE_SCORE.md` to every module
   sent a skill, its reader-layer sections to every prose module, and `CPOS_REGISTER_SCOPE.md
   § <module>` to the ten modules it names.
-- Registered, not sent: `manifest.json` registers 91 further files that CP-OS does not send (schema
+- Registered, not sent: `manifest.json` registers 98 further files that CP-OS does not send (schema
   and system references, unsent companions, the CP-L10 change-screen skill and others), kept on purpose (owner,
   2026-11-10: keep a copy of the methodology in the repo). Its `project_files` list registers the three
   sent method files that live outside the archive (`prompts/CP-1.md`, `cpl10.md`, `cp8.md`).
