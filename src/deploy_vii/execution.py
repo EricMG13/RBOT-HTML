@@ -51,8 +51,8 @@ from deploy_vii.registry import (
     plan,
     within_attempt_repair,
 )
-from deploy_workflow.platform_io import locks as fcntl
-from deploy_workflow.platform_io import replace as replace_file
+from deploy_vii.platform_io import locks as fcntl
+from deploy_vii.platform_io import replace as replace_file
 
 Validator = Callable[[Module], tuple[str, ...]]
 SCHEMA = "execution/5"
