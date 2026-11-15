@@ -12,8 +12,9 @@ functions, so it is not checked.
 T4.6 (`Metric | Comparison Basis | Prior Value | Current Value | Abs Change | % Change | ...`, or
 the SKILL's joined `Metric | Basis | Prior/Current | Abs/% | ...`): each row's % Change against
 `growth(Current Value, Prior Value)`. A joined row is read only when `Prior/Current` holds one
-`<prior> / <current>` (unit words may follow) and `Abs/%` one percentage; several pairs or
-percentages, or a change in points, are not checked. A figure followed only by `reported` or
+`<prior> / <current>` (unit words may follow) and `Abs/%` ends in its one percentage (at most one
+absolute figure before it; `+608 (20.8%)` takes the absolute figure's sign); several pairs, other
+trailing words or a change in points are not checked. A figure followed only by `reported` or
 `calculated` is read as that figure (`20.6% reported`). T4.4 (`Line Item | Period
 1...N | YoY Change (Abs) | YoY Change (%) | ...`, or the SKILL's joined `YoY Abs/%`): each row's
 YoY % against the latest period and the same period one year before it, when the headers name
@@ -88,7 +89,17 @@ _NUMBER = r"[-+−–]?\d[\d,]*(?:\.\d+)?"
 _PAIR = re.compile(
     rf"^\s*(?P<prior>{_NUMBER}\s*[x×%]?)\s+/\s+(?P<current>{_NUMBER}\s*[x×%]?)\s*(?:,\s*[^\d/;]+)?$"
 )
-_PERCENT = re.compile(rf"\(?{_NUMBER}\s*%\)?(?:\s+(?:reported|calculated)\b)?", re.IGNORECASE)
+_QUALIFIER = r"(?:\s+(?:reported|calculated))?\s*$"
+# T4.6's joined `Abs/%`, read only when the percentage ends it: at most one absolute figure and a
+# separator before it, `reported` or `calculated` alone after it. `+608 (20.8%)` annotates the
+# absolute figure (its sign); a lone `(5.0%)` is the accounting negative.
+_ANNOTATED = re.compile(
+    rf"^\s*(?P<abs>{_NUMBER})\s*\(\s*(?P<pct>{_NUMBER}\s*%)\s*\){_QUALIFIER}", re.IGNORECASE
+)
+_ENDING = re.compile(
+    rf"^\s*(?:{_NUMBER}(?:\s*[;,]\s*|\s+))?(?P<pct>\(?{_NUMBER}\s*%\)?){_QUALIFIER}",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -234,11 +245,17 @@ def _joined(name: str, pair_cell: str, change_cell: str) -> _Pair:
         return replace(row, skip=f"the Prior/Current cell {why}")
     if re.search(r"\b(?:pp|bps?|ppt|points?)\b", _plain(change_cell), re.IGNORECASE):
         return replace(row, skip="the Abs/% cell states a change in points, not only a percentage")
-    percents = _PERCENT.findall(_plain(change_cell))
-    if len(percents) != 1:
-        count = "no percentage" if not percents else "several percentages"
-        return replace(row, skip=f"the Abs/% cell holds {count}, not one")
-    return replace(row, prior=found["prior"], current=found["current"], stated=percents[0])
+    cell = _plain(change_cell)
+    annotated, ending = _ANNOTATED.match(cell), _ENDING.match(cell)
+    if annotated:
+        sign = "-" if _dash(annotated["abs"]).lstrip().startswith("-") else ""
+        stated = sign + annotated["pct"].lstrip("+-−– ")
+    elif ending:
+        stated = ending["pct"]
+    else:
+        why = "holds no percentage" if "%" not in cell else "does not end in its one percentage"
+        return replace(row, skip=f"the Abs/% cell {why}")
+    return replace(row, prior=found["prior"], current=found["current"], stated=stated)
 
 
 def _compact(label: str) -> str:

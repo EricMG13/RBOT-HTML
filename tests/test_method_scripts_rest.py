@@ -1295,3 +1295,30 @@ def test_cp1b_live_handoff_wrong_figures_are_sent_back_and_other_words_are_not_r
     assert live_1b(approx)[("T4.4", "% Change: Revenue")].status == "not checked"
     calculated = LIVE_1B.replace("| 20.6% reported |", "| 20.58% calculated |", 1)
     assert live_1b(calculated)[("T4.4", "% Change: Revenue")].status == "agreed"
+
+
+def joined_1b(pair: str, change: str) -> ms.Outcome:
+    head = (
+        "### T4.6 Variance register\n\n| Metric | Basis | Prior/Current | Abs/% | Driver |"
+        " Source |\n"
+        "|---|---|---|---|---|---|\n"
+    )
+    text = head + f"| Revenue | Annual YoY | {pair} | {change} | d | s |\n"
+    (outcome,) = [o for o in ms.run("CP-1B", text) if o.register == "T4.6"]
+    return outcome
+
+
+@pytest.mark.parametrize(
+    ("pair", "change", "status"),
+    [
+        ("2923 / 3531", "+608 (20.8%)", "agreed"),
+        ("2000 / 1900", "-100 (5.0%)", "agreed"),
+        ("2000 / 1900", "(5.0%)", "agreed"),
+        ("2000 / 1900", "-100; (5.0%)", "agreed"),
+        ("6585 / 7940", "+1355; 16.2% organic", "not checked"),
+        ("2923 / 3531", "+608; 20.8% approx", "not checked"),
+        ("2923 / 3531", "+608; 25.0% reported", "disagreed"),
+    ],
+)
+def test_cp1b_joined_abs_percent_is_read_only_when_the_percentage_ends_it(pair, change, status):
+    assert joined_1b(pair, change).status == status
