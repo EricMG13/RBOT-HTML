@@ -57,7 +57,7 @@ offending import chains. Every import counts: module level, inside a function an
   A module the engine needs moves down into `deploy_vii`; its old `deploy_workflow` name stays as
   an alias of the moved module, so existing imports and monkeypatches keep working.
 - `deploy_workflow` is layered, top to bottom: services (`run_start`, `inbox`, `signal`);
-  orchestration (`owners.cpos_launch`, `owners.cpos`, `run_pathway`, `replay`, `model_testing`);
+  orchestration (`owners.cpos_launch`, `owners.cpos`, `run_pathway`, `replay`);
   delivery (library index, changes, Markdown and handoff delivery, rendering, `owners.cpos_cp1_check`);
   analytical (`owner_workflow`, `earnings*`, `financial_workflow`, the module owners, and the
   runtime they share in one import cycle: `host`, `workflow`, `model`, `prompts`, `research`,

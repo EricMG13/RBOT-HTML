@@ -1,7 +1,7 @@
 """The model configurations CP-OS and the run start page select (``--config``).
 
 Moved from ``model_testing/configs.py`` when the model-testing harness was retired (owner,
-2026-11-15); the definitions are unchanged.
+2026-11-15). ``roles`` named the harness's repair and comparison stages; nothing reads it now.
 """
 
 from __future__ import annotations
@@ -36,16 +36,16 @@ CONFIGS: Mapping[str, ModelConfig] = MappingProxyType(
         "opus-medium": ModelConfig(
             "opus-medium", "anthropic", "claude-opus-5-5", "medium", frozenset({"comparison"})
         ),
-        # no model-testing stage plans it; selected by CP-OS / the run start page (owner 2026-11-12)
+        # selected by CP-OS / the run start page (owner 2026-11-12)
         "opus-high": ModelConfig("opus-high", "anthropic", "claude-opus-5-5", "high", frozenset()),
         "deepseek-max": ModelConfig(
             "deepseek-max",
             "openrouter",
             "deepseek/deepseek-v4.1-flash-1017",
             "max",
-            frozenset(),  # defined for its recorded spend; no stage plans it (user, 2026-11-02)
+            frozenset(),  # defined for its recorded spend (user, 2026-11-02)
         ),
-        # no model-testing stage plans a Copilot run; selected explicitly by CP-OS (plan 2026-11-06)
+        # selected explicitly by CP-OS (plan 2026-11-06)
         "copilot-sol-medium": ModelConfig(
             "copilot-sol-medium", "copilot", "gpt-6.1-sol", "medium", frozenset()
         ),

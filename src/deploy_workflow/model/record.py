@@ -190,10 +190,6 @@ def strings(value: object) -> list[str]:
     return []
 
 
-# ponytail: drop this alias once model_testing/records.py imports ``strings``.
-_strings = strings
-
-
 class CallRecord(Contract):
     # F4: contracts.Contract does not hide the input, so a rejected value would be echoed.
     model_config = ConfigDict(hide_input_in_errors=True)
