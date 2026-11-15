@@ -9,8 +9,12 @@ history at 86b9466, SHA256SUMS checked) is byte-identical to the archived CP-1 c
 (`growth`: current / prior - 1, none on a zero prior); the absolute change is not one of its
 functions, so it is not checked.
 
-T4.6 (`Metric | Comparison Basis | Prior Value | Current Value | Abs Change | % Change | ...`):
-each row's % Change against `growth(Current Value, Prior Value)`. T4.4 (`Line Item | Period
+T4.6 (`Metric | Comparison Basis | Prior Value | Current Value | Abs Change | % Change | ...`, or
+the SKILL's joined `Metric | Basis | Prior/Current | Abs/% | ...`): each row's % Change against
+`growth(Current Value, Prior Value)`. A joined row is read only when `Prior/Current` holds one
+`<prior> / <current>` (unit words may follow) and `Abs/%` one percentage; several pairs or
+percentages, or a change in points, are not checked. A figure followed only by `reported` or
+`calculated` is read as that figure (`20.6% reported`). T4.4 (`Line Item | Period
 1...N | YoY Change (Abs) | YoY Change (%) | ...`, or the SKILL's joined `YoY Abs/%`): each row's
 YoY % against the latest period and the same period one year before it, when the headers name
 both (`FY2024` and `FY2023`, `Q3 2024` and `Q3 2023`); otherwise not checked.
@@ -24,7 +28,7 @@ or a small percentage). A figure stated over a zero prior disagrees: the script 
 
 import re
 import types
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from deploy_workflow import method_scripts as core
 from deploy_workflow.method_scripts import (
@@ -77,6 +81,16 @@ CP1B_NOTE_UNSENT = (
 )
 
 
+# `20.6% reported`, `22.9% calculated`: the figure with only the method's source qualifier after it.
+_REPORTED = re.compile(r"(?<=\d%)\s+(?:reported|calculated)\s*$", re.IGNORECASE)
+_NUMBER = r"[-+−–]?\d[\d,]*(?:\.\d+)?"
+# T4.6's joined `Prior/Current`: one `<prior> / <current>`, then at most unit words.
+_PAIR = re.compile(
+    rf"^\s*(?P<prior>{_NUMBER}\s*[x×%]?)\s+/\s+(?P<current>{_NUMBER}\s*[x×%]?)\s*(?:,\s*[^\d/;]+)?$"
+)
+_PERCENT = re.compile(rf"\(?{_NUMBER}\s*%\)?(?:\s+(?:reported|calculated)\b)?", re.IGNORECASE)
+
+
 @dataclass(frozen=True)
 class _Pair:
     """One stated change and the two values it rests on, as written."""
@@ -86,6 +100,7 @@ class _Pair:
     prior: str
     current: str
     stated: str
+    skip: str = ""  # why the row's pair or percentage cannot be read; set, the row is not checked
 
 
 def _where(pair: _Pair) -> _Where:
@@ -122,7 +137,7 @@ def states_figure(cell: str) -> bool:
 def _stated(cell: str) -> str:
     """The % Change cell as a share the harness reads: `%` kept; a bare figure in a % column is
     percent when above 1, and not read when 1 or less (a decimal or a small percentage)."""
-    text = _dash(_plain(cell))
+    text = _REPORTED.sub("", _dash(_plain(cell)))
     if re.search(r"\b(?:pp|bps?|ppt|points?)\b", text, re.IGNORECASE):
         raise _NotChecked(f"`{cell}` is a change in points, not a percentage change")
     if "%" in text:
@@ -135,6 +150,8 @@ def _stated(cell: str) -> str:
 
 def _check(pair: _Pair, loaded: Loaded) -> Outcome:
     where, tables = _where(pair), loaded.tables
+    if pair.skip:
+        return where("not checked", stated=pair.stated, reason=pair.skip)
     if blank(pair.stated, tables):
         return where("not checked", stated=pair.stated, reason="no change is stated")
     try:
@@ -188,10 +205,40 @@ def _t46(text: str) -> list[_Pair] | str:
     if isinstance(table, str):
         return table
     cols = [_column(table, n) for n in ("metric", "prior value", "current value", "% change")]
-    if None in cols:
-        return "T4.6 has no Metric, Prior Value, Current Value or % Change column"
-    m, p, c, g = (int(i) for i in cols if i is not None)
-    return [_Pair("T4.6", _plain(r[m]), r[p], r[c], r[g]) for r in table[1]]
+    if None not in cols:
+        m, p, c, g = (int(i) for i in cols if i is not None)
+        return [_Pair("T4.6", _plain(r[m]), r[p], r[c], r[g]) for r in table[1]]
+    joined = [_column(table, n) for n in ("metric", "prior/current", "abs/%")]
+    if None in joined:
+        return (
+            "T4.6 has no Metric, Prior Value, Current Value or % Change column "
+            "(nor Metric, Prior/Current, Abs/%)"
+        )
+    m, pc, ap = (int(i) for i in joined if i is not None)
+    return [_joined(_plain(r[m]), r[pc], r[ap]) for r in table[1]]
+
+
+def _joined(name: str, pair_cell: str, change_cell: str) -> _Pair:
+    """A T4.6 row of the method's `Prior/Current` and `Abs/%` cells, read only when each holds one
+    pair and one percentage; otherwise the row carries why it is not (never a guess)."""
+    row = _Pair("T4.6", name, "", "", change_cell)
+    text = _plain(pair_cell)
+    found = _PAIR.match(text)
+    if found is None:
+        several = len(re.findall(r"\d\s*/\s*[-+−–]?\d", text)) > 1
+        why = (
+            "holds several prior / current pairs"
+            if several
+            else "is not one `prior / current` pair"
+        )
+        return replace(row, skip=f"the Prior/Current cell {why}")
+    if re.search(r"\b(?:pp|bps?|ppt|points?)\b", _plain(change_cell), re.IGNORECASE):
+        return replace(row, skip="the Abs/% cell states a change in points, not only a percentage")
+    percents = _PERCENT.findall(_plain(change_cell))
+    if len(percents) != 1:
+        count = "no percentage" if not percents else "several percentages"
+        return replace(row, skip=f"the Abs/% cell holds {count}, not one")
+    return replace(row, prior=found["prior"], current=found["current"], stated=percents[0])
 
 
 def _compact(label: str) -> str:

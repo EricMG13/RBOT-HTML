@@ -1249,3 +1249,49 @@ def test_cp1c_a_table_without_quartile_columns_is_not_checked_for_them():
     assert found["Peer Q1: EBITDA Margin"].status == "not checked"
     assert found["Peer Median: EBITDA Margin"].status == "agreed"
     assert ms.issues("CP-1C", bare) == ()
+
+
+# --- CP-1B: the method's joined T4.6 layout and `reported` percentages (live TDG FY2024 run) ----
+
+LIVE_1B = (ROOT / "tests/fixtures/CP-1B-earnings_update-tdg-fy2024-t44-t46.md").read_text()
+
+
+def live_1b(text: str = LIVE_1B) -> dict[tuple[str, str], ms.Outcome]:
+    return {(o.register, o.figure): o for o in ms.run("CP-1B", text)}
+
+
+def test_cp1b_live_handoff_checks_the_joined_t46_and_reported_percentages():
+    found = live_1b()
+    agreed = {
+        ("T4.4", "Revenue"): 20.5771,
+        ("T4.4", "COGS"): 19.1396,
+        ("T4.4", "Gross profit"): 21.6033,
+        ("T4.4", "SG&A"): 25.641,
+        ("T4.4", "Reported EBITDA"): 21.1245,
+        ("T4.6", "Operating profit"): 20.8005,
+        ("T4.6", "Reported EBITDA"): 21.1245,
+        ("T4.6", "Issuer-adjusted EBITDA, segment bridge"): 22.9161,
+        ("T4.6", "Operating cash flow"): 48.7273,
+    }
+    for (register, name), value in agreed.items():
+        outcome = found[(register, f"% Change: {name}")]
+        assert outcome.status == "agreed", (register, name, outcome.reason)
+        assert outcome.recomputed is not None
+        assert abs(outcome.recomputed - value) < 1e-3, (register, name, outcome.recomputed)
+    sales = found[("T4.6", "% Change: Sales, total and organic/acquisition")]
+    assert sales.status == "not checked"
+    assert "pairs" in sales.reason
+    assert found[("T4.6", "% Change: Leverage and coverage")].status == "not checked"
+    assert not [o for o in found.values() if o.status == "disagreed"]
+    assert ms.issues("CP-1B", LIVE_1B) == ()
+
+
+def test_cp1b_live_handoff_wrong_figures_are_sent_back_and_other_words_are_not_read():
+    wrong44 = LIVE_1B.replace("| 20.6% reported |", "| 22.0% reported |", 1)
+    assert live_1b(wrong44)[("T4.4", "% Change: Revenue")].status == "disagreed"
+    wrong46 = LIVE_1B.replace("+608; 20.80%", "+608; 25.0%", 1)
+    assert live_1b(wrong46)[("T4.6", "% Change: Operating profit")].status == "disagreed"
+    approx = LIVE_1B.replace("| 20.6% reported |", "| 20.6% approx |", 1)
+    assert live_1b(approx)[("T4.4", "% Change: Revenue")].status == "not checked"
+    calculated = LIVE_1B.replace("| 20.6% reported |", "| 20.58% calculated |", 1)
+    assert live_1b(calculated)[("T4.4", "% Change: Revenue")].status == "agreed"
