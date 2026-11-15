@@ -70,14 +70,19 @@ from deploy_vii.report_view import figure_unit
 from deploy_workflow.context import ContextRefused, context_facts
 from deploy_workflow.owners.blank import is_blank, one_per_page
 from deploy_workflow.owners.cp1a import probe_one_step
-from deploy_workflow.owners.cp3d import PIN_LABEL_FORGED, pin_label_forged
 from deploy_workflow.owners.period_basis import (
     DEFAULT_CURRENCY,
     PeriodRefused,
     currency_of,
     run_currency,
 )
-from deploy_workflow.owners.pins import pin_issues, pinned_line, pins_of
+from deploy_workflow.owners.pins import (
+    PIN_LABEL_FORGED,
+    pin_issues,
+    pin_label_forged,
+    pinned_line,
+    pins_of,
+)
 from deploy_workflow.trailing_period import states_trailing_period
 
 MODULE_ID = "CP-2A"

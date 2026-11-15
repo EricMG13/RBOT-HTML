@@ -85,14 +85,20 @@ from deploy_workflow.owners.blank import is_blank, one_per_page
 from deploy_workflow.owners.cp1a import probe_one_step
 from deploy_workflow.owners.cp1c import EV_READER_FACTS, Cp1cHead, cp1c_reader
 from deploy_workflow.owners.cp2g import stale_issues  # one staleness frame (S07-cp2-gh-C03)
-from deploy_workflow.owners.cp3d import PIN_LABEL_FORGED, _normalised, pin_label_forged
 from deploy_workflow.owners.period_basis import (
     DEFAULT_BASIS,
     PeriodBasis,
     PeriodRefused,
     run_basis,
 )
-from deploy_workflow.owners.pins import pin_issues, pinned_line, pins_of
+from deploy_workflow.owners.pins import (
+    PIN_LABEL_FORGED,
+    _normalised,
+    pin_issues,
+    pin_label_forged,
+    pinned_line,
+    pins_of,
+)
 
 MODULE_ID = "CP-4C"
 STEP_ID = "restructuring_fulcrum"

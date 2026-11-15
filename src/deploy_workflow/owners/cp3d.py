@@ -14,7 +14,6 @@ pure.
 """
 
 import re
-import unicodedata
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date
@@ -24,7 +23,6 @@ from typing import Any, Literal, Protocol, Self
 
 from pydantic import SerializerFunctionWrapHandler, TypeAdapter, ValidationError, model_serializer
 
-from deploy_vii.cp3_relative_value import TALK_MARKERS
 from deploy_vii.contracts import (
     Citation,
     Claim,
@@ -40,6 +38,7 @@ from deploy_vii.contracts import (
     TableColumn,
     TableRow,
 )
+from deploy_vii.cp3_relative_value import TALK_MARKERS
 from deploy_vii.execution import (
     Attempt,
     Execution,
@@ -69,7 +68,14 @@ from deploy_workflow.context_cites import (
 )
 from deploy_workflow.owners.blank import is_blank
 from deploy_workflow.owners.cp1a import probe_one_step
-from deploy_workflow.owners.pins import pin_issues, pinned_line, pins_of
+from deploy_workflow.owners.pins import (
+    PIN_LABEL_FORGED,
+    _normalised,  # noqa: F401  re-exported as cp3d._normalised
+    pin_issues,
+    pin_label_forged,
+    pinned_line,
+    pins_of,
+)
 from deploy_workflow.workflow import WorkflowError
 
 MODULE_ID = "CP-3D"
@@ -1264,27 +1270,6 @@ def _check_technicals(sub: MarketImpliedSubmission, out: _Issues) -> None:
             out.add(f"{path}: a Documentary Fact needs at least one basis quote")
         for j, b in enumerate(x.basis):
             out.ref_on_page(b, f"{path}.basis[{j}]")
-
-
-PIN_LABEL_FORGED = "the user-supplied pin line is Python's; do not write it"
-
-
-def _normalised(text: str) -> str:
-    """NFKC, no format characters (category Cf), whitespace runs as one space, case folded, the
-    ends trimmed and one trailing full stop dropped: what a reader would take for the same text."""
-    kept = "".join(
-        c for c in unicodedata.normalize("NFKC", text) if unicodedata.category(c) != "Cf"
-    )
-    folded = " ".join(kept.split()).casefold()
-    return folded.removesuffix(".").strip()
-
-
-def pin_label_forged(module_id: str, text: str | None) -> bool:
-    """True when `text` holds `module_id`'s pinned-recovery sentence, or a near copy that differs
-    only as `_normalised` folds (case, spacing, format characters, compatibility forms, the full
-    stop; a homoglyph from another script is not folded). Shared by the modules whose own
-    limitations carry model prose beside Python's pinned line (P6-P13)."""
-    return bool(text) and _normalised(pinned_line(module_id)) in _normalised(text or "")
 
 
 def _check_pin_label(sub: MarketImpliedSubmission, out: _Issues) -> None:
