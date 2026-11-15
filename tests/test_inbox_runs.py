@@ -10,7 +10,6 @@ import tempfile
 import threading
 import time
 from collections.abc import Callable, Iterator
-from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -32,7 +31,6 @@ FAKE = [sys.executable, str(Path(__file__).parent / "fixtures" / "fake_launcher.
 RULING = Path(__file__).resolve().parents[1] / "docs" / "rulings" / "2026-11-09-inbox-automation.md"
 CTX = Path("c.json")
 RECORD = Record("id1", "credit_snapshot", "acme", "queued", "t")
-CAP = Decimal(20)
 
 
 @pytest.fixture
@@ -84,7 +82,6 @@ def test_command_for_prepare_and_live(layout):
         record,
         Path("c.json"),
         launcher=["py", "-m", "x"],
-        cap=Decimal(20),
         ruling=None,
     )
     assert base == [
@@ -108,7 +105,6 @@ def test_command_for_prepare_and_live(layout):
         record,
         Path("c.json"),
         launcher=["py"],
-        cap=Decimal(20),
         ruling=Path("r.md"),
     )
     assert live[-3:] == ["--live", "--ruling", "r.md"]
@@ -120,9 +116,7 @@ def test_the_launch_the_start_page_makes_passes_no_lookup_setting(layout):
     record = Record(
         "id1", "credit_snapshot", "acme", "queued", "t", modules=("CP-0", "CP-DR"), prior="p1"
     )
-    argv = command(
-        layout, record, Path("c.json"), launcher=["py"], cap=Decimal(20), ruling=Path("r.md")
-    )
+    argv = command(layout, record, Path("c.json"), launcher=["py"], ruling=Path("r.md"))
     assert "--modules" in argv and "--live" in argv
     assert not [a for a in argv if a.startswith(("--web-lookup", "--web-host"))]
 
@@ -169,7 +163,7 @@ def test_start_runs_the_plan_and_logs(layout, fake_env, monkeypatch):
             "exit": 0,
         }
     )
-    process = start(layout, RECORD, CTX, launcher=FAKE, cap=CAP, ruling=RULING)
+    process = start(layout, RECORD, CTX, launcher=FAKE, ruling=RULING)
     assert process.wait(timeout=60) == 0
     assert outcome(layout, RECORD, 0) == ("finished", "")
     assert (layout.runs / "id1" / "deliveries" / "d1" / "delivery.json").is_file()
@@ -177,7 +171,7 @@ def test_start_runs_the_plan_and_logs(layout, fake_env, monkeypatch):
 
 
 def _live(layout, **kw):
-    return start(layout, RECORD, CTX, launcher=FAKE, cap=CAP, **kw)
+    return start(layout, RECORD, CTX, launcher=FAKE, **kw)
 
 
 def test_child_environment_adds_the_source_folder_and_utf8_and_keeps_the_key(monkeypatch):
@@ -334,7 +328,7 @@ def test_start_gives_the_child_a_pid_file_beside_the_record_and_load_all_ignores
     expected = layout.state / "id1.pid"
     process = start(
         layout, RECORD, CTX, launcher=[sys.executable, real_shape],
-        cap=CAP, ruling=RULING,
+        ruling=RULING,
     )  # fmt: skip
     try:
         deadline = time.monotonic() + 30
@@ -362,7 +356,7 @@ def test_the_pid_file_variable_is_in_the_child_environment_only_through_start(
 
     monkeypatch.setattr(subprocess, "Popen", spy)
     fake_env({})
-    start(layout, RECORD, CTX, launcher=FAKE, cap=CAP, ruling=RULING).wait()
+    start(layout, RECORD, CTX, launcher=FAKE, ruling=RULING).wait()
     assert captured["DEPLOY_WORKFLOW_PID_FILE"] == str(layout.state / "id1.pid")
 
 
@@ -406,7 +400,7 @@ def test_a_log_handle_that_fails_to_close_does_not_lose_the_started_launcher(
 def test_a_launcher_that_cannot_be_started_still_raises(layout):
     with pytest.raises(OSError):
         start(
-            layout, RECORD, CTX, launcher=["/no/such/launcher"], cap=CAP,
+            layout, RECORD, CTX, launcher=["/no/such/launcher"],
             ruling=RULING,
         )  # fmt: skip
 
@@ -443,7 +437,6 @@ def test_command_refuses_a_record_whose_modules_or_turns_could_inject_an_option(
             record,
             Path("c.json"),
             launcher=["py"],
-            cap=Decimal(20),
             ruling=None,
         )
 
@@ -456,7 +449,6 @@ def test_command_passes_the_approved_earlier_run_and_refuses_a_name_that_is_an_o
             record,
             Path("c.json"),
             launcher=["py"],
-            cap=Decimal(20),
             ruling=None,
         )
 
@@ -473,13 +465,14 @@ def test_command_takes_every_method_name_and_the_turn_limits(layout):
     from deploy_workflow.owners.cpos_launch import METHODS
 
     for turns in (1, 64):
-        record = Record("id1", "p", "a", "queued", "t", modules=tuple(METHODS), max_turns=turns)
+        record = Record(
+            "id1", "credit_snapshot", "a", "queued", "t", modules=tuple(METHODS), max_turns=turns
+        )
         argv = command(
             layout,
             record,
             Path("c.json"),
             launcher=["py"],
-            cap=Decimal(20),
             ruling=None,
         )
         assert argv[argv.index("--modules") + 1 :][: len(METHODS)] == list(METHODS)
@@ -498,17 +491,23 @@ _LAUNCH = [
 @pytest.mark.parametrize(("model", "effort", "fragment"), _LAUNCH)
 def test_the_records_model_and_effort_choose_the_launch_config(layout, model, effort, fragment):
     record = Record("id1", "credit_snapshot", "acme", "queued", "t", model=model, effort=effort)
-    argv = command(layout, record, Path("c.json"), launcher=["py"], cap=Decimal(20), ruling=None)
+    argv = command(layout, record, Path("c.json"), launcher=["py"], ruling=None)
     at = argv.index("--config")
     assert argv[at : at + len(fragment)] == fragment
 
 
 def test_a_record_written_before_model_and_effort_loads_as_gpt_fast(layout):
-    old = {"id": "old1", "pathway": "p", "folder": "a", "status": "queued", "claimed_at": "t"}
+    old = {
+        "id": "old1",
+        "pathway": "credit_snapshot",
+        "folder": "a",
+        "status": "queued",
+        "claimed_at": "t",
+    }
     (layout.state / "old1.json").write_text(json.dumps(old), encoding="utf-8")
     (record,) = load_all(layout)
     assert (record.model, record.effort) == ("gpt", "fast")
-    argv = command(layout, record, Path("c.json"), launcher=["py"], cap=Decimal(20), ruling=None)
+    argv = command(layout, record, Path("c.json"), launcher=["py"], ruling=None)
     at = argv.index("--config")
     assert argv[at : at + 3] == ["--config", "sol-medium", "--cap"]
 
@@ -528,4 +527,4 @@ def test_a_record_written_before_model_and_effort_loads_as_gpt_fast(layout):
 def test_command_refuses_a_record_with_an_unknown_model_or_effort(layout, change):
     record = Record("id1", "credit_snapshot", "acme", "queued", "t", **change)
     with pytest.raises(ValueError):
-        command(layout, record, Path("c.json"), launcher=["py"], cap=Decimal(20), ruling=None)
+        command(layout, record, Path("c.json"), launcher=["py"], ruling=None)

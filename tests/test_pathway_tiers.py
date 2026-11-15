@@ -304,3 +304,6 @@ def test_a_hand_edited_cap_above_the_pathways_is_refused(
 def test_an_unknown_pathway_has_no_cap(root: Path) -> None:
     with pytest.raises(ValueError, match="has no cap"):
         runs.cap_of(Record("r1", "no_such_pathway", "Acme", "queued", "t"))
+    # A pathway that is not even text (a hand-edited record) must not stop the activity poll.
+    odd = Record("r2", cast(str, ["credit_snapshot"]), "Acme", "queued", "t")
+    assert snapshot(layout(root), [odd], now=_NOW)["runs"][0]["cap"] is None

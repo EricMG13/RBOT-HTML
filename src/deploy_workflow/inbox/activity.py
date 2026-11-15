@@ -122,7 +122,8 @@ def _entry(layout: Layout, record: Record, now: datetime) -> tuple[dict[str, Any
     entry.pop("modules")  # the modules asked for; "modules" here is each one's state, set below
     try:  # the cap the run launches with: its own, or a record's from before per-pathway caps
         entry["cap"] = str(cap_of(record))
-    except ValueError:  # Documented fail-open: a hand-edited record shows no cap; it cannot start.
+    except (ValueError, TypeError):
+        # Documented fail-open: a hand-edited record shows no cap (and cannot be started).
         entry["cap"] = None
     run_dir = layout.runs / record.id
     events: list[dict[str, Any]] = []

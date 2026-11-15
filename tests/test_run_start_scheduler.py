@@ -10,7 +10,6 @@ import json
 import os
 import threading
 from dataclasses import replace
-from decimal import Decimal
 from pathlib import Path
 from typing import Any, cast
 

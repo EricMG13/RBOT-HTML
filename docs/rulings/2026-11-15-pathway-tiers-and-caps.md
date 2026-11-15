@@ -93,6 +93,11 @@ for CP-DR with web search) whatever its size, so a run in order needs about its 
 | Full | 25 | 9.3 | 10.4 | 12.2 | 17.0 |
 | Deep | 40 | 13.6 | 15.2 | 17.9 | 22.2 |
 
+Not in the estimate: the size of Deep's largest first requests. CP-5 is sent eighteen handoffs and
+CP-8 twenty, and the 13 November proposal projected about 300,000 tokens for each on whole handoffs,
+before the register cut of that day shortened them. Above GPT Sol's 272,000 listed input tokens the
+input rate doubles (the hold already covers it); no run has measured these requests since the cut.
+
 On GPT Sol every tier fits its cap with room. On Claude Opus the one measured full run cost USD 19.45
 (13 modules, 2026-11-12, medium) against USD 8.62 for the same modules on GPT Sol, 2.26 times. At
 that ratio, with CP-8, Full today is about USD 23 at medium and 25 at Balanced, at or past its USD 25
