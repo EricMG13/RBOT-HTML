@@ -7,6 +7,8 @@ copies are small hand-made folders. Expected folder listings are written out her
 import importlib.util
 import io
 import json
+import subprocess
+import sys
 import zipfile
 from pathlib import Path
 
@@ -315,6 +317,19 @@ def test_a_real_bundle_gives_the_signal_service_its_brand_files_and_no_node_test
             relative = path.relative_to(service._BRAND)
             assert (brand / relative).is_file(), name
     assert (brand / "brand.css").is_file() and (brand / "brand/symbol.svg").is_file()
+    # The bundled Python's path file lists engine/src and engine: with those two roots first, the
+    # library and the engine are the bundle's own, and Signal's brand folder is inside it.
+    probe = (
+        "import sys; sys.path[:0] = sys.argv[1:3]\n"
+        "import credit_os, update_library, deploy_workflow.signal.service as s\n"
+        "print(credit_os.__file__, update_library.__file__, s.__file__, s._BRAND, sep='\\n')"
+    )
+    roots = [str(engine / "src"), str(engine)]
+    found = subprocess.run(
+        [sys.executable, "-I", "-c", probe, *roots], capture_output=True, text=True, check=True
+    ).stdout.split("\n")
+    assert all(Path(line).is_relative_to(engine) for line in found[:4]), found
+    assert Path(found[3]) == brand
     web = engine / "src/deploy_workflow/signal/web"
     for name in ("index.html", "signal.css", "signal.js", "render.js"):
         assert (web / name).is_file(), name

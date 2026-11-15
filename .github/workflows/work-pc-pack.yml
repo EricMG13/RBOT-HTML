@@ -37,6 +37,7 @@ jobs:
           echo "message=$message" >> "$GITHUB_OUTPUT"
       - name: remove packs older than the retention window
         if: startsWith(steps.pack.outputs.message, 'wrote ')
+        continue-on-error: true  # the new pack is still committed when cleanup fails
         run: python tools/work_pc_delta.py prune
       - name: commit and push the pack
         if: startsWith(steps.pack.outputs.message, 'wrote ')

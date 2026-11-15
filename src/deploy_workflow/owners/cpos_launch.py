@@ -1715,7 +1715,7 @@ def update_library_at(workspace: Path) -> Any:
 
 
 def _library_command(workspace: Path) -> str:
-    return f"Run: python apps/issuer-library/update_library.py --workspace {workspace}"
+    return f"Run: uv run python apps/issuer-library/update_library.py --workspace {workspace}"
 
 
 def _refresh_library(directory: Path) -> None:

@@ -197,6 +197,16 @@ def test_brand_files_come_from_the_installed_credit_os_package():
     assert (brand / "brand.css").is_file() and (brand / "brand" / "symbol.svg").is_file()
 
 
+def test_without_the_credit_os_package_the_brand_folder_is_the_checkout_path(monkeypatch):
+    # Importing the service must not need the library: start-up names the files it lacks.
+    def absent(package):
+        raise ModuleNotFoundError(f"No module named {package!r}", name=package)
+
+    monkeypatch.setattr("importlib.resources.files", absent)
+    expected = Path(__file__).resolve().parents[1] / "apps/issuer-library/credit_os/web"
+    assert service.find_brand() == expected
+
+
 def test_name_then_feed(svc):
     assert svc.call("GET", "/api/feed?view=latest")[0] == 401
     status, headers, _ = svc.call("POST", "/api/me", body={"name": "  A.  Kovac "})

@@ -38,6 +38,9 @@ from deploy_workflow.run_start.submissions import (
 )
 
 
+AS_ROOT = hasattr(os, "geteuid") and os.geteuid() == 0  # no geteuid on Windows
+
+
 @pytest.fixture
 def layout() -> Iterator[Layout]:
     # pytest's tmp_path is longer than the 80-character root limit on macOS.
@@ -969,7 +972,7 @@ def test_a_summary_racing_the_removal_of_its_folder_is_refused_not_an_oserror(
         summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))
 
 
-@pytest.mark.skipif(os.geteuid() == 0, reason="root reads any folder")
+@pytest.mark.skipif(AS_ROOT, reason="root reads any folder")
 def test_an_oserror_while_the_summary_reads_is_logged_not_passed_off_as_a_change(
     layout, tmp_path, caplog
 ):
@@ -1439,7 +1442,7 @@ def test_open_regular_does_not_wait_on_a_fifo(tmp_path):
     assert not held and outcome == ["refused"]
 
 
-@pytest.mark.skipif(os.geteuid() == 0, reason="root reads any folder")
+@pytest.mark.skipif(AS_ROOT, reason="root reads any folder")
 def test_a_carry_from_a_folder_with_an_unreadable_subfolder_is_refused(layout, tmp_path):
     src = tmp_path / "run"
     (src / "q3").mkdir(parents=True)

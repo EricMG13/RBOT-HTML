@@ -9,7 +9,7 @@ is a separate service.) There is no compiled executable. Both steps run with a c
    (root `README.md`). Without `--live` it only prepares and reviews; `--live` with a ruling is
    the paid run, which publishes the report inside the run folder.
 2. **Update the library**: `Update library.cmd [workspace]` in the package, or
-   `python apps/issuer-library/update_library.py --workspace <folder>`. It rebuilds
+   `uv run python apps/issuer-library/update_library.py --workspace <folder>`. It rebuilds
    `<workspace>/library/` and the wrapper opens `library/index.html`. Without an argument the
    wrapper uses `FINAL_WORKFLOW_WORKSPACE`, else `Documents\FinalWorkflow`. The script writes
    nothing but `library/` (built beside it, then swapped in whole), and refuses to write through a
@@ -67,7 +67,7 @@ is `docs/visualisations/2026-11-13-screen-component-map.md`.
 `hydrate.js` and `screening.js` are helpers. The store and its sources are listed in
 `credit_os/SOURCE.md`.
 
-**Build and test.** `python apps/issuer-library/update_library.py --workspace <folder>` builds the
+**Build and test.** `uv run python apps/issuer-library/update_library.py --workspace <folder>` builds the
 library (step 2). The node tests are `node --test apps/issuer-library/credit_os/web/*.test.cjs`. The
 browser tests are `tests/test_library_page_browser.py` and `tests/test_library_changes_browser.py`. `apps/issuer-library/fixtures/shape-key.json` is the answer key for the
 classifiers in `shapes.js`, taken from the reference run `tdg-proof-snapshot-opus-002`, one record per line. Its table

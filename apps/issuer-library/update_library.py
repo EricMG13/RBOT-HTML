@@ -1,6 +1,6 @@
 """Update the Issuer Library: the static Credit OS library and issuer pages of completed runs.
 
-    python apps/issuer-library/update_library.py [--workspace FOLDER]
+    uv run python apps/issuer-library/update_library.py [--workspace FOLDER]
 
 Reads ``FOLDER/runs`` (default: this checkout; the Windows package needs ``--workspace``, which
 ``Update library.cmd`` supplies) and writes only ``FOLDER/library/``: ``index.html`` with its

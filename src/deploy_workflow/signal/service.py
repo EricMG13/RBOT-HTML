@@ -83,11 +83,15 @@ _WEB = Path(__file__).resolve().parent / "web"
 
 def find_brand() -> Path:
     """The folder holding brand.css, fonts and brand/: ``web`` in the installed ``credit_os``
-    package (the issuer library). Without that package the import fails by name; with it and a
-    missing file, start-up names the file."""
+    package (the issuer library). Without that package this is the checkout's path for it, so
+    importing this module still works and start-up names the missing files."""
     from importlib.resources import files  # Kept to this function: the only package-data lookup.
 
-    return Path(str(files("credit_os").joinpath("web")))
+    try:
+        return Path(str(files("credit_os").joinpath("web")))
+    except ModuleNotFoundError:
+        checkout = Path(__file__).resolve().parents[3]
+        return checkout / "apps" / "issuer-library" / "credit_os" / "web"
 
 
 _BRAND = find_brand()

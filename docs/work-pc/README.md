@@ -20,7 +20,8 @@ a number is issued once and never reused.
 
 ## Old packs are removed
 
-Packs dated more than 14 days before today (the date in the folder name, UTC) are removed
+Packs dated more than 14 days before today (the date in the folder name, which is the head
+commit's own date, against today's date in UTC, so up to a day either way) are removed
 from this folder by the same commit that adds a new pack; the newest pack always stays.
 So the numbers in `syncs/` can start above `001`, and the removed packs exist only in
 git history (`git log -- docs/work-pc/syncs`). Nothing else changes: `check` and `plan`
