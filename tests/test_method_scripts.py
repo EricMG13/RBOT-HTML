@@ -157,8 +157,12 @@ def test_cp2d_all_figures_right():
     assert statuses(outcomes) == {ms.ENDING: "agreed", ms.MTE: "agreed"}
     ending = outcomes[0]
     assert (ending.stated, ending.recomputed, ending.unit) == ("300", 300.0, "USD m")
-    assert ending.tolerance == 1.0  # no decimal shown: one unit
-    assert outcomes[1].tolerance == pytest.approx(0.1)  # `48.0`: one unit in the first place
+    # One unit (no decimal shown) plus the inputs' rounding: nine whole-number inputs, each up to
+    # 0.5 off, so 1 + 9 x 0.5 = 5.5 (coordinator's review, 2026-11-15).
+    assert ending.tolerance == 5.5
+    # `48.0`: 0.1, plus the quotient's first-order bound: liquidity 400 (+-0.5) over the burn
+    # 100 / 12 = 8.333 (+-8 x 0.5 / 12 = 0.333): (0.5 + 48 x 0.333) / 8.333 = 1.98.
+    assert outcomes[1].tolerance == pytest.approx(0.1 + 16.5 / (100 / 12))
     assert ms.issues("CP-2D", cp2d()) == ()
 
 
@@ -276,11 +280,12 @@ def test_cp2d_a_row_outside_the_formula_does_not_make_a_disagreement():
     assert ms.run("CP-2D", cp2d(rows))[0].status == "agreed"
 
 
-def test_cp2d_months_to_empty_within_one_displayed_unit():
-    # 48 exactly: 48 and 48.00 agree, 48.2 is out by more than 0.1.
-    assert ms.run("CP-2D", cp2d(months="48 months"))[1].status == "agreed"
-    assert ms.run("CP-2D", cp2d(months="48.00"))[1].status == "agreed"
-    assert ms.run("CP-2D", cp2d(months="48.2"))[1].status == "disagreed"
+def test_cp2d_months_to_empty_within_one_displayed_unit_and_the_inputs_rounding():
+    # 48 exactly. The bound is the stated place plus the inputs' rounding (1.98, worked above):
+    # 48, 48.00 and 50.0 (out by 2.0, within 0.1 + 1.98) agree; 50.2 (out by 2.2) disagrees.
+    for months in ("48 months", "48.00", "50.0"):
+        assert ms.run("CP-2D", cp2d(months=months))[1].status == "agreed", months
+    assert ms.run("CP-2D", cp2d(months="50.2"))[1].status == "disagreed"
 
 
 # --- CP-3C --------------------------------------------------------------------------------------
@@ -491,6 +496,14 @@ def test_a_large_figure_is_written_in_full_in_the_issue():
     assert "recomputes 4000300 USD m" in issue
 
 
+def test_cp3c_the_gap_is_compared_within_its_inputs_rounding():
+    # The gap sums the due notes (300, 450), the cash (220), the RCF (400 and 150) and the
+    # forecast (80), each up to 0.5 off: 1 + 6 x 0.5 = 4. 204 agrees with 200; 205 does not.
+    for amount, status in (("204", "agreed"), ("205", "disagreed")):
+        outcome = ms.run("CP-3C", cp3c(funding=replaced(FUNDING, "Funding gap", amount=amount)))[2]
+        assert (outcome.status, outcome.tolerance) == (status, 4.0), amount
+
+
 def test_cp3c_no_horizon_is_refused_by_the_script():
     outcomes = ms.run("CP-3C", cp3c(funding=[r for r in FUNDING if r[0] != "Horizon"]))
     assert {o.status for o in outcomes} == {"not checked"}
@@ -552,7 +565,10 @@ def test_cp2e_all_figures_right():
     assert statuses(outcomes) == dict.fromkeys(CP2E_FIGURES, "agreed")
     assert [o.recomputed for o in outcomes] == [500.0, 25.0, 5.0]
     assert [o.unit for o in outcomes] == ["USD m", "%", "USD m"]
-    assert [o.tolerance for o in outcomes] == pytest.approx([1.0, 0.1, 0.1])
+    # One unit in the stated place plus the inputs' rounding (whole numbers, each up to 0.5 off):
+    # unhedged 1 + 0.5 + 0.5 = 2.0; share 0.1 + 100 x (1.0 + 0.25 x 0.5) / 2,000 = 0.15625 points;
+    # impact 0.1 + 1% x 1.0 = 0.11.
+    assert [o.tolerance for o in outcomes] == pytest.approx([2.0, 0.15625, 0.11])
     assert ms.issues("CP-2E", cp2e()) == ()
 
 
@@ -567,10 +583,36 @@ def test_cp2e_one_figure_wrong():
 
 
 def test_cp2e_a_sign_error_is_a_disagreement():
-    # The impact is a cost of 5.0; written (5.0) it is -5.0 against the script's 5.0.
-    outcomes = ms.run("CP-2E", cp2e(impact="USD (5.0)m"))
-    assert [o.status for o in outcomes] == ["agreed", "agreed", "disagreed"]
-    assert outcomes[2].recomputed == 5.0
+    # Unhedged debt is gross less hedged, 500; written (500) it is -500.
+    outcomes = ms.run("CP-2E", cp2e(EXPOSURE | {"Unhedged floating-rate debt": "USD (500)m"}))
+    assert [o.status for o in outcomes] == ["disagreed", "agreed", "agreed"]
+
+
+def test_cp2e_the_impact_written_as_an_outflow_is_compared_as_a_magnitude():
+    # Neither the method nor the note fixes the impact's sign: -5.0, (5.0) and a whole bracketed
+    # cell all agree with 5.0, the stated sign kept; a wrong magnitude still disagrees.
+    for impact in ("-USD 5.0m", "USD (5.0)m", "(USD 5.0m)"):
+        outcome = ms.run("CP-2E", cp2e(impact=impact))[2]
+        assert outcome.status == "agreed", impact
+        assert "as an outflow (negative)" in outcome.reason and outcome.stated.startswith(
+            ("-", "(")
+        )
+    assert ms.run("CP-2E", cp2e(impact="(USD 6.0m)"))[2].status == "disagreed"
+
+
+def test_cp2e_an_unread_row_stops_only_the_checks_that_use_it():
+    # Total debt with no unit: the share needs it; unhedged and the impact do not.
+    outcomes = ms.run("CP-2E", cp2e(EXPOSURE | {"Total debt": "2,000"}))
+    assert [o.status for o in outcomes] == ["agreed", "not checked", "agreed"]
+    assert "states no currency and scale" in outcomes[1].reason
+
+
+def test_cp2e_a_figure_wrong_by_more_than_the_rounding_bound_still_disagrees():
+    # Unhedged: bound 2.0 (worked above); 502 agrees, 503 does not.
+    rows = EXPOSURE | {"Unhedged floating-rate debt": "USD 502m"}
+    assert ms.run("CP-2E", cp2e(rows))[0].status == "agreed"
+    rows = EXPOSURE | {"Unhedged floating-rate debt": "USD 503m"}
+    assert ms.run("CP-2E", cp2e(rows))[0].status == "disagreed"
 
 
 def test_cp2e_a_wrong_share_and_its_unit():
@@ -753,7 +795,11 @@ def test_cp3_all_figures_right():
     assert len(outcomes) == 15 and {o.status for o in outcomes} == {"agreed"}
     low = by_case(outcomes, "Low")
     assert low["Recovery: Term Loan B"].recomputed == pytest.approx(43.333333, abs=1e-4)
-    assert low["Recovery: Term Loan B"].tolerance == pytest.approx(0.1)
+    # 0.1, plus the rounding bound: the value left for the loan (EV 200, cost 20, RCF 50, each
+    # +-0.5, so +-1.5) over its claim 300 (+-0.5): 100 x (1.5 + 0.4333 x 0.5) / 300 = 0.572.
+    assert low["Recovery: Term Loan B"].tolerance == pytest.approx(
+        0.1 + 100 * (1.5 + 130 / 300 * 0.5) / 300
+    )
     assert low["Fulcrum"].recomputed_label == "Term Loan B"
     high = by_case(outcomes, "High")
     assert high["Residual to equity"].recomputed == 130.0
@@ -779,6 +825,11 @@ def test_cp3_a_wrong_fulcrum_names_the_scripts_fulcrum():
     (issue,) = ms.issues("CP-3", cp3(rows))
     assert "row `Fulcrum (Base)` states Term Loan B" in issue
     assert "recomputes Senior Notes from the handoff's own rows" in issue
+
+
+def test_cp3_a_fulcrum_named_with_a_note_is_its_claim():
+    rows = edited("Fulcrum", base="Senior Notes (partial)")
+    assert by_case(ms.run("CP-3", cp3(rows)), "Base")["Fulcrum"].status == "agreed"
 
 
 def test_cp3_unallocated_value_is_a_disagreement():
@@ -953,7 +1004,11 @@ def test_cp2g_all_figures_right():
         assert status[f"Closing debt (FY2025, {case})"] == "agreed"
     by = {o.figure: o for o in outcomes}
     assert by["Net leverage (FY2026, Base)"].recomputed == pytest.approx(3950 / 1100)
-    assert by["Net leverage (FY2026, Base)"].tolerance == pytest.approx(0.1)
+    # 0.1, plus the quotient's bound: net debt 3,950 (+-0.5 +-0.5) over EBITDA 1,100 (+-0.5):
+    # (1.0 + 3.591 x 0.5) / 1,100 = 0.00254.
+    assert by["Net leverage (FY2026, Base)"].tolerance == pytest.approx(
+        0.1 + (1.0 + 3950 / 1100 * 0.5) / 1100
+    )
     assert by["FCF/debt (FY2025, Base)"].recomputed == pytest.approx(6.25)
     assert ms.issues("CP-2G", cp2g()) == ()
 
@@ -1098,6 +1153,35 @@ def test_cp2g_a_leverage_multiple_on_negative_ebitda_is_not_calculable():
     assert "recomputes Not Calculable" in ms.issue(gross)
 
 
+def test_cp2g_a_null_word_with_its_explanation_is_a_null_word():
+    # Review case: EBITDA (10); "Not meaningful (negative EBITDA)" agrees with Not Calculable.
+    model = MODEL | {
+        ("FY2026", "Downside"): ("(10)", "(200)", "4,800 / 350", "0", "0", "380", "4,800 / 150")
+    }
+    cells = ("Not meaningful (negative EBITDA) / n.m.", "(0.0x)", "(4.2%)")
+    status = cp2g_status(ms.run("CP-2G", cp2g(model, METRICS | {("FY2026", "Downside"): cells})))
+    assert status["Gross leverage (FY2026, Downside)"] == "agreed"
+    assert status["Net leverage (FY2026, Downside)"] == "agreed"
+
+
+def test_cp2g_leverage_on_another_named_basis_is_not_compared():
+    # 5.0x is not 4,800 / 1,000 = 4.8x. Under `covenant EBITDA` it is not compared; under the
+    # fixture's own definition it is a disagreement. Opaque ids cannot be recognised (ruling).
+    metrics = METRICS | {("FY2025", "Base"): ("5.0x / 4.3x", "2.9x", "6.25%")}
+    other = cp2g_status(ms.run("CP-2G", cp2g(metrics=metrics, definition="D4 covenant EBITDA")))
+    assert other["Gross leverage (FY2025, Base)"] == "not checked"
+    assert cp2g_status(ms.run("CP-2G", cp2g(metrics=metrics)))["Gross leverage (FY2025, Base)"] == (
+        "disagreed"
+    )
+
+
+def test_cp2g_an_unread_t2h6_column_leaves_the_roll_forward_checked():
+    text = cp2g().replace("| FCF/debt |", "| FCF to debt |")
+    outcomes = ms.run("CP-2G", text)
+    assert outcomes[0].figure == "T2H.6" and "no `FCF/debt` column" in outcomes[0].reason
+    assert {o.status for o in outcomes[1:]} >= {"agreed"}
+
+
 def test_cp2g_leverage_on_a_quarter_is_not_compared():
     model = {("Q1 2025", "Base"): MODEL[("FY2025", "Base")]}
     metrics = {("Q1 2025", "Base"): METRICS[("FY2025", "Base")]}
@@ -1156,7 +1240,8 @@ def test_cp4_all_figures_right():
     assert len(outcomes) == 8 and {o.status for o in outcomes} == {"agreed"}
     by = {o.figure: o for o in outcomes}
     assert by["Headroom: Net leverage"].recomputed == pytest.approx(0.8)
-    assert by["Headroom: Net leverage"].tolerance == pytest.approx(0.01)
+    # 0.01, plus the inputs' rounding: 5.00 and 4.20, each up to 0.005 off, so 0.02 in all.
+    assert by["Headroom: Net leverage"].tolerance == pytest.approx(0.02)
     assert by["Headroom: Minimum liquidity"].unit == "USD m"
     assert by["Status: Minimum liquidity"].recomputed_label == "Breached"
     assert ms.issues("CP-4", cp4()) == ()
@@ -1176,6 +1261,34 @@ def test_cp4_the_max_ratio_formula_on_a_min_ratio_test_is_a_sign_error():
     assert by["Headroom: Interest cover"].status == "disagreed"
     assert by["Status: Interest cover"].status == "disagreed"
     assert by["Status: Interest cover"].recomputed_label == "Compliant"
+
+
+def test_cp4_headroom_from_unrounded_inputs_agrees_within_their_rounding():
+    # Review case: 5.00 - 4.4 = 0.60 from the displayed inputs; a true current of 4.37 shown as
+    # 4.4 gives 0.63. The bound is 0.01 (the stated place) + 0.005 + 0.05 = 0.065: 0.63 agrees,
+    # 0.70 (out by 0.10) still disagrees.
+    by = {
+        o.figure: o
+        for o in ms.run("CP-4", cp4(covenant("Net leverage", current="4.4x", headroom="0.63x")))
+    }
+    assert by["Headroom: Net leverage"].status == "agreed"
+    assert by["Headroom: Net leverage"].tolerance == pytest.approx(0.065)
+    by = {
+        o.figure: o
+        for o in ms.run("CP-4", cp4(covenant("Net leverage", current="4.4x", headroom="0.70x")))
+    }
+    assert by["Headroom: Net leverage"].status == "disagreed"
+
+
+def test_cp4_a_status_at_the_threshold_within_rounding_is_not_decided():
+    # 3.50 against 3.50: headroom 0.00, inside the inputs' rounding (0.01) of zero. A stated
+    # Breached (from an unrounded 3.504) is not sent back; at 3.40 Breached is a disagreement.
+    rows = covenant("Senior secured leverage", headroom="(0.00x)", status="Breached")
+    by = {o.figure: o for o in ms.run("CP-4", cp4(rows))}
+    assert by["Status: Senior secured leverage"].status == "not checked"
+    rows = covenant("Senior secured leverage", current="3.40x", headroom="0.10x", status="Breached")
+    by = {o.figure: o for o in ms.run("CP-4", cp4(rows))}
+    assert by["Status: Senior secured leverage"].status == "disagreed"
 
 
 def test_cp4_the_stated_test_type_drives_the_sign():
@@ -1225,6 +1338,14 @@ def test_cp4_a_unit_or_currency_mismatch_is_not_compared():
     rows = covenant("Minimum liquidity", headroom="(20)")  # a bare figure for an amount
     by = {o.figure: o for o in ms.run("CP-4", cp4(rows))}
     assert "the Headroom is in `x`, its test in `USD m`" in by["Headroom: Minimum liquidity"].reason
+
+
+def test_cp4_a_whole_bracketed_amount_is_negative():
+    # Review: `(USD 20m)` is -20, as `USD (20)m` is.
+    rows = covenant("Minimum liquidity", headroom="(USD 20m)")
+    assert {o.figure: o for o in ms.run("CP-4", cp4(rows))}[
+        "Headroom: Minimum liquidity"
+    ].status == ("agreed")
 
 
 def test_cp4_a_comparator_before_the_threshold_is_read():
@@ -1360,6 +1481,47 @@ def test_cp1_the_operand_identity_trap_on_the_retained_tdg_figures():
     outcome = cp1_by(cp1(carrying))[f"{name} (FY2024)"]
     assert outcome.status == "disagreed"
     assert outcome.recomputed == pytest.approx(24880 / 3813)
+
+
+def test_cp1_a_denominator_at_or_below_zero_follows_the_scripts_convention():
+    # Review cases. 500 / -10: the method's Not Calculable agrees, in any of the null words.
+    def outcome(name, formula, d, value):
+        return cp1_by(cp1({name: (formula, "500", d, value)}))[f"{name} (FY2024)"]
+
+    for value in ("Not Calculable", "n.m.", "Not meaningful (negative EBITDA)"):
+        assert outcome("Debt / EBITDA pro forma", "Debt / EBITDA", "-10", value).status == "agreed"
+        assert outcome("Sales ratio", "Sales / Base", "0", value).status == "agreed", value
+    # A figure: a leverage quotient against EBITDA below zero has none (the script's convention).
+    lev = outcome("Debt / EBITDA pro forma", "Debt / EBITDA", "-10", "-50.0x")
+    assert lev.status == "disagreed" and lev.recomputed_label == "Not Calculable"
+    # ... any quotient against zero has none ...
+    assert outcome("Sales ratio", "Sales / Base", "0", "0.0").status == "disagreed"
+    # ... but a growth or margin against a negative base is not the script's to decide.
+    growth = outcome("EBITDA growth", "FY2024 / FY2023 - 1", "-10", "-5100.0")
+    assert growth.status == "not checked" and "fixes no convention" in growth.reason
+
+
+def test_cp1_the_rows_formula_chooses_ratio_or_growth():
+    # Revenue growth 2,000 / 1,600 - 1 = 0.25. Stated 1.25 (the ratio, not the change) now
+    # disagrees; it agreed when every form was accepted (review).
+    growth = FREE_ROWS | {"Revenue growth": ("FY2024 / FY2023 - 1", "2,000", "1,600", "1.25")}
+    assert cp1_by(cp1(growth))["Revenue growth (FY2024)"].status == "disagreed"
+    # A margin is a ratio, written as a decimal or in percent: 0.25 and 25.0 both agree.
+    for value in ("0.25", "25.0", "25.0%"):
+        margin = FREE_ROWS | {"EBITDA margin": ("EBITDA / Revenue", "500", "2,000", value)}
+        assert cp1_by(cp1(margin))["EBITDA margin (FY2024)"].status == "agreed", value
+    # `x 100` in the formula: percent only; 0.25 is then not the figure.
+    pct = FREE_ROWS | {"EBITDA margin": ("EBITDA / Revenue x 100", "500", "2,000", "0.25")}
+    assert cp1_by(cp1(pct))["EBITDA margin (FY2024)"].status == "disagreed"
+
+
+def test_cp1_a_figure_wrong_by_more_than_the_rounding_bound_still_disagrees():
+    # 25,068 / 3,813 = 6.5743; bound 0.01 + (0.5 + 6.574 x 0.5) / 3,813 = 0.01099: 6.58 agrees,
+    # 6.59 (out by 0.0157) does not.
+    name = "Total debt / unadjusted EBITDA"
+    for value, status in (("6.58", "agreed"), ("6.59", "disagreed")):
+        row = {name: ("Total debt / EBITDA", "25,068", "3,813", value)}
+        assert cp1_by(cp1(row))[f"{name} (FY2024)"].status == status, value
 
 
 def test_cp1_a_missing_input_is_not_checked_and_never_zero():
