@@ -682,6 +682,26 @@ CP3_MODE_BLOCK = (
     "The user selected the execution mode {label} (source `context`, module_options.cp3_mode). "
     "Use it at Step 1; do not choose another.\n\n"
 )
+# CP-6 on every pathway that runs it (owner, 2026-11-15: "module cp-6A within cp-6 should be fully
+# functional"; ruling 2026-11-15-full-assessment-cp3c-cp6a.md). Where the absorbed CP-6A phase's
+# decision goes; `posture_issues` refuses a handoff without it. The method itself is unchanged.
+POSTURES = (
+    *("Include", "Avoid", "Resize-Reduce", "Resize-Increase", "Maintain-Hold"),
+    "Requires More Work",
+)
+POSTURE_HEADING = "Portfolio posture"
+CP6A_BLOCK = (
+    "Portfolio debate: the method's absorbed CP-6A phase is part of this run. Write its "
+    "registers T6E.4, T6E.6, T6E.7 and T6E.11 as you write the issuer debate's. Write its Final "
+    "Sizing Posture, Exact Portfolio Constraint and CIO Final Memo in one `## Findings` section "
+    f"headed exactly `### {POSTURE_HEADING}`, after `### Limitations`. Its first sentence is the "
+    "method's formulation and starts exactly `Final Sizing Posture: ` followed by one of "
+    f"{', '.join(POSTURES[:-1])} or {POSTURES[-1]}. The reader sentence rules apply to that "
+    "section, and each of its paragraphs that rests on a source or a supplied handoff ends with "
+    "its Basis line. Give the posture and the binding portfolio constraint as one of your Key "
+    "findings. A handoff without that section or that first sentence is refused unless the "
+    "module is blocked.\n\n"
+)
 DEEP_DEBATE_BLOCK = (
     "The user explicitly asks for a full debate (source `context`, "
     "module_options.cp6_deep_debate). Deep Debate Mode is ON.\n\n"

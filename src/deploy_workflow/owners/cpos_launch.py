@@ -117,6 +117,7 @@ from deploy_workflow.owners.cpos_launch_prompts import (
     CP1_CHECK_BLOCK,
     CP3_MODE_BLOCK,
     CP3_MODE_LABELS,
+    CP6A_BLOCK,
     CP8_BLOCK,
     CURRENCY_RULE,
     DATA_PASSAGE,
@@ -129,6 +130,8 @@ from deploy_workflow.owners.cpos_launch_prompts import (
     PEER_READER_BLOCK,
     PERIOD_REQUIRED_BLOCK,
     PERIOD_TABLE_BLOCK,
+    POSTURE_HEADING,
+    POSTURES,
     PRESENCE_RULE,
     PROSE_PASSAGES,
     READER_PERSONA,
@@ -170,6 +173,7 @@ from deploy_workflow.prose_checks import (
     DATA_MODULES,
     READER_HEADINGS,
     figure_issues,
+    findings_sentences,
     key_figures_issues,
     prose_issues,
 )
@@ -191,6 +195,7 @@ __all__ = [
     "CP1_CHECK_BLOCK",
     "CP3_MODE_BLOCK",
     "CP3_MODE_LABELS",
+    "CP6A_BLOCK",
     "CP8_BLOCK",
     "CURRENCY_CODES",
     "CURRENCY_RULE",
@@ -217,6 +222,8 @@ __all__ = [
     "PEER_READER_BLOCK",
     "PERIOD_REQUIRED_BLOCK",
     "PERIOD_TABLE_BLOCK",
+    "POSTURES",
+    "POSTURE_HEADING",
     "POST_BS",
     "PRESENCE_RULE",
     "PROSE_PASSAGES",
@@ -657,6 +664,32 @@ def register_issues(module: str, text: str) -> tuple[str, ...]:
     return (_MISSING_REGISTERS.format(ids=", ".join(missing), first=missing[0]),)
 
 
+_POSTURE = re.compile(rf"Final Sizing Posture: (?:{'|'.join(map(re.escape, POSTURES))})(?![\w-])")
+
+
+def posture_issues(module: str, text: str) -> tuple[str, ...]:
+    """CP-6's portfolio debate decision (`CP6A_BLOCK`): a `### Portfolio posture` section under
+    `## Findings` whose first sentence is the method's `Final Sizing Posture: <posture>`
+    formulation with one of its six postures, read with Markdown emphasis removed. None for any
+    other module or a blocked CP-6."""
+    if module != "CP-6" or _blocked_at_gate(text):
+        return ()
+    lines = findings_sentences(text, POSTURE_HEADING)
+    if not lines:
+        missing = (
+            "Write the portfolio debate's posture, binding constraint and memo under "
+            f"`### {POSTURE_HEADING}` in `## Findings`, after `### Limitations`."
+        )
+        return (missing,)
+    if not _POSTURE.match(re.sub(r"[*_`]", "", lines[0]).lstrip()):  # emphasis is not wording
+        unstated = (
+            f"Start `### {POSTURE_HEADING}` with the method's formulation `Final Sizing Posture: "
+            f"<posture>.`, the posture one of {', '.join(POSTURES)}."
+        )
+        return (unstated,)
+    return ()
+
+
 def upstream_scope_note(ordered: Sequence[str]) -> str:
     """What CP-5 is told about the handoffs it audits: the registers each module of the run planned
     before it was told not to write. Empty when the run has no CP-5 or none of them has a scope
@@ -1041,6 +1074,7 @@ def _prepare(  # noqa: PLR0913, PLR0915 - `prepare`'s body: one keyword per sett
             else "",
             bool(options.cp3_mode),
         ),
+        ("CP-6", CP6A_BLOCK, True),
         ("CP-6", DEEP_DEBATE_BLOCK, options.cp6_deep_debate),
         (
             "CP-8",
@@ -1230,6 +1264,7 @@ def checker(layout: MarkdownLayout) -> Check:
                 issues += chart_issues(text, route, money=money_unit(text))
         issues += _owned_issues(task.module_id, routes, text)
         issues += register_issues(task.module_id, text)
+        issues += posture_issues(task.module_id, text)
         return (*issues, *_forecast_issues(task, text))
 
     return check

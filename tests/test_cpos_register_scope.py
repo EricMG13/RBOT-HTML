@@ -47,8 +47,11 @@ CUT = {
         *("T5B.4", "T5B.5", "T5B.6", "T5B.7", "T5B.8"),
         *("T5.1", "T5.2", "T5.4", "T5.5", "T5.6", "T5.7", "T5.8", "T5.9"),
     ],
-    "CP-6": ["T6A.6", "T6A.11", "T6E.4", "T6E.6", "T6E.7", "T6E.11"],
+    # Owner, 2026-11-15 ("module cp-6A within cp-6 should be fully functional"): CP-6A's registers
+    # are written and checked again, although both runs' inventory rows still classify them CUT.
+    "CP-6": ["T6A.6", "T6A.11"],
 }
+RESTORED = {"CP-6": ["T6E.4", "T6E.6", "T6E.7", "T6E.11"]}
 # The medium run wrote four CP-1A registers under names, not ids (checked against that run's
 # `<!-- table-id: ... -->` tags: T2D.2, T2D.6, T2D.7, T2D.8).
 MEDIUM_NAMES = {
@@ -240,6 +243,24 @@ def test_every_scope_id_is_cut_in_every_inventory_row_of_both_runs(module):
         assert {cls for _, cls in mine} == {"CUT"}, (module, ident, mine)
 
 
+def test_the_restored_cp6a_registers_were_cut_by_rule_r1_and_are_now_required():
+    """Rule R1 would still cut them (every inventory row CUT); the owner restored them."""
+    rows = [r for r in inventory_rows() if r[1] == "CP-6"]
+    for ident in RESTORED["CP-6"]:
+        mine = {r[3] for r in rows if row_id(r[0], r[1], r[2]) == ident}
+        assert mine == {"CUT"}, ident
+        assert ident not in CUT["CP-6"]
+        assert ident in cpos_launch.required_registers("CP-6")
+    assert "T6E" not in dict(cpos_launch.method_sections("CP-6"))[f"{SCOPE_FILE} § CP-6"]
+
+
+def test_a_cp6_handoff_without_a_cp6a_register_is_refused_naming_it():
+    text = registers("CP-6", skip=("T6E.6",))
+    (issue,) = refusal("CP-6", text)
+    assert "Missing registers: T6E.6." in issue
+    assert refusal("CP-6", registers("CP-6")) == []
+
+
 def test_ownership_register_stays_out_while_a_delivery_reader_names_it():
     # handoff_delivery.py:488 reads the CP-1A section `Ownership and control` as table
     # `ownership_register`; rule R1's STOP: leave an id with a reader out of the list.
@@ -382,7 +403,9 @@ REQUIRED = {
     "CP-2G": ["T2H.3", "T2H.4", "T2H.5", "T2H.6", "T2H.7", "T2H.8"],
     "CP-3": ["T3.3", "T3.6", "T3B.1", "T3C.4"],
     "CP-5": ["T5B.1", "T5B.2", "T5B.3", "T5.3"],
-    "CP-6": ["T6A.4", "T6A.7"],
+    # The SKILL's `required_register_ids` (T6A.4; T6A.6; T6A.7; T6A.11; T6E.4; T6E.6; T6E.7;
+    # T6E.11) less the scope section's T6A.6 and T6A.11.
+    "CP-6": ["T6A.4", "T6A.7", "T6E.4", "T6E.6", "T6E.7", "T6E.11"],
 }
 NOTHING = "| Item | Value |\n| --- | --- |\n| Observed | Not supplied: nothing to report |\n\n"
 

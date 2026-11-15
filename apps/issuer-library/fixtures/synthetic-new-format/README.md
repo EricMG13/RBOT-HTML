@@ -10,6 +10,11 @@ blocked, so it is "Not assessable"). Supplied files: `NBG_2025-03-31_annual-repo
 `NBG_2024-12-31_Q4-results.pdf` and `NBG_2025-02-14_facility-agreement.pdf`; no handoff cites the
 facility agreement, so it is "Supplied, not used".
 
+`SYNTHETIC-CP-3C.md` and `SYNTHETIC-CP-6.md` (added 2026-11-15, when CP-3C and CP-6's portfolio
+debate joined the full credit assessment) are built into the run only with `--with-cp3c-cp6`. CP-6's
+handoff carries the portfolio debate's `### Portfolio posture` section and its registers T6E.4, T6E.6,
+T6E.7 and T6E.11; its other producers (security selection, evidence validation) are not in the run.
+
 Purpose: exercise the library's reader code (passages, Basis lines, figures, Overview selection,
 nearest dates) on the new format before any real run exists. Build a run folder from these files
 with `python apps/issuer-library/fixtures/build_synthetic_run.py --workspace <folder>`.
