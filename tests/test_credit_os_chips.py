@@ -4,7 +4,6 @@ Expected locators and flags are written here from the fixture text, not read fro
 import hashlib
 import json
 import os
-import sys
 import time
 from pathlib import Path
 
@@ -39,7 +38,6 @@ from deploy_workflow.credit_os_chips import (
 from deploy_workflow.library_index import build_library
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "apps/issuer-library"))
 import update_library
 from credit_os.store import workspace_store
 

@@ -28,7 +28,6 @@ from library_fixtures import (
 from test_credit_os_catalogue import CHARTS
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "apps/issuer-library"))
 import update_library
 
 pytestmark = pytest.mark.browser

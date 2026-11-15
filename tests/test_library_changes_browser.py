@@ -4,7 +4,6 @@ string below is literal text from them. Needs Google Chrome or Chromium; skipped
 
 import json
 import re
-import sys
 from pathlib import Path
 
 import pytest
@@ -13,7 +12,6 @@ from test_credit_os_catalogue import CHARTS
 from test_library_page_browser import read_probe, visit
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "apps/issuer-library"))
 import update_library
 
 pytestmark = pytest.mark.browser

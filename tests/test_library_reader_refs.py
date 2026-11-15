@@ -12,7 +12,6 @@ import json
 import re
 import shutil
 import subprocess
-import sys
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
@@ -20,7 +19,6 @@ from typing import Any
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "apps/issuer-library"))
 from credit_os import store
 
 FIXTURES = ROOT / "apps/issuer-library/fixtures/synthetic-new-format"

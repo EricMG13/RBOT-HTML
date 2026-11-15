@@ -63,9 +63,12 @@ _DOCUMENTS = (
     "(`powershell -NoProfile -Command \"[Environment]::GetFolderPath('MyDocuments')\"`) "
     'do set "WORKSPACE=%%D\\FinalWorkflow"'
 )
-# The embeddable Python ignores PYTHONPATH, so engine\src is listed here (paths are relative to the
-# runtime folder): `-m deploy_workflow...` and the run page's launcher children both need it.
-PTH = "python313.zip\n.\nLib\\site-packages\n..\\src\nimport site\n"
+# The embeddable Python ignores PYTHONPATH and, started with a script, does not add the script's
+# folder, so the package's two import roots are listed here (paths are relative to the runtime
+# folder): engine\src holds deploy_workflow and deploy_vii, engine holds credit_os and
+# update_library. It is the package's equivalent of a checkout's `uv sync`; `-m deploy_workflow...`
+# and the run page's launcher children need both.
+PTH = "python313.zip\n.\nLib\\site-packages\n..\\src\n..\nimport site\n"
 _ROOT_ARGUMENT = [
     'set "ROOT=%~1"',
     'if not defined ROOT set "ROOT=%FINAL_WORKFLOW_WORKSPACE%"',
@@ -195,7 +198,7 @@ def bundle(target: Path, architecture: str | None) -> None:
             records["python"]["sha256"] == PYTHON[architecture]
             and {k: v["version"] for k, v in records["wheels"].items()} == PINS
         ):
-            (runtime / "python313._pth").write_text(PTH)  # An older build lacks engine\src.
+            (runtime / "python313._pth").write_text(PTH)  # An older build lacks an import root.
             print("Reusing the pinned Python engine for", architecture, flush=True)
             return
     clear_runtime(target, runtime, manifest)

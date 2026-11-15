@@ -2,16 +2,14 @@
 
 import hashlib
 import json
-import sys
 from fractions import Fraction
 from pathlib import Path
 
-import pytest
 import library_fixtures
+import pytest
 from library_fixtures import make_run, without_report
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "apps/issuer-library"))
 from credit_os import store
 
 MODULES = ("CP-0", "CP-1")

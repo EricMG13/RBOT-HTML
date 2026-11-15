@@ -28,10 +28,6 @@ HERE = Path(__file__).resolve().parent
 WEB = HERE / "credit_os" / "web"
 PACKAGED = (HERE / "src").is_dir()  # The Windows package keeps the engine's src beside this file.
 ROOT = HERE if PACKAGED else HERE.parents[1]
-if str(ROOT / "src") not in sys.path:
-    sys.path.insert(0, str(ROOT / "src"))
-if str(HERE) not in sys.path:
-    sys.path.insert(0, str(HERE))
 
 from credit_os.store import UnreadableFile, regular_chunks, workspace_store
 

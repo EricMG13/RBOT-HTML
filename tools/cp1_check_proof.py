@@ -14,12 +14,10 @@ import argparse
 import ast
 import hashlib
 import json
-import sys
 from decimal import Decimal
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
 
 from deploy_workflow.credit_os_catalogue import period_order
 from deploy_workflow.owners import cpos_cp1_check as cp1_check

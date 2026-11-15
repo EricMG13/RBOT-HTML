@@ -8,20 +8,17 @@ import hashlib
 import json
 import logging
 import re
-import sys
 import types
 from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from credit_os import store
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from deploy_workflow.owners import cp2g, cpos_forecast, cpos_launch
 from deploy_workflow.owners.cpos_forecast import model_files
-
-sys.path.insert(0, str(Path(__file__).parents[1] / "apps" / "issuer-library"))
-from credit_os import store
 
 FIXTURE = Path(__file__).parent / "fixtures" / "tdg_sol_high_2026_11_13"
 CP1 = (FIXTURE / "CP-1-tables.md").read_bytes()

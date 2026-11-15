@@ -3,18 +3,39 @@ name = "deploy-workflow"
 version = "0.1.0"
 description = "Tool-assisted analytical modules and rendered deliverables"
 requires-python = ">=3.13,<3.14"
-dependencies = ["pydantic==2.14.1", "pypdf==6.21.2", "openpyxl==3.1.5", "github-copilot-sdk==1.0.28"]
+dependencies = [
+    "pydantic==2.14.1",
+    "pypdf==6.21.2",
+    "openpyxl==3.1.5",
+    "github-copilot-sdk==1.0.28",
+    # The engine serves the library's brand files (signal) and rebuilds the library after a run
+    # (cpos_launch.update_library_at); the library imports the engine. The cycle is declared.
+    "issuer-library",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.5,<0.13"]
+build-backend = "uv_build"
 
 [tool.uv]
-package = false
 required-version = "==0.12.5"
+
+[tool.uv.build-backend]
+module-root = "src"
+module-name = ["deploy_workflow", "deploy_vii"]
+
+[tool.uv.workspace]
+members = ["apps/issuer-library"]
+
+[tool.uv.sources]
+issuer-library = { workspace = true }
 
 [dependency-groups]
 dev = ["pytest==9.1.1", "ruff==0.17.1", "mypy==2.4.0", "hypothesis==6.170.5"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src", "."]
+pythonpath = ["."]
 addopts = "-ra --strict-markers"
 markers = ["live: paid/provider execution; paused", "browser: real browser proof"]
 

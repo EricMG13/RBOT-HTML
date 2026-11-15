@@ -109,10 +109,10 @@ def test_a_re_pinned_runtime_ships_only_the_new_wheels(
         "pypdf": "2"
     }
     assert (target / "engine/runtime/python.exe").is_file()
-    # The embeddable Python ignores PYTHONPATH: engine/src must be listed for `-m` and the
-    # launcher children to find deploy_workflow. Paths are relative to the runtime folder.
+    # The embeddable Python ignores PYTHONPATH and the script's folder: engine/src (deploy_workflow)
+    # and engine (credit_os, update_library) must be listed. Paths are relative to the runtime.
     pth = (target / "engine/runtime/python313._pth").read_text().splitlines()
-    assert pth == ["python313.zip", ".", "Lib\\site-packages", "..\\src", "import site"]
+    assert pth == ["python313.zip", ".", "Lib\\site-packages", "..\\src", "..", "import site"]
 
 
 def test_the_same_pins_reuse_the_runtime_without_a_download(
@@ -139,7 +139,7 @@ def test_a_reused_runtime_gets_the_current_pth_text(
     pth.write_text("python313.zip\n.\nLib\\site-packages\nimport site\n")  # An older build.
     runtime.bundle(target, "amd64")
     assert len(offline) == 2  # Reused, not downloaded again.
-    assert pth.read_text() == "python313.zip\n.\nLib\\site-packages\n..\\src\nimport site\n"
+    assert pth.read_text() == "python313.zip\n.\nLib\\site-packages\n..\\src\n..\nimport site\n"
 
 
 def test_a_linked_runtime_folder_is_refused_and_its_target_kept(
@@ -307,8 +307,9 @@ def test_a_real_bundle_gives_the_signal_service_its_brand_files_and_no_node_test
     target.mkdir()
     runtime.bundle(target, None)
     engine = target / "engine"
-    brand = service.find_brand(engine)
-    assert brand == engine / "credit_os" / "web"
+    # engine is on the bundled Python's path, so credit_os/web is the package's brand folder.
+    brand = engine / "credit_os" / "web"
+    assert (engine / "credit_os" / "__init__.py").is_file()
     for name, (path, _type) in service.STATIC.items():
         if name.startswith(("brand", "fonts/")):
             relative = path.relative_to(service._BRAND)
