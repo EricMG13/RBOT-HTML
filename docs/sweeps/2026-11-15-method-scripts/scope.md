@@ -33,9 +33,57 @@ CP-3C's `### Funding gap` table is new: no CP-3C register holds the horizon, the
 terms or the gap the script owns (T3D.3 is qualitative). If the owner does not want the table,
 remove `CP3C_NOTE` and the check records every CP-3C figure as not checked.
 
+The owner modules `owners/cp2d.py` and `owners/cp3c.py` (the Deploy VII journal path) hold older
+hand-written calculations of the same quantities and are not wired in. Where they differ from the
+scripts: `cp2d` derives a run-rate annual flow (cash from operations + investing + financing - net
+debt issuance) and counts months until cash plus undrawn revolver reaches a minimum cash, in
+Decimal to one place (half up), over a 1 to 60 month horizon with dated maturities;
+`liquidity_bridge.py` sums the method's eight signed bridge components over the 12-month bridge,
+has no minimum cash, and gives Months to Empty as beginning accessible liquidity over the monthly
+burn, in floats to two places, none when the burn is not positive. `cp3c` applies resources
+sequentially at each maturity (base less minimum cash, plus the run-rate flow to that month, less
+amortisation and principal already paid) and has no rule for a facility that expires or is
+uncommitted; `funding_gap.py` takes one window: maturities due within it against cash, the undrawn
+part of committed facilities that outlive it, and forecast free cash flow, the gap floored at 0,
+with a currency guard.
+
+Cost: a disagreement costs a repair write inside the module's call (at most three writes,
+`MAX_WRITES`), under the run's USD cap. Worst case per checked module: two extra writes; a module
+whose figure still disagrees after them fails acceptance like any other unresolved issue. A
+script failure or an unreadable register is "not checked" and costs nothing. The two notes add
+2,029 characters to each of `credit_snapshot`, `relative_value` and `covenant_refinancing`.
+
 ## The rest, in the order proposed
 
-(The per-module table is being compiled from the skills and the retained-run inventory; it follows in the next commit.)
+Pathways from `PATHWAY_MODULES` (`short_snapshot` deactivated). Evidence: the two retained Sol
+runs are TransDigm `credit_snapshot` runs of 2026-11-13, written before the register cut; no
+other pathway's module has a retained handoff. "Checkable now" means the inputs and the stated
+figure are in registers the module writes in this transport; the extraction rules still need
+synthetic proof as for CP-2D and CP-3C, and real column names are unproven until a paid run.
+
+| # | Module (pathways) | Script | What it could check here | Input and output registers | Cut by the scope file? | Evidence | Verdict |
+|---|---|---|---|---|---|---|---|
+| 1 | CP-2G (credit_snapshot, covenant_refinancing, distressed_restructuring) | `credit_metrics.py` | KPIs per case and period; the debt and cash roll-forward residual | T2H.4 `EBITDA`, `FCF`; T2H.5 opening, issuance, repayment, interest, closing debt and cash -> T2H.6 gross and net leverage, coverage, FCF/debt | No (only T2H.1, T2H.2, T2H.9 are cut) | Both Sol runs wrote T2H.4, T2H.5 and T2H.6 (high run: T2H.5 read by CP-5, T2H.6 by CP-3) | Checkable now; needs a rule for the combined `x/y` cells |
+| 2 | CP-4 (credit_snapshot, covenant_refinancing, distressed_restructuring) | `covenant_headroom.py` | Signed covenant headroom and status by test type | T4C.4 `Test Type`, `Threshold`, `Current Basis` -> `Headroom`, `Status` (CP-4A phase; `REF_CP-4A_STEPS.md`) | No CP-4 section | CP-4 was blocked in both Sol runs (no legal documents); synthetic only | T4C.4 checkable now; basket capacity (T4C.5) and maximum additional debt have their inputs only in `Formula` / `Current Input` text |
+| 3 | CP-1 (every pathway) | `credit_metrics.py` | LTM derivation and the KPIs `cpos_cp1_check` does not recompute | T4.4 to T4.6 and `Net debt data` -> T4.8 `Full-Year Component`, `Current Stub`, `Prior-Year Stub`, `Derived Value`; T4.9 free-name rows `Numerator Value`, `Denominator Value`, `Calculated Value` | No CP-1 section | Fixture `tdg_sol_high_2026_11_13/CP-1-tables.md` (older layout, no T4.8/T4.9) | Checkable now; `cpos_cp1_check` already recomputes the six fixed T4.9 rows, so this adds T4.8 and the free-name rows. The fixture shows the trap: leverage on principal (25,068 / 3,813 = 6.57) against carrying value (24,880, 6.53), so an operand's identity must be bound |
+| 4 | Every module | `completeness_check.py` | Columns, row counts, placeholder cells (below) | The module's own Output profile | Its contract includes the cut registers | Appendix inventory, both Sol runs | Needs the wrapper below |
+| 5 | CP-4C (distressed_restructuring) | `recovery_waterfall.py` | Allocation by class, recovery %, fulcrum, low/base/high | T4E.2 claims (`principal`, `accrued`, `PIK`, `priority`); T4E.3 `scenario`, `EV` -> T4E.5 allocation, T4E.6 fulcrum, T4E.7 recovery; launcher `Chart data: recovery by class` and `value allocation` | No | None | Checkable now for a single-pool allocation (the script does not split by entity) |
+| 6 | CP-1C (relative_value, distressed_restructuring) | `peer_statistics.py` | Peer min, max, median, Q1, Q3, average under the minimum-N gates; implied EV | T4.3 to T4.5 values and comparability status, T4.7 outliers -> T4.6 `Peer Avg`, `Median`, `Min`, `Max`, `Q1`, `Q3`, `N`; T4.10 implied EV | No | None | Checkable now once the owner fixes the quartile convention (the method names none; the script's is inclusive) |
+| 7 | CP-2H (distressed_restructuring) | `covenant_headroom.py` (`trigger_headroom`) | Signed rating-trigger headroom by direction | T2R.4 `trigger direction`, `threshold`, case or period value -> `headroom`, `status` | No | None | Point headroom checkable now; "sustained" needs an observation window no column holds |
+| 8 | CP-1B (earnings_update) | `credit_metrics.py` (`growth`) | Percentage change only (absolute change is not in `compute`) | T4.6 `Prior Value`, `Current Value` -> `% Change`; T4.4 YoY columns | No | None | Checkable now (T4.4 only where its YoY pair can be identified) |
+| 9 | CP-2E (every pathway but lite_credit_assessment) | `rate_fx_sensitivity.py` | Unhedged floating debt and share; +100 bp cash-interest impact | T2F.4 `Total debt`, `Gross floating-rate debt`, `Hedged floating-rate debt` -> T2F.4 unhedged rows; T2F.5 `Estimated Cash Impact` | Yes: T2F.2, T2F.4, T2F.5 | Both Sol runs wrote T2F.4 and T2F.5 before the cut | Owner decision: restore T2F.4 and T2F.5 or leave unchecked; FX and cost inputs are free text |
+| 10 | CP-3 (credit_snapshot, relative_value, portfolio_decision) | `recovery_waterfall.py` | Recovery by class under each EV case; fulcrum movement | Claims T3B.2 `Amount`, `Seniority / Lien`, T3B.4 rank; EV cases: no register; outputs: none (T3B.6 is a label) | Yes: T3B.2, T3B.4, T3B.6, T3B.8, T3C.7 | High run wrote T3B.2 and T3B.6 before the cut | Owner decision: restore the cut registers and add an EV case table, or leave unchecked |
+| 11 | CP-3D (relative_value) | `bond_analytics.py` | YTM, YTW (and which leg), spread, break-even default | T3E.1, T3E.2, T3E.5; call prices, years to maturity and a numeric benchmark yield are not columns | No | None | Needs a new table like CP-3C's (owner decision); the engine refuses accrued interest and dated settlement |
+| 12 | CP-2G | `liquidity_bridge.py` | Bridge, burn, Months to Empty | No register holds the bridge components or the period | No | - | Needs a new table (owner decision); CP-2D's check covers the method's own bridge |
+| 13 | CP-4C | `funding_gap.py` | Funding gap | No CP-4C register holds maturities, cash or facilities | No | - | Needs a new table (owner decision) |
+| - | CP-2H | `bond_analytics.py` | - | The method names it nowhere | - | - | Not applicable: drop |
+| - | CP-0, CP-1A, CP-1D, CP-2, CP-2A, CP-5, CP-6, CP-DR, CP-L10 | shared scripts only | Rows 4 and the `validate_handoff.py` section | - | - | - | `confidence_score.py` is already re-implemented (`deploy_workflow.confidence`); `validate_research.py` (CP-DR) is not archived: it needs `credit_os_v` |
+
+Proposed order: 1, 2, 3 (the full credit assessment's modules, CP-2G with real register
+evidence first), then 4 (it touches every module, so prove it against the retained inventory
+before it refuses anything), then 5 to 8 (pathways with no retained run), then the owner
+decisions 9 to 13. One module at a time, each as CP-2D was done: map the inputs, synthetic cases
+worked by hand, the note in the module's instructions, the checker, the record.
 
 ## `completeness_check.py` (shared, cp-os version)
 
