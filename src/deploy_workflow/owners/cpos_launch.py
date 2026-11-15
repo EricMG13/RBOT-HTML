@@ -1302,7 +1302,8 @@ def checker(layout: MarkdownLayout) -> Check:
         issues += _owned_issues(task.module_id, routes, text)
         issues += register_issues(task.module_id, text)
         issues += posture_issues(task.module_id, text)
-        issues += method_scripts.issues(task.module_id, text)
+        upstream = method_scripts.upstream_texts(task.handoffs)  # a copied figure is compared
+        issues += method_scripts.issues(task.module_id, text, upstream)
         return (*issues, *_forecast_issues(task, text))
 
     return check

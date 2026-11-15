@@ -40,6 +40,7 @@ from deploy_workflow.method_scripts import (
     Loaded,
     Outcome,
     Table,
+    Upstream,
     _Claim,
     _judged,
     _label,
@@ -451,7 +452,7 @@ def _rolls(model: _Model, loaded: Loaded) -> list[Outcome]:
     return out
 
 
-def check(text: str, loaded: Loaded) -> list[Outcome]:
+def check(text: str, loaded: Loaded, _upstream: Upstream) -> list[Outcome]:
     """Leverage, coverage and FCF/debt per period and case (T2H.6) and the debt roll-forward
     (T2H.5), each recomputed by the script from T2H.4 and T2H.5."""
     try:

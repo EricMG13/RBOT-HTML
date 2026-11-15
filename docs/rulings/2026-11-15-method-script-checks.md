@@ -248,8 +248,7 @@ has no enterprise value to read; 2 raise the `earnings_update` ceiling for CP-1'
 hedged above gross; 4 the cost of the restores): "1. cp-dr or cp-1c is supposed to do by default
 using peer multiples 2. approved 3. approved 4. its is fine".
 
-1. CP-3: under investigation (where the method puts an enterprise value from peer multiples).
-   Until then CP-3 is not asked for the table.
+1. CP-3: investigated and asked back (below, "CP-3's enterprise value"); then built.
 2. CP-1's note is sent (`CP1_NOTE`, 500 characters, in every pathway). The `earnings_update`
    ceiling (`INSTRUCTION_BUDGET` in `tests/test_cpos_launch.py`) is the owner's 546,000 plus that
    measured 500: 546,500 (545,907 before, 546,407 after on the test input). No other ceiling moved.
@@ -260,6 +259,53 @@ using peer multiples 2. approved 3. approved 4. its is fine".
    checked. Only that refusal is sent back: every other refusal of a script (a negative amount, a
    test type it does not read, a missing input) stays "not checked".
 4. No action.
+
+## CP-3's enterprise value (owner, 2026-11-15: "1. yes 2. yes 3. yes")
+
+What the method says (archive; Deploy-V `c4d2e35` and cp-os `b57a344`, read only, the same
+revisions): CP-1C computes an implied EV range in T4.10 (REF_CP-1C_06C: "Low = minimum peer multiple
+x borrower metric; Median = median ...; High = maximum ...") and twice forbids its use as a recovery
+input (06C: "indicative context ONLY, NOT recovery estimate (recovery belongs to CP-4 / CP-4A)";
+Valuation Discipline 8). CP-DR's peer pack carries no multiple (TDR.6: revenue, ebitda, debt,
+interest, ffo). CP-4B's runbook: "CP-3A owns the dollar waterfall"; no CP-3 register states an EV.
+No text names a default multiple. In this transport CP-3 receives CP-1C only in `relative_value`.
+The real cp-os TransDigm run of 2026-11-04 had no EV anywhere: "`recovery_waterfall.py` was not run
+because no enterprise value is sourced".
+
+Asked (1) whether CP-3 may take T4.10's Low, Median and High as its EV cases where it receives
+CP-1C, overriding CP-1C's rule for CP-3's use only; (2) whether, without CP-1C or a usable multiple,
+CP-3 states its own cases with their basis; (3) whether wiring CP-1C upstream of CP-3 everywhere
+waits for the pathway restructure, the owner answered "1. yes 2. yes 3. yes". The coordinating
+session reads 3 as the pathway part waiting; no pathway's modules or order changed.
+
+- Override, for CP-3's use only: CP-1C's 06C and Valuation Discipline 8 do not stop CP-3 from
+  taking T4.10's implied EV range as its enterprise-value cases. CP-1C's own text and handoff are
+  unchanged (an archived method file). CP-3's note says the implied EV is indicative, not a
+  valuation, and that the recoveries carry that limitation, for its limitations paragraph.
+- CP-3 is asked for `### Recovery waterfall` (`CP3_NOTE`, 1,274 characters): `Enterprise value`,
+  `EV multiple`, `EV metric` and `EV basis` rows per case (Low, Base, High), then costs, claims in
+  priority order with their recovery %, `Fulcrum`, `Residual to equity`. Where it was sent CP-1C's
+  T4.10, the cases are T4.10's Low, Median and High, the basis naming `CP-1C T4.10` and the method;
+  otherwise its own cases with their basis from the evidence it was given.
+- No supportable EV: each `Enterprise value` cell `Not supplied: <reason>`. Recorded as not checked
+  with the reason, never sent back: a recovery analysis with no defensible value must be able to
+  say so, as the 2026-11-04 run did, without the check pressing for a number.
+- Sent back (status `missing`): the table absent with no statement (unless CP-3 stopped at its
+  gate, `module_status: Blocked`), and an EV figure with no `EV basis`.
+- Checked per case: EV = multiple x metric by CP-1C's own `peer_statistics.implied_ev` (none on a
+  metric at or below zero), within the stated place plus the product's rounding bound; where the
+  basis names T4.10, the EV against the T4.10 CP-3 was actually sent (the checker passes each
+  module the upstream handoffs it was sent): a mis-copied figure disagrees when T4.10 states its
+  currency and scale; with none stated, only agreement is recorded (a different figure may be a
+  different scale); a T4.10 that states no figure for the case, cited anyway, disagrees; CP-1C not
+  sent is not checked. Then the waterfall as before.
+- Instruction size: CP-3 only, +1,274 characters in each of `credit_snapshot` (1,464,554 to
+  1,465,828 of 1,483,647), `relative_value` (1,059,482 to 1,060,756 of 1,071,000) and
+  `portfolio_decision` (940,681 to 941,955 of 955,500). No ceiling moved.
+- Known limits: T4.10's own layout (the SKILL's combined `Implied EV/Low/Median/High` or the step
+  file's separate columns) is read either way, but its units are the method's to state; CP-1C is
+  not asked for them. `credit_snapshot` and `portfolio_decision` have no CP-1C until the restructure,
+  so CP-3 states its own cases or none there.
 
 ## Status
 

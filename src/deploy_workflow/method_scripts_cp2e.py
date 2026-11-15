@@ -21,6 +21,7 @@ from deploy_workflow.method_scripts import (
     Loaded,
     Outcome,
     Table,
+    Upstream,
     _Claim,
     _judged,
     _label,
@@ -238,7 +239,7 @@ def _contradiction(exposure: _Exposure, error: ValueError) -> list[Outcome]:
     return [_HEDGE_PAIR("contradicted", stated=stated, unit=exposure.unit, reason=str(error))]
 
 
-def check(text: str, loaded: Loaded) -> list[Outcome]:
+def check(text: str, loaded: Loaded, _upstream: Upstream) -> list[Outcome]:
     """Unhedged floating-rate debt and its share of total debt (T2F.4) and the +100 bps
     cash-interest impact (T2F.5), each recomputed by the script from T2F.4's own rows."""
     tables = loaded.tables

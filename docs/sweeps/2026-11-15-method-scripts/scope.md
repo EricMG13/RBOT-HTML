@@ -61,7 +61,7 @@ module's mapping is `deploy_workflow.method_scripts_<module>`.
 | Module | Script | Registers read | Restored | Note sent |
 |---|---|---|---|---|
 | CP-2E | `rate_fx_sensitivity.py` | T2F.4, T2F.5 | T2F.4, T2F.5 | yes |
-| CP-3 | `recovery_waterfall.py` | a `### Recovery waterfall` table, if present | none (T3B.2, T3B.4, T3B.6 hold no input) | no: owner decision |
+| CP-3 | `recovery_waterfall.py`, `peer_statistics.py` | `### Recovery waterfall`; CP-1C's T4.10 as sent | none (T3B.2, T3B.4, T3B.6 hold no input) | yes (owner) |
 | CP-2G | `credit_metrics.py` | T2H.4, T2H.5, T2H.6 | none (never cut) | yes |
 | CP-4 | `covenant_headroom.py` | T4C.4 | none | yes |
 | CP-1 | `credit_metrics.py` | T4.8 LTM rows, T4.9 free-name rows | none | yes (ceiling raised, owner) |
