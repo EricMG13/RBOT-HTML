@@ -2,7 +2,9 @@
 
 The process holds the provider key and can start paid runs (USD 20 cap each), has no login and is
 reachable from other machines, so every request is hostile input. Plain ``http.server``; no
-framework. Every request is checked before any body byte is read:
+framework. The rules below that are not about one route are implemented once, in
+``deploy_workflow.http_base``, which Signal's service shares; this docstring is their
+specification. Every request is checked before any body byte is read:
 
 * ``Host`` must be exactly ``<host>:<port>`` as started (and ``localhost:<port>`` when the host is
   ``127.0.0.1``); otherwise 403. On port 80 the port may be left out of ``Host`` and ``Origin``.
@@ -93,28 +95,23 @@ from __future__ import annotations
 
 import argparse
 import html
-import ipaddress
-import json
 import logging
-import mimetypes
-import os
 import re
-import socket
 import sys
 import threading
 import time
 import urllib.parse
 from collections.abc import Sequence
 from datetime import UTC, datetime
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, BinaryIO, cast
 
+from deploy_workflow import http_base
+from deploy_workflow.http_base import Body, Reply, refuse
 from deploy_workflow.inbox import activity, runs, startup
 from deploy_workflow.inbox.layout import Layout
 from deploy_workflow.inbox.scheduler import Scheduler, Settings
-from deploy_workflow.platform_io import flags as flag_bits
-from deploy_workflow.platform_io import regular_open
 from deploy_workflow.run_start import prior, submissions
 from deploy_workflow.run_start.submissions import Answers
 
@@ -133,8 +130,6 @@ _POLICY = (
     "form-action 'none'; frame-ancestors 'none'"
 )
 _LIBRARY_POLICY = "connect-src 'none'; form-action 'none'; frame-ancestors 'self'"
-_JSON = "application/json; charset=utf-8"
-_FAILED = "the service failed; see its log"
 _UNKNOWN = "unknown submission"  # the text submissions raises for an id it does not hold
 _UNKNOWN_RUN = "unknown run"  # the text prior raises for a run id with no record
 _SUBMISSION = re.compile(r"/api/submissions/([^/]+)/(files|reading|summary|submit|carry)")
@@ -160,75 +155,18 @@ _RAIL_MARKER = b"<!--rail-signal-->"  # in the start page, right after the activ
 _HOSTNAME = re.compile(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?")
 
 
-class _ClientGone(Exception):
-    """The client's connection failed while its request body was being read."""
-
-
-class _Body:
-    """The request body, whose reads turn a reset or timeout of the client's connection into
-    ``_ClientGone``, so that the same errors raised elsewhere are not taken for a client leaving."""
-
-    def __init__(self, stream: Any) -> None:
-        self._stream = stream
-
-    def read(self, size: int = -1) -> bytes:
-        try:
-            return cast(bytes, self._stream.read(size))
-        except (ConnectionError, TimeoutError) as error:
-            raise _ClientGone(str(error)) from error
-
-
-class _Reply(Exception):  # control flow: it carries the response, not a failure
-    def __init__(self, status: int, body: Any, headers: dict[str, str] | None = None) -> None:
-        super().__init__(status)
-        self.status, self.body, self.headers = status, body, headers or {}
-
-
-def _refuse(status: int, text: str) -> _Reply:
-    return _Reply(status, {"error": text})
-
-
-class _Server(ThreadingHTTPServer):
-    daemon_threads = True
+class _Server(http_base.Server):
     scheduler: Scheduler
-    allowed_hosts: frozenset[str]
-    advertised_port: int = 0
     rail_signal: str = ""  # the validated rail anchor, or "" for none
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        self.active_connections = 0
-        self._count = threading.Lock()
-        super().__init__(*args, **kwargs)
-
-    def verify_request(self, request: Any, client_address: Any) -> bool:
-        with self._count:
-            if self.active_connections >= MAX_CONNECTIONS:
-                return False  # closed by the server loop with no handler thread
-            self.active_connections += 1
-        return True
-
-    def _release(self) -> None:
-        with self._count:
-            self.active_connections -= 1
-
-    def process_request(self, request: Any, client_address: Any) -> None:
-        try:
-            super().process_request(request, client_address)
-        except BaseException:
-            self._release()  # the handler thread never ran (the OS refused it), so it cannot
-            raise
-
-    def process_request_thread(self, request: Any, client_address: Any) -> None:
-        try:
-            super().process_request_thread(request, client_address)
-        finally:
-            self._release()
+    def connection_limits(self) -> tuple[int, int | None]:
+        return MAX_CONNECTIONS, None  # no ceiling per remote address
 
 
-class Handler(BaseHTTPRequestHandler):
+class Handler(http_base.Handler):
     timeout = SOCKET_TIMEOUT
     server_version = "RunStart"
-    sys_version = ""
+    logger = log
 
     # -- plumbing ---------------------------------------------------------------------------
 
@@ -240,121 +178,26 @@ class Handler(BaseHTTPRequestHandler):
     def _layout(self) -> Layout:
         return self._service.scheduler.layout
 
-    def log_message(self, format: str, *args: Any) -> None:
-        log.info("%s %s", self.address_string(), format % args)
-
     def do_GET(self) -> None:
-        self._serve(self._get)
+        self.serve_request(self._get)
 
     def do_POST(self) -> None:
-        self._serve(self._post)
+        self.serve_request(self._post)
 
     def do_DELETE(self) -> None:
-        self._serve(self._delete)
-
-    def _serve(self, route: Any) -> None:
-        try:
-            if not self.path.startswith("/"):
-                raise _refuse(400, "the request target must be a path")
-            self._check_origin()
-            if self.headers.get("Transfer-Encoding") is not None:
-                raise _refuse(411, "a body needs Content-Length")
-            route(urllib.parse.urlsplit(self.path))
-            raise _refuse(404, "not found")
-        except _Reply as reply:
-            self._send(reply)
-        except _ClientGone as gone:
-            # A client that reset or stalled mid-body is not a service failure: one info line. Only
-            # the reading of the request body raises this; the same errors met anywhere else (a
-            # timeout on the shared folder) fall to the 500 below.
-            log.info("%s %s: connection lost (%s)", self.command, self.path, gone)
-            self.close_connection = True
-        except Exception:
-            # The only catch-all, documented: whatever a handler raises becomes a 500 with fixed
-            # text. The traceback goes to the log; neither it, the exception text nor any
-            # environment value (the provider key) reaches the client. KeyboardInterrupt and
-            # SystemExit (BaseException) are not caught.
-            log.exception("%s %s", self.command, self.path)
-            self._send(_refuse(500, _FAILED))
-
-    def _check_origin(self) -> None:
-        hosts = self.headers.get_all("Host") or []
-        if len(hosts) != 1 or hosts[0] not in self._service.allowed_hosts:
-            raise _refuse(403, "this address is not the one the service was started on")
-        site = self.headers.get_all("Sec-Fetch-Site")
-        if site is not None and site not in (["same-origin"], ["none"]) and not self._navigation():
-            raise _refuse(403, "the request came from another site")
-        origins = self.headers.get_all("Origin") or []
-        acceptable = [f"http://{hosts[0]}"]
-        if self._service.advertised_port == 80 and hosts[0].endswith(":80"):
-            acceptable.append(f"http://{hosts[0][:-3]}")  # browsers leave the default port out
-        if (self.command != "GET" or origins) and not (
-            len(origins) == 1 and origins[0] in acceptable
-        ):
-            raise _refuse(403, "the request did not come from the service's own page")
-
-    def _navigation(self) -> bool:
-        """A top-level navigation to a document: only a GET with both fetch-metadata values."""
-        return (
-            self.command == "GET"
-            and self.headers.get_all("Sec-Fetch-Mode") == ["navigate"]
-            and self.headers.get_all("Sec-Fetch-Dest") == ["document"]
-        )
-
-    def end_headers(self) -> None:
-        # Here, not in _send, so the replies http.server writes itself (501, 400, 414) carry them.
-        self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("Cross-Origin-Resource-Policy", "same-origin")
-        super().end_headers()
-
-    def _send(self, reply: _Reply) -> None:
-        if isinstance(reply.body, bytes):
-            data = reply.body
-            headers = reply.headers
-        else:
-            data = json.dumps(reply.body, ensure_ascii=False).encode("utf-8")
-            headers = {"Content-Type": _JSON, "Cache-Control": "no-store", **reply.headers}
-        try:
-            self.send_response(reply.status)
-            self.send_header("Content-Length", str(len(data)))
-            for name, value in headers.items():
-                self.send_header(name, value)
-            self.end_headers()
-            if self.command != "HEAD":
-                self.wfile.write(data)
-        except OSError as error:  # the peer went away or stalled: nothing more can be said to it
-            log.info("%s %s: reply not delivered (%s)", self.command, self.path, error)
-
-    def _length(self) -> int:
-        """``Content-Length`` as a number; 411 when absent, 400 when it is no length."""
-        values = self.headers.get_all("Content-Length") or []
-        if self.headers.get("Transfer-Encoding") is not None or not values:
-            raise _refuse(411, "a body needs Content-Length")
-        text = values[0].strip()
-        if len(values) != 1 or not (text.isascii() and text.isdigit()) or len(text) > 15:
-            raise _refuse(400, "Content-Length is not a length")
-        return int(text)
+        self.serve_request(self._delete)
 
     def _json_body(self) -> Any:
-        length = self._length()
-        if length > MAX_JSON:
-            raise _refuse(413, f"a request body is at most {MAX_JSON // 1024} KiB")
-        data = _Body(self.rfile).read(length)
-        if len(data) != length:
-            raise _refuse(400, "the request body ended early")
-        try:
-            return json.loads(data.decode("utf-8"))
-        except (ValueError, RecursionError):  # bad UTF-8, bad JSON, or nesting past the parser
-            raise _refuse(400, "the request body is not valid JSON") from None
+        return self.json_body(MAX_JSON)  # any one JSON value: each route checks its own shape
 
     def _name(self, query: str) -> str:
         try:
             found = urllib.parse.parse_qs(query, keep_blank_values=True, errors="strict")
         except UnicodeDecodeError:
-            raise _refuse(400, "the file name is not valid UTF-8") from None
+            raise refuse(400, "the file name is not valid UTF-8") from None
         names = found.get("name", [])
         if len(names) != 1:
-            raise _refuse(400, "the request needs exactly one name")
+            raise refuse(400, "the request needs exactly one name")
         return names[0]
 
     # -- routes -----------------------------------------------------------------------------
@@ -365,7 +208,7 @@ class Handler(BaseHTTPRequestHandler):
             page = startup.FORM.read_bytes().replace(
                 _RAIL_MARKER, self._service.rail_signal.encode("ascii")
             )
-            raise _Reply(
+            raise Reply(
                 200,
                 page,
                 {
@@ -375,25 +218,25 @@ class Handler(BaseHTTPRequestHandler):
                 },
             )
         if path.startswith(_LIBRARY):
-            self._file(self._layout.engine / "library", path[len(_LIBRARY) :], direct=False)
+            raise self._file(self._layout.engine / "library", path[len(_LIBRARY) :], direct=False)
         if path == "/activity.js":
-            self._file(self._layout.engine, "activity.js", direct=True)
+            raise self._file(self._layout.engine, "activity.js", direct=True)
         found = _SUBMISSION.fullmatch(path)
         if found and found[2] == "reading":
-            raise _Reply(200, self._guarded(lambda: submissions.reading(self._layout, found[1])))
+            raise Reply(200, self._guarded(lambda: submissions.reading(self._layout, found[1])))
         inputs = _RUN_INPUTS.fullmatch(path)
         if inputs:
-            raise _Reply(200, self._guarded(lambda: prior.inputs(self._layout, inputs[1])))
+            raise Reply(200, self._guarded(lambda: prior.inputs(self._layout, inputs[1])))
         issuer = _ISSUER.fullmatch(path)
         if issuer:
-            raise _Reply(200, prior.issuer(self._layout, issuer[1]))
+            raise Reply(200, prior.issuer(self._layout, issuer[1]))
         run = _RUN.fullmatch(path)
         if run:
-            raise _Reply(200, self._run(run[1]))
+            raise Reply(200, self._run(run[1]))
 
     def _post(self, url: urllib.parse.SplitResult) -> None:
         if url.path == "/api/submissions":
-            raise _Reply(200, {"id": self._guarded(lambda: submissions.new(self._layout))})
+            raise Reply(200, {"id": self._guarded(lambda: submissions.new(self._layout))})
         found = _SUBMISSION.fullmatch(url.path)
         if not found:
             return
@@ -402,7 +245,7 @@ class Handler(BaseHTTPRequestHandler):
             self._upload(sid, self._name(url.query))
         if action == "summary":
             answers = self._json_body()
-            raise _Reply(200, self._guarded(lambda: self._summary(sid, answers)))
+            raise Reply(200, self._guarded(lambda: self._summary(sid, answers)))
         if action == "submit":
             self._submit(sid, self._json_body())
         if action == "carry":
@@ -413,7 +256,7 @@ class Handler(BaseHTTPRequestHandler):
         if found and found[2] == "files":
             name = self._name(url.query)
             self._guarded(lambda: submissions.remove_file(self._layout, found[1], name))
-            raise _Reply(200, {"name": name})
+            raise Reply(200, {"name": name})
 
     def _guarded(self, action: Any) -> Any:
         """The result of ``action``; a ``Refused`` becomes its 400 (404 for an unknown id)."""
@@ -421,21 +264,21 @@ class Handler(BaseHTTPRequestHandler):
             return action()
         except submissions.Refused as refusal:
             missing = str(refusal) in (_UNKNOWN, _UNKNOWN_RUN)
-            raise _refuse(404 if missing else 400, str(refusal)) from None
+            raise refuse(404 if missing else 400, str(refusal)) from None
 
     def _upload(self, sid: str, name: str) -> None:
-        length = self._length()
+        length = self.content_length()
         stored = self._guarded(
             lambda: submissions.add_file(
-                self._layout, sid, name, cast(BinaryIO, _Body(self.rfile)), length
+                self._layout, sid, name, cast(BinaryIO, Body(self.rfile)), length
             )
         )
-        raise _Reply(200, {"name": stored})
+        raise Reply(200, {"name": stored})
 
     def _carry(self, sid: str, body: Any) -> None:
         run = body.get("run") if isinstance(body, dict) else None
         if not isinstance(run, str) or not re.fullmatch(_RUN_ID, run):
-            raise _refuse(400, "the request needs the id of an earlier run")
+            raise refuse(400, "the request needs the id of an earlier run")
 
         def copy() -> dict[str, list[str]]:
             _, folder = prior.source(self._layout, run)
@@ -443,7 +286,7 @@ class Handler(BaseHTTPRequestHandler):
                 raise submissions.Refused(_NO_FILES)
             return submissions.carry(self._layout, sid, folder)
 
-        raise _Reply(200, self._guarded(copy))
+        raise Reply(200, self._guarded(copy))
 
     def _summary(self, sid: str, answers: Any) -> dict[str, Any]:
         settings = self._service.scheduler.settings
@@ -451,7 +294,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _submit(self, sid: str, body: Any) -> None:
         if not isinstance(body, dict) or not isinstance(body.get("digest"), str):
-            raise _refuse(400, "the request needs the answers and the digest of the summary")
+            raise refuse(400, "the request needs the answers and the digest of the summary")
         record = self._guarded(
             lambda: self._service.scheduler.submit(
                 sid,
@@ -459,12 +302,12 @@ class Handler(BaseHTTPRequestHandler):
                 body["digest"],  # checked by submit
             )
         )
-        raise _Reply(200, {"run": record.id, "status": record.status})
+        raise Reply(200, {"run": record.id, "status": record.status})
 
     def _run(self, run_id: str) -> dict[str, Any]:
         record = next((r for r in runs.load_all(self._layout) if r.id == run_id), None)
         if record is None:
-            raise _refuse(404, "unknown run")
+            raise refuse(404, "unknown run")
         settings = self._service.scheduler.settings
         shown = activity.snapshot(self._layout, [record], cap=settings.cap, now=datetime.now(UTC))[
             "runs"
@@ -492,81 +335,10 @@ class Handler(BaseHTTPRequestHandler):
             return ""
         return f"index.html#W-Report/history?c={urllib.parse.quote(run_id, safe='')}"
 
-    def _file(self, base: Path, relative: str, *, direct: bool) -> None:
-        """Serve a regular file inside ``base``; anything else is a 404.
-
-        The final path is decided first (``index.html`` appended for a folder), then resolved with
-        links followed, and that resolved path is what is checked and read. ``direct`` also
-        requires the file to sit in ``base`` itself.
-        """
-        root = base.resolve()
-        try:
-            wanted = root / urllib.parse.unquote(relative, errors="strict").lstrip("/")
-            if wanted.resolve().is_dir():
-                wanted = wanted / "index.html"
-            target = wanted.resolve()
-            inside = target.is_relative_to(root) and (not direct or target.parent == root)
-            data = _read_regular(target) if inside else None
-            inside = data is not None
-        except (UnicodeDecodeError, ValueError, OSError):  # not UTF-8, a NUL, a loop of links
-            inside = False
-        if not inside:
-            raise _refuse(404, "not found")
-        kind = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
-        raise _Reply(
-            200,
-            cast(bytes, data),
-            {
-                "Content-Type": kind,
-                "Content-Security-Policy": _LIBRARY_POLICY,
-                "X-Frame-Options": "SAMEORIGIN",
-            },
-        )
-
-
-def _read_regular(path: Path) -> bytes | None:
-    """The bytes of ``path`` read from one handle, or None when it is not a regular file.
-
-    The handle is opened by ``platform_io.regular_open`` (binary where the platform has the flag,
-    without following a link, without waiting on a FIFO) and its own ``fstat`` decides, so a file
-    swapped for a link after the path was checked is not read."""
-    # O_NONBLOCK: opening a FIFO must not wait for a writer (it would hold this handler's thread).
-    flags = flag_bits("O_RDONLY", "O_NOFOLLOW", "O_CLOEXEC", "O_NONBLOCK")
-    try:
-        fd = regular_open(
-            path, flags
-        )  # adds O_BINARY where it exists; refuses a link or a non-file
-    except (FileNotFoundError, NotADirectoryError, IsADirectoryError):
-        return None
-    except OSError as error:  # a link where O_NOFOLLOW forbids it (ELOOP), or not readable
-        log.info("library file %s not served: %s", path.name, error)
-        return None
-    with os.fdopen(fd, "rb") as handle:  # the handle owns the descriptor now
-        return handle.read()
-
-
-def _wildcard(host: str) -> bool:
-    """True when ``host`` is empty or resolves to an address that means every interface."""
-    if not host:
-        return True
-    try:
-        found = socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)
-    except (socket.gaierror, UnicodeError):
-        return False  # not an address: binding it fails with its own message
-    for *_, sockaddr in found:
-        address = ipaddress.ip_address(str(sockaddr[0]).partition("%")[0])
-        mapped = getattr(address, "ipv4_mapped", None)
-        if address.is_unspecified or (mapped is not None and mapped.is_unspecified):
-            return True
-    return False
-
-
-def _hosts(host: str, port: int) -> frozenset[str]:
-    names = [host, "localhost"] if host == "127.0.0.1" else [host]
-    allowed = {f"{name}:{port}" for name in names}
-    if port == 80:
-        allowed.update(names)  # a browser leaves the default port out of Host
-    return frozenset(allowed)
+    def _file(self, base: Path, relative: str, *, direct: bool) -> Reply:
+        """A library file's reply: its page may not call this API and is framed only by itself."""
+        headers = {"Content-Security-Policy": _LIBRARY_POLICY, "X-Frame-Options": "SAMEORIGIN"}
+        return http_base.contained_file(base, relative, direct=direct, headers=headers, logger=log)
 
 
 def signal_link(url: str) -> str:
@@ -613,9 +385,7 @@ def make_server(
     link = signal_link(signal_url) if signal_url else ""  # a bad value raises before any socket
     server = _Server((host, port), Handler)
     server.rail_signal = _rail_anchor(link) if link else ""
-    port = server.server_address[1]
-    server.scheduler, server.allowed_hosts = scheduler, _hosts(host, port)
-    server.advertised_port = port
+    server.scheduler = scheduler
     return server
 
 
@@ -642,8 +412,8 @@ def _refusal(args: argparse.Namespace) -> str | None:
         return "--port must be from 0 to 65535"
     if args.max_running < 1 or args.max_per_day < 1:
         return "--max-running and --max-per-day must be at least 1"
-    if _wildcard(args.host):
-        return "--host: pass this machine's own address, not 0.0.0.0 (no Host header would match)"
+    if http_base.wildcard(args.host):
+        return http_base.WILDCARD_MESSAGE
     return None
 
 
