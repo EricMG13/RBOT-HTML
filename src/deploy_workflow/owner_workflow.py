@@ -16,20 +16,15 @@ resume.
 
 Errors (G7): `invoke`, `read_inputs`, `submit_review`, `publish` and `write_receipt` retain an
 exception that is not a `WorkflowError` or `SourceError` as an `InternalError` fault under
-`faults/` and raise it again unchanged. `serve_json_lines` no longer converts internal errors to
-`bad_arguments` or `internal_error`: it answers only malformed requests (`bad_arguments`) and
-expected refusals, and an internal error ends the stream. A run that ended on an internal error
-therefore has a `faults/` record and none from the transport has a `run.json`. In the loop (O5) an
-internal error in a tool call (`_caught`) ends the run `stopped` with a `run.json`; one raised
-where `run_pathway` calls `publish` or `write_receipt` itself propagates, with the `faults/`
-record and no `run.json`.
+`faults/` and raise it again unchanged, so a run that ended on an internal error has a `faults/`
+record. The JSON-lines transport (`serve_json_lines`, `python -m deploy_workflow.owner_workflow`)
+was removed: nothing invoked it. `open` still refuses a retained run it served (`transport`
+marker). In the loop (O5) an internal error in a tool call (`_caught`) ends the run `stopped`
+with a `run.json`; one raised where `run_pathway` calls `publish` or `write_receipt` itself
+propagates, with the `faults/` record and no `run.json`.
 """
 
-import argparse
-import json
 import logging
-import math
-import sys
 import tempfile
 import unicodedata
 from collections import Counter
@@ -39,7 +34,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from threading import Lock
 from types import MappingProxyType, ModuleType
-from typing import Annotated, Any, Literal, NoReturn, TextIO
+from typing import Annotated, Any, Literal, NoReturn
 from uuid import uuid4
 
 from pydantic import Field, SerializerFunctionWrapHandler, model_serializer
@@ -94,7 +89,6 @@ from deploy_workflow.financial_workflow import (
     MAX_CALLS,
     MAX_INVOKES,
     MAX_LINE,
-    MAX_MESSAGES,
     FinancialBinding,
     ModelPublication,
     PublicationCall,
@@ -104,7 +98,6 @@ from deploy_workflow.financial_workflow import (
     _FrozenExecution,
     _hash,
     _historical,
-    _nonfinite_json,
     _parse,
     _projection,
     _put,
@@ -115,8 +108,7 @@ from deploy_workflow.financial_workflow import (
     _verify_promotion,
     expand_unit_maps,
 )
-from deploy_workflow.unit_maps import Expansion
-from deploy_workflow.host import MAX_ARGUMENT_DEPTH, SourceSession
+from deploy_workflow.host import SourceSession
 from deploy_workflow.model.redact import Redactor
 from deploy_workflow.owners import (
     cp0_attachments,
@@ -142,7 +134,8 @@ from deploy_workflow.owners import (
     cpl10,
 )
 from deploy_workflow.tools.source import SourceError
-from deploy_workflow.workflow import SourceEvidence, WorkflowError, read_line
+from deploy_workflow.unit_maps import Expansion
+from deploy_workflow.workflow import SourceEvidence, WorkflowError
 
 AUDIT = "owner-run-audit"
 SUPPORTED_ANALYTICAL = frozenset(
@@ -305,15 +298,6 @@ RefusalKind = Literal["not_authorized", "blocked", "superseded", "upstream_fault
 _FINANCIAL_MODULES = frozenset({"CP-0", "CP-1"})
 # G6: the bytes a `read_inputs` body may take: the bound a submitted payload already obeys.
 MAX_INPUT_BYTES: int = MAX_LINE
-# G7: a parser guard, not an argument bound. `serve_json_lines` reads no JSON nested deeper than
-# this (the request object is depth 1); past it the text is not a request: `bad_arguments`, never
-# a `RecursionError`. It lies above H05's deepest frame (`arguments` 210 levels deep, request
-# depth 212), which must reach the host so that the host refuses it with a retained receipt, and
-# well below the json parser's recursion limit. The argument bound is the host's
-# (`MAX_ARGUMENT_DEPTH`); at a step with no source session the transport applies it (`_checked`).
-MAX_JSON_DEPTH: int = 256
-# The host's argument bound in request depth: `arguments` is one level below the request object.
-_HOST_BOUND_REQUEST_DEPTH: int = MAX_ARGUMENT_DEPTH + 1
 # G7: the characters of an error's text an `InternalError` fault keeps.
 MAX_FAULT_DETAIL: int = 500
 _OPTIONAL_FAULT_FIELDS = (
@@ -786,14 +770,6 @@ class PublishCall(Contract):
 
     sequence: int
     publication_sha256: Hash
-
-
-class TransportMarker(Contract):
-    """Retained by `serve_json_lines` (kind `transport`): a run served over JSON-lines is not
-    resumed, as its participant and transport are held in memory only."""
-
-    participant: str
-    transport: Literal["bounded-json-lines/1"] = "bounded-json-lines/1"
 
 
 class OwnerFault(Contract):
@@ -3705,163 +3681,3 @@ def verify_owner_run_receipt(
         raise
     except (ValueError, OSError):
         raise WorkflowError("identity_mismatch") from None
-
-
-def _depth_of(value: Any) -> int:
-    """The nesting depth of parsed JSON (a scalar is 0, the request object 1), iteratively, so
-    that no input can make the measure itself recurse."""
-    deepest = 0
-    pending: list[tuple[Any, int]] = [(value, 0)]
-    while pending:
-        item, depth = pending.pop()
-        if type(item) is dict:
-            children: Sequence[Any] = list(item.values())
-        elif type(item) is list:
-            children = item
-        else:
-            continue
-        deepest = max(deepest, depth + 1)
-        pending.extend((child, depth + 1) for child in children)
-    return deepest
-
-
-def _finite_float(text: str) -> float:
-    value = float(text)
-    if not math.isfinite(value):
-        raise ValueError("Non-finite JSON number")
-    return value
-
-
-def _request_of(line: str) -> dict[str, Any]:
-    """The request a JSON-lines message carries, or `bad_arguments`: not valid JSON, a non-finite
-    number, an over-limit integer, nesting past `MAX_JSON_DEPTH` and a non-object are the
-    participant's malformed text, decided before dispatch (G7). Nothing else is caught."""
-    try:
-        request = json.loads(line, parse_constant=_nonfinite_json, parse_float=_finite_float)
-    except (ValueError, RecursionError):  # JSONDecodeError, non-finite, int digit limit
-        raise WorkflowError("bad_arguments") from None
-    if type(request) is not dict or _depth_of(request) > MAX_JSON_DEPTH:
-        raise WorkflowError("bad_arguments")
-    return request
-
-
-def _checked(request: dict[str, Any], *, sessionless: bool) -> dict[str, Any]:
-    """The key set of a known operation, and a `submit_review` payload that can be written as
-    UTF-8, or `bad_arguments`. At a step with a source session the shapes of an invoke frame
-    (`tool`, `arguments`), a lone surrogate inside it and its depth are the host's to refuse, with
-    a retained receipt (H05, item 88). At a step with none there is no host, so `sessionless`
-    makes the transport refuse what the host would (`_host_would_refuse`). An unknown operation
-    is left to the dispatch (`not_permitted`)."""
-    keys: dict[str, tuple[str, ...]] = {
-        "invoke": ("tool", "arguments"),
-        "submit_review": ("payload",),
-        "read_inputs": (),
-        "publish": (),
-        "write_receipt": (),
-    }
-    operation = request.get("operation")
-    shape = keys.get(operation) if isinstance(operation, str) else None
-    if shape is None:
-        return request
-    if set(request) != {"operation", *shape}:
-        raise WorkflowError("bad_arguments")
-    if operation == "submit_review" and not _utf8_text(request["payload"]):
-        raise WorkflowError("bad_arguments")
-    if operation == "invoke" and sessionless and _host_would_refuse(request):
-        raise WorkflowError("bad_arguments")
-    return request
-
-
-def _host_would_refuse(request: dict[str, Any]) -> bool:
-    """An invoke frame that `host._json_arguments` or its tool-name rule would refuse: `tool` not
-    a `str`, `arguments` not an object, a lone surrogate in `tool` or anywhere in `arguments`, or
-    `arguments` nested past `MAX_ARGUMENT_DEPTH`."""
-    tool, arguments = request["tool"], request["arguments"]
-    if type(tool) is not str or type(arguments) is not dict:
-        return True
-    if _depth_of(request) > _HOST_BOUND_REQUEST_DEPTH:
-        return True
-    return not _utf8_text(tool) or not _utf8_text(json.dumps(arguments, ensure_ascii=False))
-
-
-def _utf8_text(value: object) -> bool:
-    """`value` is a `str` that can be written as UTF-8 (no lone surrogate)."""
-    if type(value) is not str:
-        return False
-    try:
-        value.encode()
-    except UnicodeEncodeError:
-        return False
-    return True
-
-
-def serve_json_lines(
-    workflow: OwnerWorkflow,
-    reader: TextIO,
-    writer: TextIO,
-    *,
-    destination: Path,
-    participant: str,
-) -> None:
-    """Serve one participant over bounded JSON lines. A malformed request (`_request_of`,
-    `_checked`) answers `bad_arguments` and a `WorkflowError` or `SourceError` its own code. The
-    transport no longer converts internal errors (G7, Q7): an exception from a workflow method is
-    retained as an `InternalError` fault by that method and propagates, ending the stream; the
-    participant sees end of stream, not a label. Such a run has a `faults/` record and no
-    `run.json` (a loop run writes one only for an error in a tool call), and is recovered by a
-    rerun."""
-    if workflow._calls or workflow._submissions or workflow._reads:
-        raise WorkflowError("not_permitted")
-    workflow._participant, workflow._transport = participant, "bounded-json-lines/1"
-    _retain(workflow._store, "transport", TransportMarker(participant=participant))
-    for _ in range(MAX_MESSAGES):
-        line = read_line(reader, writer, MAX_LINE)  # "" also once a non-UTF-8 line is answered
-        if not line:
-            return
-        try:
-            if len(line) > MAX_LINE or not line.endswith("\n"):
-                raise WorkflowError("bad_arguments")
-            request = _checked(_request_of(line), sessionless=workflow._session is None)
-            operation = request.get("operation")
-            if operation == "invoke":
-                result = workflow.invoke(request["tool"], request["arguments"])
-            elif operation == "submit_review":
-                result = workflow.submit_review(request["payload"])
-            elif operation == "read_inputs":
-                result = workflow.read_inputs()
-            elif operation == "publish":
-                result = workflow.publish()
-            elif operation == "write_receipt":
-                receipt = workflow.write_receipt(destination)
-                result = {
-                    "status": "ok",
-                    "receipt_sha256": receipt.content_hash(),
-                    "snapshot_sha256": receipt.snapshot_sha256,
-                }
-            else:
-                raise WorkflowError("not_permitted")
-        except (WorkflowError, SourceError) as error:
-            result = {"status": "refused", "error_code": error.code}
-        writer.write(json.dumps(result, ensure_ascii=False, allow_nan=False) + "\n")
-        writer.flush()
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Bounded offline owner workflow")
-    parser.add_argument("--directory", type=Path, required=True)
-    parser.add_argument("--pack", type=Path, required=True)
-    parser.add_argument("--publication-directory", type=Path)
-    parser.add_argument("--receipt", type=Path, required=True)
-    parser.add_argument("--participant", required=True)
-    args = parser.parse_args()
-    pack = PreparedPack.model_validate_json(args.pack.read_bytes())
-    workflow = OwnerWorkflow.create(
-        args.directory, pack, publication_directory=args.publication_directory
-    )
-    serve_json_lines(
-        workflow, sys.stdin, sys.stdout, destination=args.receipt, participant=args.participant
-    )
-
-
-if __name__ == "__main__":
-    main()
