@@ -1,7 +1,7 @@
 """The portfolio workbook in a CP-OS run (ruling 2026-11-15-full-assessment-portfolio-workbook).
 
-The full credit assessment and the portfolio decision collect the fund's workbook: its mandate,
-exposures and compliance limits in the layout of the portfolio template
+The full and deep credit assessments and the portfolio decision collect the fund's workbook: its
+mandate, exposures and compliance limits in the layout of the portfolio template
 (`deploy_vii.inputs.portfolio`). It reaches the modules as an ordinary source, as every uploaded
 file does. This module finds it among the run's sources by its sheets, runs the template's checks
 on it against the run's as-of date (`validate_portfolio_bytes`), and words what CP-0, CP-3 and
@@ -28,8 +28,10 @@ from deploy_vii.inputs.rv_quotes import ValidationReport
 from deploy_vii.preparation import xlsx_content
 
 # The pathways whose run start page asks for the workbook (owner, 2026-11-15: "yes, wire in the
-# portfolio workbook."). Elsewhere a workbook is an ordinary source and nothing here applies.
-PATHWAYS = frozenset({"credit_snapshot", "portfolio_decision"})
+# portfolio workbook."). Elsewhere a workbook is an ordinary source and nothing here applies. The
+# deep credit assessment runs CP-0, CP-3 and CP-6 as the full one does, so it asks too (ruling
+# 2026-11-15-pathway-tiers-and-caps).
+PATHWAYS = frozenset({"credit_snapshot", "deep_credit_assessment", "portfolio_decision"})
 TOLD = ("CP-0", "CP-3", "CP-6")
 # A source is a portfolio workbook when at least two of the template's required sheets are named in
 # it, so one misnamed sheet is still found (and reported by the checks).

@@ -103,7 +103,7 @@ def main(argv: list[str]) -> int:
     out = given("--out")
     preview = Path(tempfile.mkdtemp()) / "preview"
     prepared = cpos_launch.prepare(
-        given("--context"), given("--sources"), preview, config="sol-medium", cap="50"
+        given("--context"), given("--sources"), preview, config="sol-medium", cap="15"
     )
     routes = list(prepared.layout.routes)
 

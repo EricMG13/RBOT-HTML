@@ -432,7 +432,7 @@ def test_a_run_cpos_completed_with_a_fake_provider_is_listed(tmp_path, monkeypat
             tmp_path / "issuer",
             tmp_path / "preview",
             config="sol-medium",
-            cap="50",
+            cap="15",
             modules=("CP-1",),
         ).plan.layout.routes
     )
