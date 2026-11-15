@@ -34,7 +34,7 @@ branch, reviewed and merged here; counts are from the CI fast list unless stated
   rounding puts on the result, in every check). Known limit: a CP-2G definition id that does not
   name its basis in words is compared as closing debt over EBITDA. Synthetic handoffs only; the
   retained TransDigm excerpts of 2026-11-13 hold none of these registers ("not checked").
-  `tests/test_method_scripts.py` 126 passed; launcher offline preparation for the 7 pathways differs
+  `tests/test_method_scripts.py` passes (126 then, more since); launcher offline preparation for the 7 pathways differs
   only in the wired modules' instructions and CP-5's upstream note; sizes within every ceiling.
   The quality gate leaves `docs/reuse/selected-methods/` out of its scope (owner: "ok").
   Owner's later answers ("approved", "approved"): CP-1 is sent its note, with `earnings_update`'s
@@ -42,7 +42,17 @@ branch, reviewed and merged here; counts are from the CI fast list unless stated
   debt above gross is sent back as `contradicted`, every other script refusal stays not checked.
   CP-3's enterprise value: the method has no link from CP-DR or CP-1C peer multiples to CP-3's
   waterfall (CP-1C's T4.10 forbids recovery use; the cp-os TransDigm run of 2026-11-04 had no
-  enterprise value anywhere); put to the owner, nothing built.
+  enterprise value anywhere). Owner, shown that: "1. yes 2. yes 3. yes", and "correct, pathway part
+  waits for the restructure". CP-3 is asked for `### Recovery waterfall`: enterprise-value cases
+  from CP-1C's T4.10 where it was sent (overriding CP-1C's step 06C and Valuation Discipline 8 for
+  CP-3's use only), else its own with their basis, else `Not supplied: <reason>` (recorded, never
+  refused). Checked: EV = multiple x metric, the multiple against the T4.10 CP-3 was actually sent,
+  then recoveries, fulcrum and residual. A table absent with no statement, or an EV with no basis,
+  is sent back (`missing`). A second adversarial review (about 150 synthetic handoffs, no crash)
+  found false refusals, fixed: a basis that mentions T4.10 without using it, enterprise values
+  compared where multiples should be, equal-ranking claims, fulcrum and heading wording, a
+  decorated Blocked status (now one rule shared with the launcher's presence check). CP-3's
+  instructions grow within the three ceilings; no pathway's module list or order changed.
 - Portfolio inputs for the full credit assessment (ruling
   `docs/rulings/2026-11-15-full-assessment-portfolio-workbook.md`; owner: "wire in the portfolio
   workbook ... check data first likely incorrect sums and values"). `credit_snapshot` and
