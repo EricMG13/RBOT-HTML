@@ -95,6 +95,56 @@ open" item on mandate and exposure inputs; that ruling is not edited.
   (it is per module today), add instruction size and output to CP-3, CP-5 and CP-6 in both
   pathways, and reverse part of a cut made because no consumer read them.
 
+## The export shape
+
+Later on 2026-11-15 the owner uploaded their portfolio data to the coordinating session (not to this
+repository; no session here has read it). The coordinating session reported its shape and defects:
+four CSV exports (a mandate file; a constraints compliance monitor; a near-identical constraints
+sheet named "CP-3C Portfolio Constraints"; an exposure report with five stacked sections) and a
+workbook with a Holdings sheet (382 loans) and a Market Data sheet, all pasted constants, with
+twelve classes of defect: the report not reconciling to the holdings; concentration figures
+disagreeing with the rows; limits that pass on stated figures but breach on recomputed ones;
+subtotals that nearly add; inconsistent summary metrics; a capital structure that does not
+balance the collateral; maturities a century off; impossible yields and margins; vendor error
+tokens; identifier defects; stale dates; and limits and values written as text with units.
+
+Decisions:
+
+- The export is accepted beside the template, not instead of it, and never converted into it.
+  Converting would mean choosing between figures that disagree, which the CP-6A method says to
+  surface. The template stays the documented typed contract.
+- `src/deploy_vii/inputs/portfolio_export.py` reads the export (files recognised by their headers;
+  the report's sections by their title rows) and checks it with the holdings as the authority:
+  stated figures are claims checked against the holdings' recomputation and against their own
+  totals. Values keep their units; what cannot be read, an approximate value or a vendor token is
+  missing, never zero, and reported. Each of the twelve classes has a check and a SYNTHETIC
+  fixture (`tools/synthetic_portfolio_exports.py`, invented names and numbers, none of the
+  owner's), with hand-written expected findings (`tests/test_portfolio_export.py`).
+- Tolerances: a stated figure may differ from the exact one by half a unit in its last place (a sum
+  by the sum of those halves); a figure the fund marks itself (NAV, market values, the average
+  price, shares of NAV) may also differ from a recomputation at mid by 0.5 % of the stated figure;
+  counts and par are exact. Yields outside -10 % to 100 % and discount margins outside -1,000 to
+  10,000 bps are impossible; maturities before 1950 are two-digit years read as 19xx; the capital
+  structure must fund 95 % to 105 % of the collateral.
+- The launcher finds the export among the run's `.csv` and `.xlsx` sources in the same two
+  pathways, and tells CP-0, CP-3 and CP-6 the files and their roles, what the holdings give, the
+  notes (withdrawn ratings, watch flags, figures not recomputed) and every finding, with the same
+  restriction as a failing workbook. The forecast items are the same four. On the run start page
+  the analyst uploads every file of the export and chooses the holdings workbook as the portfolio
+  workbook.
+- `uv run deploy-vii validate-input portfolio-export <files> --as-of <date>` checks the files
+  together.
+
+Open, for the owner: the export names one constraints sheet "CP-3C Portfolio Constraints". In this
+repository portfolio fit is CP-3B, inside CP-3; CP-3C is Refinancing & LME. The coordinating session
+has asked the owner which was meant. Nothing here acts on the name: both constraints files are read
+as constraints and told to CP-0, CP-3 and CP-6.
+
+Not proven: the reader was built from the coordinating session's description, not the owner's
+files. Their exact headers, section titles and date formats may differ from what is recognised;
+the self-check then says which file was not recognised or which section was not found, and the
+reader is adjusted on that evidence.
+
 ## Cost
 
 No run has measured this. Measured on the synthetic launcher input (as-of 2025-03-31), the
@@ -110,7 +160,9 @@ are unchanged, and the run start page shows no USD forecast.
 ## Left open
 
 - A paid run: no model has produced CP-6A output with a workbook under these instructions.
-- The owner's own workbook has not been read; it can be checked with the command above.
+- The owner's own workbook and export have not been read here; they can be checked with the
+  commands above.
+- The "CP-3C Portfolio Constraints" name, as above.
 - CP-3B's cut registers, as above.
 - `docs/templates/README.md` still describes the Deploy VII pack path ("How the file reaches the
   Portfolio Fit module", `scripts/build_templates.py`, `tests/product/test_inputs_portfolio.py`),

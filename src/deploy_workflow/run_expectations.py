@@ -641,11 +641,12 @@ RULES: tuple[Rule, ...] = (
             and not f.portfolio.workbooks
         ),
         "check",
-        "You chose a portfolio workbook, but no uploaded workbook is in the layout of the "
-        "portfolio template, so none is checked and the committee takes the fund's limits as "
-        "not supplied.",
-        "Upload the fund's workbook in the layout of the portfolio template, or choose no "
-        "portfolio workbook.",
+        "You chose a portfolio workbook, but no uploaded file is a workbook in the layout of "
+        "the portfolio template or the fund's portfolio export, so none is checked and the "
+        "committee takes the fund's limits as not supplied.",
+        "Upload the fund's workbook in the layout of the portfolio template, or its export "
+        "(mandate, constraints and exposure report CSVs and the holdings workbook), or choose "
+        "no portfolio workbook.",
         _FOUND,
         "observed offline",
     ),
@@ -658,7 +659,7 @@ RULES: tuple[Rule, ...] = (
             and bool(f.portfolio.workbooks)
         ),
         "check",
-        "A workbook in the layout of the portfolio template is among the documents but is not "
+        "A portfolio workbook or the fund's portfolio export is among the documents but is not "
         "chosen as the portfolio workbook; the modules are told it is there and how its checks "
         "came out.",
         "Choose it as the portfolio workbook under Issuer and dates, or remove it.",
@@ -671,7 +672,7 @@ RULES: tuple[Rule, ...] = (
         "CP-6",
         lambda f: bool(f.portfolio.failing),
         "limited",
-        "The portfolio workbook fails the template's checks of its sums, values and dates. The "
+        "The portfolio workbook fails the checks of its sums, values and dates. The "
         "modules are told each finding, and the committee's posture cannot rest on a figure "
         "that does not reconcile.",
         "Correct the figures each finding names and upload the workbook again.",
