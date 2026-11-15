@@ -1788,22 +1788,32 @@ CP1_CHANGE_KEY = [
 ]
 
 
-@pytest.mark.parametrize(("formula", "n", "d", "stated", "status"), CP1_CHANGE_KEY)
-def test_cp1_a_change_over_prior_is_a_ratio_unless_the_formula_says_minus_one(
-    formula, n, d, stated, status
-):
-    row = {"Revenue growth": (formula, n, d, stated)}
-    assert cp1_by(cp1(row))["Revenue growth (FY2024)"].status == status
+# Ruling after review (brief task-A): (Metric Name, Formula, N, D, stated, status).
+CP1_RULING_KEY = [
+    ("Revenue growth", "Current sales / prior sales", "7940", "6585", "1.21", "disagreed"),
+    ("Revenue growth", "Current sales / prior sales", "7940", "6585", "120.6%", "disagreed"),
+    ("Revenue growth", "Current sales / prior sales", "7940", "6585", "0.21", "agreed"),
+    ("Revenue growth", "Sales change / prior sales", "1355", "6585", "-0.79", "disagreed"),
+    ("Interest cover", "EBITDA / interest (t-1)", "3813", "1160", "3.29", "agreed"),
+    ("Ratio", "(a - 1) / b", "7940", "6585", "1.21", "agreed"),
+    ("Leverage change", "Current leverage / prior leverage - 1", "6", "5", "0.20", "agreed"),
+]
+CP1_KEY = [("Revenue growth", *row) for row in CP1_CHANGE_KEY] + CP1_RULING_KEY
 
 
-def test_cp1_the_rejected_live_draft_has_no_disagreed_t49_row():
-    rows = {
-        "Revenue growth": ("Sales change / prior sales", "1355", "6585", "0.21"),
-        "EBITDA growth": ("EBITDA change / prior EBITDA", "665", "3148", "0.21"),
-    }
-    assert {o.status for o in cp1_by(cp1(rows)).values() if o.figure.endswith("(FY2024)")} == {
-        "agreed"
-    }
+@pytest.mark.parametrize(
+    ("name", "formula", "operands", "stated", "status"),
+    [(k[0], k[1], k[2:4], k[4], k[5]) for k in CP1_KEY],
+)
+def test_cp1_the_formula_decides_growth_or_ratio(name, formula, operands, stated, status):
+    row = {name: (formula, *operands, stated)}
+    assert cp1_by(cp1(row))[f"{name} (FY2024)"].status == status
+
+
+def test_cp1_the_rejected_live_draft_t49_table_has_no_disagreed_row():
+    table = (Path(__file__).parent / "fixtures" / "cp1_earnings_update_draft1_t49.md").read_text()
+    outcomes = [o for o in ms.run("CP-1", table) if o.register == "T4.9"]
+    assert outcomes and "disagreed" not in {o.status for o in outcomes}
 
 
 def test_cp1_a_figure_wrong_by_more_than_the_rounding_bound_still_disagrees():
