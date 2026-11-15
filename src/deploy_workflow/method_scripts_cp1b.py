@@ -248,8 +248,9 @@ def _joined(name: str, pair_cell: str, change_cell: str) -> _Pair:
     cell = _plain(change_cell)
     annotated, ending = _ANNOTATED.match(cell), _ENDING.match(cell)
     if annotated:
-        sign = "-" if _dash(annotated["abs"]).lstrip().startswith("-") else ""
-        stated = sign + annotated["pct"].lstrip("+-−– ")
+        own = annotated["pct"]  # a sign written inside the brackets is kept, else the figure's
+        negative = _dash(annotated["abs"]).lstrip().startswith("-")
+        stated = own if re.match(r"[-+−–]", own) else ("-" if negative else "") + own
     elif ending:
         stated = ending["pct"]
     else:
