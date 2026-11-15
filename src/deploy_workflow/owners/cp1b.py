@@ -4,15 +4,14 @@ CP-1B has a registered step chain for its pinned step name only (`shared_live` f
 served by this core (`owner_workflow._owner_only`), not by `submit_model_payload`. The analyst
 names two periods and three assessments; Python reads the settled CP-1 head, builds the paired
 deltas (`deploy_workflow.earnings.build_earnings_delta`, `Decimal`), derives the 12 measure
-selections and composes the module with the composer the frozen `EarningsWorkflow` shares
-(`earnings_workflow.compose_delta`). The step reads the CP-1 head as a `module_context` view
-(no paged upstream grant, which the owner path cannot verify). The step has no pack sources, so
-the core has no `RULES`.
+selections and composes the module with `earnings_workflow.compose_delta`. The step reads the
+CP-1 head as a `module_context` view (no paged upstream grant, which the owner path cannot
+verify). The step has no pack sources, so the core has no `RULES`.
 
 A settled head adds one input after the attempt inputs, `earnings-delta-submission`, the content
-hash of the retained submission (G1-X protocol section 2). The frozen receipt path keeps its
-`earnings-review` and `earnings-participation` inputs and its checkpoint limitation; the owner
-head carries neither, because it proves neither.
+hash of the retained submission (G1-X protocol section 2). The owner head carries no
+`earnings-review` or `earnings-participation` input and no checkpoint limitation (the removed
+frozen earnings receipt path had them), because it proves neither.
 """
 
 import hashlib
