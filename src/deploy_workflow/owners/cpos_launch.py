@@ -443,13 +443,13 @@ def _documents(
     return guesses, rows
 
 
-def _workbooks(pinned: Mapping[str, HandoffInput], folder: Path) -> dict[str, bytes]:
-    """The bytes of each pinned `.xlsx` source (its name is its path in the issuer folder), as
-    pinned: a file changed since it was hashed refuses the launch rather than be checked in a
-    state the run would not read."""
+def _portfolio_files(pinned: Mapping[str, HandoffInput], folder: Path) -> dict[str, bytes]:
+    """The bytes of each pinned `.xlsx` and `.csv` source (its name is its path in the issuer
+    folder), as pinned: a file changed since it was hashed refuses the launch rather than be
+    checked in a state the run would not read."""
     found: dict[str, bytes] = {}
     for name, pin in pinned.items():
-        if name.lower().endswith(".xlsx"):
+        if name.lower().endswith((".xlsx", ".csv")):
             raw = (folder / name).read_bytes()
             if _sha(raw) != pin.sha256:
                 raise LaunchRefused(f"--sources: {name} changed while it was read; try again")
@@ -1059,7 +1059,7 @@ def _prepare(  # noqa: PLR0913, PLR0915 - `prepare`'s body: one keyword per sett
             f"--sources: {', '.join(clash)} would be taken for an earlier run's handoff; rename it"
         )
     portfolio = portfolio_check(
-        _workbooks(pinned, folder),
+        _portfolio_files(pinned, folder),
         pathway=settings.run.pathway,
         declared=settings.attachments.portfolio_workbook,
         run_date=run.as_of,

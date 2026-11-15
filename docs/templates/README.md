@@ -334,6 +334,55 @@ disagrees with its operands is never read.
 Keep real portfolio files out of Git. They belong in your environment's pack root, not in this
 repository.
 
+## Portfolio export (the fund's own files, beside the template)
+
+Owner, 2026-11-15 (ruling `docs/rulings/2026-11-15-full-assessment-portfolio-workbook.md`, "The
+export shape"). A fund's systems export the same facts as CSVs and a workbook. They are accepted as
+they are, checked, and never converted into the template: converting would mean choosing between
+figures that disagree, which the CP-6A method says to surface instead. The launcher finds the files
+by their headers among a full credit assessment's or portfolio decision's documents
+(`src/deploy_vii/inputs/portfolio_export.py`).
+
+| File | Recognised by |
+| --- | --- |
+| Mandate (CSV) | first row `Section`, `Field`, `Value` (and `Notes`); capital structure rows under a `Capital Structure` section with a `Total` row; an `As of` field |
+| Constraints (CSV, one or more) | a header with `Parameter`, `Limit` and `Current Value` (optional `ID`, `Constraint Category`, `Breach Type`, `Source Document`, `Headroom`, `Status`, `Last Checked`, `Checked By`) |
+| Exposure report (CSV) | sections stacked in one sheet, each a title row (one cell), a header row and data rows: summary metrics, rating distribution, sectors, largest holdings, maturity profile, recognised by the title's words; `Total`, `Subtotal` and `Other` rows |
+| Holdings (XLSX) | a `Holdings` sheet whose header has a borrower column (also `Ticker`, `Index Sector`, `Loan Name`, `FIGI`, `Ranking`, `Ratings`, `Margin`, `Maturity`, `Bid`, `Ask`, `Δ 1M`, `Δ YTD`, `Mid YTM`, `Mid 3Y DM` and `Holdings` = par); an optional `Market Data` sheet |
+
+Values keep their unit: `≤ 2.5% NAV`, `≥ Caa1 (numeric ≤ 17)`, `B1 (14.3)`, `313 bps`, `4.82 yrs`,
+`2.7 notches`, `USD 300,000,000`, `14.95m`. A value that cannot be read with its unit, an
+approximate value (`~100%`) or a vendor token (`#N/A N/A`) is missing, never zero, and reported.
+
+The holdings are the authority: par, market value at mid ((bid + ask) / 2 x par / 100), position,
+borrower, ticker and sector counts, issuer, sector and second-lien shares of that market value, and
+par-weighted price, margin and yield (yields outside -10 % to 100 % left out) are recomputed from
+them. The classes of defect checked:
+
+| Class | Check |
+| --- | --- |
+| 1 | Stated par, NAV, positions, obligors and sectors against the holdings (par and counts exact; NAV to within 0.5 % plus rounding, because the fund marks it and the check prices at mid; positions with no price are named) |
+| 2 | The largest issuer, the ten largest issuers and each listed holding (present, market value, share, positions) against the holdings |
+| 3 | Each listed sector's share against the holdings', and its limit on the holdings' share: a breach the stated share hides |
+| 4 | Every Total and Subtotal row against its rows: shares and amounts to within the rounding of the figures added (half a unit in each one's last place), counts exactly |
+| 5 | Average price, margin, yield and second-lien share against the holdings; the stated price against stated NAV over par; a stated yield below the stated margin |
+| 6 | The capital structure's tranches against its stated total, and the total against the collateral NAV (95 % to 105 %) |
+| 7 | Maturities before 1950: two-digit years read as 19xx; maturities before the as-of date |
+| 8 | Yields outside -10 % to 100 % and discount margins outside -1,000 to 10,000 bps, with the average with and without them |
+| 9 | Vendor error tokens in numeric columns and ratings (withdrawn ratings and watch flags are notes, not defects) |
+| 10 | FIGIs not 12 characters, a FIGI on two rows, a ticker naming two borrowers, damaged names, a rating in Ranking, rows of empty cells |
+| 11 | Dates after the run's as-of date or more than 30 days before it |
+| 12 | Limits and values that cannot be read with their unit, approximate values, a value without the limit's unit; status and headroom against limit and value; each constraint the holdings can recompute (largest issuer, largest sector, second lien) against them |
+
+Not recomputed: rating and maturity distributions (no rating scale or bucket rule is part of the
+export), the weighted average life and rating factors. They are listed as not checked.
+
+```
+uv run deploy-vii validate-input portfolio-export <mandate>.csv <constraints>.csv <exposure>.csv <holdings>.xlsx --as-of 2026-11-15
+```
+
+`tools/synthetic_portfolio_exports.py` builds a SYNTHETIC clean export and one per class.
+
 ## Run context form (`context-form.html`, `context.json`, schema `context/1`)
 
 The form writes `context.json`; `src/deploy_vii/context.py` reads it, and the form's `build()` is the
