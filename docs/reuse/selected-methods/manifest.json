@@ -495,42 +495,6 @@
       "use": "Selected analytical breadth/labels; current project instructions govern transport, no inherited export/approval/completeness rulings."
     },
     {
-      "consumed_path": "src/deploy_workflow/owners/cpos.py",
-      "archive_path": "docs/reuse/selected-methods/runtime/cpos-before-handoff-orchestration.py",
-      "sha256": "b9e918663aa8c418701aa6b468b9f6e06aad00bf70b2090e799af6207d74ce02",
-      "use": "Exact local pre-edit source for CP-OS integration diff and isolated baseline regression reproduction; historical navigation/delivery behavior is not selected authority."
-    },
-    {
-      "consumed_path": "src/deploy_workflow/handoff_delivery.py",
-      "archive_path": "docs/reuse/selected-methods/runtime/handoff-delivery-before-cpos-verification.py",
-      "sha256": "aa77ae59a2e408f05a3cf2f5c7af92b4dde2b2df635f961545d49fc05bc0e00c",
-      "use": "Exact local pre-edit source for CP-OS integration diff and isolated baseline regression reproduction; historical navigation/delivery behavior is not selected authority."
-    },
-    {
-      "consumed_path": "src/deploy_workflow/owners/cpos.py",
-      "archive_path": "docs/reuse/selected-methods/runtime/cpos-before-retained-handoffs.py",
-      "sha256": "0de23e85c466d7d3cc6be4ffbb963808c98e51fe882c9fe8c387c7af71caee7a",
-      "use": "Exact pre-edit CP-OS snapshot to verify unsupported upstream reuse and review the minimal integration changes; matched the preceding case source hash before archival. No predecessor repository mutation."
-    },
-    {
-      "consumed_path": "src/deploy_workflow/owners/cpos.py",
-      "archive_path": "docs/reuse/selected-methods/runtime/cpos-before-model-publication.py",
-      "sha256": "52eb6f244fc20db6da500a00ce6514c8d8ffe85d1b08c2981c0d7aa739607c08",
-      "use": "Exact pre-edit CP-OS integration source; verified retained analytical identity and unchanged native navigation."
-    },
-    {
-      "consumed_path": "src/deploy_workflow/handoff_delivery.py",
-      "archive_path": "docs/reuse/selected-methods/runtime/handoff-delivery-before-model-publication.py",
-      "sha256": "a9c8971689b25dd93270260cf0ae73d1380385d45e1a84f523ffcb59ab6060fe",
-      "use": "Exact pre-edit separate delivery adapter; optional Model hook preserves previous no-Model behavior."
-    },
-    {
-      "consumed_path": "retained original TDG Model publication script",
-      "archive_path": "docs/reuse/selected-methods/runtime/tdg-model-original-builder.py",
-      "sha256": "a3347373896f2eaab6de38604b31e89432c0a83e88e2480bdc0dc338563affd6",
-      "use": "Recovered original local Model builder promoted into reusable source, with checked missing/period/quantity corrections. Not a new financial engine."
-    },
-    {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-0-source-readiness/SKILL.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-0-source-readiness/SKILL.md",
       "sha256": "20a3634526648cd4983fcfd412ba68162b9e832781abd7c90b5caa7a236a3e1d",
@@ -551,30 +515,6 @@
       "sha256": "1790ab8edd56e1d3cdaa5c357a0acf09fb50fc1ec141a2e12976e9499a3d6d98",
       "source_revision": "cp-os e67bf0cda2dc80d7a744bee371c4fb3c7b8b8df7 (selected files clean)",
       "use": "Preparation/readiness analytical duties and P1-P8 packaging evidence. Current project rules govern transport, Excel input only and no agents; historical approval/export/role machinery is not inherited authority."
-    },
-    {
-      "consumed_path": "src/deploy_workflow/owners/cpos.py",
-      "archive_path": "docs/reuse/selected-methods/runtime/cpos-before-deliverable-comparison.py",
-      "sha256": "0557929d215f111705e2cf57240c2bc5df14ee5770efe6c410ba4ca59e6debe0",
-      "use": "Exact pre-edit source for the CP-8 deliverable-comparison integration. Existing native/navigation behavior remains historical evidence, not current CP-8 authority."
-    },
-    {
-      "consumed_path": "src/deploy_workflow/handoff_delivery.py",
-      "archive_path": "docs/reuse/selected-methods/runtime/handoff-delivery-before-comparison.py",
-      "sha256": "f992a8ca0e8c13648f19181dd6c6d6f812a2df6c3612b93c39fc331f2204b454",
-      "use": "Exact pre-edit source for the CP-8 deliverable-comparison integration. Existing native/navigation behavior remains historical evidence, not current CP-8 authority."
-    },
-    {
-      "consumed_path": "src/deploy_workflow/owners/cpos.py",
-      "archive_path": "docs/reuse/selected-methods/runtime/cpos-before-earnings-presentation.py",
-      "sha256": "0c14bcd8b61ce4b66b00cdcd130086e7826daca33ebede388ea2fdda4b289158",
-      "use": "Exact pre-edit source before the bounded CP-1B Markdown-to-earnings-report adapter; historical evidence, not an analytical authority."
-    },
-    {
-      "consumed_path": "src/deploy_workflow/handoff_delivery.py",
-      "archive_path": "docs/reuse/selected-methods/runtime/handoff-delivery-before-earnings-presentation.py",
-      "sha256": "d5d7fe76b2cb3c4e1e7ad3bf0b67dd814af0f48e6c3a1c513ef72ea804ca79da",
-      "use": "Exact pre-edit source before the bounded CP-1B Markdown-to-earnings-report adapter; historical evidence, not an analytical authority."
     },
     {
       "consumed_path": "skills/cp-1d-earnings-quality/SKILL.md",
@@ -602,36 +542,6 @@
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-1d-earnings-quality/references/CP-1E_SCHEMA_REFERENCE.md",
       "source_revision": "cp-os e67bf0cda2dc80d7a744bee371c4fb3c7b8b8df7 (selected files clean)",
       "use": "Selected CP-1D/absorbed CP-1E analytical duties; current project transport, orchestration, delivery and Excel-input-only rules govern."
-    },
-    {
-      "consumed_path": "src/deploy_vii/registry.py",
-      "archive_path": "docs/reuse/selected-methods/runtime/before-retained-planning-registry.py",
-      "sha256": "19ec267dff71aa89cbfdfbece02e1a44f6800306572e15f16029d3bd23dc880a",
-      "use": "Exact prior source before retained-handoff planning and standalone ratings presentation; prior PINS preserves the ancestor catalog hash, not financial expected-value changes."
-    },
-    {
-      "consumed_path": "src/deploy_workflow/owners/cpos.py",
-      "archive_path": "docs/reuse/selected-methods/runtime/before-retained-planning-cpos.py",
-      "sha256": "bd6b8097aca9b01a42048be6b567a6e167115d54ebca8117bfbec80afc7c14e2",
-      "use": "Exact prior source before retained-handoff planning and standalone ratings presentation; prior PINS preserves the ancestor catalog hash, not financial expected-value changes."
-    },
-    {
-      "consumed_path": "src/deploy_workflow/handoff_delivery.py",
-      "archive_path": "docs/reuse/selected-methods/runtime/before-retained-planning-handoff_delivery.py",
-      "sha256": "4d505fa46029dc975c4ee33d15fae597d52c6819c8754bb8fdede6973fc43cec",
-      "use": "Exact prior source before retained-handoff planning and standalone ratings presentation; prior PINS preserves the ancestor catalog hash, not financial expected-value changes."
-    },
-    {
-      "consumed_path": "src/deploy_workflow/markdown_delivery.py",
-      "archive_path": "docs/reuse/selected-methods/runtime/before-retained-planning-markdown_delivery.py",
-      "sha256": "9670707024a4745a889f90e5d0d0aae16b294c5a373ca59ee3009541f30dad42",
-      "use": "Exact prior source before retained-handoff planning and standalone ratings presentation; prior PINS preserves the ancestor catalog hash, not financial expected-value changes."
-    },
-    {
-      "consumed_path": "cases/PINS.json",
-      "archive_path": "docs/reuse/selected-methods/runtime/before-retained-planning-PINS.json",
-      "sha256": "9cd1dc8562c51d966972b27ccc5b13889601dd7b11acd46359859d2e0b2bc020",
-      "use": "Exact prior source before retained-handoff planning and standalone ratings presentation; prior PINS preserves the ancestor catalog hash, not financial expected-value changes."
     },
     {
       "consumed_path": "skills/cp-0-source-readiness/references/CP-0_SCHEMA_REFERENCE.md",
@@ -1143,5 +1053,6 @@
       "note": "ruling docs/rulings/2026-11-13-appendix-and-routing-scope.md; the lists are the registers classified CUT in every inventory row of both retained Sol runs (docs/sweeps/2026-11-13-optimisation-review/appendix-inventory.md)"
     }
   ],
-  "companions_note": "2026-11-10 (owner: keep a copy of the methodology in the repo): companion references, CANON_SHARED.md, the CP-DR research brief and the cp-1b-earnings-delta skill were first copied read-only from cp-os at commit b57a344. Each file's source is the one its own entry names: `exact_copy_found_at` (a path whose file is byte-equal to the archived file, checked 2026-11-13) or, for a file edited since the copy, `edited_copy_of` with the named `edit`. Not every companion is a cp-os copy: CP-4's six references, the CP-2D steps, the CP-5 runbook and the CP-5A steps are caos-databricks copies; the CP-2G and CP-DR steps are edited cp-os copies; CP-3C is a Deploy V copy; the CP-2A stress copy comes from this repo. Four SKILL.md files were archived earlier (cp-2h, cp-3, cp-6, cp-dr) as the cp-os initial-commit text (a31f3f5), which differs from cp-os at b57a344; as of 2026-11-13 each is stated by its own entry: cp-2h and cp-3 are the live cp-os (b57a344) files exactly, after one named edit each (the 115f664 blocklist change); cp-dr is the live cp-os v2.0 text (b57a344) plus named edits 2a and 2b; cp-6 is the initial-commit text plus named CP-5/CP-6 ordering edits and is not the live cp-os file. Not copied: scripts (not run in this transport) and the three .xlsx deployment placeholders (CP-3 Sector RV, CP-3B portfolio constraints, CP-6A debate inputs)."
+  "companions_note": "2026-11-10 (owner: keep a copy of the methodology in the repo): companion references, CANON_SHARED.md, the CP-DR research brief and the cp-1b-earnings-delta skill were first copied read-only from cp-os at commit b57a344. Each file's source is the one its own entry names: `exact_copy_found_at` (a path whose file is byte-equal to the archived file, checked 2026-11-13) or, for a file edited since the copy, `edited_copy_of` with the named `edit`. Not every companion is a cp-os copy: CP-4's six references, the CP-2D steps, the CP-5 runbook and the CP-5A steps are caos-databricks copies; the CP-2G and CP-DR steps are edited cp-os copies; CP-3C is a Deploy V copy; the CP-2A stress copy comes from this repo. Four SKILL.md files were archived earlier (cp-2h, cp-3, cp-6, cp-dr) as the cp-os initial-commit text (a31f3f5), which differs from cp-os at b57a344; as of 2026-11-13 each is stated by its own entry: cp-2h and cp-3 are the live cp-os (b57a344) files exactly, after one named edit each (the 115f664 blocklist change); cp-dr is the live cp-os v2.0 text (b57a344) plus named edits 2a and 2b; cp-6 is the initial-commit text plus named CP-5/CP-6 ordering edits and is not the live cp-os file. Not copied: scripts (not run in this transport) and the three .xlsx deployment placeholders (CP-3 Sector RV, CP-3B portfolio constraints, CP-6A debate inputs).",
+  "runtime_snapshots_note": "2026-11-15 (owner: move history out of the working tree): the 17 files of docs/reuse/selected-methods/runtime/ (15 pre-edit snapshots of this repository's own code and cases/PINS.json, each listed here with its sha256 and use, and two unlisted pre-edit method texts) were removed from the tree. Nothing read them. The files and their 15 entries are in git history at 9d040f8 and earlier."
 }
