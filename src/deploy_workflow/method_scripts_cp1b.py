@@ -97,7 +97,7 @@ _ANNOTATED = re.compile(
     rf"^\s*(?P<abs>{_NUMBER})\s*\(\s*(?P<pct>{_NUMBER}\s*%)\s*\){_QUALIFIER}", re.IGNORECASE
 )
 _ENDING = re.compile(
-    rf"^\s*(?:{_NUMBER}(?:\s*[;,]\s*|\s+))?(?P<pct>\(?{_NUMBER}\s*%\)?){_QUALIFIER}",
+    rf"^\s*(?:{_NUMBER}(?:\s*[;,/]\s*|\s+))?(?P<pct>\(?{_NUMBER}\s*%\)?){_QUALIFIER}",
     re.IGNORECASE,
 )
 
