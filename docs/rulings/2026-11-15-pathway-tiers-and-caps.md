@@ -154,3 +154,15 @@ after this change; no other ceiling moved.
 - A paid run: no model has produced a Deep run. The owner starts it.
 - Skipping a module whose sources are missing (proposal `docs/sweeps/2026-11-13-optimisation-review/
   pathway-tiers-proposal.md`, section 4) is not built: the owner chose "Deep = all".
+
+## Owner's answers after the build (2026-11-15)
+
+Asked four questions with the options and a recommendation each, the owner chose:
+
+- Deep's report sections: "Keep the 24 (Recommended)", until a real Deep run has been read.
+- Claude Opus against the caps: "Leave caps; measure first (Recommended)". The caps stay 15, 25
+  and 40 for every model; the first Full and Deep runs go on GPT Sol, and Opus is decided after a
+  measured run. Until then an Opus Full or Deep run can stop at its cap.
+- Submissions queued before this change: "Lower of $20 and cap (Recommended)".
+- This change to `main`: "Open and merge (Recommended)", when its checks are green.
+
