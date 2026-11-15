@@ -90,7 +90,7 @@ def cap_of(record: Record) -> Decimal:
     ceiling = PATHWAY_CAP_USD.get(cast(PathwayId, record.pathway))
     if ceiling is None:
         raise ValueError(f"run {record.id}: pathway {record.pathway!r} has no cap")
-    if not record.cap:
+    if record.cap == "":
         return min(LEGACY_CAP, ceiling)
     try:
         value = Decimal(record.cap) if isinstance(record.cap, str) else Decimal("NaN")

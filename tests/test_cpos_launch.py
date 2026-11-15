@@ -4924,6 +4924,70 @@ def test_a_lite_run_fills_the_library_pages_and_its_forecast_page_states_the_gap
     assert "No forecast model was published from this run\u2019s files" in shown["Forecast"]
 
 
+def _deep_run_in_the_library(tmp_path, provider, capsys) -> dict:
+    """A SYNTHETIC deep run (fake provider, hand-written handoffs) launched into runs/ through the
+    real launcher, delivery and library refresh; returns the library's data."""
+    argv = launch(tmp_path, "--live", "--ruling", str(RULING), pathway="deep_credit_assessment")
+    argv[argv.index("--out") + 1] = str(tmp_path / "runs" / RUN_ID)
+    routes = prepare_routes(tmp_path, "sol-medium", None)
+    provider.answer = lambda context: forecast_answer(context, routes, forecast_block())
+    assert main(argv) == 0
+    assert "Library not updated" not in capsys.readouterr().err
+    text = (tmp_path / "library/data.js").read_text(encoding="utf-8")
+    return json.loads(text.removeprefix("window.CREDIT_OS_DATA=").rstrip().removesuffix(";"))
+
+
+def test_a_deep_run_is_delivered_and_listed_by_the_library_with_every_module(
+    tmp_path, provider, capsys
+):
+    """Ruling 2026-11-15-pathway-tiers-and-caps. Synthetic handoffs: this proves the wiring from
+    the launcher to the library's data, not any analysis."""
+    data = _deep_run_in_the_library(tmp_path, provider, capsys)
+    deep = PATHWAY_MODULES["deep_credit_assessment"]
+    assert tuple(c[0] for c in provider.calls) == deep
+    run = data["workspace"]["runs"][RUN_ID]
+    assert run["pathway"] == "deep_credit_assessment"
+    held = {code for code, entry in run["modules"].items() if entry.get("outputs")}
+    assert held == set(deep)  # all twenty handoffs reach the Modules pages
+    (model,) = data["workspace"]["models"]  # the forecast is published: CP-1 and CP-2G ran
+    assert model["cashflow"] is not None
+    receipt = next((tmp_path / "runs" / RUN_ID / "deliveries").glob("*/delivery.json"))
+    delivered = json.loads(receipt.read_text())
+    assert "Deep credit assessment" in delivered["scope"]
+    assert "Sections not produced: what-changed." in delivered["scope"]  # a first run: no CP-8
+    report = ReportView.model_validate_json((receipt.parent / "report-view.json").read_text())
+    blocks = tuple(block.block_id for block in report.blocks)
+    assert set(FULL_BLOCKS) - {"what-changed"} <= set(blocks) and len(blocks) == 23
+    assert {"recovery-by-class", "peer-positioning", "rating-triggers"} <= set(blocks)
+
+
+@pytest.mark.browser
+def test_a_deep_run_fills_the_library_pages(tmp_path, provider, capsys):
+    """The same synthetic deep run read in the real library: Overview, Changes, Modules, Forecast
+    and Evidence render with its label, no console message and no unfilled value."""
+    from test_library_page_browser import visit
+
+    data = _deep_run_in_the_library(tmp_path, provider, capsys)
+    (model,) = data["workspace"]["models"]
+    index = tmp_path / "library/index.html"
+    shown = {}
+    for name, route in {
+        "Overview": f"#W-Overview/overview?c={RUN_ID}",
+        "Changes": f"#W-Changes/changes?c={RUN_ID}",
+        "Modules CP-4C": f"#CP-4C?c={RUN_ID}",
+        "Modules CP-1C": f"#CP-1C?c={RUN_ID}",
+        "Forecast": f"#W-Forecast/{model['id']}?c={RUN_ID}",
+        "Evidence": f"#W-Evidence/sources?c={RUN_ID}",
+    }.items():
+        dom, console = visit(index, route)
+        shown[name] = " ".join(re.sub(r"(?s)<(script|style)\b.*?</\1>|<[^>]+>", " ", dom).split())
+        assert console == [], (name, console)
+        assert UNFILLED.search(shown[name]) is None, (name, UNFILLED.findall(shown[name]))
+        assert ISSUER in shown[name] and "Deep credit assessment" in shown[name], name
+    assert "First run of this pathway" in shown["Changes"]
+    assert "FY2025E" in shown["Forecast"]
+
+
 def test_a_delivery_without_a_forecast_has_no_forecast_key_in_its_receipt(
     tmp_path, provider, capsys
 ):

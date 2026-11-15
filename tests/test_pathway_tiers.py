@@ -282,11 +282,19 @@ def test_a_record_queued_before_per_pathway_caps_launches_at_no_more_than_was_ap
 
 @pytest.mark.parametrize(
     ("pathway", "cap"),
-    [(DEEP, "41"), (DEEP, "0"), (DEEP, "NaN"), (DEEP, "forty"), ("credit_snapshot", "40")],
+    [
+        (DEEP, "41"),
+        (DEEP, "0"),
+        (DEEP, "NaN"),
+        (DEEP, "forty"),
+        ("credit_snapshot", "40"),
+        (DEEP, 0),
+    ],
 )
 def test_a_hand_edited_cap_above_the_pathways_is_refused(
-    root: Path, pathway: str, cap: str
+    root: Path, pathway: str, cap: Any
 ) -> None:
+    """A cap that is not an amount within the pathway's (a number where text belongs included)."""
     record = Record("r1", pathway, "Acme", "queued", "t", cap=cap)
     with pytest.raises(ValueError, match="is not an amount above zero and at most"):
         runs.command(layout(root), record, Path("c.json"), launcher=("L",), ruling=None)

@@ -95,6 +95,31 @@ def test_the_prior_run_is_the_latest_listed_run_of_the_same_issuer_and_pathway_o
     assert prior("2025-03-31", folder="b-mar") == "a-dec"  # never the run itself
 
 
+def test_a_first_deep_run_is_not_compared_with_the_issuers_full_run(tmp_path):
+    """Ruling 2026-11-15-pathway-tiers-and-caps: CP-8 compares runs of one pathway. A Full run of
+    the issuer is no base for its first Deep run, nor a Deep run for a Full one; a later Deep run
+    compares with the earlier Deep run."""
+    make_run(tmp_path, "full-1", as_of="2024-12-31")  # credit_snapshot
+
+    def prior(pathway: str) -> str | None:
+        found = find_prior(
+            tmp_path,
+            folder="cur",
+            issuer_id="nbg",
+            **ME,
+            pathway=pathway,
+            as_of="2025-03-31",
+            method=method(),
+        )
+        return None if found is None else found[0].folder
+
+    assert prior("deep_credit_assessment") is None
+    assert prior("credit_snapshot") == "full-1"
+    make_run(tmp_path, "deep-1", as_of="2025-01-31", pathway="deep_credit_assessment")
+    assert prior("deep_credit_assessment") == "deep-1"
+    assert prior("credit_snapshot") == "full-1"  # the later Deep run does not displace it
+
+
 def test_runs_of_one_as_of_date_are_ordered_by_their_first_call(tmp_path):
     make_run(tmp_path, "x-early", as_of="2025-03-31", first_call="2026-11-01T09:00:00Z")
     make_run(tmp_path, "a-late", as_of="2025-03-31", first_call="2026-11-05T09:00:00Z")

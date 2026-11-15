@@ -91,7 +91,9 @@ def test_the_pathways_offered_and_their_labels_are_the_active_ones() -> None:
 def test_each_choice_shows_its_pathways_cap_and_the_summary_shows_the_services() -> None:
     """Ruling 2026-11-15-pathway-tiers-and-caps: one cap table; the page copies it per choice and
     states the summary's own cap (the service's answer), never a fixed USD 20."""
-    caps = dict(re.findall(r"^  (\w+): \{label:'[^']+', cap:'(\d+)'", constant("PATHS"), re.M))
+    caps = dict(
+        re.findall(r"^  (\w+): \{label:'[^']+', cap:'(\d+)'", constant("PATHS"), re.MULTILINE)
+    )
     assert caps == {
         "lite_credit_assessment": "15",
         "credit_snapshot": "25",
