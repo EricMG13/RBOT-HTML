@@ -99,3 +99,20 @@ def test_each_body_row_with_the_wrong_cell_count_is_listed_and_a_fence_is_not_a_
 def test_a_lone_pipe_line_and_a_table_inside_a_comment_are_not_faults() -> None:
     assert table_faults("| only one line |\n\ntext") == ()
     assert table_faults(f"<!--\n{HEAD}\n{SEP8}\n{ROW}\n-->\n") == ()
+
+
+def test_orphan_rows_after_a_blank_line_say_a_blank_line_splits_a_table() -> None:
+    text = f"{HEAD}\n{SEP7}\n{ROW}\n\n{ROW}\n{ROW}\n"
+    (fault,) = table_faults(text)
+    assert fault.startswith("Invalid Markdown table header at line 5: the second row is not made")
+    assert fault.endswith("(a blank line splits a table: remove it, or give these rows their own "
+                          "header and separator)")  # fmt: skip
+
+
+def test_prose_lines_starting_with_a_pipe_and_lacking_a_closing_pipe_are_not_a_table() -> None:
+    assert table_faults("|ΔEBITDA| rose by two\n|ΔLeverage| fell by one\n") == ()
+
+
+def test_a_table_lists_its_faults_in_line_order() -> None:
+    faults = table_faults(f"{HEAD}\n{SEP8}\n| 1 | 2 |\n")
+    assert [f.split(" at line ")[1][:1] for f in faults] == ["1", "3"]

@@ -1296,7 +1296,8 @@ def checker(layout: MarkdownLayout) -> Check:
                 require_issuer(task.run, layout.issuer_aliases, task.module_id, text.splitlines())
                 literal_module(task.module_id, raw)
         except ValueError as error:
-            if str(error) not in faults:  # the adapter's own first table error is listed below
+            listed = any(f.startswith(str(error)) for f in faults)  # its table error, listed below
+            if not listed:
                 issues.append(f"The report adapter refused this handoff: {error}")
         issues += faults
         for route in routes:

@@ -9117,11 +9117,15 @@ def test_each_attempt_keeps_its_method_script_checks_beside_its_review(tmp_path)
 
 
 def test_the_check_lists_every_malformed_table_of_a_draft_in_one_review(tmp_path):
-    """Live 2026-11-15: one refusal per table cost CP-1 two of its three writes."""
+    """Live 2026-11-15: one refusal per table cost CP-1 two of its three writes. The issuer is
+    named as the test's own, so the adapter reaches the tables and raises its first table error:
+    that error is listed once, not also as a refusal of the adapter."""
     fixtures = Path(__file__).parent / "fixtures" / "live_2026_11_15"
     prepared, task, _ = good_task(tmp_path, "CP-1", "earnings_update")
-    raw = (fixtures / "earnings_update-CP-1-draft1.md").read_bytes()
+    text = (fixtures / "earnings_update-CP-1-draft1.md").read_text(encoding="utf-8")
+    raw = text.replace("TransDigm Group Incorporated", ISSUER, 1).encode()
     issues = _checked_handoff(task, raw, checker(prepared.layout))
     for line in (323, 382):
         mine = [i for i in issues if f"table header at line {line}:" in i]
         assert len(mine) == 1, (line, issues)
+    assert not [i for i in issues if i.startswith("The report adapter refused")], issues

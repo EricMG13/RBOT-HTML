@@ -381,27 +381,41 @@ def table_faults(text: str) -> tuple[str, ...]:
     return tuple(faults)
 
 
+_SEPARATOR_LIKE = re.compile(r"\|[\s:|-]*-[\s:|-]*")
+_BLANK_SPLITS = (
+    " (a blank line splits a table: remove it, or give these rows their own header and separator)"
+)
+
+
 def _group_faults(group: list[tuple[int, str]]) -> list[str]:
-    """The faults of one run of pipe lines: its header and separator, then each body row."""
+    """The faults of one run of pipe lines, in line order: its header and separator, then each
+    body row. A run whose second line is not separator-like and that has a line without its
+    closing pipe is prose (`|x| rose`), not a table: no fault. A header whose second line is
+    not made of --- cells says why that may be (rows split from their table by a blank line)."""
+    if _SEPARATOR_LIKE.fullmatch(group[1][1]) is None and not all(
+        row.endswith("|") for _, row in group
+    ):
+        return []
     cells: list[list[str] | None] = []
-    faults = []
+    faults: list[tuple[int, str]] = []
     for line, row in group:
         try:
             cells.append(table_cells(line, row))
         except ValueError as error:
             cells.append(None)
-            faults.append(str(error))
+            faults.append((line, str(error)))
     headers, separator = cells[0], cells[1]
     if headers is None or separator is None:
-        return faults
+        return [fault for _, fault in faults]
     if fault := header_fault(group[0][0], group[0][1], headers, separator):
-        faults.insert(0, fault)
+        hint = _BLANK_SPLITS if "not made of ---" in fault else ""
+        faults.append((group[0][0], fault + hint))
     faults += [
-        fault
+        (line, fault)
         for (line, _), values in zip(group[2:], cells[2:], strict=True)
         if values is not None and (fault := row_fault(line, values, headers))
     ]
-    return faults
+    return [fault for _, fault in sorted(faults, key=lambda item: item[0])]
 
 
 def mapped_module(  # noqa: C901, PLR0915 - pre-existing size (C901 18, 62 statements at base)
