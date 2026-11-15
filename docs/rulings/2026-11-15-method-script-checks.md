@@ -382,6 +382,38 @@ on every module's handoff after the module's own script check. Its outcomes go i
   partial tables; they now carry every declared column (`Not supplied` where synthetic), since a
   handoff without them would be sent back.
 
+## CP-4C, `recovery_waterfall.py` (2026-11-15)
+
+Mapping `deploy_workflow.method_scripts_cp4c`. Restored: none (CP-4C has no scope section).
+
+- What the method says: the SKILL names the script as the owner of "the claims waterfall,
+  per-class recovery percentages, the fulcrum, and the low/base/high sensitivity", claims
+  "consumed in the order you supply"; REF_CP-4C_D: "Allocate residual value by entity and class",
+  the fulcrum "the class receiving the marginal reorganised equity/value after senior claims", "a
+  fulcrum range" when uncertain, recoveries split into cash, reinstated debt, new debt, equity and
+  warrants with timing and discount. T4E.5's declared columns are the waterfall itself: `scenario;
+  entity; available value; priority claim; allocation; residual; currency and scale; legal evidence
+  ID`.
+- Checked, per T4E.5 row (each row is one step, so value by entity, a new collateral pool and a
+  deficiency at a lower rank stay readable): Allocation = the lesser of the row's Priority claim
+  and its Available value, Residual = Available value - Allocation, by the script's `waterfall` on
+  that one claim. An allocation written as an outflow (`-600`, `(600)`, as the value allocation
+  chart writes it) is compared by magnitude: the method fixes no sign. Per scenario, T4E.6's
+  `fulcrum class/range` against the script's fulcrum, only when the scenario's rows are one entity
+  and one chain (each available value the residual of the row before) and the cell names one
+  claim or none (`None`, `Equity`); a range is not compared.
+- Asked of CP-4C (`CP4C_NOTE`, 1,000 characters): Priority claim as `<class>: <amount>`; claims
+  ranking equally in one row; a collateral-limited secured claim as two rows (secured part, then
+  the deficiency at its rank); another entity's or pool's value as its own rows; an allocation the
+  governing evidence sets otherwise written with its reason after the figure (`300 (settlement)`),
+  then not checked. `distressed_restructuring` 1,167,756 to 1,168,756 of 1,186,500.
+- Not checked: a row whose claim states no amount (that scenario's fulcrum too, unless the row is
+  below every read claim, as an equity row is), a cell in another unit, T4E.7 recoveries (forms of
+  consideration and discounting the script does not model), the chart tables `recovery by class`
+  (Recovery % "as the owner states it", maybe on another basis) and `value allocation` (the
+  launcher reconciles its steps), T4E.3's enterprise value (multiple or discount in free text).
+- Evidence: none retained (no distressed run). Synthetic handoffs only, hand-worked.
+
 ## Status
 
 Built and tested offline, module by module. Not accepted: no model has written a restored register

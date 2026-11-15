@@ -240,3 +240,204 @@ def test_a_dotted_declared_name_matches_its_spelled_forms():
     # CP-DR's TDR.5 declares `peer_id.dimension` (PEER_PACK_BLOCK names it as the method does).
     for header in ("peer_id.dimension", "Peer ID.dimension", "peer id dimension"):
         assert mc._present("peer_id.dimension", [header]), header
+
+
+# --- CP-4C: recovery_waterfall.py on T4E.5 and T4E.6 ---------------------------------------------
+
+# SYNTHETIC, USD m, one entity. Worked by hand, each row its own step (allocation = the lesser of
+# claim and available value, residual = available - allocation):
+# Base: 1,000 -> Admin 100 (100, 900) -> TLB 600 (600, 300) -> Notes 500 (300, 0) -> Sub 200
+#       (0, 0). Fulcrum: Senior notes (300 of 500, the first partial recovery).
+# Low:  600 -> Admin 100 (100, 500) -> TLB 600 (500, 0) -> Notes 500 (0, 0). Fulcrum: TLB.
+T4E5_HEAD = (
+    "| scenario | entity | available value | priority claim | allocation | residual "
+    "| currency and scale | legal evidence ID |\n|---|---|---|---|---|---|---|---|\n"
+)
+BASE_ROWS = [
+    ("Base", "HoldCo", "1,000", "Admin and DIP: 100", "100", "900"),
+    ("Base", "HoldCo", "900", "Senior secured TLB: 600", "600", "300"),
+    ("Base", "HoldCo", "300", "Senior notes: 500", "300", "0"),
+    ("Base", "HoldCo", "0", "Subordinated notes: 200", "0", "0"),
+]
+LOW_ROWS = [
+    ("Low", "HoldCo", "600", "Admin and DIP: 100", "100", "500"),
+    ("Low", "HoldCo", "500", "Senior secured TLB: 600", "500", "0"),
+    ("Low", "HoldCo", "0", "Senior notes: 500", "0", "0"),
+]
+T4E6 = """### T4E.6 - Fulcrum
+
+| scenario/EV range | last covered class | first impaired class | fulcrum class/range | note |
+|---|---|---|---|---|
+| Base (EV 1,000) | Senior secured TLB | Senior notes | {base} | Valuation. |
+| Low (EV 600) | Admin and DIP | Senior secured TLB | {low} | Valuation. |
+
+"""
+
+
+def t4e5(rows=None) -> str:
+    rows = BASE_ROWS + LOW_ROWS if rows is None else rows
+    body = "".join(f"| {' | '.join(r)} | USD m | L1 |\n" for r in rows)
+    return "### T4E.5 - Waterfall allocation\n\n" + T4E5_HEAD + body + "\n"
+
+
+def cp4c(t4e5_text: str, base="Senior notes", low="Senior secured TLB") -> str:
+    shell = "---\nmodule_id: CP-4C\n---\n\n## Findings\n\n{}## Calculations\n\n## Gaps\n"
+    return shell.format(t4e5_text + T4E6.format(base=base, low=low))
+
+
+def cp4c_run(text: str) -> list[ms.Outcome]:
+    return list(ms.run("CP-4C", text))
+
+
+def by_status(text: str) -> dict[str, list[str]]:
+    out: dict[str, list[str]] = {}
+    for o in cp4c_run(text):
+        out.setdefault(o.status, []).append(o.figure)
+    return out
+
+
+def test_cp4c_all_right():
+    found = by_status(cp4c(t4e5()))
+    assert set(found) == {"agreed"}
+    assert len(found["agreed"]) == 2 * 7 + 2  # allocation and residual per row, two fulcra
+    assert ms.issues("CP-4C", cp4c(t4e5())) == ()
+
+
+def swap(rows, at, column, value):
+    rows = [list(r) for r in rows]
+    rows[at][column] = value
+    return [tuple(r) for r in rows]
+
+
+@pytest.mark.parametrize(
+    ("rows", "why"),
+    [
+        # rounded inputs: 999.6 shown as 1,000 with 899.6 left; one unit of the last place
+        (swap(BASE_ROWS, 0, 5, "899.6"), "rounding"),
+        # an allocation written as an outflow, as the value allocation chart writes it
+        (swap(BASE_ROWS, 1, 4, "-600"), "outflow sign"),
+        (swap(BASE_ROWS, 1, 4, "(600)"), "bracketed outflow"),
+        # decorated cells and a unit in the cell itself
+        (swap(BASE_ROWS, 1, 4, "**USD 600m**"), "decorated"),
+        # a secured claim limited by collateral: the secured part, then the deficiency later
+        (
+            [
+                ("Base", "HoldCo", "1,000", "TLB secured part: 400", "400", "600"),
+                ("Base", "HoldCo", "600", "Senior notes: 500", "500", "100"),
+                ("Base", "HoldCo", "100", "TLB deficiency: 200", "100", "0"),
+            ],
+            "collateral split",
+        ),
+        # claims ranking equally in one row
+        ([("Base", "HoldCo", "1,000", "TLB and RCF: 1,500", "1,000", "0")], "pari passu"),
+        # another entity's pool: its own rows
+        (BASE_ROWS + [("Base", "OpCo", "250", "Trade claims: 300", "250", "0")], "entity"),
+        # an allocation the governing evidence sets otherwise, with its reason
+        (swap(BASE_ROWS, 2, 4, "250 (settlement)"), "governing evidence"),
+        # a gap
+        (swap(BASE_ROWS, 2, 4, "Not supplied: plan not filed"), "gap"),
+    ],
+)
+def test_cp4c_correct_but_unusual_waterfalls_are_not_sent_back(rows, why):
+    text = cp4c(t4e5(rows), base="Not supplied: see T4E.5", low="Not supplied: no low case")
+    assert ms.issues("CP-4C", text) == (), why
+
+
+@pytest.mark.parametrize(
+    ("rows", "fulcrum"),
+    [
+        # collateral split: the deficiency recovers 100 of 200, the first partial step
+        (
+            [
+                ("Base", "HoldCo", "1,000", "TLB secured part: 400", "400", "600"),
+                ("Base", "HoldCo", "600", "Senior notes: 500", "500", "100"),
+                ("Base", "HoldCo", "100", "TLB deficiency: 200", "100", "0"),
+            ],
+            "TLB deficiency",
+        ),
+        # pari passu in one row: 1,000 of 1,500
+        ([("Base", "HoldCo", "1,000", "TLB and RCF: 1,500", "1,000", "0")], "TLB and RCF"),
+    ],
+)
+def test_cp4c_fulcrum_of_a_split_or_shared_claim(rows, fulcrum):
+    text = cp4c(t4e5(rows), base=fulcrum, low="Not supplied: no low case")
+    assert {o.figure: o.status for o in cp4c_run(text)}["Fulcrum (Base)"] == "agreed"
+
+
+def test_cp4c_fulcrum_written_with_a_note_or_as_a_range():
+    for cell in ("Senior notes (60% recovery)", "Claim: Senior notes - partial"):
+        found = {o.figure: o.status for o in cp4c_run(cp4c(t4e5(), base=cell))}
+        assert found["Fulcrum (Base)"] == "agreed", cell
+    found = {o.figure: o.status for o in cp4c_run(cp4c(t4e5(), base="TLB to Senior notes"))}
+    assert found["Fulcrum (Base)"] == "not checked"
+    # none covered partly: every class whole, value left -> `None`
+    whole = [("Up", "HoldCo", "2,000", "TLB: 600", "600", "1,400")]
+    text = cp4c(t4e5(whole)).replace("| Base (EV 1,000) |", "| Up |")
+    found = {
+        o.figure: o.status
+        for o in cp4c_run(text.replace("| Senior notes | Valuation", "| None | Valuation"))
+    }
+    assert found["Fulcrum (Up)"] == "agreed"
+
+
+def test_cp4c_no_fulcrum_check_across_entities_or_a_broken_chain():
+    entity = BASE_ROWS + [("Base", "OpCo", "250", "Trade claims: 300", "250", "0")]
+    found = {o.figure: o for o in cp4c_run(cp4c(t4e5(entity)))}
+    assert found["Fulcrum (Base)"].status == "not checked"
+    assert "more than one entity" in found["Fulcrum (Base)"].reason
+    broken = swap(BASE_ROWS, 2, 2, "350")  # available 350 after a residual of 300: a new pool
+    broken = swap(broken, 2, 4, "350")  # notes then take 350 of 500 (lesser of), residual 0
+    broken = swap(broken, 2, 5, "0")
+    found = {o.figure: o for o in cp4c_run(cp4c(t4e5(broken)))}
+    assert found["Fulcrum (Base)"].status == "not checked"
+    assert ms.issues("CP-4C", cp4c(t4e5(broken))) == ()
+
+
+def test_cp4c_unread_inputs_are_not_checked_never_zero():
+    nameless = swap(BASE_ROWS, 2, 3, "Senior notes")  # no claim amount
+    found = {o.figure: o for o in cp4c_run(cp4c(t4e5(nameless)))}
+    assert found["Row: Senior notes (Base)"].status == "not checked"
+    assert found["Fulcrum (Base)"].status == "not checked"
+    assert ms.issues("CP-4C", cp4c(t4e5(nameless))) == ()
+    euro = swap(BASE_ROWS, 1, 4, "EUR 600m")
+    assert ms.issues("CP-4C", cp4c(t4e5(euro), low="x")) == ()
+    (only,) = cp4c_run("no register here")
+    assert only.status == "not checked" and "no T4E.5" in only.reason
+
+
+@pytest.mark.parametrize(
+    ("rows", "base", "figure", "recomputed"),
+    [
+        (swap(BASE_ROWS, 1, 4, "550"), "Senior notes", "Allocation: Senior secured TLB", 600),
+        (swap(BASE_ROWS, 1, 4, "700"), "Senior notes", "Allocation: Senior secured TLB", 600),
+        (swap(BASE_ROWS, 2, 5, "50"), "Senior notes", "Residual: Senior notes", 0),
+    ],
+)
+def test_cp4c_wrong_steps_are_sent_back(rows, base, figure, recomputed):
+    issues = ms.issues("CP-4C", cp4c(t4e5(rows + LOW_ROWS), base=base))
+    assert len(issues) == 1 and f"`{figure} (Base, HoldCo)`" in issues[0]
+    assert f"recomputes {recomputed} USD m" in issues[0]
+
+
+def test_cp4c_a_wrong_fulcrum_is_sent_back():
+    (issue,) = ms.issues("CP-4C", cp4c(t4e5(), base="Senior secured TLB"))
+    assert "`Fulcrum (Base)`" in issue and "recomputes Senior notes" in issue
+
+
+def test_cp4c_note_fits_and_names_the_rows():
+    assert "`<class>: <amount>`" in ms.NOTES["CP-4C"] and len(ms.NOTES["CP-4C"]) < 1_300
+
+
+def test_cp4c_a_trailing_equity_row_and_units_in_the_headers():
+    equity = BASE_ROWS + [("Base", "HoldCo", "0", "Equity", "0", "0")]
+    found = {o.figure: o.status for o in cp4c_run(cp4c(t4e5(equity)))}
+    assert found["Fulcrum (Base)"] == "agreed"  # the seniors' fulcrum stands
+    assert found["Row: Equity (Base)"] == "not checked"
+    head = (
+        "| Scenario | Entity | Available value (USD m) | Priority claim | Allocation (USD m) "
+        "| Residual (USD m) | Legal evidence ID |\n|---|---|---|---|---|---|---|\n"
+    )
+    body = "".join(f"| {' | '.join(r)} | L1 |\n" for r in BASE_ROWS)
+    text = cp4c("### T4E.5 - Waterfall\n\n" + head + body + "\n", low="x")
+    assert ms.issues("CP-4C", text) == ()
+    assert {o.status for o in cp4c_run(text) if o.figure.startswith("Allocation")} == {"agreed"}

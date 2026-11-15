@@ -8881,6 +8881,36 @@ def test_cp4_is_checked_by_its_script(tmp_path, pathway):
     assert "T4C.4 row `Headroom: Net leverage` states 0.70 x" in added
 
 
+# SYNTHETIC, USD m: 900 available, TLB claim 600 -> allocation 600, residual 300 (worked in
+# tests/test_method_scripts_rest.py).
+T4E5_ONE = """### T4E.5 - Waterfall allocation
+
+| scenario | entity | available value | priority claim | allocation | residual \
+| currency and scale | legal evidence ID |
+|---|---|---|---|---|---|---|---|
+| Base | HoldCo | 900 | Senior secured TLB: 600 | {allocation} | 300 | USD m | L1 |
+
+"""
+
+
+def test_cp4c_is_checked_by_its_script(tmp_path):
+    (tmp_path / "texts").mkdir()
+    _, texts = all_instructions(tmp_path / "texts", "distressed_restructuring")
+    head = texts["CP-4C"].partition(cpos_launch.METHOD_MARK)[0]
+    assert head.count(method_scripts.NOTES["CP-4C"]) == 1
+    prepared, task, context = good_task(tmp_path, "CP-4C", "distressed_restructuring")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    check = checker(prepared.layout)
+    base = set(_checked_handoff(task, raw.encode(), check))
+    right, wrong = (
+        raw.replace("\n## Calculations", "\n" + T4E5_ONE.format(allocation=a) + "## Calculations")
+        for a in ("600", "550")
+    )
+    assert set(_checked_handoff(task, right.encode(), check)) == base
+    (added,) = set(_checked_handoff(task, wrong.encode(), check)) - base
+    assert "T4E.5 row `Allocation: Senior secured TLB (Base, HoldCo)` states 550" in added
+
+
 def test_cp1_free_name_rows_are_checked_by_its_script(tmp_path):
     # CP-1 is sent its note (owner: "approved"), in every pathway; the method's own T4.9 is read.
     assert "CP-1" in method_scripts.CHECKS and "CP-1" in method_scripts.NOTES
