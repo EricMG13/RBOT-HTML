@@ -52,8 +52,7 @@ ROUTING_COLUMN = re.compile(r"downstream|receiving module|next module|consumer",
 MISSING_COLUMNS = (
     "{register} lacks the method's column{s} {names}: its Output profile declares every column of "
     "the register. Write {register}'s table with all of them, under the method's names (a column "
-    "with nothing to report holds `Not supplied: <reason>`); a column renamed or merged into "
-    "another does not count."
+    "with nothing to report holds `Not supplied: <reason>`); a renamed column does not count."
 )
 SHOWN = 6  # placeholder cells named in one outcome
 
