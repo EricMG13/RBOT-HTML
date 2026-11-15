@@ -8950,6 +8950,36 @@ def test_cp1c_is_checked_by_its_script(tmp_path, pathway):
     assert "T4.6 row `Peer Median: EV/EBITDA` states 12.0 x" in added
 
 
+# SYNTHETIC: a maximum 6.0x trigger against 5.2x has headroom 6.0 - 5.2 = 0.8x, Compliant (worked
+# in tests/test_method_scripts_rest.py).
+T2R4_ONE = """### T2R.4 - Quantitative trigger matrix
+
+| agency | rating type | trigger direction | metric | threshold | case/period value | headroom \
+| status |
+|---|---|---|---|---|---|---|---|
+| Moody's | CFR | maximum | Debt/EBITDA | 6.0x | Base FY2025: 5.2x | {headroom} | Compliant |
+
+"""
+
+
+def test_cp2h_is_checked_by_its_script(tmp_path):
+    (tmp_path / "texts").mkdir()
+    _, texts = all_instructions(tmp_path / "texts", "distressed_restructuring")
+    head = texts["CP-2H"].partition(cpos_launch.METHOD_MARK)[0]
+    assert head.count(method_scripts.NOTES["CP-2H"]) == 1
+    prepared, task, context = good_task(tmp_path, "CP-2H", "distressed_restructuring")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    check = checker(prepared.layout)
+    base = set(_checked_handoff(task, raw.encode(), check))
+    right, wrong = (
+        raw.replace("\n## Calculations", "\n" + T2R4_ONE.format(headroom=h) + "## Calculations")
+        for h in ("0.8x", "1.8x")
+    )
+    assert set(_checked_handoff(task, right.encode(), check)) == base
+    (added,) = set(_checked_handoff(task, wrong.encode(), check)) - base
+    assert "T2R.4 row `Headroom: Debt/EBITDA` states 1.8 x" in added
+
+
 def test_cp1_free_name_rows_are_checked_by_its_script(tmp_path):
     # CP-1 is sent its note (owner: "approved"), in every pathway; the method's own T4.9 is read.
     assert "CP-1" in method_scripts.CHECKS and "CP-1" in method_scripts.NOTES

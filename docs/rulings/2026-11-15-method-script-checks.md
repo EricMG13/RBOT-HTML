@@ -453,6 +453,36 @@ Mapping `deploy_workflow.method_scripts_cp1c`. Restored: none (CP-1C has no scop
   convention, tell CP-1C so in its note (about 60 characters) and check Q1 and Q3; until then they
   are recorded as not checked.
 
+## CP-2H, `covenant_headroom.py` `trigger_headroom` (2026-11-15)
+
+Mapping `deploy_workflow.method_scripts_cp2h`. Restored: none (CP-2H has no scope section). The
+script is the same archived bytes CP-4's check runs.
+
+- What the method says: the SKILL: the script "owns T2R.4 signed trigger headroom via its
+  `trigger_headroom` entry point. The max-ratio vs min-ratio direction comes from the register's own
+  `trigger direction` column — required, never inferred"; REF_CP-2H_C: different formulas for a
+  maximum and a minimum trigger, "Where the agency supplies a range ... show distance to both
+  bounds", "a point-in-time breach is not automatically a trigger", no numerical headroom for a
+  qualitative trigger. T2R.4: `agency; rating type; trigger direction; metric; threshold;
+  case/period value; headroom; status`.
+- Checked, per row: Headroom (maximum: threshold - value; minimum: value - threshold; to each bound
+  of a range) and Status (Compliant, At threshold, Breached against the binding bound), by the
+  script's `trigger_headroom` on the row's own cells. The direction goes to the script's
+  `normalise_test_type` as written or its first word; `upgrade`, `downgrade`, `maintenance` and
+  `incurrence` name no ceiling or floor, so such a row is not checked. A threshold is one figure or
+  a range of two (`5.0x-5.5x`, `5.0x to 5.5x`); a comparator and a year (`FY2025E`) are not figures.
+  A value cell with several cases (`5.2x / 6.4x`) pairs with as many ` / ` parts in Headroom and
+  Status; otherwise the row is not checked. A stated headroom against a range agrees with the
+  distance to either bound, and each of two stated figures with one. Status read from its first
+  word (`Breach (point-in-time)` is Breached); not decided when the recomputed headroom is within
+  the inputs' rounding of zero (as CP-4). Threshold, value and headroom must be in one unit (`x`,
+  `%`, or one currency and scale).
+- Note (`CP2H_NOTE`, 667 characters), `distressed_restructuring` only: 1,169,452 to 1,170,119 of
+  1,186,500.
+- Not checked by design: whether a breach is sustained (the script needs the agency's ordered
+  observation window, `sustained_periods`, which no column holds), qualitative triggers.
+- Evidence: none retained (no distressed run). Synthetic proof only.
+
 ## Status
 
 Built and tested offline, module by module. Not accepted: no model has written a restored register

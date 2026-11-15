@@ -631,3 +631,89 @@ def test_cp1c_a_peer_gap_or_a_noted_status_is_read_as_the_method_reads_it():
     text = text.replace("| Comparable |\n| Peer B", "| Comparable (size gap) |\n| Peer B")
     statuses = {o.figure: o.status for o in ms.run("CP-1C", text) if "Margin" in o.figure}
     assert {v for k, v in statuses.items() if " Q" not in k} == {"agreed"}
+
+
+# --- CP-2H: covenant_headroom.py (trigger_headroom) on T2R.4 -------------------------------------
+
+# SYNTHETIC, worked by hand. Maximum 6.0x against 5.2x: 6.0 - 5.2 = 0.8, Compliant. Minimum 2.0x
+# against 1.8x: 1.8 - 2.0 = -0.2, Breached. Range 5.0x-5.5x, maximum, against 5.2x: 5.0 - 5.2 =
+# -0.2 to the binding (lower) bound, 5.5 - 5.2 = 0.3 to the upper; Breached against the binding
+# bound. Two cases 5.2x / 6.4x against a maximum 6.0x: 0.8 Compliant, -0.4 Breached.
+T2R4_HEAD = (
+    "| agency | rating type | trigger direction | metric | threshold | case/period value "
+    "| headroom | status |\n|---|---|---|---|---|---|---|---|\n"
+)
+T2R4_ROWS = [
+    "| Moody's | CFR | maximum | Debt/EBITDA | 6.0x | Base FY2025: 5.2x | 0.8x | Compliant |",
+    "| S&P | ICR | minimum | EBITDA/interest | 2.0x | Base FY2025: 1.8x | -0.2x | Breached |",
+    (
+        "| Fitch | IDR | maximum | Net leverage | 5.0x-5.5x | 5.2x | -0.2x / 0.3x "
+        "| Breached (lower bound) |"
+    ),
+    (
+        "| Moody's | CFR | maximum | Gross leverage | 6.0x | 5.2x / 6.4x | 0.8x / -0.4x "
+        "| Compliant / Breached |"
+    ),
+]
+
+
+def cp2h(*rows: str) -> str:
+    body = "\n".join(rows or T2R4_ROWS)
+    return f"## Findings\n\n### T2R.4 - Quantitative triggers\n\n{T2R4_HEAD}{body}\n\n## Gaps\n"
+
+
+def cp2h_by(text: str) -> dict[str, str]:
+    return {o.figure: o.status for o in ms.run("CP-2H", text)}
+
+
+def test_cp2h_all_right():
+    found = cp2h_by(cp2h())
+    assert set(found.values()) == {"agreed"}, found
+    assert len(found) == 2 * 5  # headroom and status, one row each and two cases in the last
+    assert ms.issues("CP-2H", cp2h()) == ()
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "why"),
+    [
+        ("| maximum | Debt/EBITDA |", "| Maximum (leverage ceiling) | Debt/EBITDA |", "noted"),
+        ("| 6.0x | Base FY2025: 5.2x |", "| > 6.0x | Base FY2025E: 5.2x |", "comparator, year"),
+        ("| 0.8x | Compliant |", "| 0.76x | Compliant |", "an unrounded input"),
+        ("| -0.2x | Breached |", "| (0.2x) | Breach (point-in-time) |", "brackets, words"),
+        ("| -0.2x / 0.3x |", "| 0.3x |", "one bound's distance of a range"),
+        ("| maximum | Debt/EBITDA |", "| downgrade | Debt/EBITDA |", "no ceiling or floor"),
+        ("| 6.0x | Base FY2025: 5.2x |", "| Aggressive financial policy | Base |", "qualitative"),
+        ("| Compliant |\n", "| Watch |\n", "a status the script has no word for"),
+    ],
+)
+def test_cp2h_correct_but_unusual_rows_are_not_sent_back(old, new, why):
+    text = cp2h()
+    assert old in text, why
+    assert ms.issues("CP-2H", text.replace(old, new, 1)) == (), why
+
+
+def test_cp2h_status_at_the_rounding_edge_is_not_decided():
+    # 6.0x against 5.97x shown as 6.0x: headroom 0.0 recomputed, Breached stated from 6.03x
+    row = "| Moody's | CFR | maximum | Debt/EBITDA | 6.0x | 6.0x | 0.0x | Breached |"
+    assert cp2h_by(cp2h(row))["Status: Debt/EBITDA"] == "not checked"
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "figure"),
+    [
+        ("| -0.2x | Breached |", "| 0.2x | Breached |", "Headroom: EBITDA/interest"),
+        ("| -0.2x | Breached |", "| -0.2x | Compliant |", "Status: EBITDA/interest"),
+        ("| 0.8x / -0.4x |", "| 0.8x / 0.4x |", "Headroom: Gross leverage (case 2)"),
+    ],
+)
+def test_cp2h_a_wrong_headroom_or_status_is_sent_back(old, new, figure):
+    (issue,) = ms.issues("CP-2H", cp2h().replace(old, new, 1))
+    assert f"`{figure}`" in issue
+
+
+def test_cp2h_a_range_compares_each_stated_bound():
+    # 5.0x-5.5x against 5.2x: -0.2 to the lower bound, 0.3 to the upper. A wrong second figure
+    # (0.7; tolerance 0.1 + the inputs' rounding 0.1) is a disagreement, not ignored.
+    text = cp2h().replace("| -0.2x / 0.3x |", "| -0.2x / 0.7x |")
+    (issue,) = ms.issues("CP-2H", text)
+    assert "`Headroom: Net leverage`" in issue
