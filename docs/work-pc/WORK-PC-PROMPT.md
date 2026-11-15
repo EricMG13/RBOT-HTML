@@ -20,7 +20,19 @@ every edit must come from the download or from an adaptation already in my copy.
 2. New packs: the folders in `<DOWNLOAD>/docs/work-pc/syncs/` that are not in
    `<ADAPTED>/docs/work-pc/syncs/`, in number order. If `<ADAPTED>` has no
    `docs/work-pc/` folder, every pack is new. Read each new pack's `CHANGES.md`.
-3. Confirm the packs cover the download:
+   Numbers are never reused, and packs older than 14 days are removed from the
+   download, so the numbers may start above `001`.
+3. Confirm no pack is missing: `base` in the lowest-numbered new pack's `SYNC.json`
+   must equal `head` in `<ADAPTED>/docs/work-pc/manifest.json` (if `<ADAPTED>` has no
+   `docs/work-pc/` folder: must start with `04e7221`). If it does not, packs between
+   my last sync and this download were removed. Then stop and ask me for `<OLD>`: the
+   extracted ZIP of that `head` commit
+   (`https://github.com/EricMG13/RBOT-HTML/archive/<head>.zip`). Confirm it with
+   `python <DOWNLOAD>/tools/work_pc_delta.py check <OLD> --manifest <ADAPTED>/docs/work-pc/manifest.json`
+   (no `docs/work-pc/` folder: `--manifest <DOWNLOAD>/docs/work-pc/baselines/04e7221.json`),
+   which must print `identical`. Wherever a later step uses the new packs, use `<OLD>`
+   as well: it is the full old upstream text for the range the packs do not cover.
+4. Confirm the packs cover the download:
    `python <DOWNLOAD>/tools/work_pc_delta.py check <DOWNLOAD>`
    If it prints `differs`/`missing`/`extra` lines, the download is newer than the last
    pack: those files have no pack entry, so read them in full in step 4.
@@ -48,6 +60,8 @@ Each line is an action for one file:
 Collect the "Packages and versions" tables from every new pack's `CHANGES.md`. Apply
 each version change (latest pack wins) using this PC's usual package source. If a
 version cannot be installed here, stop and tell me which package and version.
+If packs are missing (step 1, item 3), also compare `pyproject.toml` and `uv.lock`
+in `<OLD>` with those in `<DOWNLOAD>`: that comparison is the complete list.
 
 ## 4. Copy and delete
 
@@ -61,7 +75,9 @@ For each `merge` file:
 1. Find the file in the new packs (`CHANGES.md` gives the `Where` lines;
    `changes.patch` gives the exact hunks, oldest pack first).
 2. Work out this PC's adaptation: where `<ADAPTED>` differs from the old upstream text.
-   That old text is the `-` and context lines of the hunks.
+   That old text is the `-` and context lines of the hunks. If packs are missing,
+   the old text is the same file in `<OLD>`, and the upstream change is the difference
+   between `<OLD>` and `<DOWNLOAD>`.
 3. Start from the download's version and re-apply that adaptation, keeping the
    adaptation's intent where the upstream code around it moved or changed.
 4. If the upstream change makes the adaptation unnecessary, or the two cannot be
@@ -89,8 +105,8 @@ Only when steps 3–6 are done, replace `<ADAPTED>/docs/work-pc/` with
 ## Report
 
 Reply with:
-- the packs processed (first and last number) and the counts of copy, delete, merge
-  and keep;
+- the packs processed (first and last number), whether any were missing and `<OLD>`
+  was used, and the counts of copy, delete, merge and keep;
 - the package changes applied, or not applied and why;
 - each merged file: the adaptation re-applied, or why the download's version was kept;
 - the files adapted in step 6 and the adaptation used;
