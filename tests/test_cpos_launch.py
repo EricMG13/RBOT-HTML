@@ -9114,3 +9114,14 @@ def test_each_attempt_keeps_its_method_script_checks_beside_its_review(tmp_path)
     _, other, _ = good_task(tmp_path / "other", "CP-L10", "short_snapshot")
     _handoff(other, tmp_path / "run1", lambda _task: shell.format("").encode(), lambda *_: (), 1)
     assert not list((tmp_path / "run1").rglob("*.method-checks.json"))
+
+
+def test_the_check_lists_every_malformed_table_of_a_draft_in_one_review(tmp_path):
+    """Live 2026-11-15: one refusal per table cost CP-1 two of its three writes."""
+    fixtures = Path(__file__).parent / "fixtures" / "live_2026_11_15"
+    prepared, task, _ = good_task(tmp_path, "CP-1", "earnings_update")
+    raw = (fixtures / "earnings_update-CP-1-draft1.md").read_bytes()
+    issues = _checked_handoff(task, raw, checker(prepared.layout))
+    for line in (323, 382):
+        mine = [i for i in issues if f"table header at line {line}:" in i]
+        assert len(mine) == 1, (line, issues)

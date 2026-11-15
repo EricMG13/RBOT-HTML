@@ -1,8 +1,10 @@
 """The table reader's refusals name the line and the fault, so a model can fix its draft."""
 
+from pathlib import Path
+
 import pytest
 
-from deploy_workflow.handoff_delivery import table
+from deploy_workflow.handoff_delivery import table, table_faults
 
 HEAD = "| A | B | C | D | E | F | G |"
 SEP7 = "|---|---|---|---|---|---|---|"
@@ -61,3 +63,39 @@ def test_too_short_table_names_its_first_line() -> None:
 
 def test_no_table_keeps_the_plain_message() -> None:
     assert refusal() == "Expected a populated Markdown table"
+
+
+LIVE = Path(__file__).parent / "fixtures" / "live_2026_11_15"
+# Live 2026-11-15, copilot-sol-medium, TDG FY2024: (header line, header cells, separator cells).
+LIVE_FAULTS = {
+    "earnings_update-CP-1-draft1.md": ((323, 4, 5), (382, 7, 8)),
+    "relative_value-CP-1-draft1.md": ((278, 7, 8), (325, 17, 18)),
+    "distressed-CP-1-draft1.md": ((222, 5, 6), (258, 5, 6)),
+}
+
+
+@pytest.mark.parametrize("name", sorted(LIVE_FAULTS))
+def test_every_malformed_table_of_a_rejected_draft_is_listed_once(name: str) -> None:
+    faults = table_faults((LIVE / name).read_text(encoding="utf-8"))
+    assert len(faults) == 2
+    for fault, (line, head, sep) in zip(faults, LIVE_FAULTS[name], strict=True):
+        assert fault.startswith(f"Invalid Markdown table header at line {line}: ")
+        assert f"the header has {head} cells and the separator row has {sep}" in fault
+
+
+def test_the_accepted_draft_has_no_table_fault() -> None:
+    accepted = LIVE / "earnings_update-CP-1-draft3-accepted.md"
+    assert table_faults(accepted.read_text(encoding="utf-8")) == ()
+
+
+def test_each_body_row_with_the_wrong_cell_count_is_listed_and_a_fence_is_not_a_table() -> None:
+    bad_rows = f"{HEAD}\n{SEP7}\n{ROW}\n| 1 | 2 |\n{ROW}\n| 1 |\n"  # lines 4 and 6 are short
+    text = f"{bad_rows}\n```\n{HEAD}\n{SEP8}\n```\n"  # the fenced pair is not a table
+    faults = table_faults(text)
+    assert [f.split(" at line ")[1][:1] for f in faults] == ["4", "6"]
+    assert all(f.startswith("Markdown table row does not match its header") for f in faults)
+
+
+def test_a_lone_pipe_line_and_a_table_inside_a_comment_are_not_faults() -> None:
+    assert table_faults("| only one line |\n\ntext") == ()
+    assert table_faults(f"<!--\n{HEAD}\n{SEP8}\n{ROW}\n-->\n") == ()
