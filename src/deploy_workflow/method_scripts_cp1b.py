@@ -31,6 +31,7 @@ from deploy_workflow.method_scripts import (
     ARCHIVE,
     Loaded,
     Outcome,
+    Status,
     Table,
     Upstream,
     _Claim,
@@ -50,6 +51,12 @@ from deploy_workflow.method_scripts import (
 )
 
 CREDIT_METRICS = ARCHIVE + "skills/cp-1-canonical-data-foundation/scripts/credit_metrics.py"
+# T4.4's cost lines (REF_CP-1B_05: COGS, SG&A, D&A, cash interest and taxes, capex) and any other.
+_COST = re.compile(
+    r"\b(?:cogs|cost|costs|sg&a|sga|expense|expenses|interest|tax|taxes|capex|d&a|depreciation|"
+    r"amorti[sz]ation)\b",
+    re.IGNORECASE,
+)
 GROWTH_FORMULA = (
     "% Change = Current / Prior - 1, in percent; none on a zero prior (credit_metrics.py growth, "
     "which CP-1B's SKILL names for T4.4 and T4.6)"
@@ -100,18 +107,30 @@ def _amount(cell: str, tables: types.ModuleType) -> tuple[float, int, str] | Non
     return read[0], read[1], unit
 
 
+def _dash(text: str) -> str:
+    """A leading en dash or minus sign as the minus it is (`–7.3%`, `−600`)."""
+    return re.sub(r"^([(\s]*)[–−]", r"\1-", text)
+
+
+def states_figure(cell: str) -> bool:
+    """Whether a change cell states a figure: it starts with one, its bracketed notes aside
+    (`N/A (zero base)` and `New` state none; `(10.0%)` and `7.1% (organic)` state one)."""
+    text = _dash(_plain(cell))
+    return bool(re.match(r"^\s*\(?\s*[-+]?\s*\d", text))
+
+
 def _stated(cell: str) -> str:
     """The % Change cell as a share the harness reads: `%` kept; a bare figure in a % column is
     percent when above 1, and not read when 1 or less (a decimal or a small percentage)."""
-    text = _plain(cell)
+    text = _dash(_plain(cell))
     if re.search(r"\b(?:pp|bps?|ppt|points?)\b", text, re.IGNORECASE):
         raise _NotChecked(f"`{cell}` is a change in points, not a percentage change")
     if "%" in text:
         return text
-    read = re.sub(r"[^\d.]", "", text)
-    if read and float(read or 0) > 1:
+    read = re.fullmatch(r"\(?[-+]?(\d[\d,]*(?:\.\d+)?)\)?", text.strip())
+    if read and float(read[1].replace(",", "")) > 1:
         return f"{text}%"
-    raise _NotChecked(f"`{cell}` states no `%`, and at 1 or less it may be a decimal")
+    raise _NotChecked(f"`{cell}` states no `%` figure above 1 (a decimal or a small percentage)")
 
 
 def _check(pair: _Pair, loaded: Loaded) -> Outcome:
@@ -122,29 +141,40 @@ def _check(pair: _Pair, loaded: Loaded) -> Outcome:
         prior, current = _amount(pair.prior, tables), _amount(pair.current, tables)
         if prior is None or current is None:
             raise _NotChecked("a prior or current value is not stated (missing, not zero)")
-        if prior[2] != current[2] and prior[2] and current[2]:
+        if prior[2] != current[2]:  # one stated unit beside a bare figure is no match either
             raise _NotChecked(f"prior and current are in different units: {prior[2]}, {current[2]}")
         if prior[0] < 0:
             raise _NotChecked(
                 "the prior is below zero: a change on a negative base is a convention"
             )
         value = loaded.script.growth(current[0], prior[0])
-        if value is None:  # a zero prior: the script gives none
-            agreed = said_none(pair.stated)
+        if value is None:  # a zero prior: the script gives none; only a stated figure disagrees
+            if not states_figure(pair.stated):
+                status: Status = "agreed" if said_none(pair.stated) else "not checked"
+                why = f"{GROWTH_FORMULA}; the prior is zero and the cell states no figure"
+                return where(status, stated=pair.stated, reason=why)
+            why = f"{GROWTH_FORMULA}; the prior is zero"
             return where(
-                "agreed" if agreed else "disagreed",
-                stated=pair.stated,
-                recomputed_label="Not Calculable",
-                reason=f"{GROWTH_FORMULA}; the prior is zero",
+                "disagreed", stated=pair.stated, recomputed_label="Not Calculable", reason=why
             )
-        if said_none(pair.stated):
-            raise _NotChecked("the change is stated as none where the script computes one")
+        if not states_figure(pair.stated):
+            raise _NotChecked("the change states no figure where the script computes one")
         text = _stated(pair.stated)
+        if _COST.search(pair.name) and _sign(text) != (value >= 0):
+            # A cost may carry either sign: the method fixes none (SKILL: "absolute and
+            # percentage change"), so a cost's rise may be written as an unfavourable (10.0%).
+            text = text.replace("(", "").replace(")", "").lstrip("-+ ")
+            value = abs(value)
     except _NotChecked as error:
         return where("not checked", stated=pair.stated, reason=str(error))
     slack = quotient_slack(current[0], half(current[1]), prior[0], half(prior[1]))
     claim = _Claim(where, text, value, 1e-6, "", GROWTH_FORMULA, slack=slack)
     return share(claim, tables)
+
+
+def _sign(text: str) -> bool:
+    """Whether a stated change is zero or more."""
+    return not re.match(r"^\s*(?:\(|-)", text)
 
 
 def _column(table: Table, *names: str) -> int | None:
@@ -166,6 +196,12 @@ def _t46(text: str) -> list[_Pair] | str:
 
 def _compact(label: str) -> str:
     return _label(label).replace(" ", "").replace("'", "")
+
+
+def _kind(label: str) -> str:
+    """A period header without its year (`Q3 2024` -> `q3`, `FY2024` -> `fy`)."""
+    found = _YEAR.match(_compact(label))
+    return found["pre"] if found else _compact(label)
 
 
 def _year(label: str) -> int:
@@ -197,16 +233,26 @@ def _t44(text: str) -> list[_Pair] | str:
     periods = [i for i, h in enumerate(table[0]) if _PERIOD.match(_label(h))]
     if not periods:
         return "T4.4 names no period columns"
-    latest = max(periods, key=lambda i: (_year(table[0][i]), i))  # the latest year, rightmost
-    earlier = _year_earlier(
-        table[0][latest], [table[0][i] if i in periods else "" for i in range(len(table[0]))]
-    )
-    if earlier is None:
-        return f"T4.4 has no column one year before `{table[0][latest]}`"
+    labels = [table[0][i] if i in periods else "" for i in range(len(table[0]))]
+    top = max(_year(table[0][i]) for i in periods)
+    pairs = [
+        (i, j)
+        for i in periods
+        if _year(table[0][i]) == top and (j := _year_earlier(table[0][i], labels)) is not None
+    ]
+    if not pairs:
+        return "T4.4 has no period column one year before its latest"
+    if len({_kind(table[0][i]) for i, _ in pairs}) > 1:  # `Q3 2024` and `9M 2024` both pair
+        return (
+            "T4.4 has more than one period kind with a year-earlier column; its YoY pair is unsaid"
+        )
+    latest, earlier = pairs[-1]
     out = []
     for row in table[1]:
         stated = (
-            row[pct] if pct is not None else (_plain(row[int(joined or 0)]).split("/") + [""])[1]
+            row[pct]
+            if pct is not None
+            else ([*re.split(r"\s+/\s+", _plain(row[int(joined or 0)])), ""])[1]
         )
         out.append(_Pair("T4.4", _plain(row[line]), row[earlier], row[latest], stated))
     return out

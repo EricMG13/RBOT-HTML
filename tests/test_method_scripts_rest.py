@@ -72,7 +72,9 @@ def test_the_retained_cp2e_handoffs_are_not_sent_back():
         cut = {o.register for o in outcomes if "not required in this transport" in o.reason}
         assert cut == {"T2F.2", "T2F.8", "T2F.9"}, name  # CPOS_REGISTER_SCOPE.md § CP-2E
         columns = {o.register for o in outcomes if o.figure == "columns" and o.status == "agreed"}
-        assert len(columns) == 14, name  # 17 declared, less the three cut
+        gaps = {o.register for o in outcomes if "states a gap" in o.reason}
+        assert len(columns | gaps) == 14, name  # 17 declared, less the three cut
+        assert gaps <= {"T2G.5"}, name  # h3's T2G.5: every row `Not supplied` (no linked debt)
 
 
 def test_the_h3_placeholder_count_is_the_scripts_own():
@@ -811,3 +813,409 @@ def test_cp1b_t44_period_pairs():
 def test_cp1b_a_wrong_change_is_sent_back(cells, figure):
     (issue,) = ms.issues("CP-1B", cp1b(**cells))
     assert f"`{figure}`" in issue
+
+
+@pytest.mark.parametrize(
+    ("row", "why"),
+    [
+        # A duration is not a range bound: 6.0 - 5.2 = 0.8, Compliant (review, 2026-11-15).
+        (
+            (
+                "| Moody's | CFR | maximum | Debt/EBITDA | > 6.0x for 2 consecutive quarters "
+                "| 5.2x | 0.8x | Compliant |"
+            ),
+            "duration",
+        ),
+        # A minimum 25% within 3 years against 22%: 22 - 25 = -3, Breached.
+        ("| S&P | ICR | minimum | FFO/debt | 25% within 3 years | 22% | -3% | Breached |", "years"),
+        # `between ... and` is a range: 5.0 - 5.2 = -0.2 to the binding bound.
+        (
+            (
+                "| Fitch | IDR | maximum | Net leverage | between 5.0x and 5.5x | 5.2x | -0.2x "
+                "| Breached |"
+            ),
+            "between",
+        ),
+        # An unsigned breach with the word that carries its sign: -0.2.
+        ("| S&P | ICR | minimum | Coverage | 2.0x | 1.8x | 0.2x shortfall | Breached |", "word"),
+        ("| S&P | ICR | minimum | Coverage | 2.0x | 1.8x | Breach of 0.2x | Breached |", "word"),
+        # A case label with its own number: `(12 months)` is not a second case.
+        (
+            "| S&P | ICR | minimum | Coverage | 2.0x | LTM (12 months): 1.8x | -0.2x | Breached |",
+            "label",
+        ),
+    ],
+)
+def test_cp2h_review_cases_are_read_as_written(row, why):
+    found = cp2h_by(cp2h(row))
+    assert set(found.values()) == {"agreed"}, (why, found)
+
+
+def test_cp4c_review_a_unit_mismatch_stops_the_fulcrum_too():
+    # USD 1.0bn available against TLB: USD 400m: the row is not checked, and its scenario's
+    # fulcrum is not computed from the raw 1.0 and 400 (review, 2026-11-15).
+    rows = [("Base", "HoldCo", "USD 1.0bn", "TLB: USD 400m", "400", "600")]
+    found = {o.figure: o.status for o in cp4c_run(cp4c(t4e5(rows), base="Equity", low="x"))}
+    assert found["Fulcrum (Base)"] == "not checked"
+    assert ms.issues("CP-4C", cp4c(t4e5(rows), base="Equity", low="x")) == ()
+
+
+def test_cp4c_review_rows_that_repeat_the_pool_are_read_as_one_pool():
+    # Every row states the pool, 1,000; residual is what is left after the rows above:
+    # Admin 100 (100, 900), TLB 600 (600, 300), Notes 500 (300, 0). Fulcrum: Senior notes.
+    rows = [
+        ("Base", "HoldCo", "1,000", "Admin and DIP: 100", "100", "900"),
+        ("Base", "HoldCo", "1,000", "Senior secured TLB: 600", "600", "300"),
+        ("Base", "HoldCo", "1,000", "Senior notes: 500", "300", "0"),
+    ]
+    text = cp4c(t4e5(rows), low="x")
+    assert {o.status for o in cp4c_run(text) if o.figure != "Fulcrum (Low)"} == {"agreed"}
+    wrong = cp4c(t4e5(swap(rows, 2, 4, "500")), low="x")  # notes cannot take 500 of 300 left
+    (issue,) = ms.issues("CP-4C", wrong)
+    assert "`Allocation: Senior notes (Base, HoldCo)`" in issue and "recomputes 300" in issue
+
+
+def test_cp4c_review_a_fulcrum_at_a_class_boundary_is_not_decided():
+    # 1,000 against Admin 100 + TLB 900: value runs out exactly at the TLB/notes boundary. The
+    # script names no fulcrum; `Senior secured TLB` (last covered) or `Senior notes` (first
+    # impaired) is defensible: not checked, never sent back.
+    rows = [
+        ("Base", "HoldCo", "1,000", "Admin and DIP: 100", "100", "900"),
+        ("Base", "HoldCo", "900", "Senior secured TLB: 900", "900", "0"),
+        ("Base", "HoldCo", "0", "Senior notes: 500", "0", "0"),
+    ]
+    for name in ("Senior secured TLB", "Senior notes", "None"):
+        found = {o.figure: o.status for o in cp4c_run(cp4c(t4e5(rows), base=name, low="x"))}
+        assert found["Fulcrum (Base)"] in ("agreed", "not checked"), name
+    # inside a class it is still decided: Admin and DIP is not the fulcrum there
+    found = {o.figure: o.status for o in cp4c_run(cp4c(t4e5(rows), base="Admin and DIP", low="x"))}
+    assert found["Fulcrum (Base)"] == "disagreed"
+
+
+def test_cp4c_review_equal_ranking_claims_listed_in_one_row_are_summed():
+    # `TLB: 900; RCF: 600` is one class of 1,500; 1,000 available: allocation 1,000, residual 0.
+    rows = [("Base", "HoldCo", "1,000", "TLB: 900; RCF: 600", "1,000", "0")]
+    text = cp4c(t4e5(rows), base="TLB and RCF", low="x")
+    found = {o.figure: o.status for o in cp4c_run(text)}
+    assert found["Allocation: TLB and RCF (Base, HoldCo)"] == "agreed"
+    assert found["Fulcrum (Base)"] == "agreed"
+
+
+@pytest.mark.parametrize(
+    "cell",
+    ["n/a (N=4)", "Suppressed (N=4)", "Below gate", "Not computed", "NC", "n.a.", "N<5"],
+)
+def test_cp1c_review_words_below_the_gate_are_never_sent_back(cell):
+    # EV/EBITDA has N = 4: the method's gate gives no average; a cell stating no figure cannot
+    # disagree with "no figure" (review, 2026-11-15).
+    text = cp1c().replace("| Not calculable (N=4) |", f"| {cell} |")
+    assert ms.issues("CP-1C", text) == ()
+    assert cp1c_by(text)["Peer Avg: EV/EBITDA"].status in ("agreed", "not checked")
+
+
+def test_cp1c_review_an_indicative_figure_below_the_gate_disagrees():
+    # Step 04D: "Min 3 for median, 4 quartile, 5 avg"; REF: "Do not calculate average ...
+    # unless sufficient comparable datapoints exist". No indicative exception.
+    text = cp1c().replace("| Not calculable (N=4) |", "| 11.25x (indicative only) |")
+    (issue,) = ms.issues("CP-1C", text)
+    assert "`Peer Avg: EV/EBITDA`" in issue
+
+
+def test_cp1c_review_an_absolute_metric_is_not_taken_as_the_multiple():
+    # T4.6 holds an absolute EBITDA row and no EV/EBITDA row: T4.10's `EV/EBITDA trading comps`
+    # is not matched to it (`ebitda` is a part of `ev/ebitda`, not the multiple).
+    t46 = (
+        "### T4.6 - Summary statistics\n\n| Metric | Borrower Value | Peer Avg | Median | Min "
+        "| Max | Q1 | Q3 | N | Borrower Position |\n|---|---|---|---|---|---|---|---|---|---|\n"
+        "| EBITDA | 220 | 240 | 264 | 160 | 312 | — | — | 5 | Below |\n\n"
+    )
+    text = cp1c(t46=t46)
+    assert ms.issues("CP-1C", text) == ()
+    found = cp1c_by(text)
+    assert found["Implied EV Low: EV/EBITDA trading comps"].status == "not checked"
+
+
+def test_cp1c_review_an_empty_cell_in_a_joined_column_is_one_peer_without_a_value():
+    t45 = (
+        "### T4.5 - Credit metrics\n\n| Entity | Total/Net/Sr Sec Leverage | Calc/Comp Status |\n"
+        "|---|---|---|\n| Peer A | 4.0x / 3.5x / 2.0x | Reported / Comparable |\n"
+        "| Peer B |  | Reported / Comparable |\n"
+        "| Peer C | 6.0x / 5.5x / 4.0x | Reported / Comparable |\n\n"
+    )
+    # Net leverage over A and C (B states none): N = 2, min 3.5, max 5.5, no median (gate 3).
+    t46 = (
+        "### T4.6 - S\n\n| Metric | Borrower Value | Peer Avg/Median/Min/Max | N |\n"
+        "|---|---|---|---|\n| Net Leverage | 4.0x | n.m. / n.m. / 3.5x / 5.5x | 2 |\n\n"
+    )
+    found = cp1c_by(cp1c(t46=t46 + t45))
+    assert {found[f"Peer {s}: Net Leverage"].status for s in ("Avg", "Median", "Min", "Max")} == {
+        "agreed"
+    }
+
+
+# --- completeness: every enforced module, headers written in harmless other ways ------------------
+
+ENFORCED = ("CP-0", "CP-1A", "CP-DR", "CP-2", "CP-2A", "CP-2E", "CP-2G", "CP-3", "CP-5", "CP-6")
+
+
+def _declared(module: str) -> dict[str, list[str]]:
+    """The required registers' declared columns, read by the method's own `load_contract` from
+    the SKILL.md the module is sent (not by the check under test), less this transport's cuts."""
+    from deploy_workflow.owners.cpos_launch import required_registers
+
+    contract = mc.contract(module)
+    assert isinstance(contract, dict), module
+    required = set(required_registers(module))
+    return {i: s["columns"] for i, s in contract["registers"].items() if i in required}
+
+
+def _title(c: str) -> str:
+    return f"**{c.replace('_', ' ').title()}**"
+
+
+def _unit_and_spaces(c: str) -> str:
+    return c.replace("/", " / ").replace("_", " ") + " (USD m)"
+
+
+def _plural_footnote(c: str) -> str:
+    return (c if c.endswith("s") else c + "s") + "†"
+
+
+def _br(c: str) -> str:
+    return c.replace(" ", "<br>", 1).replace("1–5", "(1-5)")
+
+
+TRANSFORMS = {
+    "as declared": lambda c: c,
+    "title case, bold": _title,
+    "spaced slash, unit": _unit_and_spaces,
+    "plural, footnote mark": _plural_footnote,
+    "line break, bracketed range": _br,
+}
+
+
+@pytest.mark.parametrize("transform", sorted(TRANSFORMS))
+@pytest.mark.parametrize("module", ENFORCED)
+def test_completeness_accepts_every_enforced_registers_harmless_headers(module, transform):
+    change = TRANSFORMS[transform]
+    parts = [f"---\nmodule_id: {module}\n---\n\n## Findings\n"]
+    for ident, columns in _declared(module).items():
+        header = [change(c) for c in reversed(columns)] + ["Source"]  # any order, an extra column
+        rows = f"|{'---|' * len(header)}\n| {' | '.join(['Synthetic.'] * len(header))} |\n"
+        parts.append(f"### {ident} - Register\n\n| {' | '.join(header)} |\n{rows}")
+    text = "\n".join(parts) + "\n## Gaps\n"
+    assert ms.shared_issues(module, text) == (), (module, transform)
+    agreed = [o for o in complete(module, text) if o.figure == "columns" and o.status == "agreed"]
+    assert len(agreed) == len(_declared(module)), (module, transform)
+
+
+@pytest.mark.parametrize(
+    ("declared", "header"),
+    [
+        ("Raw Score 1–5", "Raw Score (1-5)"),  # CP-3 T3.3 (review, 2026-11-15)
+        ("Raw Score 1–5", "Raw Score"),
+        ("Affected Section / Flag / Export Record", "Affected Section / Flag"),  # CP-1A T2D.11
+        ("Gap", "Gap #"),
+        ("Gap", "Gap No."),
+        ("Formula / Source", "Formula or Source"),
+        ("Evidence ID", "Evidence ID¹"),
+        ("Missing Data", "Missing<br>Data"),
+    ],
+)
+def test_completeness_review_header_forms(declared, header):
+    assert mc._present(declared, [header])
+
+
+@pytest.mark.parametrize("declared", ["dependency", "Responsible Module", "downstream module"])
+def test_completeness_review_routing_columns_are_never_required(declared):
+    # ROUTING_RULES: no upstream or downstream dependencies, no rows addressed to modules.
+    assert mc.ROUTING_COLUMN.search(declared)
+    for kept in ("Module Status", "Originating Module", "independence_family"):
+        assert not mc.ROUTING_COLUMN.search(kept), kept
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        # A cushion described against a breach is not a breach: 6.0 - 5.2 = 0.8, Compliant.
+        "| Moody's | CFR | maximum | Debt/EBITDA | 6.0x | 5.2x | 0.8x to breach | Compliant |",
+        "| Moody's | CFR | maximum | Debt/EBITDA | 6.0x | 5.2x | 0.8x before breach | Compliant |",
+        "| Moody's | CFR | maximum | Debt/EBITDA | 6.0x | 5.2x | 0.8x (no breach) | Compliant |",
+        # Durations and counts with a hyphen are not range bounds.
+        (
+            "| Moody's | CFR | maximum | Debt/EBITDA | Above 6.0x sustained over 12-18 months "
+            "| 5.2x | 0.8x | Compliant |"
+        ),
+        "| Moody's | CFR | maximum | Debt/EBITDA | 6.0x (12-18 months) | 5.2x | 0.8x | Compliant |",
+        # A minimum 15% (one to two notches) against 18%: 18 - 15 = 3.
+        "| S&P | ICR | minimum | FFO/debt | 15% (1-2 notches) | 18% | 3% | Compliant |",
+    ],
+)
+def test_cp2h_second_review_cases_are_not_sent_back(row):
+    assert ms.issues("CP-2H", cp2h(row)) == ()
+    assert "agreed" in set(cp2h_by(cp2h(row)).values())
+
+
+def test_cp2h_a_point_breach_read_as_not_sustained_is_not_decided():
+    # REF_CP-2H_C: "a point-in-time breach is not automatically a trigger".
+    row = "| Moody's | CFR | maximum | Debt/EBITDA | 6.0x | 6.4x | -0.4x | Compliant (one-period "
+    row += "breach, not sustained) |"
+    found = cp2h_by(cp2h(row))
+    assert found["Headroom: Debt/EBITDA"] == "agreed"
+    assert found["Status: Debt/EBITDA"] == "not checked"
+
+
+@pytest.mark.parametrize(
+    "cell", ["n.a.", "N.A.", "NMF", "n.m", "New", "N/A (zero base)", "n/a (new)"]
+)
+def test_cp1b_review_words_over_a_zero_prior_are_never_sent_back(cell):
+    # FCF 0 -> 50: the script gives no percentage; a cell stating no figure cannot disagree.
+    assert ms.issues("CP-1B", cp1b(fcf=cell)) == ()
+
+
+def test_cp1b_review_the_joined_yoy_layout_keeps_a_null_word_whole():
+    t44 = (
+        "### T4.4 - Performance\n\n| Line Item | FY2023 | FY2024 | YoY Abs/% |\n|---|---|---|---|\n"
+        "| FCF | 0 | 50 | 50 / n/m |\n| Revenue | 2,100 | 2,250 | 150 / 7.1% |\n\n"
+    )
+    found = cp1b_by(cp1b(t44=t44))
+    assert found[("T4.4", "% Change: FCF")] == "agreed"
+    assert found[("T4.4", "% Change: Revenue")] == "agreed"
+
+
+@pytest.mark.parametrize(("item", "cell"), [("COGS", "(10.0%)"), ("Cash Interest Paid", "-10.0%")])
+def test_cp1b_review_a_cost_may_carry_the_unfavourable_sign(item, cell):
+    # 1,000 -> 1,100 is +10.0%; a cost's rise written as (10.0%) is the same change.
+    t44 = (
+        "### T4.4 - Performance\n\n| Line Item | FY2023 | FY2024 | YoY Change (%) |\n"
+        f"|---|---|---|---|\n| {item} | 1,000 | 1,100 | {cell} |\n\n"
+    )
+    assert cp1b_by(cp1b(t44=t44))[("T4.4", f"% Change: {item}")] == "agreed"
+    revenue = t44.replace(f"| {item} |", "| Revenue |")  # not a cost: the sign is wrong
+    assert cp1b_by(cp1b(t44=revenue))[("T4.4", "% Change: Revenue")] == "disagreed"
+
+
+def test_cp1b_review_unread_cells_do_not_hide_other_rows():
+    # `n.a.` on a non-zero prior and `.` once crashed the whole check; the wrong EBITDA sign must
+    # still be sent back.
+    for cell in ("n.a.", "."):
+        (issue,) = ms.issues("CP-1B", cp1b(revenue=cell, ebitda="7.3%"))
+        assert "`% Change: EBITDA`" in issue
+
+
+def test_cp1b_review_an_en_dash_minus_and_a_one_sided_unit():
+    assert cp1b_by(cp1b(ebitda="–7.3%"))[("T4.6", "% Change: EBITDA")] == "agreed"
+    one_sided = cp1b().replace("| USD 2,250m |", "| 2,250 |")  # USD 2,100m beside a bare 2,250
+    assert cp1b_by(one_sided)[("T4.6", "% Change: Revenue")] == "not checked"
+
+
+def test_cp1b_review_a_quarter_beside_year_to_date_is_not_paired():
+    t44 = (
+        "### T4.4 - Performance\n\n| Line Item | Q3 2023 | Q3 2024 | 9M 2023 | 9M 2024 "
+        "| YoY Change (%) |\n|---|---|---|---|---|---|\n| Revenue | 500 | 550 | 1,500 | 1,560 "
+        "| 10.0% |\n\n"
+    )
+    assert cp1b_by(cp1b(t44=t44))[("T4.4", "% Change: all")] == "not checked"
+
+
+def test_cp1c_review_a_gate_explanation_with_a_digit_is_a_word():
+    text = cp1c().replace("| Not calculable (N=4) |", "| Not calculated: N below 5 |")
+    assert ms.issues("CP-1C", text) == ()
+
+
+@pytest.mark.parametrize(
+    "method",
+    ["Transaction EV/EBITDA (T4.9)", "EV/EBITDA trading comps (ex-outliers)"],
+)
+def test_cp1c_review_t410_matches_only_the_multiple_it_names(method):
+    # Step 06C names transaction multiples as their own method, and step 05 an ex-outlier
+    # version: neither is T4.6's trading EV/EBITDA, so neither is compared with it.
+    text = cp1c(high="USD 7,500m").replace("| EV/EBITDA trading comps |", f"| {method} |")
+    found = cp1c_by(text)
+    assert found[f"Implied EV High: {method}"].status == "not checked"
+    assert ms.issues("CP-1C", text) == ()
+
+
+def test_cp4c_review_a_deficit_pool_does_not_hide_another_rows_error():
+    # OpCo states (50) available (a deficit): the script refuses that row only; HoldCo's wrong
+    # residual (950 where 1,000 - 100 = 900) is still sent back.
+    rows = [
+        ("Base", "OpCo", "(50)", "Trade: 100", "0", "(50)"),
+        ("Base", "HoldCo", "1,000", "Admin and DIP: 100", "100", "950"),
+    ]
+    (issue,) = ms.issues("CP-4C", cp4c(t4e5(rows), base="x", low="x"))
+    assert "`Residual: Admin and DIP (Base, HoldCo)`" in issue
+
+
+def test_cp4c_review_unicode_minus_and_pro_rata_rows():
+    minus = swap(BASE_ROWS, 1, 4, "−600")  # U+2212, an outflow: compared by magnitude
+    assert {o.figure: o.status for o in cp4c_run(cp4c(t4e5(minus)))}[
+        "Allocation: Senior secured TLB (Base, HoldCo)"
+    ] == "agreed"
+    # Two claims ranking equally written as two rows sharing 300 pro rata: 500 and 250 each
+    # recover 40% (200 and 100). Right, though not the one-row form the note asks: not checked,
+    # never "repaired" to 300.
+    rows = [
+        ("Base", "HoldCo", "300", "Senior notes: 500", "200", "100"),
+        ("Base", "HoldCo", "300", "Trade claims: 250", "100", "200"),
+    ]
+    assert ms.issues("CP-4C", cp4c(t4e5(rows), base="x", low="x")) == ()
+
+
+@pytest.mark.parametrize(
+    ("declared", "header"),
+    [
+        # a joined declared name written as its natural parts (CP-2G T2H.5, T2H.6, T2H.4, T2H.8)
+        ("gross/net leverage", ["Gross leverage", "Net leverage"]),
+        ("opening debt/cash", ["Opening debt", "Opening cash"]),
+        ("closing debt/cash", ["Closing debt", "Closing cash"]),
+        ("evidence/assumption IDs", ["Evidence IDs", "Assumption IDs"]),
+        ("target/date", ["Target", "Target date"]),
+        # the method's own wording around the declared name
+        ("interest", ["Cash interest"]),
+        ("issuance", ["Debt issuance"]),
+        ("coverage", ["EBITDA / interest coverage"]),
+        ("margin", ["EBITDA margin (%)"]),
+        ("EBITDA", ["Adjusted EBITDA"]),
+        ("FCF", ["Free cash flow (FCF)"]),
+        ("CFO", ["Cash from operations (CFO)"]),
+        # other decorations
+        ("revenue", ["Revenue, USD m"]),
+        ("period", ["Period(s) covered"]),
+    ],
+)
+def test_completeness_second_review_header_forms(declared, header):
+    assert mc._present(declared, header)
+
+
+def test_completeness_half_a_joined_name_is_still_missing():
+    assert not mc._present("gross/net leverage", ["Gross leverage"])
+    assert not mc._present("opening debt/cash", ["Opening debt"])
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        "| All | Not supplied: no forecast | E-12 |",  # a Source or Evidence ID beside the gap
+        "| All | n/a | Not applicable: no floating debt |",
+        "| FY2025E | Base | Not supplied: not forecast |",  # two labels
+        "| Not calculable: no EBITDA | — | — |",
+        "| Unavailable: not disclosed | S1 | — |",
+    ],
+)
+def test_completeness_review_gap_rows_with_other_cells(row):
+    text = cp2e(
+        f"### T2F.4 - Unhedged Exposure Table\n\n| A | B | C |\n|---|---|---|\n{row}\n\n", T2F5
+    )
+    assert ms.shared_issues("CP-2E", text) == ()
+
+
+def test_completeness_review_a_register_split_under_sub_headings_is_read_whole():
+    split = (
+        "### T2F.4 - Unhedged Exposure Table\n\n#### Exposure\n\n"
+        "| Metric | Amount | Formula / Source | Status |\n|---|---|---|---|\n"
+        "| Total debt | USD 2,000m | T2F.2 | Reported |\n\n#### Implication\n\n"
+        "| Metric | Credit Implication | Source Trace |\n|---|---|---|\n"
+        "| Total debt | Context. | S1 |\n\n"
+    )
+    assert statuses("CP-2E", cp2e(split, T2F5))[("T2F.4", "columns")] == "agreed"

@@ -402,7 +402,7 @@ Mapping `deploy_workflow.method_scripts_cp4c`. Restored: none (CP-4C has no scop
   `fulcrum class/range` against the script's fulcrum, only when the scenario's rows are one entity
   and one chain (each available value the residual of the row before) and the cell names one
   claim or none (`None`, `Equity`); a range is not compared.
-- Asked of CP-4C (`CP4C_NOTE`, 1,000 characters): Priority claim as `<class>: <amount>`; claims
+- Asked of CP-4C (`CP4C_NOTE`, 1,000 characters, 1,007 after the review fixes): Priority claim as `<class>: <amount>`; claims
   ranking equally in one row; a collateral-limited secured claim as two rows (secured part, then
   the deficiency at its rank); another entity's or pool's value as its own rows; an allocation the
   governing evidence sets otherwise written with its reason after the figure (`300 (settlement)`),
@@ -512,6 +512,64 @@ Mapping `deploy_workflow.method_scripts_cp1b`. Restored: none (CP-1B has no scop
   ceiling; the note it would need (`CP1B_NOTE_UNSENT`, 435 characters) would take it to 546,842, 342
   over. The check reads the method's own columns, so it runs without one.
 - Evidence: none retained. Synthetic proof only.
+
+## Review fixes for the second part (2026-11-15)
+
+Two independent adversarial reviews (the coordinating session's, on 6f21c4d, and this session's,
+about 150 correct variants and their wrong twins) found correct handoffs refused and two crash
+paths. Each was reproduced, fixed and given a hand-worked test (`tests/test_method_scripts_rest.py`).
+
+- CP-2H: a second figure in the threshold is a range bound only where a range marker joins them
+  (`5.0x-5.5x`, `to`, `between ... and`) and not when it counts something (`12-18 months`, `1-2
+  notches`, `for 2 consecutive quarters`); a figure with the trigger's unit is chosen over a bare
+  one, in the value cell too (`LTM (12 months): 1.8x`). An unsigned headroom is negative only with a
+  word that states a breach (`0.2x shortfall`, `Breach of 0.2x`), never with one that describes the
+  cushion (`0.8x to breach`, `no breach`, `short of trigger`). A `Compliant` status that reads a
+  point breach as not sustained is not decided (REF_CP-2H_C: a point-in-time breach is not
+  automatically a trigger). `(0.2x)` keeps its sign; `(12 months)` is a bracket.
+- CP-4C: the fulcrum is not computed when any row of the scenario is in another currency or scale
+  or its residual is unread. Rows that each repeat the pool as their available value are read as
+  one pool (each from what the rows above leave). At a class boundary within the inputs' rounding,
+  the last covered class, the first impaired one and none are each not decided. `TLB: 900; RCF:
+  600` in one row is one class of their sum (the note now gives that form, 1,007 characters). Rows
+  sharing one available value at the same partial share are claims ranking equally written apart:
+  not checked, so the module is never told to "repair" them to strict order. A negative available
+  value is refused by the script for that row only (it once stopped the whole check). `−600` and
+  `–7.3%` are minus signs.
+- CP-1C: T4.10's Method is matched to the T4.6 metric it names exactly (`EV/EBITDA trading comps`
+  is `EV/EBITDA`; `Transaction EV/EBITDA (T4.9)` and `... (ex-outliers)` are not), and the T4.6
+  statistics must be multiples (`x`). Below the gate only a stated figure disagrees: a cell that
+  states none (`n/a (N=4)`, `Suppressed`, `N<5`, `Not calculated: N below 5`) agrees if it is a null
+  word, else is not checked; `11.25x (indicative only)` disagrees (step 04D and the Peer Statistic
+  Rules allow no indicative figure below the gate). An empty cell in a joined column is one peer
+  with no value (it once raised and lost the whole check).
+- CP-1B: over a zero prior only a stated figure disagrees (`n.a.`, `NMF`, `New`, `N/A (zero base)`
+  do not); the joined `YoY Abs/%` cell splits at ` / ` only, so `n/m` stays whole. A cost line
+  (COGS, SG&A, interest, tax, capex, D&A) may carry the unfavourable sign: its magnitude is compared
+  (the method fixes no sign). An unread cell is that row's "not checked" (it once raised). A value
+  with a unit beside a bare one is not compared. T4.4 with two period kinds that both pair a year
+  earlier (`Q3` and `9M`) is not paired.
+- Completeness: a joined declared name is present as its natural parts (`gross/net leverage` as
+  `Gross leverage` and `Net leverage`, `opening debt/cash` as `Opening debt` and `Opening cash`); a
+  header holding the declared name as whole words counts (`Cash interest`, `Adjusted EBITDA`, `EBITDA
+  margin (%)`), as do a bracketed abbreviation (`Free cash flow (FCF)`), a unit after a comma, `(s)`,
+  a trailing range or scale (`Raw Score (1-5)`), `Gap #` and `Gap No.`, `or` as a joiner, footnote
+  marks and `<br>`. Routing columns checked mechanically against every declared column of the ten
+  modules: `Export Record` (CP-1A T2D.11, as a part), `dependency` (CP-2G T2H.8) and `Responsible
+  Module` (CP-2A T5.5) join the `downstream` columns as never required; `Module Status`, CP-5's
+  audited and originating `Module` and `independence_family` stay required. A gap row is one with
+  a cell in the transport's gap form (`Not supplied: ...`, `Not calculable: ...`) whatever its other
+  cells hold, or mostly placeholder cells. A register written under `####` sub-headings is read
+  whole. Retained h3's T2G.5 (every row `Not supplied`) is now "states a gap", not judged.
+- Proof: a parametrized test builds, for each of the ten enforced modules, a handoff from the
+  method's own register declarations (read by the script's `load_contract`) with headers written
+  five harmless other ways (title case and bold, spaced slashes and a unit, plurals and footnote
+  marks, line breaks and bracketed ranges, any order with an extra Source column): 50 cases, zero
+  issues, every register's columns judged.
+- Known limits, recorded: a renamed column (`Scenario` for `case`) is still sent back for the ten
+  modules (the issue says so; one repair write). CP-1C with an unmarked borrower row in a
+  benchmark table, a blank Borrower Value and a T4.7 outlier can pick the set that includes the
+  borrower; the note asks for the `(borrower)` mark.
 
 ## Decisions for the owner from this second part
 

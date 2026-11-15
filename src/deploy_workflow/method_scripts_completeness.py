@@ -48,7 +48,17 @@ from deploy_workflow.owners.cpos_launch_methods import METHODS, REGISTER_SCOPE_M
 
 COMPLETENESS = SHARED + "completeness_check.py"
 # A declared column whose rows would address another module (ROUTING_RULES forbids them).
-ROUTING_COLUMN = re.compile(r"downstream|receiving module|next module|consumer", re.IGNORECASE)
+# ROUTING_RULES: "map upstream or downstream dependencies", "keep a ... export record", "a register
+# whose rows are addressed to receiving modules": a declared column (or one part of a joined one)
+# that is one of these is never required. Checked against every declared column of the ten modules
+# (ruling, review of 2026-11-15): `Export Record` (CP-1A T2D.11), `dependency` (CP-2G T2H.8),
+# `Responsible Module` (CP-2A T5.5), the `downstream` columns. Kept: `Module Status`, CP-5's
+# audited and originating `Module` (provenance), `independence_family`.
+ROUTING_COLUMN = re.compile(
+    r"downstream|upstream|receiving module|next module|consumer|export record|"
+    r"responsible module|^\W*dependenc(?:y|ies)\W*$",
+    re.IGNORECASE,
+)
 MISSING_COLUMNS = (
     "{register} lacks the method's column{s} {names}: its Output profile declares every column of "
     "the register. Write {register}'s table with all of them, under the method's names (a column "
@@ -86,9 +96,11 @@ def contract(module: str) -> dict[str, Any] | str:
 
 
 def _norm(text: str) -> str:
-    """A header as compared: emphasis, case, `_`, `.`, hyphens and dashes, `?` aside, `&` and
-    `+` read as `and`, spacing around `/` and a word's plural `s` ignored (`Evidence IDs`)."""
-    text = _plain(text).casefold().replace("_", " ")
+    """A header as compared: emphasis, case, `_`, `.`, hyphens and dashes, `?`, footnote marks and
+    `<br>` aside, `&` and `+` read as `and`, spacing around `/` and a word's plural `s` ignored
+    (`Evidence IDs`)."""
+    text = re.sub(r"<br\s*/?>", " ", _plain(text), flags=re.IGNORECASE).casefold().replace("_", " ")
+    text = re.sub(r"[†‡§¹²³⁴⁵⁶⁷⁸⁹⁰*]", "", text)
     text = re.sub(r"\s*[&+]\s*", " and ", text)
     text = re.sub(r"[\u2010-\u2015-]", " ", text)
     text = re.sub(r"\?", "", text).replace(".", " ")
@@ -98,53 +110,91 @@ def _norm(text: str) -> str:
 
 
 def _whole(name: str) -> set[str]:
-    """A column name as compared: whole, and without a trailing bracketed note (`(USD m)`)."""
-    whole = _norm(name)
-    return {whole, re.sub(r"\s*\([^()]*\)$", "", whole).strip()}
+    """A column name as compared: whole, and without what may trail it: a bracketed note (`(USD
+    m)`), a scale or range (`1–5`, `(1-5)`), a number mark (`Gap #`, `Gap No.`), a unit after a
+    comma (`Revenue, USD m`), a plural mark (`Period(s)`); a bracketed abbreviation is a form
+    too (`Free cash flow (FCF)`)."""
+    whole = _norm(re.sub(r"\(s\)", "", name))
+    short = re.sub(r"\s*\([^()]*\)$", "", whole).strip()
+    bare = re.sub(r"(?:\s+(?:\d+(?:\s+\d+)?|#|no))+$", "", short).strip()
+    comma = whole.split(",")[0].strip()
+    abbreviation = re.findall(r"\((\w+)\)$", whole)
+    return {f for f in (whole, short, bare, comma, *abbreviation) if f}
 
 
 def _parts(name: str) -> set[str]:
-    """The parts of a joined name (`a/b`, `a and b`), each as compared."""
-    return {p.strip() for w in _whole(name) for p in re.split(r"/| and ", w) if p.strip()}
+    """The parts of a joined name (`a/b`, `a and b`, `a or b`), each as compared."""
+    return {p.strip() for w in _whole(name) for p in re.split(r"/| and | or ", w) if p.strip()}
+
+
+def _spelt(name: str) -> list[set[str]]:
+    """Each part of a joined declared name with the words its neighbours share: `gross/net
+    leverage` is `gross leverage` and `net leverage`; `opening debt/cash` is `opening debt` and
+    `opening cash`; `target/date` may be `target date`. A routing part is left out."""
+    whole = _norm(re.sub(r"\(s\)", "", name))
+    pieces = [p.strip() for p in re.split(r"/| and | or ", whole) if p.strip()]
+    head, tail = pieces[0].split()[0], pieces[-1].split()[-1]
+    return [{p, f"{p} {tail}", f"{head} {p}"} for p in pieces if not ROUTING_COLUMN.search(p)]
+
+
+def _holds(cells: set[str], forms: set[str]) -> bool:
+    """A header form is one of ``forms``, or starts or ends with one as whole words (`Principal
+    amount`, `Cash interest`)."""
+    return bool(forms & cells) or any(
+        c.startswith(f + " ") or c.endswith(" " + f) for f in forms for c in cells
+    )
 
 
 def _present(declared: str, header: list[str]) -> bool:
     """A declared column is in the header when a header cell, or a part of a joined one
-    (`Currency and scale`), is it or starts with it (`Principal amount`), or when a joined
-    declared name's parts are each a header cell (`evidence/date` as two columns)."""
+    (`Currency and scale`), is it or holds it as whole words (`Principal amount`, `Cash
+    interest`), or when a joined declared name's parts are each there (`evidence/date` as two
+    columns, `gross/net leverage` as `Gross leverage` and `Net leverage`). A part that names a
+    routing record (`Export Record`) is not required."""
     cells = set().union(*(_whole(h) | _parts(h) for h in header)) if header else set()
-    want = _whole(declared)
-    if want & cells or any(c.startswith(w + " ") for w in want for c in cells):
+    if _holds(cells, _whole(declared)):
         return True
-    parts = _parts(declared)
-    return len(parts) > 1 and parts <= cells
+    spelt = _spelt(declared)
+    joined = len(re.split(r"/| and | or ", _norm(declared))) > 1
+    return joined and bool(spelt) and all(_holds(cells, forms) for forms in spelt)
+
+
+# A cell in the transport's gap form: a gap word, or a null word with its reason after a colon.
+_GAP_FORM = re.compile(r"^(?:not calculable|not assessable|unavailable|not applicable)\s*:")
 
 
 def _gap_row(row: list[str]) -> bool:
-    """A row that states a gap (`Not supplied: <reason>`, the method's `[Insufficient
-    Information]`) and at most one other thing, its label: the presence rule's form for a
-    register with nothing to report, under whatever header."""
+    """A row that states a gap: a cell in the transport's form (`Not supplied: <reason>`,
+    `Not calculable: <reason>`) whatever its other cells say (a label, a source, `n/a`), or a row
+    whose cells are mostly the method's placeholder (`[Insufficient Information]`): the presence
+    rule's form for a register with nothing to report, under whatever header."""
     said = [_plain(c).casefold() for c in row if _plain(c) not in ("", *core.NOT_APPLICABLE)]
-    gaps = [c for c in said if c.startswith(core.GAP_WORDS)]
-    return bool(gaps) and len(said) - len(gaps) <= 1
+    if any(c.startswith(core.GAP_WORDS[:4]) or _GAP_FORM.match(c) for c in said):
+        return True
+    gaps = [c for c in said if c.startswith(core.GAP_WORDS) or c in ("n/a", "na", "tbd")]
+    return bool(said) and len(gaps) * 2 > len(said)
 
 
 def tables(text: str, ident: str) -> list[Table] | str:
-    """Every table between the register's heading and the next heading (a register may be
-    written as more than one), or why none is read."""
-    first = register_table(text, ident)
-    if isinstance(first, str):
-        return first
+    """Every table between the register's heading and the next heading of its level or above
+    (a register may be written as more than one table, under `####` sub-headings), or why none
+    is read."""
     lines = core._unfenced(text)
-    start = next(i for i, line in enumerate(lines) if core._register_start(ident).match(line))
+    starts = [i for i, line in enumerate(lines) if core._register_start(ident).match(line)]
+    if len(starts) != 1:
+        why = register_table(text, ident)
+        return why if isinstance(why, str) else [why]
+    start = starts[0]
+    level = len(lines[start]) - len(lines[start].lstrip("#")) or 6  # a tag: any heading ends it
     found: list[Table] = []
     for i in range(start + 1, len(lines)):
-        if core._HEADING.match(lines[i]):
+        heading = core._HEADING.match(lines[i])
+        if heading and len(lines[i]) - len(lines[i].lstrip("#")) <= level:
             break
         if lines[i].lstrip().startswith("|") and not lines[i - 1].lstrip().startswith("|"):
             table = core._table_after(lines, i - 1, ident)
             found += [] if isinstance(table, str) else [table]
-    return found or [first]
+    return found or f"{ident} has no table under its heading"
 
 
 def _register(

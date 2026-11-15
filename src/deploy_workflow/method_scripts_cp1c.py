@@ -181,7 +181,8 @@ def _series(text: str, metric: str) -> _Series | str:
         for at, part, header in _columns(table).get(_key(metric), []):
             peers = []
             for row in table[1]:
-                cell = row[at] if part is None else _plain(row[at]).split("/")[part]
+                pieces = _plain(row[at]).split("/")  # an empty or short cell: no value here
+                cell = row[at] if part is None else (pieces[part] if part < len(pieces) else "")
                 peers.append(
                     _Peer(_plain(row[0]), cell, _unit(cell, header), *_statuses(row, comp, calc))
                 )
@@ -348,6 +349,14 @@ def _cell_half(cell: str, tables: types.ModuleType) -> float:
     return 0.0 if isinstance(read, str) else half(read[1])
 
 
+def _states_number(cell: str) -> bool:
+    """Whether a statistic cell states a figure: it starts with one, its bracketed notes aside
+    (`Suppressed (N=4)`, `N<5` and `Not calculated: N below 5` state none; `11.25x (indicative
+    only)` states one)."""
+    text = re.sub(r"^([(\s]*)[–−]", r"\1-", _plain(cell))
+    return bool(re.match(r"^\s*\(?\s*[-+]?\s*\d", text))
+
+
 def _stat(
     where: _Where,
     cell: str,
@@ -358,13 +367,8 @@ def _stat(
     """One stated statistic against the script's (``found``: its value and N; ``basis``: the
     peer values' unit and largest rounding)."""
     (value, n), (unit, slack) = found, basis
-    if blank(cell, tables):
-        return where("not checked", stated=cell, reason="T4.6 states no figure here")
-    if said_none(cell):
-        if value is None:
-            return where("agreed", stated=cell, reason=STATS_FORMULA)
-        why = "T4.6 states none where the script computes one (the method may have suppressed it)"
-        return where("not checked", stated=cell, recomputed=value, reason=why)
+    if blank(cell, tables) or not _states_number(cell):  # a word, never a disagreement
+        return _worded(where, cell, value, n)
     if _unit(cell, "") not in (unit, "") or not unit:
         why = f"`{cell}` and its peer values are not both in `x` or `%`"
         return where("not checked", stated=cell, reason=why)
@@ -374,6 +378,19 @@ def _stat(
     text = re.sub(r"\s*[x×%]\s*$", "", _plain(cell), flags=re.IGNORECASE)
     claim = _Claim(where, text, value, 1e-9, unit, STATS_FORMULA)
     return _judged(replace(claim, slack=slack), tables)
+
+
+def _worded(where: _Where, cell: str, value: float | None, n: int) -> Outcome:
+    """A statistic cell that states no figure: a null word agrees where the gate gives none; any
+    other word, or a null word where the script computes one, is not checked (the method may
+    have suppressed it)."""
+    if value is None and said_none(cell):
+        return where("agreed", stated=cell, reason=STATS_FORMULA)
+    if value is None:
+        why = f"`{cell}` states no figure where the method's gate gives none at N={n}"
+    else:
+        why = f"`{cell}` states no figure where the script computes one"
+    return where("not checked", stated=cell, recomputed=value, reason=why)
 
 
 def _t46(stated: _Stated, text: str, loaded: Loaded) -> list[Outcome]:
@@ -419,6 +436,19 @@ def _borrower_metric(cell: str, tables: types.ModuleType) -> tuple[float, int]:
     return read
 
 
+# Words a T4.10 Method adds to the multiple it applies (`EV/EBITDA trading comps (T4.8)`);
+# a qualifier that changes the multiple (`transaction`, `ex-outliers`) is kept.
+_GENERIC = re.compile(
+    r"\b(?:trading|comps?|comparables?|peer|peers|multiples?|method|implied ev)\b"
+)
+
+
+def _method(cell: str) -> str:
+    """The multiple a T4.10 Method names, as compared with T4.6's metric keys."""
+    text = re.sub(r"\(\s*t4\.\d+\s*\)", " ", _key(cell))
+    return re.sub(r"\s+", " ", _GENERIC.sub(" ", text)).strip()
+
+
 def _t410(text: str, rows: list[_Stated], loaded: Loaded) -> list[Outcome]:
     table = register_table(text, "T4.10")
     if isinstance(table, str):
@@ -426,8 +456,8 @@ def _t410(text: str, rows: list[_Stated], loaded: Loaded) -> list[Outcome]:
     by_metric = {_key(r.metric): r for r in rows}
     out = []
     for row in table[1]:
-        method = _key(row[0])
-        named = [m for m in by_metric if m and m in method]
+        method = _method(row[0])
+        named = [m for m in by_metric if m and m == method]
         stated = by_metric[named[0]] if len(named) == 1 else None
         for case in EV_CASES:
             where = _Where(
@@ -451,6 +481,8 @@ def _ev(
             raise _NotChecked(f"no implied EV or T4.6 multiple is stated for {case}")
         metric_cell = row[core.column(table, "Borrower Metric", "T4.10")[0]]
         metric = _borrower_metric(metric_cell, tables)
+        if _unit(multiple, "") != "x":
+            raise _NotChecked(f"T4.6's `{stated.metric}` {EV_CASES[case]} is not a multiple (`x`)")
         m = _number(multiple, tables)
         if isinstance(m, str):
             raise _NotChecked(m)

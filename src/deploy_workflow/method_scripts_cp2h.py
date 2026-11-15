@@ -59,7 +59,27 @@ HEADROOM_FORMULA = (
     "threshold, negative Breached against the binding bound (REF_CP-2H_C; covenant_headroom.py "
     "trigger_headroom)"
 )
-_NUMBER = re.compile(r"\(?[-−]?\d[\d,]*(?:\.\d+)?\)?\s*(?:[x×%]|bps)?", re.IGNORECASE)
+_NUMBER = re.compile(r"\(?[-−]?\d[\d,]*(?:\.\d+)?\s*(?:[x×%]|bps)?\)?", re.IGNORECASE)
+_TOKEN = r"[-−]?\d[\d,]*(?:\.\d+)?\s*(?:[x×%]|bps)?"
+_JOINED = re.compile(
+    rf"(?:between\s+)?({_TOKEN})\s*"
+    rf"(?:-|–|—|\bto\b|(?<=\d)\s+and\b|(?<=[x×%])\s+and\b)\s*({_TOKEN})",
+    re.IGNORECASE,
+)
+# A word that states the headroom is a breach (`0.2x shortfall`, `Breach of 0.2x`, `breached by
+# 0.2x`, `in breach`); a cushion described against a breach (`0.8x to breach`, `before breach`,
+# `no breach`, `short of trigger`) is not one.
+_ADVERSE = re.compile(
+    r"\b(?:shortfall|deficit|breach(?:ed)?\s+(?:of|by)|in\s+breach)\b", re.IGNORECASE
+)
+_CUSHION = re.compile(
+    r"\b(?:to|before|until|no|not|without)\s+(?:a\s+)?breach|short\s+of", re.IGNORECASE
+)
+# What a hyphenated pair of figures counts when it is not a threshold range (`12-18 months`).
+_COUNTED = re.compile(
+    r"^\s*\)?\s*(?:months?|years?|quarters?|periods?|notch(?:es)?|days?|weeks?|times)\b",
+    re.IGNORECASE,
+)
 _RANGE = re.compile(r"(?<=[\d%x×])\s*[-–—]\s*(?=\d)")
 _YEAR = re.compile(r"(?<![\d,.])(?:FY|CY|LTM|H[12]|Q[1-4]\s*)?(?:19|20)\d{2}[A-Z]?(?![\d,.])")
 CP2H_NOTE = (
@@ -91,14 +111,48 @@ def _figures(cell: str, tables: types.ModuleType) -> list[_Figure]:
     text = _RANGE.sub(" to ", text)  # `5.0x-5.5x` is a range, not 5.0 and -5.5
     out = []
     for token in _NUMBER.findall(text):
-        unit = re.search(r"([x×%]|bps)\s*$", token, re.IGNORECASE)
-        bare = re.sub(r"\s*(?:[x×%]|bps)\s*$", "", token, flags=re.IGNORECASE).strip()
+        unit = re.search(r"([x×%]|bps)\s*\)?$", token, re.IGNORECASE)
+        bare = re.sub(r"\s*(?:[x×%]|bps)\s*(?=\)?$)", "", token, flags=re.IGNORECASE).strip()
+        if bare.startswith("(") != bare.endswith(")"):  # `(12 months)`: a bracket, not a sign
+            bare = bare.strip("()")
         read = figure(bare, tables)
         if isinstance(read, str):
             raise _NotChecked(read)
         kind = "" if unit is None else {"×": "x"}.get(unit[1], unit[1].casefold())
         out.append(_Figure(read[0], read[1], kind))
     return out
+
+
+def _one(figures: list[_Figure], unit: str, cell: str) -> _Figure:
+    """The one figure a part states: alone, or the only one in the trigger's unit (`> 6.0x for 2
+    consecutive quarters` is 6.0x); `_NotChecked` otherwise."""
+    if len(figures) == 1:
+        return figures[0]
+    united = [f for f in figures if f.unit and (f.unit == unit or not unit)]
+    if len(united) == 1:
+        return united[0]
+    raise _NotChecked(f"`{cell}` states more than one figure, and none is plainly the trigger's")
+
+
+def _values(cell: str, tables: types.ModuleType) -> list[_Figure]:
+    """One figure per case: the cell, or each ` / ` part of it."""
+    return [_one(_figures(part, tables), "", part) for part in _parts(cell)]
+
+
+def _thresholds(cell: str, unit: str, tables: types.ModuleType) -> list[_Figure]:
+    """A point threshold, or the two bounds of a range only where a range marker joins them
+    (`5.0x-5.5x`, `5.0x to 5.5x`, `between 5.0x and 5.5x`); any other second figure (a duration,
+    `for 2 consecutive quarters`) is not a bound."""
+    text = _YEAR.sub(" ", core._plain(cell)).replace("−", "-")
+    for joined in _JOINED.finditer(text):
+        if _COUNTED.match(text[joined.end() :]):  # `12-18 months`: a duration, not bounds
+            continue
+        bounds = [_figures(joined[1], tables), _figures(joined[2], tables)]
+        units = {f.unit for side in bounds for f in side} - {""}
+        if unit and units and units != {unit}:  # a range is in the trigger's own unit
+            continue
+        return [_one(bounds[0], unit, cell), _one(bounds[1], unit, cell)]
+    return [_one(_figures(cell, tables), unit, cell)]
 
 
 def _direction(cell: str, loaded: Loaded) -> str:
@@ -149,10 +203,8 @@ def _read(row: list[str], cols: dict[str, int], loaded: Loaded) -> _Row:
         if blank(cells[name], tables):
             raise _NotChecked(f"T2R.4 states no {name} (missing, not zero)")
     direction = _direction(cells["trigger direction"], loaded)
-    thresholds = _figures(cells["threshold"], tables)
-    values = _figures(cells["case/period value"], tables)
-    if not 1 <= len(thresholds) <= 2 or not values:
-        raise _NotChecked("the threshold is not one figure or a range of two, or no value is read")
+    values = _values(cells["case/period value"], tables)
+    thresholds = _thresholds(cells["threshold"], values[0].unit, tables)
     headrooms, statuses = [cells["headroom"]], [cells["status"]]
     if len(values) > 1:  # several cases: each cell holds one part per case, in order
         headrooms, statuses = _parts(cells["headroom"]), _parts(cells["status"])
@@ -201,9 +253,14 @@ def _headroom(
         return where("not checked", stated=cell, reason=why)
     bounds = list(period["headroom"].values())
     outcomes = []
+    # An unsigned figure with a word that carries the sign (`0.2x shortfall`, `Breach of 0.2x`)
+    # is a negative headroom, as written.
+    plain = core._plain(cell)
+    adverse = bool(_ADVERSE.search(plain)) and not _CUSHION.search(plain)
     for s in stated:
-        nearest = min(bounds, key=lambda b: abs(b - s.value))  # a range: either bound's distance
-        text = f"{s.value:.{s.places}f}"
+        value = -abs(s.value) if adverse else s.value
+        nearest = min(bounds, key=lambda b: abs(b - value))  # a range: either bound's distance
+        text = f"{value:.{s.places}f}"
         claim = _Claim(where, text, nearest, HEADROOM_STEP, r.unit, HEADROOM_FORMULA)
         outcomes.append(_judged(replace(claim, slack=slack), loaded.tables))
     worst = next((o for o in outcomes if o.status != "agreed"), outcomes[0])
@@ -217,6 +274,12 @@ def _status(where: _Where, cell: str, period: dict[str, Any], slack: float) -> O
         why = f"Status `{cell}` is none of Compliant, At threshold, Breached"
         return where("not checked", stated=cell, reason=why)
     found = str(period["status"])
+    if word == "compliant" and found == "Breached" and re.search(r"breach", stated):
+        why = (
+            f"`{cell}` reads a breach as not a trigger (REF_CP-2H_C: a point-in-time breach "
+            "is not automatically a trigger); the script's Breached is the point test only"
+        )
+        return where("not checked", stated=cell, recomputed_label=found, reason=why)
     if found != STATUSES[word] and abs(period["binding_headroom"]) <= slack:
         why = (
             f"the recomputed headroom {period['binding_headroom']:g} is within the inputs' "
