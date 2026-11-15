@@ -136,6 +136,54 @@ file's manifest sha256 and note, the METHODOLOGY-REVIEW.md appendix row, the mod
 - Retained evidence: none. CP-4 was blocked at its source gate in both Sol runs (no legal
   documents); synthetic proof only.
 
+### CP-1, `credit_metrics.py`
+
+- Restored: none needed. CP-1 has no register-scope section.
+- How the work divides with `owners/cpos_cp1_check.py`: that check already recomputes the six fixed
+  T4.9 rows (`Total debt / EBITDA`, `Net debt / EBITDA`, `EBITDA / cash interest` and their
+  adjusted twins), binding each operand to the figure it must be (debt from `Net debt data`,
+  EBITDA and cash interest from the statements) and the two-place print. The script check leaves
+  those six rows to it (a test pins the two lists equal) and takes the rest: T4.9 rows with a free
+  `Metric Name` whose `Formula` is a quotient (`Calculated Value` against the script's `ratio` of
+  the row's own `Numerator Value` and `Denominator Value`, as a ratio or in percent, or its
+  `growth`, n / d - 1, for a change; on a disagreement the form nearest the stated figure is
+  reported), and T4.8 rows whose `Derived Period Type` is LTM (`Derived Value` against the script's
+  `derive_periods`: Full-Year Component + Current Stub - Prior-Year Stub).
+- The operand-identity trap: for a free-name row only the arithmetic is bound, not which debt or
+  EBITDA the operands are. On the retained TransDigm figures (FY2024, USD millions), a row of
+  principal 25,068 over EBITDA 3,813 stating 6.57 agrees with its own division, although the
+  method's debt is carrying value (24,880, giving 6.53); the same row stating 6.57 over 24,880
+  disagrees. The fixed rows, where the operand is bound, are `cpos_cp1_check`'s.
+- Units: T4.9's `Currency` and `Unit` must be stated (they describe both operands). T4.8 has no
+  currency or scale column: an LTM row is compared only when its cells or column headers state
+  one, and the same one; otherwise not checked. Not checked by design: other derived types (Q2, Q3,
+  Q4, YTD; T4.8's three component columns do not say which periods they hold), and free-name rows
+  that are sums or differences.
+- No note: CP-1 runs in every pathway, and `earnings_update`'s instructions measure 545,907 of its
+  546,000-character ceiling. The smallest useful note (500 characters, below) would take them to
+  546,407, 407 over. The ceiling is not raised; the owner decides. Without the note the check reads
+  the method's own registers as written, and T4.8 rows will usually be not checked (no units).
+  Proposed note: "Python checks two kinds of your figures after you answer, with the method's own
+  `credit_metrics.py` (you cannot run it): each T4.8 LTM Derived Value (Full-Year Component +
+  Current Stub - Prior-Year Stub) and each free-name T4.9 Calculated Value (Numerator Value /
+  Denominator Value, or the change n / d - 1). State T4.8's currency and scale in each cell or
+  column header (`USD 1,250m`). A figure that disagrees is sent back for repair; one whose input
+  is missing is not checked, never read as zero."
+- Retained evidence: `tests/fixtures/tdg_sol_high_2026_11_13/CP-1-tables.md` (TransDigm, run of
+  2026-11-13) is the older CP-1 layout, written before T4.8 and T4.9: the check records both as not
+  checked (no register). Its key-metrics row `Total debt / unadjusted EBITDA` 6.57 is principal
+  25,068 / EBITDA 3,813 (carrying value 24,880 gives 6.53): a basis difference from the method's
+  carrying-value rule, in a layout that predates it, not an arithmetic error.
+
+## Decisions for the owner
+
+1. CP-3: ask CP-3 for the `### Recovery waterfall` table (a new model output), or leave CP-3
+   unchecked. Nothing was restored for CP-3.
+2. CP-1: raise `earnings_update`'s ceiling by at least 407 characters for CP-1's note, or leave
+   CP-1 without a note.
+3. CP-2E: hedged floating-rate debt above gross is refused by the script and so recorded as not
+   checked; whether it should be sent back as an acceptance issue.
+
 ## Status
 
 Built and tested offline, module by module. Not accepted: no model has written a restored register

@@ -1246,6 +1246,177 @@ def test_cp4_an_absent_or_malformed_register_is_not_checked():
     assert "a row of 12 cells under 11 columns" in outcome.reason
 
 
+# --- CP-1 ---------------------------------------------------------------------------------------
+
+# SYNTHETIC, USD millions, FY2024. T4.9 free-name rows (Calculated Value = numerator / denominator,
+# or that x 100, or numerator / denominator - 1 for a change):
+#   EBITDA margin 500 / 2,000 = 0.25, written 25.0 (percent); Capex / revenue 100 / 2,000 = 0.05;
+#   Revenue growth 2,000 / 1,600 - 1 = 0.25, written 25.0; FCF / debt 150 / 2,000 = 0.075, 7.5.
+#   Liquidity (cash + undrawn) is a sum, not a quotient. Total debt / EBITDA is a fixed row.
+# T4.8 LTM: revenue 2,000 + 1,100 - 1,000 = 2,100; EBITDA 500 + 300 - 250 = 550.
+FREE_ROWS = {
+    "Total debt / EBITDA": ("Total debt / EBITDA", "2,000", "500", "4.00"),
+    "EBITDA margin": ("EBITDA / Revenue", "500", "2,000", "25.0"),
+    "Capex / revenue": ("Capex / Revenue", "100", "2,000", "0.05"),
+    "Revenue growth": ("FY2024 / FY2023 - 1", "2,000", "1,600", "25.0"),
+    "FCF / debt": ("FCF / Total debt", "150", "2,000", "7.5"),
+    "Liquidity": ("Cash + undrawn", "300", "200", "500"),
+}
+LTM_ROWS = {
+    "Revenue": ("USD 2,000m", "USD 1,100m", "USD 1,000m", "USD 2,100m"),
+    "EBITDA": ("USD 500m", "USD 300m", "USD 250m", "USD 550m"),
+}
+CP1_FIGURES = ("EBITDA margin", "Capex / revenue", "Revenue growth", "FCF / debt", "Liquidity")
+
+
+def cp1(free=None, ltm=None, currency="USD", unit="millions"):
+    free = FREE_ROWS if free is None else free
+    ltm = LTM_ROWS if ltm is None else ltm
+    return "\n".join(
+        [
+            "## Findings",
+            "### Bottom line",
+            "Leverage is high.",
+            "### T4.8 Constructed period register",
+            (
+                "| Metric Name | Derived Period Type | Full-Year Component | Current Stub | "
+                "Prior-Year Stub | Derived Value | Calculation Status | Source Files | "
+                "Limitations |"
+            ),
+            "|---|---|---|---|---|---|---|---|---|",
+            *(f"| {m} | LTM | {' | '.join(v)} | Derived | S1 | — |" for m, v in ltm.items()),
+            "| Revenue | Q2 | USD 2,000m | USD 600m | — | USD 1,400m | Derived | S1 | — |",
+            "",
+            "### T4.9 Calculation register",
+            (
+                "| Metric Name | Formula | Numerator Value | Numerator Source | "
+                "Denominator Value | Denominator Source | Period | Currency | Unit | "
+                "Calculated Value | Calculation Status | Evidence Quality Tier | Limitations |"
+            ),
+            "|---|---|---|---|---|---|---|---|---|---|---|---|---|",
+            *(
+                f"| {m} | {v[0]} | {v[1]} | S1 | {v[2]} | S1 | FY2024 | {currency} | {unit} | "
+                f"{v[3]} | Calculated | A | — |"
+                for m, v in free.items()
+            ),
+            "## Gaps",
+            "None.",
+        ]
+    )
+
+
+def cp1_by(text):
+    return {o.figure: o for o in ms.run("CP-1", text)}
+
+
+def test_cp1_all_figures_right():
+    by = cp1_by(cp1())
+    assert [by[f"{m} (FY2024)"].status for m in CP1_FIGURES[:4]] == ["agreed"] * 4
+    assert by["Liquidity (FY2024)"].status == "not checked"  # a sum: not a quotient
+    assert by["LTM: Revenue"].status == by["LTM: EBITDA"].status == "agreed"
+    assert by["LTM: Revenue"].recomputed == 2100.0 and by["LTM: Revenue"].unit == "USD m"
+    assert "agrees as the ratio in percent" in by["EBITDA margin (FY2024)"].reason
+    assert "agrees as the growth in percent" in by["Revenue growth (FY2024)"].reason
+    assert ms.issues("CP-1", cp1()) == ()
+
+
+def test_cp1_leaves_the_six_fixed_rows_to_the_cp1_check():
+    from deploy_workflow.owners.cpos_cp1_check import METRICS
+
+    assert ms.method_scripts_cp1.FIXED_ROWS == tuple(m.name for m in METRICS)
+    assert "Total debt / EBITDA (FY2024)" not in cp1_by(cp1())
+    # ... even when its figure is wrong: the CP-1 check sends that back, not this one.
+    wrong = FREE_ROWS | {"Total debt / EBITDA": ("Total debt / EBITDA", "2,000", "500", "5.00")}
+    assert ms.issues("CP-1", cp1(wrong)) == ()
+
+
+def test_cp1_one_figure_wrong():
+    text = cp1(FREE_ROWS | {"EBITDA margin": ("EBITDA / Revenue", "500", "2,000", "26.0")})
+    (issue,) = ms.issues("CP-1", text)
+    assert "T4.9 row `EBITDA margin (FY2024)` states 26.0" in issue
+    assert "recomputes 25 " in issue and "nearest as the ratio in percent" in issue
+    assert "credit_metrics.py" in issue
+    ltm = LTM_ROWS | {"Revenue": (*LTM_ROWS["Revenue"][:3], "USD 2,200m")}
+    (issue,) = ms.issues("CP-1", cp1(ltm=ltm))
+    assert "T4.8 row `LTM: Revenue` states 2,200 USD m" in issue and "recomputes 2100" in issue
+
+
+def test_cp1_a_sign_error_is_a_disagreement():
+    ltm = LTM_ROWS | {"Revenue": (*LTM_ROWS["Revenue"][:3], "USD (2,100)m")}
+    assert cp1_by(cp1(ltm=ltm))["LTM: Revenue"].status == "disagreed"
+    free = FREE_ROWS | {"Revenue growth": ("FY2024 / FY2023 - 1", "2,000", "1,600", "-25.0")}
+    assert cp1_by(cp1(free))["Revenue growth (FY2024)"].status == "disagreed"
+
+
+def test_cp1_the_operand_identity_trap_on_the_retained_tdg_figures():
+    # Figures from the real TransDigm excerpt (tests/fixtures/tdg_sol_high_2026_11_13, FY2024, USD
+    # millions; the row layout is synthetic): total debt principal 25,068, carrying 24,880, EBITDA
+    # 3,813. 25,068 / 3,813 = 6.574 (6.57); 24,880 / 3,813 = 6.525 (6.53). The check binds the
+    # row's own operands, not which debt they are: 6.57 on principal agrees with its own division.
+    name = "Total debt / unadjusted EBITDA"
+    principal = {name: ("Total debt / EBITDA", "25,068", "3,813", "6.57")}
+    assert cp1_by(cp1(principal))[f"{name} (FY2024)"].status == "agreed"
+    carrying = {name: ("Total debt / EBITDA", "24,880", "3,813", "6.57")}
+    outcome = cp1_by(cp1(carrying))[f"{name} (FY2024)"]
+    assert outcome.status == "disagreed"
+    assert outcome.recomputed == pytest.approx(24880 / 3813)
+
+
+def test_cp1_a_missing_input_is_not_checked_and_never_zero():
+    ltm = LTM_ROWS | {
+        "Revenue": (*LTM_ROWS["Revenue"][:2], "Not supplied: no Q3 2023", "USD 2,100m")
+    }
+    outcome = cp1_by(cp1(ltm=ltm))["LTM: Revenue"]
+    assert outcome.status == "not checked"
+    assert "states no Prior-Year Stub (missing, not zero)" in outcome.reason
+    free = FREE_ROWS | {"Capex / revenue": ("Capex / Revenue", "100", "Not supplied: x", "0.05")}
+    outcome = cp1_by(cp1(free))["Capex / revenue (FY2024)"]
+    assert outcome.status == "not checked" and "(missing, not zero)" in outcome.reason
+
+
+def test_cp1_a_blank_is_missing_and_a_zero_is_a_figure():
+    # Current stub 0: 2,000 + 0 - 1,000 = 1,000.
+    ltm = LTM_ROWS | {"Revenue": ("USD 2,000m", "USD 0m", "USD 1,000m", "USD 1,000m")}
+    assert cp1_by(cp1(ltm=ltm))["LTM: Revenue"].status == "agreed"
+    # Revenue 0: no margin. `Not calculable` agrees with the script's None; a figure does not.
+    zero = FREE_ROWS | {
+        "EBITDA margin": ("EBITDA / Revenue", "500", "0", "Not calculable: no sales")
+    }
+    assert cp1_by(cp1(zero))["EBITDA margin (FY2024)"].status == "agreed"
+    zero = FREE_ROWS | {"EBITDA margin": ("EBITDA / Revenue", "500", "0", "0.0")}
+    assert cp1_by(cp1(zero))["EBITDA margin (FY2024)"].status == "disagreed"
+
+
+def test_cp1_a_unit_mismatch_or_two_currencies_are_not_compared():
+    for cell in ("USD 1.1bn", "EUR 1,100m"):
+        ltm = LTM_ROWS | {"Revenue": ("USD 2,000m", cell, "USD 1,000m", "USD 2,100m")}
+        outcome = cp1_by(cp1(ltm=ltm))["LTM: Revenue"]
+        assert outcome.status == "not checked" and "different units" in outcome.reason, cell
+    bare = {
+        m: tuple(c.removeprefix("USD ").removesuffix("m") for c in v) for m, v in LTM_ROWS.items()
+    }
+    outcome = cp1_by(cp1(ltm=bare))["LTM: Revenue"]
+    assert outcome.status == "not checked" and "states no currency or scale" in outcome.reason
+    outcome = cp1_by(cp1(unit="Not supplied: x"))["EBITDA margin (FY2024)"]
+    assert outcome.status == "not checked" and "no Currency or Unit" in outcome.reason
+
+
+def test_cp1_an_absent_or_malformed_register_is_not_checked():
+    no_ltm = cp1().replace("### T4.8 Constructed period register", "### Constructed periods")
+    by = cp1_by(no_ltm)
+    assert by["T4.8"].reason == "the handoff has no T4.8 register"
+    assert by["EBITDA margin (FY2024)"].status == "agreed"
+    broken = cp1().replace("| EBITDA margin | EBITDA / Revenue |", "| EBITDA margin | x | y |")
+    assert "a row of 14 cells under 13 columns" in cp1_by(broken)["T4.9"].reason
+
+
+def test_cp1_the_retained_tdg_excerpt_has_neither_register():
+    # Real (TransDigm, run of 2026-11-13): the older CP-1 layout, written before T4.8 and T4.9.
+    text = (ROOT / "tests/fixtures/tdg_sol_high_2026_11_13/CP-1-tables.md").read_text()
+    by = cp1_by(text)
+    assert set(by) == {"T4.8", "T4.9"} and {o.status for o in by.values()} == {"not checked"}
+
+
 # --- the policy -----------------------------------------------------------------------------------
 
 

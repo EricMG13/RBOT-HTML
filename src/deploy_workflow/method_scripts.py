@@ -904,6 +904,7 @@ def record(module: str, raw: bytes) -> dict[str, Any] | None:
 
 # The per-module mappings register themselves when imported; imported last, after all they use.
 from deploy_workflow import (  # noqa: F401
+    method_scripts_cp1,
     method_scripts_cp2e,
     method_scripts_cp2g,
     method_scripts_cp3,

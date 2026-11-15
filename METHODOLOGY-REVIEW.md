@@ -915,7 +915,10 @@ is restored and CP-3 is not asked for the table until the owner decides. CP-2G:
 `credit_metrics.py` on T2H.4 to T2H.6 (never cut): leverage, coverage and FCF/debt per period and
 case, and the opening-to-prior-closing and debt roll-forward of T2H.5. CP-4:
 `covenant_headroom.py` on T4C.4, signed headroom and status by the stated test type (never
-inferred). Limit: synthetic proof only.
+inferred). CP-1: `credit_metrics.py` on T4.8's LTM rows and T4.9's free-name quotients; the six
+fixed T4.9 rows stay with `owners/cpos_cp1_check.py`, which binds their operands; no note is sent
+(the `earnings_update` size ceiling). Limit: synthetic proof only, and the retained TDG excerpts
+of 2026-11-13 hold none of these registers.
 
 ## Appendix: selected method files
 

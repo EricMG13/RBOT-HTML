@@ -8830,6 +8830,26 @@ def test_cp4_is_checked_by_its_script(tmp_path, pathway):
     assert "T4C.4 row `Headroom: Net leverage` states 0.70 x" in added
 
 
+def test_cp1_free_name_rows_are_checked_by_its_script_without_a_note(tmp_path):
+    # CP-1 is sent no note (the earnings_update ceiling); the method's own T4.9 is read.
+    assert "CP-1" in method_scripts.CHECKS and "CP-1" not in method_scripts.NOTES
+    prepared, task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    check = checker(prepared.layout)
+    base = set(_checked_handoff(task, raw.encode(), check))
+    header = raw.index("| Metric Name | Formula | Numerator Value |")
+    at = raw.index("\n", raw.index("\n", header) + 1) + 1  # after the separator row
+    # SYNTHETIC: 150 / 2,000 = 0.075, written 7.5 (percent); 8.5 is not it.
+    row = "| FCF / debt | FCF / Total debt | 150 | annual.txt | 2000 | annual.txt | FY2024 | USD | "
+    row += "US$m | {value} | Calculated | Tier 3 | Synthetic. |\n"
+    right, wrong = (raw[:at] + row.format(value=v) + raw[at:] for v in ("7.5", "8.5"))
+    by = {o.figure: o.status for o in method_scripts.run("CP-1", right)}
+    assert by["FCF / debt (FY2024)"] == "agreed"
+    assert set(_checked_handoff(task, right.encode(), check)) == base
+    (added,) = set(_checked_handoff(task, wrong.encode(), check)) - base
+    assert "T4.9 row `FCF / debt (FY2024)` states 8.5" in added
+
+
 def test_each_attempt_keeps_its_method_script_checks_beside_its_review(tmp_path):
     _, task, _ = good_task(tmp_path, "CP-2D", "credit_snapshot")
     shell = "## Request\n\n## Sources\n\n## Findings\n\n{}## Calculations\n\n## Gaps\n\n"
@@ -8852,8 +8872,9 @@ def test_each_attempt_keeps_its_method_script_checks_beside_its_review(tmp_path)
         ["disagreed", "not checked"],  # no T2E.6: Months to Empty is not checked
         ["agreed", "not checked"],
     ]
-    # A module without a method-script check keeps its review only.
+    # A module without a method-script check keeps its review only (CP-0: CP-1 is checked since
+    # 2026-11-15, ruling 2026-11-15-method-script-checks.md).
     (tmp_path / "other").mkdir()
-    _, other, _ = good_task(tmp_path / "other", "CP-1", "credit_snapshot")
+    _, other, _ = good_task(tmp_path / "other", "CP-0", "credit_snapshot")
     _handoff(other, tmp_path / "run1", lambda _task: shell.format("").encode(), lambda *_: (), 1)
     assert not list((tmp_path / "run1").rglob("*.method-checks.json"))
