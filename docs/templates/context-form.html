@@ -656,7 +656,7 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
   <dl class="review-summary" id="rv-steps"></dl>
   <aside class="rv-card" id="rv-card" aria-labelledby="rv-card-h">
     <h3 id="rv-card-h">What Submit does</h3>
-  <p class="lead">This is the run you are about to start, as the launcher itself forecasts it from your documents and answers. It uses the paid model (USD 20 cap). Pages of the documents you uploaded that modules read are sent to OpenAI, and, on a GPT Sol run unless the case is synthetic, the research module's web searches go to OpenAI's search (a Claude run does not search the web): it is told to search with public names only, and the queries it actually sent are kept in the run record. For a private case the issuer's name and the questions it researches go to that search. Read it, accept each limit, approve, then submit once. Any change to an answer or a document needs a new summary.</p>
+  <p class="lead">This is the run you are about to start, as the launcher itself forecasts it from your documents and answers. It uses the paid model, up to the pathway's cap shown below. Pages of the documents you uploaded that modules read are sent to OpenAI, and, on a GPT Sol run unless the case is synthetic, the research module's web searches go to OpenAI's search (a Claude run does not search the web): it is told to search with public names only, and the queries it actually sent are kept in the run record. For a private case the issuer's name and the questions it researches go to that search. Read it, accept each limit, approve, then submit once. Any change to an answer or a document needs a new summary.</p>
     <dl class="rv-facts" id="rv-facts"></dl>
     <div class="rv-go">
       <label class="start-confirm"><input type="checkbox" id="approve" disabled><span>Approve: I have read this summary and want this run started.</span></label>
@@ -732,6 +732,7 @@ const $ = id => document.getElementById(id);
 const PATHWAYS = {
   credit_snapshot: ['CP-0','CP-1','CP-MODEL','CP-1A','CP-DR','CP-2','CP-2A','CP-2D','CP-2E','CP-2G','CP-4','CP-3C','CP-3','CP-5','CP-6'],
   lite_credit_assessment: ['CP-0','CP-1','CP-1A','CP-2','CP-2A'],
+  deep_credit_assessment: ['CP-0','CP-1','CP-MODEL','CP-1A','CP-1B','CP-DR','CP-1C','CP-1D','CP-2','CP-4','CP-2A','CP-2E','CP-2D','CP-2G','CP-2H','CP-3D','CP-3C','CP-4C','CP-3','CP-5','CP-6'],
   earnings_update: ['CP-0','CP-1','CP-MODEL','CP-1B','CP-1D','CP-DR','CP-2E','CP-5'],
   relative_value: ['CP-0','CP-1','CP-MODEL','CP-1C','CP-DR','CP-2','CP-2D','CP-2E','CP-3','CP-3C','CP-3D','CP-5'],
   covenant_refinancing: ['CP-0','CP-1','CP-MODEL','CP-1A','CP-DR','CP-2','CP-2A','CP-2D','CP-2E','CP-2G','CP-4','CP-3C','CP-5'],
@@ -746,6 +747,7 @@ const PATHWAYS = {
 const RUN_ORDER = {
   credit_snapshot: ['CP-0','CP-1','CP-1A','CP-DR','CP-4','CP-2','CP-2A','CP-2E','CP-2D','CP-2G','CP-3C','CP-3','CP-5','CP-6'],
   lite_credit_assessment: ['CP-0','CP-1','CP-1A','CP-2','CP-2A'],
+  deep_credit_assessment: ['CP-0','CP-1','CP-1A','CP-1B','CP-DR','CP-1C','CP-1D','CP-2','CP-4','CP-2A','CP-2E','CP-2D','CP-2G','CP-2H','CP-3D','CP-3C','CP-4C','CP-3','CP-5','CP-6'],
   earnings_update: ['CP-0','CP-1','CP-1B','CP-DR','CP-2E','CP-1D','CP-5'],
   relative_value: ['CP-0','CP-1','CP-1A','CP-3D','CP-DR','CP-1C','CP-2','CP-2E','CP-2D','CP-3C','CP-3','CP-5'],
   covenant_refinancing: ['CP-0','CP-1','CP-1A','CP-DR','CP-4','CP-2','CP-2A','CP-2E','CP-2D','CP-2G','CP-3C','CP-5'],
@@ -755,7 +757,7 @@ const RUN_ORDER = {
 };
 // Consumer -> producer -> b (a refusal blocks it) | r (it restricts): deploy_vii.registry.edge_rule, as
 // run_expectations.edges_for returns it for the orders above. Only producers in the run count.
-const EDGES = {"CP-1":{"CP-0":"b"},"CP-2E":{"CP-0":"b","CP-1":"r","CP-1A":"r","CP-2":"r"},"CP-2A":{"CP-0":"b","CP-1":"b","CP-2":"r"},"CP-2":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-DR":"r","CP-1C":"r"},"CP-DR":{"CP-0":"b","CP-1":"b"},"CP-4":{"CP-0":"b","CP-1":"r","CP-1A":"r"},"CP-3":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-2":"b","CP-2G":"r","CP-4":"r","CP-1C":"r","CP-2D":"r","CP-3C":"r","CP-3D":"r"},"CP-2G":{"CP-0":"b","CP-1":"b","CP-2A":"b","CP-2D":"r"},"CP-6":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-2":"b","CP-2A":"r","CP-2E":"r","CP-2D":"r","CP-3C":"r","CP-3":"b","CP-4":"r","CP-5":"b"},"CP-1A":{"CP-0":"b"},"CP-5":{"CP-0":"b","CP-1":"r","CP-1A":"r","CP-2":"r","CP-2A":"r","CP-2E":"r","CP-2G":"r","CP-3":"r","CP-4":"r","CP-DR":"r","CP-1B":"r","CP-1D":"r","CP-1C":"r","CP-2D":"r","CP-3C":"r","CP-3D":"r","CP-2H":"r","CP-4C":"r"},"CP-1D":{"CP-0":"b","CP-1":"b","CP-1B":"r"},"CP-1B":{"CP-0":"b","CP-1":"b"},"CP-3C":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-2D":"b","CP-3D":"r","CP-2A":"r","CP-4":"r"},"CP-2D":{"CP-0":"b","CP-1":"b","CP-2":"b"},"CP-1C":{"CP-0":"b","CP-1":"b","CP-DR":"r"},"CP-3D":{"CP-0":"b"},"CP-2H":{"CP-0":"b","CP-1":"b","CP-2G":"b"},"CP-4C":{"CP-0":"b","CP-1":"b","CP-1C":"r","CP-2A":"b","CP-2G":"b","CP-4":"b"},"CP-L10":{"CP-0":"b","CP-1":"b"}};
+const EDGES = {"CP-1":{"CP-0":"b"},"CP-2E":{"CP-0":"b","CP-1":"r","CP-1A":"r","CP-2":"r"},"CP-2A":{"CP-0":"b","CP-1":"b","CP-2":"r","CP-1B":"r"},"CP-2":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-DR":"r","CP-1C":"r","CP-1B":"r","CP-1D":"r"},"CP-DR":{"CP-0":"b","CP-1":"b"},"CP-4":{"CP-0":"b","CP-1":"r","CP-1A":"r","CP-1D":"r"},"CP-3":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-2":"b","CP-2G":"r","CP-4":"r","CP-1C":"r","CP-2D":"r","CP-3C":"r","CP-3D":"r","CP-1D":"r","CP-2H":"r","CP-4C":"r"},"CP-2G":{"CP-0":"b","CP-1":"b","CP-2A":"b","CP-2D":"r","CP-1D":"r"},"CP-6":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-2":"b","CP-2A":"r","CP-2E":"r","CP-2D":"r","CP-3C":"r","CP-3":"b","CP-4":"r","CP-5":"b","CP-1B":"r","CP-1C":"r","CP-3D":"r"},"CP-1A":{"CP-0":"b"},"CP-5":{"CP-0":"b","CP-1":"r","CP-1A":"r","CP-2":"r","CP-2A":"r","CP-2E":"r","CP-2G":"r","CP-3":"r","CP-4":"r","CP-DR":"r","CP-1B":"r","CP-1D":"r","CP-1C":"r","CP-2D":"r","CP-3C":"r","CP-3D":"r","CP-2H":"r","CP-4C":"r"},"CP-1D":{"CP-0":"b","CP-1":"b","CP-1B":"r"},"CP-1B":{"CP-0":"b","CP-1":"b"},"CP-3C":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-2D":"b","CP-3D":"r","CP-2A":"r","CP-4":"r"},"CP-2D":{"CP-0":"b","CP-1":"b","CP-2":"b"},"CP-1C":{"CP-0":"b","CP-1":"b","CP-DR":"r"},"CP-3D":{"CP-0":"b","CP-2H":"r"},"CP-2H":{"CP-0":"b","CP-1":"b","CP-2G":"b","CP-1D":"r"},"CP-4C":{"CP-0":"b","CP-1":"b","CP-1C":"r","CP-2A":"b","CP-2G":"b","CP-4":"b","CP-3C":"r"},"CP-L10":{"CP-0":"b","CP-1":"b"}};
 // Reader names: the module groups of apps/issuer-library/credit_os/web/screen.js.
 const MODULES = {
   'CP-0': ['Source readiness', 'Classifies every file and checks your declarations against them.'],
@@ -785,14 +787,16 @@ const MODULES = {
 const mname = m => (MODULES[m] || [m])[0];
 // Text from the rules or the service names a module by its code; the analyst reads its name (a code with no name here reads "a module").
 const named = t => String(t ?? '').replace(/\bCP-[A-Z0-9]+\b/g, c => MODULES[c] ? MODULES[c][0] : 'a module');
+// The choices, in the report view's order; each `cap` is src/deploy_vii/contracts.py PATHWAY_CAP_USD (USD a run).
 const PATHS = {
-  credit_snapshot: {label:'Full credit assessment', q:'A full first look at a credit', needs:'Filings, the governing legal documents, and quotes or price talk.'},
-  lite_credit_assessment: {label:'Lite credit assessment', q:'The credit profile and how it holds up under stress', needs:'Filings with financial statements; the executed credit agreement if you have it (the downside module is limited without it). No quotes.'},
-  earnings_update: {label:'Earnings Update', q:'What changed since the last reporting period?', needs:'Filings for both periods and the management EBITDA bridge.'},
-  relative_value: {label:'Relative Value', q:'Is this instrument cheap or rich?', needs:'Observed quotes.'},
-  covenant_refinancing: {label:'Covenant & Refinancing', q:'What do the documents allow, and can it refinance?', needs:'The executed credit agreement or indenture.'},
-  distressed_restructuring: {label:'Distressed & Restructuring', q:'How bad can it get, and who recovers what?', needs:'Executed documents, ratings and a fiscal-year base period.'},
-  portfolio_decision: {label:'Portfolio Decision', q:'Does it fit the fund?', needs:'The portfolio workbook and quotes.'}
+  lite_credit_assessment: {label:'Lite credit assessment', cap:'15', q:'The credit profile and how it holds up under stress', needs:'Filings with financial statements; the executed credit agreement if you have it (the downside module is limited without it). No quotes.'},
+  credit_snapshot: {label:'Full credit assessment', cap:'25', q:'A full first look at a credit', needs:'Filings, the governing legal documents, and quotes or price talk.'},
+  deep_credit_assessment: {label:'Deep credit assessment', cap:'40', q:'The full assessment with every specialist module', needs:'What the full assessment needs, plus prior-period filings, the management EBITDA bridge, peers, ratings and quotes. A module without its sources still runs and states what it lacks.'},
+  earnings_update: {label:'Earnings Update', cap:'20', q:'What changed since the last reporting period?', needs:'Filings for both periods and the management EBITDA bridge.'},
+  relative_value: {label:'Relative Value', cap:'20', q:'Is this instrument cheap or rich?', needs:'Observed quotes.'},
+  covenant_refinancing: {label:'Covenant & Refinancing', cap:'20', q:'What do the documents allow, and can it refinance?', needs:'The executed credit agreement or indenture.'},
+  distressed_restructuring: {label:'Distressed & Restructuring', cap:'20', q:'How bad can it get, and who recovers what?', needs:'Executed documents, ratings and a fiscal-year base period.'},
+  portfolio_decision: {label:'Portfolio Decision', cap:'20', q:'Does it fit the fund?', needs:'The portfolio workbook and quotes.'}
 };
 const RUN_LABEL = {primary:'New issue', secondary:'Trading', research:'No market view', earnings:'Earnings update'};
 // Fonts: the service's library route when the page is served; this repository's when it is opened
@@ -892,7 +896,7 @@ const STALE_DAYS = 30, PEER_MONTHS = 12, PRECEDENT_MONTHS = 36, MIN_ADMITTED = 3
    `kind` is what the launcher reads such a file as. `when` says whether the item applies to the run's
    modules; a chosen file is shown anyway, because every module reads that declaration. */
 // The pathways that ask for the portfolio workbook (portfolio_workbook.PATHWAYS; ruling 2026-11-15-full-assessment-portfolio-workbook).
-const PORTFOLIO_PATHWAYS = ['credit_snapshot', 'portfolio_decision'];
+const PORTFOLIO_PATHWAYS = ['credit_snapshot', 'deep_credit_assessment', 'portfolio_decision'];
 const ATTACH = [
   {id:'bridge', k:'management_bridge', sel:'f-bridge', title:'Management EBITDA bridge', text:"Management's reconciliation from reported to adjusted EBITDA.", uses:['CP-0','CP-1D'], when:has => has('CP-1D'),
     without:'Earnings quality marks every bridge cell not applicable and comes back restricted.'},
@@ -1971,7 +1975,7 @@ function renderFacts(o) {
     const dates = [['As-of', o.run.as_of], ['Cutoff', o.run.cutoff], ['Current period', o.run.current_period], ['Prior period', o.run.prior_period]].filter(x => x[1]).map(x => x[0] + ' ' + x[1]).join(', ');
     rows.push(['Pathway', PATHS[o.run.pathway].label], ['Issuer', o.identity.issuer_name + (o.identity.issuer_id ? ' (' + o.identity.issuer_id + ')' : '')], ['Dates', dates],
       ['Files', SUMMARY.documents.length + ' read' + (SUMMARY.ignored.length ? ', ' + SUMMARY.ignored.length + ' not read' : '')],
-      ['Cap', 'USD 20 for this run'],
+      ['Cap', `USD ${SUMMARY.cap} for this run, the ${PATHS[o.run.pathway].label.toLowerCase()}'s cap`],
       ...(SUMMARY.modules.includes('CP-DR') ? [['Web search', webSearches(o.run.case_kind, (SUMMARY.answers || {}).model) ? 'Yes: the research module searches the web' + (o.run.case_kind === 'private' ? "; the issuer's name and what it researches go to OpenAI's search" : '') : (o.run.case_kind !== 'synthetic' ? 'No: web search is offered on GPT Sol only, so this Claude run reads only its files' : 'No: a synthetic case reads only its files')]] : []), ['Report sections not filled', SUMMARY.omitted.length ? SUMMARY.omitted.join(', ') : 'none'],
       ...(SUMMARY.changes ? [['Changes', SUMMARY.changes]] : []));
     // What was sent, whatever the level now is: a setting made at Advanced still binds the run at Basic.
@@ -2591,7 +2595,7 @@ $('new-submission').addEventListener('click', () => {
 
 /* ======================================================================= Visibility */
 let rtTouched = false, basisTouched = false, idTouched = false, cutTouched = false;
-const PATH_DEFAULT_RUN = {credit_snapshot:'research', earnings_update:'earnings', relative_value:'secondary', covenant_refinancing:'research', distressed_restructuring:'research', portfolio_decision:'research', lite_credit_assessment:'research'};
+const PATH_DEFAULT_RUN = {credit_snapshot:'research', earnings_update:'earnings', relative_value:'secondary', covenant_refinancing:'research', distressed_restructuring:'research', portfolio_decision:'research', lite_credit_assessment:'research', deep_credit_assessment:'research'};
 function slug(s) {
   let x = s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   if (x.length > MAX_ISSUER_ID) { x = x.slice(0, MAX_ISSUER_ID); const cut = x.lastIndexOf('-'); if (cut > 10) x = x.slice(0, cut); }
@@ -2604,7 +2608,7 @@ function renderPathCards() {
     return `<label class="prow" for="${id}"><input type="radio" id="${id}" name="pathway" data-k="pathway" value="${p}"${p === 'credit_snapshot' ? ' checked' : ''}>` +
       `<span class="ct"><span class="ctl"><b>${d.label}</b><span class="q">${d.q}</span></span>` +
       `<span class="mods-line">${runOf(p).length} modules: ${runOf(p).map(m => `<span>${esc(mname(m))}</span>`).join(', ')}</span></span>` +
-      `<span class="imp">Needs: ${d.needs}</span></label>`;
+      `<span class="imp">Cap: USD ${d.cap} a run. Needs: ${d.needs}</span></label>`;
   }).join('');
 }
 function renderTimeline() {

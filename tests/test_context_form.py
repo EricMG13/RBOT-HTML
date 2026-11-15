@@ -313,7 +313,13 @@ class _VisibleText(HTMLParser):
 
 # What Rulings 6-9 of the redesign plan change in the markup after the step logic: nothing.
 # Ruling 6 (the title) and 9 (the group number) landed there; 8 (button labels) is script.
-CHANGED_BY_RULINGS: frozenset[str] = frozenset()
+# Sentences a later ruling changed. Ruling 2026-11-15-pathway-tiers-and-caps: the cap is the
+# pathway's (`PATHWAY_CAP_USD`), not one USD 20 for every run.
+CHANGED_BY_RULINGS: frozenset[str] = frozenset(
+    {
+        "This is the run you are about to start, as the launcher itself forecasts it from your documents and answers. It uses the paid model (USD 20 cap). Pages of the documents you uploaded that modules read are sent to OpenAI, and, on a GPT Sol run unless the case is synthetic, the research module's web searches go to OpenAI's search (a Claude run does not search the web): it is told to search with public names only, and the queries it actually sent are kept in the run record. For a private case the issuer's name and the questions it researches go to that search. Read it, accept each limit, approve, then submit once. Any change to an answer or a document needs a new summary.",
+    }
+)
 
 
 def test_the_redesigned_markup_keeps_every_sentence_of_the_step_logic_commit() -> None:

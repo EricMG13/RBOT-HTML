@@ -10,10 +10,11 @@ import subprocess
 import sys
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Literal, get_args
+from typing import Literal, cast, get_args
 
+from deploy_vii.contracts import PATHWAY_CAP_USD, PathwayId
 from deploy_workflow import platform_io
 from deploy_workflow.inbox.layout import Layout
 from deploy_workflow.owners.cpos_launch import METHODS
@@ -70,6 +71,37 @@ class Record:
     submitted_by: str = ""
     digest: str = ""  # the approved digest of the submitted files; the move is checked against it
     prior: str = ""  # the earlier run the approval named (a run folder name or `none`); "": search
+    cap: str = ""  # USD the approved summary showed (`cap_of`); "": written before per-pathway caps
+
+
+# The one cap of the standing ruling before per-pathway caps (ruling 2026-11-11-run-start-submit):
+# what the summary a record without a cap was approved on showed.
+LEGACY_CAP = Decimal(20)
+
+
+def cap_of(record: Record) -> Decimal:
+    """The USD cap the record's run launches with (ruling 2026-11-15-pathway-tiers-and-caps).
+
+    A record keeps the cap its approved summary showed, which may not pass its pathway's cap in
+    ``PATHWAY_CAP_USD``. A record written before per-pathway caps holds none: its summary showed
+    ``LEGACY_CAP``, so it runs at the lower of that and its pathway's cap, never at more than was
+    approved or than the table now allows. ``ValueError`` for an unknown pathway or a cap that is
+    not an amount within those bounds (a hand-edited record)."""
+    ceiling = PATHWAY_CAP_USD.get(cast(PathwayId, record.pathway))
+    if ceiling is None:
+        raise ValueError(f"run {record.id}: pathway {record.pathway!r} has no cap")
+    if not record.cap:
+        return min(LEGACY_CAP, ceiling)
+    try:
+        value = Decimal(record.cap) if isinstance(record.cap, str) else Decimal("NaN")
+    except InvalidOperation:
+        value = Decimal("NaN")
+    if not (value.is_finite() and 0 < value <= ceiling):
+        raise ValueError(
+            f"run {record.id}: cap {record.cap!r} is not an amount above zero and at most the "
+            f"{record.pathway} cap USD {ceiling}"
+        )
+    return value
 
 
 PID_FILE_VARIABLE = "DEPLOY_WORKFLOW_PID_FILE"  # the launcher reads the same name
@@ -194,16 +226,17 @@ def _check_options(record: Record) -> None:
         raise ValueError(f"run {record.id}: max_turns {turns!r} is not a whole number 1 to 64")
 
 
-def command(  # noqa: PLR0913 - the signature the scheduler calls
+def command(
     layout: Layout,
     record: Record,
     context: Path,
     *,
     launcher: Sequence[str],
-    cap: Decimal,
     ruling: Path | None,
 ) -> list[str]:
+    """The launcher's argv for the record; its cap is ``cap_of(record)``."""
     _check_options(record)
+    cap = cap_of(record)
     config, balanced = launch_options(record.model, record.effort)
     argv = [
         *launcher,
@@ -226,17 +259,16 @@ def command(  # noqa: PLR0913 - the signature the scheduler calls
     return argv
 
 
-def start(  # noqa: PLR0913 - the signature the scheduler calls
+def start(
     layout: Layout,
     record: Record,
     context: Path,
     *,
     launcher: Sequence[str],
-    cap: Decimal,
     ruling: Path,
 ) -> subprocess.Popen[bytes]:
     """Start the paid run as a child; stdout and stderr append to logs/<id>.log."""
-    argv = command(layout, record, context, launcher=launcher, cap=cap, ruling=ruling)
+    argv = command(layout, record, context, launcher=launcher, ruling=ruling)
     env = child_environment()
     env[PID_FILE_VARIABLE] = str(pid_file(layout, record.id))
     child: subprocess.Popen[bytes] | None = None

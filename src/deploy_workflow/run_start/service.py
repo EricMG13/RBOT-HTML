@@ -1,10 +1,10 @@
 """The start page's HTTP service: the upload store and the scheduler behind one local address.
 
-The process holds the provider key and can start paid runs (USD 20 cap each), has no login and is
-reachable from other machines, so every request is hostile input. Plain ``http.server``; no
-framework. The rules below that are not about one route are implemented once, in
-``deploy_workflow.http_base``, which Signal's service shares; this docstring is their
-specification. Every request is checked before any body byte is read:
+The process holds the provider key and can start paid runs (each at its pathway's cap,
+``PATHWAY_CAP_USD``), has no login and is reachable from other machines, so every request is
+hostile input. Plain ``http.server``; no framework. The rules below that are not about one route
+are implemented once, in ``deploy_workflow.http_base``, which Signal's service shares; this
+docstring is their specification. Every request is checked before any body byte is read:
 
 * ``Host`` must be exactly ``<host>:<port>`` as started (and ``localhost:<port>`` when the host is
   ``127.0.0.1``); otherwise 403. On port 80 the port may be left out of ``Host`` and ``Origin``.
@@ -147,6 +147,7 @@ _RUN_FIELDS = (
     "ended_at",
     "issuer_name",
     "pathway",
+    "cap",
     "report",
     "modules",
     "stalled",
@@ -290,8 +291,7 @@ class Handler(http_base.Handler):
         raise Reply(200, self._guarded(copy))
 
     def _summary(self, sid: str, answers: Any) -> dict[str, Any]:
-        settings = self._service.scheduler.settings
-        return submissions.summary(self._layout, sid, answers, cap=settings.cap)
+        return submissions.summary(self._layout, sid, answers)
 
     def _submit(self, sid: str, body: Any) -> None:
         if not isinstance(body, dict) or not isinstance(body.get("digest"), str):
@@ -309,10 +309,7 @@ class Handler(http_base.Handler):
         record = next((r for r in runs.load_all(self._layout) if r.id == run_id), None)
         if record is None:
             raise refuse(404, "unknown run")
-        settings = self._service.scheduler.settings
-        shown = activity.snapshot(self._layout, [record], cap=settings.cap, now=datetime.now(UTC))[
-            "runs"
-        ][0]
+        shown = activity.snapshot(self._layout, [record], now=datetime.now(UTC))["runs"][0]
         # A run with no folder yet has no events: every module waits.
         shown.setdefault("modules", activity.module_states(record.pathway, []))
         answer = {key: shown[key] for key in _RUN_FIELDS if key in shown}

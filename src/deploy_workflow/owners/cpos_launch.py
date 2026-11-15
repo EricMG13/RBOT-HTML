@@ -28,7 +28,13 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
-from deploy_vii.contracts import DEACTIVATED_MESSAGE, DEACTIVATED_PATHWAYS, PATHWAY_MODULES, Run
+from deploy_vii.contracts import (
+    DEACTIVATED_MESSAGE,
+    DEACTIVATED_PATHWAYS,
+    PATHWAY_CAP_USD,
+    PATHWAY_MODULES,
+    Run,
+)
 from deploy_vii.registry import dependencies, modules, plan
 from deploy_vii.report_view import _spec_of, pathways
 from deploy_workflow import (
@@ -1694,7 +1700,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--context", type=Path, required=True, help="context/1 JSON file")
     parser.add_argument("--sources", type=Path, required=True, help="folder of issuer files")
     parser.add_argument("--config", choices=tuple(CONFIGS), required=True, help="model and effort")
-    parser.add_argument("--cap", type=_cap, required=True, help="USD ceiling for this run folder")
+    parser.add_argument(
+        "--cap",
+        type=_cap,
+        help="USD ceiling for this run folder; default: the pathway's cap (PATHWAY_CAP_USD)",
+    )
     parser.add_argument("--modules", nargs="+", help="default: the context's pathway preset")
     parser.add_argument("--max-turns", type=int, default=32, help="model turns per module")
     parser.add_argument("--out", type=Path, help="run folder; default runs/<run id>")
@@ -1831,7 +1841,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.sources,
             args.out,
             config=args.config,
-            cap=args.cap,
+            cap=PATHWAY_CAP_USD[context.run.pathway] if args.cap is None else args.cap,
             modules=args.modules,
             web_search=web_search_run(args.config, args.ruling),
             prior=args.prior,

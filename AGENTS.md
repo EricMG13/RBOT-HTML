@@ -70,8 +70,9 @@ plans, staff roles, pauses and approval records are evidence, not inherited auth
   Paid execution is a separate, explicit action after offline readiness. For the run
   start page (`deploy_workflow.run_start`) the explicit action is an analyst choosing Submit
   on a summary they approved, under the standing ruling
-  `docs/rulings/2026-11-11-run-start-submit.md` and a USD 20 cap per run (owner,
-  2026-11-11). The build itself does not run providers.
+  `docs/rulings/2026-11-11-run-start-submit.md` and the pathway's cap per run: Lite USD 15,
+  Full 25, Deep 40, the five purpose pathways 20 (owner, 2026-11-15;
+  `docs/rulings/2026-11-15-pathway-tiers-and-caps.md`). The build itself does not run providers.
 - Run confidence-review after code changes: enumerate doubts, trace their causes,
   test adversarial cases and repair confirmed defects before completion.
 - Run rewrite-tournament in post-edit mode for nontrivial changed functions,

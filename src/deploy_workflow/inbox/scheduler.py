@@ -26,10 +26,10 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
-from decimal import Decimal
 from pathlib import Path
 from typing import IO, Any
 
+from deploy_vii.contracts import PATHWAY_CAP_USD
 from deploy_workflow.context import load_context
 from deploy_workflow.inbox import activity, filing, layout, runs, startup
 from deploy_workflow.inbox.runs import Record
@@ -63,7 +63,6 @@ MAX_QUEUED = 30
 @dataclass(frozen=True)
 class Settings:
     root: Path
-    cap: Decimal = Decimal(20)
     max_running: int = 3
     max_per_day: int = 30
     poll_seconds: float = 10
@@ -103,7 +102,7 @@ class Scheduler:
     ) -> None:
         self.settings, self.clock, self.now = settings, clock, now
         self.layout = layout.ensure_layout(settings.root)
-        startup.check_launchable(settings.ruling, settings.cap)
+        startup.check_launchable(settings.ruling)
         self._lock: IO[str] | None = startup.take_lock(self.layout)
         self._logger = startup.open_log(self.layout, __name__)  # only the lock holder logs
         self.lock = threading.Lock()  # held by step() and submit(): a submit never splits a poll
@@ -294,8 +293,16 @@ class Scheduler:
             raise submissions.Refused(
                 "the documents or answers changed after approval; review the summary again"
             )
-        (sealed / "context.json").write_bytes(submissions.context_bytes(answers))
         context = answers["context"]
+        # The cap the approved summary showed is the run's; a table changed since (or a summary
+        # made before per-pathway caps, which records none) needs a new summary.
+        cap = str(PATHWAY_CAP_USD[context["run"]["pathway"]])
+        if submissions.issued_cap(self.layout, sid) != cap:
+            raise submissions.Refused(
+                f"the run's cap is now USD {cap}, not the one the summary showed; review the "
+                "summary again"
+            )
+        (sealed / "context.json").write_bytes(submissions.context_bytes(answers))
         record = Record(
             self._new_id(),
             context["run"]["pathway"],
@@ -315,6 +322,7 @@ class Scheduler:
             submitted_by=answers["submitted_by"],
             digest=current,
             prior=prior,
+            cap=cap,
         )
         self._put(record)
         return record
@@ -396,7 +404,6 @@ class Scheduler:
             snapshot = activity.snapshot(
                 self.layout,
                 list(self._records.values()),
-                cap=self.settings.cap,
                 now=self.now(),
                 kept=self._kept_activity,
                 held="; ".join(t for t in (self._rebuild_error, self._limit_held) if t),
@@ -549,7 +556,6 @@ class Scheduler:
                 record,
                 context,
                 launcher=self.settings.launcher,
-                cap=self.settings.cap,
                 ruling=startup.STANDING_RULING,
             )
         except (ValueError, TypeError) as error:
@@ -569,7 +575,6 @@ class Scheduler:
                 running,
                 context,
                 launcher=self.settings.launcher,
-                cap=self.settings.cap,
                 ruling=startup.STANDING_RULING,  # start-up proved settings.ruling is this file
             )
         except (OSError, ValueError, TypeError) as error:

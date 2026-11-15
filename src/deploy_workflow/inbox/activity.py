@@ -15,7 +15,7 @@ from deploy_vii.contracts import PATHWAY_MODULES, PathwayId
 from deploy_vii.registry import plan
 from deploy_workflow import platform_io
 from deploy_workflow.inbox.layout import Layout
-from deploy_workflow.inbox.runs import Record
+from deploy_workflow.inbox.runs import Record, cap_of
 from deploy_workflow.model.budget import BudgetError, exact_sum, read_reservation_snapshot
 from deploy_workflow.model.pricing import money_text
 from deploy_workflow.owners.cpos_launch import METHODS, NOT_ANALYTICAL
@@ -120,6 +120,10 @@ def _entry(layout: Layout, record: Record, now: datetime) -> tuple[dict[str, Any
     entry: dict[str, Any] = asdict(record)
     entry["files"] = list(record.files)
     entry.pop("modules")  # the modules asked for; "modules" here is each one's state, set below
+    try:  # the cap the run launches with: its own, or a record's from before per-pathway caps
+        entry["cap"] = str(cap_of(record))
+    except ValueError:  # Documented fail-open: a hand-edited record shows no cap; it cannot start.
+        entry["cap"] = None
     run_dir = layout.runs / record.id
     events: list[dict[str, Any]] = []
     complete = record.status == "rejected"
@@ -151,11 +155,10 @@ def _shown(
     return entry
 
 
-def snapshot(  # noqa: PLR0913 - one more argument: the caller's store of finished entries
+def snapshot(
     layout: Layout,
     records: Sequence[Record],
     *,
-    cap: Decimal,
     now: datetime,
     held: str = "",
     kept: dict[str, tuple[Record, dict[str, Any]]] | None = None,
@@ -173,7 +176,6 @@ def snapshot(  # noqa: PLR0913 - one more argument: the caller's store of finish
         del store[run_id]
     return {
         "updated": now.astimezone(UTC).strftime(_TIME),
-        "cap": str(cap),
         "held": held,
         "runs": runs,
     }
