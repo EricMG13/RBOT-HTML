@@ -3,7 +3,7 @@
 Plain ``http.server``; no framework. The service has no login and may be reachable from other
 machines, so every request is hostile input. The rules are those of the run start page's service,
 implemented once in ``deploy_workflow.http_base`` for both; what Signal adds or sets differently
-(the per-address ceiling, the connection deadline, the HTTP/0.9 close, the page policy on every
+(the per-address ceiling, the connection deadline, the page policy on every
 response, the JSON object rule) is passed to that base here. Every request is checked before any
 body byte is read:
 
@@ -333,7 +333,6 @@ class Handler(http_base.Handler):
     logger = log
     # The page policy on every response, the replies http.server writes itself included.
     response_headers = (("Content-Security-Policy", _POLICY), ("X-Frame-Options", "DENY"))
-    closes_http09 = True
 
     def connection_deadline(self) -> float:
         return 2 * SOCKET_TIMEOUT

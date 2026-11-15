@@ -63,7 +63,6 @@ class _PlainHandler(http_base.Handler):
 
 class _StrictHandler(_PlainHandler):
     response_headers = (("Content-Security-Policy", "default-src 'none'"), ("X-Extra", "1"))
-    closes_http09 = True
     deadline = 30.0
 
     def connection_deadline(self) -> float:
@@ -304,15 +303,10 @@ def test_the_replies_http_server_writes_itself_carry_the_headers(toy, request_by
     assert ("Content-Security-Policy" in headers) == (toy.kind == "strict")
 
 
-def test_an_http_09_request_line_is_closed_or_refused_by_parameter(toy):
-    answer = toy.raw(b"GET /\r\n\r\n")
-    if toy.kind == "strict":
-        assert answer == b""  # closed with no reply
-    else:
-        # http.server parses no headers for such a line, so the Host check itself fails: the
-        # fixed 500 text, with no status line or headers (HTTP/0.9 has none), and a logged
-        # traceback. This is what a service that does not set ``closes_http09`` answers.
-        assert answer == b'{"error": "the service failed; see its log"}'
+def test_an_http_09_request_line_is_closed_with_no_reply(toy):
+    # http.server parses no headers for such a line, so no check could run and no status line
+    # or header could be sent.
+    assert toy.raw(b"GET /\r\n\r\n") == b""
     assert toy.ask("GET", "/")[0] == 200
 
 
@@ -575,7 +569,6 @@ def test_an_own_address_or_no_address_is_not_a_wildcard(host):
 def test_the_run_start_service_passes_its_own_parameters():
     handler = run_start_service.Handler
     assert handler.response_headers == ()  # its policies differ per route, so none is global
-    assert handler.closes_http09 is True
     assert handler.connection_deadline is http_base.Handler.connection_deadline  # none
     assert handler.read_body is http_base.Handler.read_body  # a lost body is ClientGone
     assert handler.logger is run_start_service.log
@@ -595,7 +588,6 @@ def test_signal_passes_its_own_parameters():
         "Content-Security-Policy": signal_service._POLICY,
         "X-Frame-Options": "DENY",
     }
-    assert handler.closes_http09 is True
     assert handler.connection_deadline(cast(Any, None)) == 2 * signal_service.SOCKET_TIMEOUT == 120
     assert handler.read_body is not http_base.Handler.read_body  # a lost body is a 400
     assert handler.logger is signal_service.log

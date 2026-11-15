@@ -7,8 +7,9 @@ their one implementation. Plain ``http.server``; no framework.
 What is the same for both services lives here: the server with its connection ceiling, the reply
 type, the checks every request passes before any body byte is read (``Handler.serve_request``, in
 this order: the target is a path, ``Host``, ``Sec-Fetch-Site``, ``Origin``, no
-``Transfer-Encoding``), the ``Content-Length`` and JSON body rules, the headers every response
-carries, the fixed 500, and the two ways a file is served.
+``Transfer-Encoding``; an HTTP/0.9 request line is closed with no reply before them), the
+``Content-Length`` and JSON body rules, the headers every response carries, the fixed 500, and
+the two ways a file is served.
 
 What differs between the services is a named parameter, never a branch on which service it is:
 
@@ -19,8 +20,6 @@ What differs between the services is a named parameter, never a branch on which 
     ``http.server`` writes itself (501, 400, 414) included.
 ``Handler.connection_deadline``
     Seconds after accept at which the connection is shut down however it trickles, or None.
-``Handler.closes_http09``
-    Whether an HTTP/0.9 request line is closed with no reply before any check.
 ``Handler.read_body``
     What a body whose connection fails becomes: ``ClientGone`` (no reply) unless overridden.
 ``Handler.logger``
@@ -167,7 +166,6 @@ class Handler(BaseHTTPRequestHandler):
     sys_version = ""
     logger: logging.Logger = log
     response_headers: tuple[tuple[str, str], ...] = ()
-    closes_http09 = False
     _deadline: threading.Timer | None = None
 
     def connection_deadline(self) -> float | None:
@@ -205,7 +203,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def serve_request(self, route: Callable[[urllib.parse.SplitResult], Reply | None]) -> None:
         """Check the request, then send what ``route`` returns or raises; None is a 404."""
-        if self.closes_http09 and self.request_version == "HTTP/0.9":
+        if self.request_version == "HTTP/0.9":
             self.close_connection = True  # no headers exist to check and none can be sent
             self.logger.info("%s: HTTP/0.9 request closed", self.address_string())
             return

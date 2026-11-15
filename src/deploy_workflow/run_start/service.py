@@ -168,7 +168,6 @@ class Handler(http_base.Handler):
     timeout = SOCKET_TIMEOUT
     server_version = "RunStart"
     logger = log
-    closes_http09 = True  # no headers to check, and no status line or headers could be sent
 
     # -- plumbing ---------------------------------------------------------------------------
 

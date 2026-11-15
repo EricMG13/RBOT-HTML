@@ -84,4 +84,4 @@ python tools/work_pc_delta.py prune --keep-days 14       # remove them (14 is th
 ```
 
 `prune` never removes the newest pack, and leaves alone and reports anything in `syncs/`
-not named `NNN_YYYY-MM-DD_...`. A longer window must be set in the workflow as well.
+not named `NNN_YYYY-MM-DD_...`. The window is `KEEP_DAYS` in `tools/work_pc_delta.py`; the workflow uses that default.

@@ -37,7 +37,7 @@ jobs:
           echo "message=$message" >> "$GITHUB_OUTPUT"
       - name: remove packs older than the retention window
         if: startsWith(steps.pack.outputs.message, 'wrote ')
-        run: python tools/work_pc_delta.py prune --keep-days 14
+        run: python tools/work_pc_delta.py prune
       - name: commit and push the pack
         if: startsWith(steps.pack.outputs.message, 'wrote ')
         run: |
