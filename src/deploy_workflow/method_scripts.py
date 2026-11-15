@@ -25,7 +25,7 @@ import re
 import sys
 import threading
 import types
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, replace
 from functools import cache
@@ -48,8 +48,12 @@ RECORD_SUFFIX = ".method-checks.json"  # beside a request folder's `<attempt>.re
 # `contradicted`: two stated inputs contradict each other and the script refuses them, so nothing
 # is recomputed; an acceptance issue like a disagreement (owner, 2026-11-15, CP-2E's hedged debt
 # above gross: "approved"). Every other refusal is "not checked".
-Status = Literal["agreed", "disagreed", "not checked", "contradicted"]
-SENT_BACK = ("disagreed", "contradicted")
+# `missing`: a table the module is asked for is absent, with no statement in its place (owner,
+# 2026-11-15, CP-3's recovery waterfall: "yes"); sent back. Every other gap is "not checked".
+Status = Literal["agreed", "disagreed", "not checked", "contradicted", "missing"]
+SENT_BACK = ("disagreed", "contradicted", "missing")
+# The handoffs a module was sent, by module id, as text: a check may read what it copied from.
+Upstream = Mapping[str, str]
 
 
 class ScriptRefused(ValueError):
@@ -603,7 +607,7 @@ def _read_bridge(table: Table, tables: types.ModuleType) -> _Bridge | str:
     return _Bridge(inputs, gap, others, ending, str(keys.pop()), halves)
 
 
-def _cp2d(text: str, loaded: Loaded) -> list[Outcome]:
+def _cp2d(text: str, loaded: Loaded, _upstream: Upstream) -> list[Outcome]:
     table = register_table(text, "T2E.5")
     bridge = table if isinstance(table, str) else _read_bridge(table, loaded.tables)
     if isinstance(bridge, str):
@@ -897,7 +901,7 @@ def _funding_slack(line: str, funding: _Funding, view: dict[str, Any]) -> float:
     return by_line.get(line, due + liquidity + halves["fcf"])
 
 
-def _cp3c(text: str, loaded: Loaded) -> list[Outcome]:
+def _cp3c(text: str, loaded: Loaded, _upstream: Upstream) -> list[Outcome]:
     try:
         funding = _read_funding(text, loaded.tables)
         view = loaded.script.compute(funding.payload)["as_of_balance_sheet_date"]
@@ -926,7 +930,8 @@ def _funding_line(
 
 # --- the checks, their issues and their record --------------------------------------------------
 
-CHECKS: dict[str, tuple[str, Callable[[str, Loaded], list[Outcome]]]] = {
+Check = Callable[[str, Loaded, Upstream], list[Outcome]]
+CHECKS: dict[str, tuple[str, Check]] = {
     "CP-2D": (LIQUIDITY_BRIDGE, _cp2d),
     "CP-3C": (FUNDING_GAP, _cp3c),
 }
@@ -934,9 +939,7 @@ CHECKS: dict[str, tuple[str, Callable[[str, Loaded], list[Outcome]]]] = {
 NOTES = {"CP-2D": CP2D_NOTE, "CP-3C": CP3C_NOTE}
 
 
-def register(
-    module: str, script: str, check: Callable[[str, Loaded], list[Outcome]], note: str | None
-) -> None:
+def register(module: str, script: str, check: Check, note: str | None) -> None:
     """Add a module's check and its note (None: the module is not told; the check reads only what
     it writes unasked). Each later module's mapping is its own sibling module
     (`method_scripts_<module>.py`), imported at the end of this one."""
@@ -945,15 +948,15 @@ def register(
         NOTES[module] = note
 
 
-def run(module: str, text: str) -> tuple[Outcome, ...]:
-    """Every check the module's method scripts make on this handoff; none for a module without
-    one. A script that cannot be loaded or that fails is one "not checked" outcome, never a
-    raise."""
+def run(module: str, text: str, upstream: Upstream | None = None) -> tuple[Outcome, ...]:
+    """Every check the module's method scripts make on this handoff (``upstream``: the handoffs
+    it was sent, by module id); none for a module without one. A script that cannot be loaded or
+    that fails is one "not checked" outcome, never a raise."""
     if module not in CHECKS:
         return ()
     path, check = CHECKS[module]
     try:
-        return tuple(check(text, _loaded(path)))
+        return tuple(check(text, _loaded(path), upstream or {}))
     except Exception as error:  # noqa: BLE001 - a script failure must never stop a run
         cause = f"the check could not run: {type(error).__name__}: {error}"
         return (Outcome(module, path, "all", "", "", "not checked", reason=cause),)
@@ -962,6 +965,8 @@ def run(module: str, text: str) -> tuple[Outcome, ...]:
 def issue(outcome: Outcome) -> str:
     """The acceptance issue for a disagreement or a contradiction, in words the module can act
     on."""
+    if outcome.status == "missing":
+        return outcome.reason
     if outcome.status == "contradicted":
         return (
             f"{outcome.register} states {outcome.stated}, and the method's "
@@ -980,19 +985,46 @@ def issue(outcome: Outcome) -> str:
     )
 
 
-def issues(module: str, text: str) -> tuple[str, ...]:
-    """The acceptance issues: one per disagreement or contradiction; a figure not checked is no
-    issue."""
-    return tuple(issue(o) for o in run(module, text) if o.status in SENT_BACK)
+def issues(module: str, text: str, upstream: Upstream | None = None) -> tuple[str, ...]:
+    """The acceptance issues: one per disagreement, contradiction or missing table; a figure not
+    checked is no issue."""
+    return tuple(issue(o) for o in run(module, text, upstream) if o.status in SENT_BACK)
 
 
-def record(module: str, raw: bytes) -> dict[str, Any] | None:
+def upstream_texts(handoffs: Mapping[str, bytes]) -> dict[str, str]:
+    """The handoffs a module was sent, as text (one that is not UTF-8 is left out)."""
+    out = {}
+    for module, raw in handoffs.items():
+        try:
+            out[module] = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            continue
+    return out
+
+
+def blocked(text: str) -> bool:
+    """`module_status: Blocked` in the handoff's front matter: the method's own stop, after which
+    only the gate is owed (as the launcher's presence check reads it)."""
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return False
+    head = lines[1:]
+    head = head[: head.index("---")] if "---" in head else head
+    return any(
+        re.fullmatch(r"""module_status:\s*["']?blocked["']?\s*""", h.strip(), re.IGNORECASE)
+        for h in head
+    )
+
+
+def record(
+    module: str, raw: bytes, upstream: Mapping[str, bytes] | None = None
+) -> dict[str, Any] | None:
     """Every check's outcome for one response, for the run's files; None for a module without a
     method-script check."""
     if module not in CHECKS:
         return None
     try:
-        outcomes = run(module, raw.decode("utf-8"))
+        outcomes = run(module, raw.decode("utf-8"), upstream_texts(upstream or {}))
     except UnicodeDecodeError:
         path = CHECKS[module][0]
         outcomes = (Outcome(module, path, "all", "", "", "not checked", reason="not UTF-8"),)

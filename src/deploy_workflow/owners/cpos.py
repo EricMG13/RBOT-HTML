@@ -231,7 +231,7 @@ def _retain_method_checks(path: Path, task: HandoffTask, response: bytes) -> Non
     """Beside an attempt's review, every check the module's method scripts made on its response
     (agreed, disagreed or not checked, with the reason), for the library's Evidence page; nothing
     for a module without one. Kept like a review: a recheck that differs is kept beside it."""
-    record = method_scripts.record(task.module_id, response)
+    record = method_scripts.record(task.module_id, response, task.handoffs)
     if record is not None:
         _retain_review(path, json.dumps(record, sort_keys=True, indent=2).encode())
 

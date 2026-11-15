@@ -599,8 +599,22 @@ CP6A_POSTURE = (
     "established.\nBasis: annual.txt, page 2"
 )
 
-# Sections a module owes beside its tables: CP-6's portfolio debate decision (owner, 2026-11-15).
-OWNED_SECTIONS = {"CP-6": ["### Portfolio posture", "", CP6A_POSTURE, ""]}
+# Sections a module owes beside its tables: CP-6's portfolio debate decision (owner, 2026-11-15)
+# and CP-3's recovery waterfall, here stating that no enterprise value can be supported (owner,
+# 2026-11-15: "1. yes 2. yes 3. yes"; recorded, not refused).
+NO_EV = "Not supplied: no enterprise value in the synthetic evidence"
+CP3_WATERFALL = [
+    "### Recovery waterfall",
+    "",
+    "| Line | Amount | Low | Base | High | Currency | Scale |",
+    "| --- | --- | --- | --- | --- | --- | --- |",
+    f"| Enterprise value | — | {NO_EV} | {NO_EV} | {NO_EV} | USD | m |",
+    "",
+]
+OWNED_SECTIONS = {
+    "CP-6": ["### Portfolio posture", "", CP6A_POSTURE, ""],
+    "CP-3": CP3_WATERFALL,
+}
 
 
 def register_rows(module: str) -> list[str]:
@@ -8863,6 +8877,51 @@ def test_cp1_free_name_rows_are_checked_by_its_script(tmp_path):
     assert set(_checked_handoff(task, right.encode(), check)) == base
     (added,) = set(_checked_handoff(task, wrong.encode(), check)) - base
     assert "T4.9 row `FCF / debt (FY2024)` states 8.5" in added
+
+
+# SYNTHETIC: EV 4.2x x EBITDA 100 = 420 in each case, copied from CP-1C's T4.10 (worked in
+# tests/test_method_scripts.py); with no claims, only the EV figures are recomputed.
+CP3_FROM_T410 = """### Recovery waterfall
+
+| Line | Amount | Low | Base | High | Currency | Scale |
+| --- | --- | --- | --- | --- | --- | --- |
+| Enterprise value | — | 420 | 420 | 420 | USD | m |
+| EV multiple | — | 4.2x | 4.2x | 4.2x | — | — |
+| EV metric | — | 100 | 100 | 100 | USD | m |
+| EV basis | — | CP-1C T4.10 EV/EBITDA | CP-1C T4.10 EV/EBITDA | CP-1C T4.10 EV/EBITDA | — | — |
+
+"""
+T410_SENT = """## Findings
+
+### T4.10 — Implied EV
+
+| Method | Multiple Value | Implied EV | Low (USD m) | Median (USD m) | High (USD m) | Calc Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| Peer EV/EBITDA | 4.2x | 420 | {low} | 420 | 420 | Calculated |
+"""
+
+
+@pytest.mark.parametrize("pathway", ["credit_snapshot", "relative_value", "portfolio_decision"])
+def test_cp3_is_asked_for_its_waterfall_and_checked_against_the_t410_it_was_sent(tmp_path, pathway):
+    (tmp_path / "texts").mkdir()
+    _, texts = all_instructions(tmp_path / "texts", pathway)
+    head = texts["CP-3"].partition(cpos_launch.METHOD_MARK)[0]
+    assert head.count(method_scripts.NOTES["CP-3"]) == 1
+    prepared, task, context = good_task(tmp_path, "CP-3", pathway)
+    raw = answer(context, list(prepared.plan.layout.routes))
+    check = checker(prepared.layout)
+    assert _checked_handoff(task, raw.encode(), check) == ()  # no EV supportable: recorded only
+    # No table and no statement: sent back.
+    start = raw.index("### Recovery waterfall")
+    bare = raw[:start] + raw[raw.index("\n\n", raw.index("| Enterprise value", start)) + 2 :]
+    (missing,) = _checked_handoff(task, bare.encode(), check)
+    assert "Write `### Recovery waterfall`" in missing
+    # The T4.10 copy is compared with the CP-1C handoff the module was sent.
+    cited = bare.replace("\n## Calculations", "\n" + CP3_FROM_T410 + "## Calculations")
+    for low, sent_back in (("420", False), ("380", True)):
+        sent = {**task.handoffs, "CP-1C": T410_SENT.format(low=low).encode()}
+        issues = _checked_handoff(dataclasses.replace(task, handoffs=sent), cited.encode(), check)
+        assert any("T4.10" in i and "recomputes 380" in i for i in issues) is sent_back, low
 
 
 def test_each_attempt_keeps_its_method_script_checks_beside_its_review(tmp_path):

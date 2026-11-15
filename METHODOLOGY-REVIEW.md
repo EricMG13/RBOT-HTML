@@ -917,7 +917,11 @@ case, and the opening-to-prior-closing and debt roll-forward of T2H.5. CP-4:
 `covenant_headroom.py` on T4C.4, signed headroom and status by the stated test type (never
 inferred). CP-1: `credit_metrics.py` on T4.8's LTM rows and T4.9's free-name quotients; the six
 fixed T4.9 rows stay with `owners/cpos_cp1_check.py`, which binds their operands; CP-1 is sent a
-note, its `earnings_update` size ceiling raised by the note's length (owner: "approved"). Limit: synthetic proof only, and the retained TDG excerpts
+note, its `earnings_update` size ceiling raised by the note's length (owner: "approved"). CP-3
+(owner: "1. yes 2. yes 3. yes"): asked for `### Recovery waterfall`, its enterprise-value cases
+CP-1C's T4.10 range where it receives CP-1C (overriding CP-1C's step 06C and Valuation Discipline 8
+for CP-3's use only; CP-1C's text unchanged) or its own cases with their basis, or `Not supplied`
+where none can be supported; checked with `recovery_waterfall.py` and CP-1C's `peer_statistics.py`. Limit: synthetic proof only, and the retained TDG excerpts
 of 2026-11-13 hold none of these registers.
 
 **CP-3's portfolio-fit registers restored (2026-11-15; owner: "restore the CP-3 portfolio-fit

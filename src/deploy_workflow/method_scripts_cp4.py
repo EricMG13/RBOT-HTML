@@ -29,6 +29,7 @@ from deploy_workflow.method_scripts import (
     Loaded,
     Outcome,
     Status,
+    Upstream,
     _Claim,
     _columns,
     _judged,
@@ -164,7 +165,7 @@ def _status(where: _Where, cell: str, result: dict[str, Any]) -> Outcome:
     return where(agreed, stated=cell, recomputed_label=found, reason=HEADROOM_FORMULA)
 
 
-def check(text: str, loaded: Loaded) -> list[Outcome]:
+def check(text: str, loaded: Loaded, _upstream: Upstream) -> list[Outcome]:
     """Each T4C.4 test's headroom and status, recomputed by the script from its own row."""
     table = register_table(text, "T4C.4")
     cols = table if isinstance(table, str) else _columns(table, HEADROOM_COLUMNS, "T4C.4")

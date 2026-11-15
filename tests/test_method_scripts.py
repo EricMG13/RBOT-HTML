@@ -749,17 +749,22 @@ def test_cp2e_a_repeated_input_row_is_not_checked():
     assert "two `Hedged floating-rate debt` rows" in outcomes[0].reason
 
 
-# --- CP-3 (the table is proposed to the owner; CP-3 is not asked for it) ------------------------
+# --- CP-3 ---------------------------------------------------------------------------------------
 
-# SYNTHETIC, USD millions. Claims in row order RCF 50, Term Loan B 300, Senior Notes 200; admin
-# cost 20 comes off the top of each enterprise value.
+# SYNTHETIC, USD millions. Enterprise value per case = multiple x FY2024 EBITDA 100: Low 2.0x = 200,
+# Base 4.2x = 420, High 7.0x = 700. Claims in row order RCF 50, Term Loan B 300, Senior Notes 200;
+# admin cost 20 comes off the top of each enterprise value.
 # Low, EV 200: 180 left. RCF 50 of 50 (100%); 130 left, Term Loan B 130 of 300 = 43.33% (the first
 # partial: the fulcrum); Senior Notes 0%. Residual 0.
 # Base, EV 420: 400 left. RCF 100%; Term Loan B 300 of 300 (100%); 50 left, Senior Notes 50 of
 # 200 = 25.0% (fulcrum). Residual 0.
 # High, EV 700: 680 left. All three whole (100%); 680 - 550 = 130 to equity; no fulcrum.
+OWN_BASIS = "FY2024 EBITDA; sector multiple from evidence S4"
 WATERFALL = [
     ("Enterprise value", "—", "200", "420", "700", "USD", "m"),
+    ("EV multiple", "—", "2.0x", "4.2x", "7.0x", "—", "—"),
+    ("EV metric", "—", "100", "100", "100", "USD", "m"),
+    ("EV basis", "—", OWN_BASIS, OWN_BASIS, OWN_BASIS, "—", "—"),
     ("Cost: Administrative claims", "20", "—", "—", "—", "USD", "m"),
     ("Claim: RCF", "50", "100%", "100%", "100%", "USD", "m"),
     ("Claim: Term Loan B", "300", "43.3%", "100%", "100%", "USD", "m"),
@@ -768,12 +773,14 @@ WATERFALL = [
     ("Residual to equity", "—", "0", "0", "130", "USD", "m"),
 ]
 CP3_CLAIMS = ("RCF", "Term Loan B", "Senior Notes")
+T410_BASIS = "CP-1C T4.10 EV/EBITDA: minimum, median, maximum peer multiple x FY2024 EBITDA"
 
 
-def cp3(rows=None, heading="### Recovery waterfall"):
+def cp3(rows=None, heading="### Recovery waterfall", front=""):
     rows = WATERFALL if rows is None else rows
     return "\n".join(
         [
+            *([front] if front else []),
             "## Request",
             "SYNTHETIC handoff.",
             "## Findings",
@@ -789,12 +796,39 @@ def cp3(rows=None, heading="### Recovery waterfall"):
     )
 
 
-def edited(line, **cells):
+def t410(low="200", median="420", high="700", unit=" (USD m)"):
+    """A SYNTHETIC CP-1C handoff's T4.10 in the step file's layout (REF_CP-1C_06C)."""
+    return "\n".join(
+        [
+            "## Findings",
+            "### T4.10 — Implied EV",
+            (
+                "| Method | Multiple Source | Multiple Value | Borrower Metric | Period | "
+                f"Implied EV | Low{unit} | Median{unit} | High{unit} | Calc Status | Limitations |"
+            ),
+            "|---|---|---|---|---|---|---|---|---|---|---|",
+            (
+                f"| Peer EV/EBITDA | T4.8 | 4.2x | EBITDA 100 | FY2024 | {median} | {low} | "
+                f"{median} | {high} | Calculated | Indicative only |"
+            ),
+            (
+                "| Peer EV/Revenue | T4.8 | Not Calculable | Revenue 900 | FY2024 | "
+                "Not Calculable | Not Calculable | Not Calculable | Not Calculable | "
+                "Not Calculable: N=2 | — |"
+            ),
+        ]
+    )
+
+
+def edited(line, rows=None, **cells):
     names = ("amount", "low", "base", "high", "currency", "scale")
     return [
         (r[0], *(cells.get(n, r[i + 1]) for i, n in enumerate(names))) if r[0] == line else r
-        for r in WATERFALL
+        for r in (WATERFALL if rows is None else rows)
     ]
+
+
+FROM_T410 = edited("EV basis", low=T410_BASIS, base=T410_BASIS, high=T410_BASIS)
 
 
 def by_case(outcomes, case):
@@ -803,9 +837,9 @@ def by_case(outcomes, case):
     }
 
 
-def test_cp3_all_figures_right():
+def test_cp3_all_figures_right_on_its_own_cases():
     outcomes = ms.run("CP-3", cp3())
-    assert len(outcomes) == 15 and {o.status for o in outcomes} == {"agreed"}
+    assert len(outcomes) == 18 and {o.status for o in outcomes} == {"agreed"}
     low = by_case(outcomes, "Low")
     assert low["Recovery: Term Loan B"].recomputed == pytest.approx(43.333333, abs=1e-4)
     # 0.1, plus the rounding bound: the value left for the loan (EV 200, cost 20, RCF 50, each
@@ -813,6 +847,10 @@ def test_cp3_all_figures_right():
     assert low["Recovery: Term Loan B"].tolerance == pytest.approx(
         0.1 + 100 * (1.5 + 130 / 300 * 0.5) / 300
     )
+    # EV 2.0 x 100 = 200; bound 1 + 2.0 x 0.5 + 100 x 0.05 = 7 (a product: each input's rounding
+    # times the other).
+    assert (low["Enterprise value"].recomputed, low["Enterprise value"].tolerance) == (200.0, 7.0)
+    assert low["Enterprise value"].script.endswith("peer_statistics.py")
     assert low["Fulcrum"].recomputed_label == "Term Loan B"
     high = by_case(outcomes, "High")
     assert high["Residual to equity"].recomputed == 130.0
@@ -820,8 +858,92 @@ def test_cp3_all_figures_right():
     assert ms.issues("CP-3", cp3()) == ()
 
 
-def test_cp3_is_not_asked_for_the_table():
-    assert "CP-3" in ms.CHECKS and "CP-3" not in ms.NOTES
+def test_cp3_is_asked_for_the_table_with_the_owners_limitation():
+    note = ms.NOTES["CP-3"]
+    for words in ("### Recovery waterfall", "CP-1C T4.10", "Not supplied: <reason>", "indicative"):
+        assert words in note, words
+
+
+def test_cp3_t410_used_and_right():
+    outcomes = ms.run("CP-3", cp3(FROM_T410), {"CP-1C": t410()})
+    assert {o.status for o in outcomes} == {"agreed"}
+    copies = [o for o in outcomes if o.figure.endswith("from CP-1C T4.10")]
+    assert [o.recomputed for o in copies] == [200.0, 420.0, 700.0]
+
+
+def test_cp3_a_mis_copied_t410_figure_is_sent_back():
+    # T4.10's median is 450; CP-3 wrote 420 (with a 4.2x it also wrote): its own arithmetic agrees,
+    # the copy does not.
+    outcomes = {o.figure: o for o in ms.run("CP-3", cp3(FROM_T410), {"CP-1C": t410(median="450")})}
+    assert outcomes["Enterprise value (Base)"].status == "agreed"
+    copy = outcomes["Enterprise value (Base) from CP-1C T4.10"]
+    assert (copy.status, copy.recomputed) == ("disagreed", 450.0)
+    (issue,) = ms.issues("CP-3", cp3(FROM_T410), {"CP-1C": t410(median="450")})
+    assert "states 420 USD m" in issue and "recomputes 450 USD m" in issue and "T4.10" in issue
+
+
+def test_cp3_a_t410_figure_with_no_unit_is_only_agreed_never_refused():
+    # Unitless T4.10: 420 agrees (the same figure); 450 may be another scale, so not checked.
+    agreed = ms.run("CP-3", cp3(FROM_T410), {"CP-1C": t410(unit="")})
+    assert {o.status for o in agreed} == {"agreed"}
+    outcomes = {
+        o.figure: o
+        for o in ms.run("CP-3", cp3(FROM_T410), {"CP-1C": t410("200", "450", "700", "")})
+    }
+    assert outcomes["Enterprise value (Base) from CP-1C T4.10"].status == "not checked"
+
+
+def test_cp3_citing_a_t410_that_states_none_disagrees():
+    rows = edited("EV basis", low=T410_BASIS.replace("EV/EBITDA", "EV/Revenue"))
+    outcomes = {o.figure: o for o in ms.run("CP-3", cp3(rows), {"CP-1C": t410()})}
+    copy = outcomes["Enterprise value (Low) from CP-1C T4.10"]
+    assert copy.status == "disagreed" and copy.recomputed_label == "none in T4.10"
+
+
+def test_cp3_citing_t410_without_cp1c_is_not_checked():
+    outcomes = {o.figure: o for o in ms.run("CP-3", cp3(FROM_T410))}
+    copy = outcomes["Enterprise value (Low) from CP-1C T4.10"]
+    assert copy.status == "not checked" and "was not sent CP-1C's handoff" in copy.reason
+
+
+def test_cp3_ev_arithmetic_wrong_is_sent_back():
+    # Base 450 against 4.2 x 100 = 420, bound 1 + 4.2 x 0.5 + 100 x 0.05 = 8.1.
+    rows = edited("Enterprise value", base="450")
+    ev = by_case(ms.run("CP-3", cp3(rows)), "Base")["Enterprise value"]
+    assert (ev.status, ev.recomputed, ev.tolerance) == ("disagreed", 420.0, pytest.approx(8.1))
+    assert any("peer_statistics.py" in i for i in ms.issues("CP-3", cp3(rows)))
+
+
+def test_cp3_an_ev_without_a_basis_is_sent_back():
+    rows = edited("EV basis", low="—")
+    outcome = by_case(ms.run("CP-3", cp3(rows)), "Low")["EV basis"]
+    assert outcome.status == "missing"
+    (issue,) = ms.issues("CP-3", cp3(rows))
+    assert "with no EV basis" in issue and "Not supplied: <reason>" in issue
+
+
+def test_cp3_an_ev_on_a_basis_with_no_multiple_is_not_recomputed():
+    rows = edited("EV multiple", base="—")
+    ev = by_case(ms.run("CP-3", cp3(rows)), "Base")["Enterprise value"]
+    assert ev.status == "not checked" and "no EV multiple and EV metric" in ev.reason
+
+
+def test_cp3_no_supportable_ev_is_recorded_not_refused():
+    none = "Not supplied: no peer multiple or valuation in the evidence"
+    rows = edited("Enterprise value", low=none, base=none, high=none)
+    outcomes = ms.run("CP-3", cp3(rows))
+    assert {o.status for o in outcomes} == {"not checked"}
+    assert "states no enterprise value can be supported for Low" in outcomes[0].reason
+    assert ms.issues("CP-3", cp3(rows)) == ()
+
+
+def test_cp3_a_missing_table_is_sent_back_unless_blocked_at_its_gate():
+    (absent,) = ms.run("CP-3", cp3(heading="### Recovery analysis"))
+    assert absent.status == "missing"
+    (issue,) = ms.issues("CP-3", cp3(heading="### Recovery analysis"))
+    assert "Write `### Recovery waterfall`" in issue and "Not supplied: <reason>" in issue
+    blocked = cp3(heading="### Recovery analysis", front="---\nmodule_status: Blocked\n---")
+    assert [o.status for o in ms.run("CP-3", blocked)] == ["not checked"]
 
 
 def test_cp3_one_recovery_wrong():
@@ -860,9 +982,9 @@ def test_cp3_a_sign_error_is_a_disagreement():
 def test_cp3_a_claim_guaranteed_at_two_entities_is_refused_by_the_script():
     # The notes listed once per guarantor entity would recover twice: the script refuses.
     rows = [
-        *WATERFALL[:5],
+        *WATERFALL[:8],
         ("Claim: Senior Notes", "200", "0%", "0%", "0%", "USD", "m"),
-        *WATERFALL[5:],
+        *WATERFALL[8:],
     ]
     (outcome,) = ms.run("CP-3", cp3(rows))
     assert outcome.status == "not checked" and "double-counts recovery" in outcome.reason
@@ -896,8 +1018,9 @@ def test_cp3_a_blank_cost_stops_the_case_and_a_zero_cost_is_a_figure():
     blank = ms.run(
         "CP-3", cp3(edited("Cost: Administrative claims", amount="Not supplied: none disclosed"))
     )
-    assert {o.status for o in blank} == {"not checked"}
-    assert "has no supported amount" in blank[0].reason
+    waterfall = [o for o in blank if not o.figure.startswith("Enterprise value")]
+    assert {o.status for o in waterfall} == {"not checked"}
+    assert "has no supported amount" in waterfall[0].reason
     # Cost 0: Base has 420; RCF 50, Term Loan B 300, 70 left, Senior Notes 70 / 200 = 35.0%.
     zero = by_case(ms.run("CP-3", cp3(edited("Cost: Administrative claims", amount="0"))), "Base")
     assert zero["Recovery: Senior Notes"].recomputed == pytest.approx(35.0)
@@ -911,16 +1034,14 @@ def test_cp3_a_scale_mismatch_or_two_currencies_are_not_compared():
         )
 
 
-def test_cp3_an_absent_or_malformed_table_is_not_checked():
-    (absent,) = ms.run("CP-3", cp3(heading="### Recovery analysis"))
-    assert absent.reason == "the handoff has no `### Recovery waterfall` table"
+def test_cp3_a_malformed_table_is_not_checked():
     broken = cp3().replace("| Claim: RCF | 50 |", "| Claim: RCF | 50 | 9 |")
     (outcome,) = ms.run("CP-3", broken)
-    assert "a row of 8 cells under 7 columns" in outcome.reason
+    assert outcome.status == "not checked" and "a row of 8 cells under 7 columns" in outcome.reason
 
 
 def test_cp3_a_row_the_check_does_not_read_is_not_compared():
-    rows = [*WATERFALL[:2], ("Tax leakage", "5", "—", "—", "—", "USD", "m"), *WATERFALL[2:]]
+    rows = [*WATERFALL[:5], ("Tax leakage", "5", "—", "—", "—", "USD", "m"), *WATERFALL[5:]]
     (outcome,) = ms.run("CP-3", cp3(rows))
     assert outcome.status == "not checked" and "`Tax leakage`" in outcome.reason
 

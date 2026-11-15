@@ -34,6 +34,7 @@ from deploy_workflow.method_scripts import (
     Amount,
     Loaded,
     Outcome,
+    Upstream,
     _Claim,
     _columns,
     _judged,
@@ -283,7 +284,7 @@ def _t48(text: str, loaded: Loaded) -> list[Outcome]:
     return [_ltm_row(r, cols, loaded) for r in rows]
 
 
-def check(text: str, loaded: Loaded) -> list[Outcome]:
+def check(text: str, loaded: Loaded, _upstream: Upstream) -> list[Outcome]:
     """T4.8's LTM figures and T4.9's free-name quotients, each recomputed by the script."""
     return [*_t48(text, loaded), *_t49(text, loaded)]
 
