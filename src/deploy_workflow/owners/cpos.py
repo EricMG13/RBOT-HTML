@@ -55,9 +55,10 @@ from deploy_workflow.handoff_delivery import (
     verify_files,
 )
 from deploy_workflow.model.budget import BudgetExhausted
+from deploy_workflow.model.configs import CONFIGS, ModelConfig
+from deploy_workflow.model.run_lock import RunDirBusy, _single_writer
 from deploy_workflow.owners import cpos_forecast
 from deploy_workflow.run_events import append_event, stop_reason
-from deploy_workflow.run_pathway import RunDirBusy, _single_writer
 from deploy_workflow.run_scopes import PUBLIC_S1A_MODULES
 from deploy_workflow.workflow import _put
 
@@ -65,7 +66,6 @@ if TYPE_CHECKING:
     from deploy_workflow.model.adapter import LiveAdapter
     from deploy_workflow.model.copilot_adapter import CopilotAdapter
     from deploy_workflow.model.handoff import HandoffExecutor
-    from deploy_workflow.model_testing.configs import ModelConfig
 
 
 log = logging.getLogger(__name__)
@@ -815,8 +815,6 @@ def web_search_run(config: str, ruling: Path | None, rulings_root: Path | None =
 
     Search is OpenAI's hosted tool (``HandoffExecutor`` refuses it elsewhere), so a Claude run under
     the same ruling runs with search off rather than stopping."""
-    from deploy_workflow.model_testing.configs import CONFIGS
-
     return CONFIGS[config].provider == "openai" and web_search_ruled(ruling, rulings_root)
 
 
@@ -858,7 +856,6 @@ def run_live_handoffs(  # noqa: PLR0913 -- the explicit paid entry point takes e
         settled_web_lookup,
     )
     from deploy_workflow.model.redact import Redactor
-    from deploy_workflow.model_testing.configs import CONFIGS
     from deploy_workflow.research.weblookup import Runtime
 
     request = HandoffPlan.model_validate_json(manifest.read_bytes())
@@ -1134,55 +1131,6 @@ def run_comparison(
         raw_completion = json.dumps(completion, indent=2).encode()
         _put(directory / f"completed-{_sha(raw_completion)}.json", raw_completion)
         return receipt
-
-
-def run_live_comparison(
-    manifest: Path,
-    directory: Path,
-    *,
-    ruling: Path,
-    check: Callable[[HandoffTask, bytes], tuple[str, ...]],
-    environ: Mapping[str, str] | None = None,
-    max_turns: int = 24,
-    max_output_tokens: int = 16000,
-) -> Path:
-    """Explicit bounded CP-8 execution over the existing verified bundle exchange."""
-    import os
-
-    from deploy_workflow.model.handoff import HandoffExecutor
-    from deploy_workflow.model.redact import Redactor
-    from deploy_workflow.model_testing.configs import CONFIGS
-
-    request = ComparisonPlan.model_validate_json(manifest.read_bytes())
-    if request.execution != "live-provider":
-        raise ValueError("cpos_live_mode: manifest must explicitly declare live-provider")
-
-    def checked_response(task: HandoffTask, raw: bytes) -> tuple[str, ...]:
-        # Supply dimension feedback inside the paid repair loop, before outer publication.
-        # This validation's files are discarded; run_comparison binds the published input hashes.
-        try:
-            comparison_files(task.run, raw, {})
-        except ValueError as error:
-            if str(error).startswith("cp8_dimensions:"):
-                return (str(error),)
-            raise
-        return check(task, raw)
-
-    environment = os.environ if environ is None else environ
-    adapter = live_adapter_for(CONFIGS["sol-medium"], ruling, environment, None)
-    try:
-        executor = HandoffExecutor(
-            directory / "live",
-            adapter=adapter,
-            cap_usd=request.provider_cap_usd,
-            check=checked_response,
-            redactor=Redactor.from_environ(environment),
-            max_turns=max_turns,
-            max_output_tokens=max_output_tokens,
-        )
-        return run_comparison(manifest, directory, execute=executor, check=checked_response)
-    finally:
-        _release(adapter)
 
 
 def main() -> None:

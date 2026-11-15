@@ -25,7 +25,7 @@ from deploy_workflow.inbox.layout import Layout
 from deploy_workflow.inbox.runs import Record, load_all
 from deploy_workflow.inbox.scheduler import Scheduler, Settings
 from deploy_workflow.model.adapter import KEY_VARIABLES
-from deploy_workflow.model_testing.configs import CONFIGS
+from deploy_workflow.model.configs import CONFIGS
 from deploy_workflow.owners import cpos_launch
 from deploy_workflow.run_start import submissions
 

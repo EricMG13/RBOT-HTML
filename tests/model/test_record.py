@@ -1177,11 +1177,10 @@ def test_attempt_refuses_booleans(flag: bool) -> None:
         CallRecord.model_validate_json(json.dumps(body))
 
 
-def test_strings_is_public_and_old_name_is_an_alias() -> None:
+def test_strings_is_public() -> None:
     from deploy_workflow.model import record as module
 
     assert module.strings({"a": ["x", ("y",)], "b": 1}) == ["x", "y"]
-    assert module._strings is module.strings
 
 
 @pytest.mark.parametrize("zero", ["-0", "-0.00", "-0E+3", "0.00"])

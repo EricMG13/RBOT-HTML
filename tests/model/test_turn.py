@@ -50,9 +50,8 @@ def test_config_providers_are_the_section_7_1_ids_and_the_copilot_pair() -> None
 
 def test_one_provider_list() -> None:
     # S03-C05: the list is written once (turn.Provider); record's KeyReflected check asks every
-    # provider in it, and model_testing's Provider is the same type. Expected by hand.
-    from deploy_workflow.model import record
-    from deploy_workflow.model_testing import configs
+    # provider in it, and model.configs' Provider is the same type. Expected by hand.
+    from deploy_workflow.model import configs, record
 
     assert PROVIDERS == ("openai", "anthropic", "openrouter", "copilot")
     assert set(CONFIG_PROVIDERS.values()) == set(PROVIDERS)

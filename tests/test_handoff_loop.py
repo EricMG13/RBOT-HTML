@@ -1210,11 +1210,11 @@ def test_the_record_reads_back_with_its_compactions_and_an_old_record_still_read
     tmp_path: Path,
 ) -> None:
     from deploy_workflow.model.record import CallRecord
-    from deploy_workflow.model_testing.records import read_journal
 
     loop, folder = compacting_loop(tmp_path, compacted(turn(write_call()), CP8_START, CP8_DONE))
     assert loop(task()) == GOOD
-    (record,) = read_journal(folder / "live/calls.jsonl")
+    lines = (folder / "live/calls.jsonl").read_bytes().splitlines()
+    (record,) = [CallRecord.model_validate_json(line) for line in lines]
     assert record.compactions is not None and record.compactions[1].usd == Decimal("0.0996381")
     assert record.compaction_usd == Decimal("0.0996381")
     assert record.own_usd == Decimal("0.0007")  # the turn's own charge, without the compaction
