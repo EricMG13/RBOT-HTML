@@ -8879,8 +8879,9 @@ def test_cp1_free_name_rows_are_checked_by_its_script(tmp_path):
     assert "T4.9 row `FCF / debt (FY2024)` states 8.5" in added
 
 
-# SYNTHETIC: EV 4.2x x EBITDA 100 = 420 in each case, copied from CP-1C's T4.10 (worked in
-# tests/test_method_scripts.py); with no claims, only the EV figures are recomputed.
+# SYNTHETIC: EV 4.2x x EBITDA 100 = 420 in each case, copied from CP-1C's T4.10, whose multiple is
+# its implied EV over its borrower metric (420 / 100 = 4.2x; a Low of 380 gives 3.8x, a mis-copy);
+# with no claims, only the EV figures are recomputed.
 CP3_FROM_T410 = """### Recovery waterfall
 
 | Line | Amount | Low | Base | High | Currency | Scale |
@@ -8895,9 +8896,9 @@ T410_SENT = """## Findings
 
 ### T4.10 — Implied EV
 
-| Method | Multiple Value | Implied EV | Low (USD m) | Median (USD m) | High (USD m) | Calc Status |
+| Method | Borrower Metric | Implied EV | Low (USD m) | Median (USD m) | High (USD m) | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| Peer EV/EBITDA | 4.2x | 420 | {low} | 420 | 420 | Calculated |
+| Peer EV/EBITDA | EBITDA 100 | 420 | {low} | 420 | 420 | Calculated |
 """
 
 
@@ -8921,7 +8922,7 @@ def test_cp3_is_asked_for_its_waterfall_and_checked_against_the_t410_it_was_sent
     for low, sent_back in (("420", False), ("380", True)):
         sent = {**task.handoffs, "CP-1C": T410_SENT.format(low=low).encode()}
         issues = _checked_handoff(dataclasses.replace(task, handoffs=sent), cited.encode(), check)
-        assert any("T4.10" in i and "recomputes 380" in i for i in issues) is sent_back, low
+        assert any("T4.10" in i and "recomputes 3.8 x" in i for i in issues) is sent_back, low
 
 
 def test_each_attempt_keeps_its_method_script_checks_beside_its_review(tmp_path):

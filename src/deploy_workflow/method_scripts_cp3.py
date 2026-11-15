@@ -32,6 +32,7 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 from deploy_workflow import method_scripts as core
+from deploy_workflow import method_scripts_cp3_ev as cp3_ev
 from deploy_workflow.method_scripts import (
     AMOUNT_STEP,
     ARCHIVE,
@@ -49,16 +50,9 @@ from deploy_workflow.method_scripts import (
     _plain,
     _value,
     _Where,
-    bare,
     blank,
-    column,
     currency_of,
-    figure,
-    half,
-    heading_table,
     quotient_slack,
-    register_table,
-    said_none,
     scale_of,
     share,
 )
@@ -68,7 +62,8 @@ WATERFALL_HEADING = "Recovery waterfall"
 CASES = ("Low", "Base", "High")
 WATERFALL_COLUMNS = ("Line", "Amount", *CASES, "Currency", "Scale")
 EV, FULCRUM, RESIDUAL = "Enterprise value", "Fulcrum", "Residual to equity"
-NO_FULCRUM = ("none", "no fulcrum", "n/a")
+# No debt claim is the fulcrum: value covers all of them, or none recovers in part.
+NO_FULCRUM = ("none", "no fulcrum", "n/a", "na", "not applicable", "equity", "nil")
 RECOVERY_FORMULA = (
     "Recovery = min(claim, value left after the costs and every senior claim) / claim, value "
     "allocated in the table's row order (recovery_waterfall.py)"
@@ -83,17 +78,6 @@ RESIDUAL_FORMULA = (
 )
 MULTIPLE, METRIC, BASIS = "EV multiple", "EV metric", "EV basis"
 BASIS_ROWS = (MULTIPLE, METRIC, BASIS)
-PEER_STATISTICS = ARCHIVE + "skills/cp-1c-peer-benchmark/scripts/peer_statistics.py"
-T410_CASES = {"Low": "Low", "Base": "Median", "High": "High"}  # CP-1C's implied EV range
-EV_FORMULA = (
-    "Enterprise value = EV multiple x EV metric (CP-1C's Implied EV formula; peer_statistics.py "
-    "implied_ev, which gives none on a metric at or below zero)"
-)
-COPY_FORMULA = (
-    "The case's enterprise value is CP-1C's T4.10 implied EV for it (Low, Median, High), as the "
-    "CP-1C handoff CP-3 was sent states it"
-)
-_METHODS = ("ev/ebitda", "ev/revenue", "tv/ebitda", "tv/revenue")
 _HEADING = f"`### {WATERFALL_HEADING}`"
 
 
@@ -116,6 +100,7 @@ class _Waterfall:
     halves: dict[str, float]  # `costs`, `claim:<name>`, `ev:<case>`: displayed rounding
     basis: dict[str, list[str] | None]  # the EV multiple, metric and basis rows, as written
     ev_cells: dict[str, str]  # case -> the Enterprise value cell, as written
+    skipped: tuple[str, ...]  # rows the check does not read (a total, a subtotal), named
 
 
 def _kind(line: str) -> tuple[str, str]:
@@ -127,6 +112,9 @@ def _kind(line: str) -> tuple[str, str]:
 
 
 def _unit(rows: list[list[str]], cols: dict[str, int]) -> str:
+    """The table's one money unit; a row that states neither currency nor scale (`—`) takes it."""
+    stating = [r for r in rows if _plain(r[cols["Currency"]]) not in ("", *core.NOT_APPLICABLE)]
+    rows = stating or rows
     pairs = {(currency_of(r[cols["Currency"]]), scale_of(r[cols["Scale"]])) for r in rows}
     if len(pairs) != 1 or None in next(iter(pairs)):
         shown = "; ".join(sorted({f"{r[cols['Currency']]} {r[cols['Scale']]}" for r in rows}))
@@ -152,6 +140,7 @@ def _read(table: Table, tables: types.ModuleType) -> _Waterfall:
     halves: dict[str, float] = {"costs": 0.0}
     stated: dict[str, list[str]] = {}
     labelled: dict[str, list[list[str]]] = {}
+    skipped: list[str] = []
     for row in table[1]:
         kind, name = _kind(row[cols["Line"]])
         if kind == "claim":
@@ -164,9 +153,12 @@ def _read(table: Table, tables: types.ModuleType) -> _Waterfall:
             costs.append({"label": name, "amount": _value(row[cols["Amount"]], tables)})
             halves["costs"] += _cell_half(row[cols["Amount"]], tables)
         elif kind not in (_label(n) for n in (EV, FULCRUM, RESIDUAL, *BASIS_ROWS)):
-            raise _NotChecked(
-                f"{_HEADING} has a row the check does not read: `{row[cols['Line']]}`"
-            )
+            if any("%" in row[cols[c]] for c in CASES):  # it may be a claim not marked `Claim:`
+                raise _NotChecked(
+                    f"{_HEADING} has a row the check does not read: `{row[cols['Line']]}`"
+                )
+            skipped.append(_plain(row[cols["Line"]]))
+            continue
         else:
             labelled.setdefault(kind, []).append(row)
         if kind not in (_label(n) for n in (FULCRUM, MULTIPLE, BASIS)):
@@ -188,6 +180,7 @@ def _read(table: Table, tables: types.ModuleType) -> _Waterfall:
         halves,
         {name: _single(labelled, name) for name in BASIS_ROWS},
         {case: ev_row[cols[case]] for case in CASES},
+        tuple(skipped),
     )
 
 
@@ -218,6 +211,14 @@ def _recoveries(
     return out
 
 
+def _named(cell: str) -> str:
+    """The claim a fulcrum cell names: a leading `Claim:` and a trailing note (after a dash, or
+    in brackets) are not the name (`Debt (66.7%)`, `Debt - 66.7% recovery` name `Debt`)."""
+    text = re.sub(r"^\s*claim\s*:\s*", "", _plain(cell), flags=re.IGNORECASE)
+    text = re.sub(r"\s*\([^)]*\)\s*$", "", text)
+    return _label(re.split(r"\s+[-—–]\s+", text, maxsplit=1)[0])
+
+
 def _fulcrum(case: str, w: _Waterfall, result: dict[str, Any]) -> Outcome:
     where = _where(f"{FULCRUM} ({case})")
     cell = None if w.fulcrum is None else w.fulcrum[w.cols[case]]
@@ -225,9 +226,12 @@ def _fulcrum(case: str, w: _Waterfall, result: dict[str, Any]) -> Outcome:
         return where("not checked", stated=cell, reason=f"{_HEADING} states no fulcrum for {case}")
     if result["status"] != "complete":
         return where("not checked", stated=cell, reason=str(result.get("note")))
-    found = result["fulcrum_claim_id"]
-    name = re.sub(r"\s*\([^)]*\)$", "", _label(cell))  # `Senior Notes (partial)` names the notes
-    agreed = name in NO_FULCRUM if found is None else name == _label(found)
+    found, name = result["fulcrum_claim_id"], _named(cell)
+    claims = {_named(c["claim_id"]) for c in w.claims}
+    if name not in NO_FULCRUM and name not in claims:
+        why = f"`{cell}` names no claim of the table and none of {', '.join(NO_FULCRUM)}"
+        return where("not checked", stated=cell, reason=why)
+    agreed = name in NO_FULCRUM if found is None else name == _named(found)
     label = "no fulcrum" if found is None else str(found)
     status: Status = "agreed" if agreed else "disagreed"
     return where(status, stated=cell, recomputed_label=label, reason=FULCRUM_FORMULA)
@@ -250,135 +254,12 @@ def _residual(
     return _judged(replace(claim, slack=slack), tables)
 
 
-# --- the enterprise value of each case ------------------------------------------------------
+def _ev_case(case: str, w: _Waterfall) -> cp3_ev.Case:
+    def cell(name: str) -> str | None:
+        row = w.basis.get(name)
+        return None if row is None else row[w.cols[case]]
 
-
-def _row_cell(w: _Waterfall, name: str, case: str) -> str | None:
-    row = w.basis.get(name)
-    return None if row is None else row[w.cols[case]]
-
-
-def _ev_figure(w: _Waterfall, case: str, loaded: Loaded) -> Outcome:
-    """The case's EV against the method's own arithmetic: multiple x metric (CP-1C's script)."""
-    where = _where(f"{EV} ({case})", PEER_STATISTICS)
-    cell = w.ev_cells[case]
-    multiple, metric = _row_cell(w, MULTIPLE, case), _row_cell(w, METRIC, case)
-    if (
-        multiple is None
-        or metric is None
-        or blank(multiple, loaded.tables)
-        or blank(metric, loaded.tables)
-    ):
-        reason = f"the {EV} for {case} states no {MULTIPLE} and {METRIC} to recompute it from"
-        return where("not checked", stated=cell, reason=reason)
-    read_m = figure(re.sub(r"(?i)\s*x(?=\)?$)", "", _plain(multiple)), loaded.tables)
-    read_b = figure(metric, loaded.tables)
-    if isinstance(read_m, str) or isinstance(read_b, str):
-        return where(
-            "not checked", stated=cell, reason=str(read_m if isinstance(read_m, str) else read_b)
-        )
-    peers = core._loaded(PEER_STATISTICS).script
-    stats = {
-        "statistics_including_outliers": dict.fromkeys(("minimum", "median", "maximum"), read_m[0])
-    }
-    implied = peers.implied_ev(
-        {"borrower_metric": read_b[0]}, stats | {"meaningful_as_sector_multiple": True}
-    )
-    value = None if implied is None else implied["median"]
-    if value is None:
-        why = f"{EV_FORMULA}; the {METRIC} {read_b[0]:g} is not above zero, so there is none"
-        return where("disagreed", stated=cell, recomputed_label="Not Calculable", reason=why)
-    slack = abs(read_m[0]) * half(read_b[1]) + abs(read_b[0]) * half(read_m[1])  # a product
-    claim = _Claim(where, cell, value, AMOUNT_STEP, w.unit, EV_FORMULA, slack=slack)
-    return _judged(claim, loaded.tables)
-
-
-def _t410_value(text: str, method: str, case: str, tables: types.ModuleType) -> tuple[str, str]:
-    """T4.10's implied EV for the case (Low, Median or High) of the named method, as written, with
-    the header it sits under; `_NotChecked` when T4.10 cannot be read for it."""
-    table = register_table(text, "T4.10")
-    if isinstance(table, str):
-        raise _NotChecked(f"CP-1C's handoff: {table}")
-    rows = [r for r in table[1] if method in _label(r[0])]
-    if len(rows) != 1:
-        raise _NotChecked(f"CP-1C's T4.10 has {len(rows) or 'no'} `{method}` rows")
-    wanted = T410_CASES[case]
-    try:
-        index, header = column(table, wanted, "CP-1C's T4.10")
-        return rows[0][index], header
-    except _NotChecked:
-        pass
-    found = [i for i, h in enumerate(table[0]) if "low/median/high" in _label(h)]
-    if len(found) != 1:
-        raise _NotChecked(f"CP-1C's T4.10 has no `{wanted}` column")
-    parts = [p.strip() for p in _plain(rows[0][found[0]]).split("/")]
-    if len(parts) < 3 or blank(rows[0][found[0]], tables):
-        return rows[0][found[0]], table[0][found[0]]
-    return parts[-3:][list(T410_CASES).index(case)], table[0][found[0]]
-
-
-def _ev_copy(w: _Waterfall, case: str, loaded: Loaded, upstream: Upstream) -> Outcome | None:
-    """When the case's basis names CP-1C's T4.10, its EV against the T4.10 CP-3 was sent: a
-    mis-copied figure is the likeliest error. None when the basis does not name T4.10."""
-    basis = _label(_row_cell(w, BASIS, case) or "")
-    if not re.search(r"t4\.10|cp 1c", basis):
-        return None
-    where = _where(f"{EV} ({case}) from CP-1C T4.10", PEER_STATISTICS)
-    cell = w.ev_cells[case]
-    method = next((m for m in _METHODS if m in basis), None)
-    try:
-        if "CP-1C" not in upstream:
-            raise _NotChecked("CP-3 was not sent CP-1C's handoff, whose T4.10 the basis names")
-        if method is None:
-            raise _NotChecked(
-                f"the basis names T4.10 but none of its methods ({', '.join(_METHODS)})"
-            )
-        sent = _t410_value(upstream["CP-1C"], method, case, loaded.tables)
-    except _NotChecked as why:
-        return where("not checked", stated=cell, reason=str(why))
-    return _copied(_Claim(where, cell, 0.0, AMOUNT_STEP, w.unit, COPY_FORMULA), sent, loaded.tables)
-
-
-def _copied(claim: _Claim, sent: tuple[str, str], tables: types.ModuleType) -> Outcome:
-    """The stated EV (``claim``) against T4.10's figure and header as sent."""
-    where, cell, unit = claim.where, claim.stated, claim.unit
-    source, header = sent
-    if blank(source, tables) or said_none(source):
-        why = f"{COPY_FORMULA}; T4.10 states no figure for it (`{source}`)"
-        return where("disagreed", stated=cell, recomputed_label="none in T4.10", reason=why)
-    stated_unit = (currency_of(source) or currency_of(header), scale_of(source) or scale_of(header))
-    read = figure(bare(source), tables)
-    if isinstance(read, str):
-        return where("not checked", stated=cell, reason=f"T4.10: {read}")
-    known = None not in stated_unit
-    if known and f"{stated_unit[0]} {stated_unit[1]}" != unit:
-        why = f"T4.10 states `{stated_unit[0]} {stated_unit[1]}`, the waterfall `{unit}`"
-        return where("not checked", stated=cell, reason=why)
-    outcome = _judged(replace(claim, recomputed=read[0]), tables)
-    if known or outcome.status != "disagreed":
-        return outcome
-    why = "T4.10 states no currency or scale, so a different figure may be a different scale"
-    return replace(outcome, status="not checked", reason=why)
-
-
-def _ev(case: str, w: _Waterfall, loaded: Loaded, upstream: Upstream) -> list[Outcome]:
-    """The case's EV: its basis owed, its arithmetic and, from T4.10, its copy."""
-    cell = w.ev_cells[case]
-    if blank(cell, loaded.tables) or said_none(cell):
-        reason = f"CP-3 states no enterprise value can be supported for {case}: `{cell}`"
-        where = _where(f"{EV} ({case})", PEER_STATISTICS)
-        return [where("not checked", stated=cell, reason=reason)]
-    basis = _row_cell(w, BASIS, case)
-    if basis is None or blank(basis, loaded.tables):
-        why = (
-            f"`### {WATERFALL_HEADING}` states an {EV} for {case} with no {BASIS}: state the "
-            "metric and period it values, the multiple or other basis, and where each came from "
-            "(CP-1C T4.10, or the evidence you were given), or write the value `Not supplied: "
-            "<reason>`."
-        )
-        return [_where(f"{BASIS} ({case})", PEER_STATISTICS)("missing", stated=cell, reason=why)]
-    copy = _ev_copy(w, case, loaded, upstream)
-    return [_ev_figure(w, case, loaded), *([copy] if copy is not None else [])]
+    return cp3_ev.Case(case, w.ev_cells[case], cell(MULTIPLE), cell(METRIC), cell(BASIS), w.unit)
 
 
 def _case(case: str, w: _Waterfall, loaded: Loaded, upstream: Upstream) -> list[Outcome]:
@@ -388,7 +269,7 @@ def _case(case: str, w: _Waterfall, loaded: Loaded, upstream: Upstream) -> list[
     else:
         result = loaded.script.waterfall(w.ev[case], w.claims, w.costs)
         reason = str(result.get("note"))  # a cost without an amount stops the whole case
-    values = _ev(case, w, loaded, upstream)
+    values = cp3_ev.outcomes(_ev_case(case, w), loaded, upstream)
     if result is None or "claims" not in result:
         names = [f"Recovery: {c['claim_id']} ({case})" for c in w.claims]
         names += [f"{FULCRUM} ({case})", f"{RESIDUAL} ({case})"]
@@ -408,18 +289,52 @@ MISSING_TABLE = (
 )
 
 
+_TITLE = re.compile(r"^\s*(?:#{1,6}\s+(?P<heading>.*?)\s*#*|\*\*(?P<bold>.+?)\*\*\s*:?)\s*$")
+
+
+def find_table(text: str) -> Table | str | None:
+    """The waterfall table: under a heading (any level) or a bold line whose words include
+    "recovery waterfall" (numbering and a trailing note aside), else the one table with its
+    columns. None when there is none; why, when there are two or it is unread."""
+    lines = core._unfenced(text)
+    titles = []
+    for i, line in enumerate(lines):
+        found = _TITLE.match(line)
+        if found and "recovery waterfall" in _label(found["heading"] or found["bold"] or ""):
+            titles.append(i)
+    if len(titles) > 1:
+        return f"the handoff has {len(titles)} recovery waterfall headings"
+    if titles:
+        return core._table_after(lines, titles[0], _HEADING)
+    wanted = {_label(c) for c in WATERFALL_COLUMNS}
+    headers = [
+        i
+        for i, line in enumerate(lines)
+        if line.lstrip().startswith("|") and wanted <= {_label(c) for c in core._cells(line)}
+    ]
+    if len(headers) > 1:
+        return f"the handoff has {len(headers)} tables with the waterfall's columns"
+    return core._table_after(lines, headers[0] - 1, _HEADING) if headers else None
+
+
 def check(text: str, loaded: Loaded, upstream: Upstream) -> list[Outcome]:
     """Each case's enterprise value (its basis, its arithmetic and its copy from CP-1C's T4.10),
     then recovery by claim, the fulcrum and the residual to equity, recomputed by the scripts from
     the table's own rows. An absent table is sent back unless CP-3 stopped at its gate."""
-    table = heading_table(text, WATERFALL_HEADING)
-    if isinstance(table, str) and table.startswith("the handoff has no") and not core.blocked(text):
+    table = find_table(text)
+    if table is None:
+        if core.blocked(text):
+            return [_where(WATERFALL_HEADING)("not checked", reason="CP-3 stopped at its gate")]
         return [_where(WATERFALL_HEADING)("missing", reason=MISSING_TABLE)]
     try:
         if isinstance(table, str):
             raise _NotChecked(table)
         waterfall = _read(table, loaded.tables)
-        return [o for case in CASES for o in _case(case, waterfall, loaded, upstream)]
+        skipped = [
+            _where(f"Row: {name}")("not checked", reason="a row the check does not read")
+            for name in waterfall.skipped
+        ]
+        return [*skipped, *(o for case in CASES for o in _case(case, waterfall, loaded, upstream))]
     except _NotChecked as why:
         return [_where(WATERFALL_HEADING)("not checked", reason=str(why))]
     except ValueError as error:  # the script refuses: a claim named twice, a negative amount
@@ -434,9 +349,10 @@ CP3_NOTE = (
     f"`{' | '.join(WATERFALL_COLUMNS)}`: an `{EV}` row; `{MULTIPLE}`, `{METRIC}` (the EBITDA or "
     f"revenue it multiplies) and `{BASIS}` (that metric and its period, the multiple's basis and "
     "where each came from) rows; a `Cost: <label>` row per cost; a `Claim: <instrument>` row per "
-    "claim, senior first, its claim in Amount and its recovery % in each case; `Fulcrum` (the "
-    "claim, or None); `Residual to equity`. Where you were sent CP-1C's T4.10, the cases are its "
-    "Low, Median and High implied EV, the basis naming `CP-1C T4.10` and its method (EV/EBITDA); "
+    "claim, senior first, its claim in Amount and its recovery % in each case (claims that rank "
+    "equally share one row naming them all); `Fulcrum` (the claim, or None); `Residual to "
+    "equity`. Where you were sent CP-1C's T4.10, the cases are its Low, Median and High implied "
+    "EV, each basis beginning `CP-1C T4.10 EV/EBITDA` (or its method); "
     "otherwise state your own cases with their basis from the evidence you were given. Where no "
     f"enterprise value can be supported, write each `{EV}` cell `Not supplied: <reason>`: that is "
     "recorded, not refused. An implied EV from peer multiples is indicative, not a valuation: "
