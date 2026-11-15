@@ -861,12 +861,258 @@ def test_cp3_a_row_the_check_does_not_read_is_not_compared():
     assert outcome.status == "not checked" and "`Tax leakage`" in outcome.reason
 
 
+# --- CP-2G --------------------------------------------------------------------------------------
+
+# SYNTHETIC, USD millions, annual. (period, case): T2H.4 EBITDA, FCF; T2H.5 opening debt / cash,
+# issuance, repayment, interest, closing debt / cash; T2H.6 gross / net leverage, coverage and
+# FCF/debt.
+# Base FY2025: closing debt 5,000 + 0 - 200 = 4,800. Gross 4,800 / 1,000 = 4.8x; net
+#   (4,800 - 500) / 1,000 = 4.3x; coverage 1,000 / 350 = 2.857 (2.9x); FCF/debt 300 / 4,800 = 6.25%.
+# Base FY2026: opens at FY2025's close 4,800 / 500; closing 4,800 + 100 - 300 = 4,600. Gross
+#   4,600 / 1,100 = 4.18 (4.2x); net 3,950 / 1,100 = 3.59 (3.6x); coverage 1,100 / 330 = 3.33
+#   (3.3x); FCF/debt 350 / 4,600 = 7.61% (7.6%).
+# Downside FY2025: closing 4,800. Gross 4,800 / 800 = 6.0x; net 4,450 / 800 = 5.5625 (5.6x);
+#   coverage 800 / 360 = 2.22 (2.2x); FCF/debt 150 / 4,800 = 3.125% (3.1%).
+# Downside FY2026: EBITDA -50, so no leverage multiple (n.m.); coverage -50 / 380 = -0.13
+#   ((0.1x)); FCF/debt -200 / 4,800 = -4.17% ((4.2%)); closing 4,800 + 0 - 0 = 4,800.
+MODEL = {
+    ("FY2025", "Base"): ("1,000", "300", "5,000 / 400", "0", "200", "350", "4,800 / 500"),
+    ("FY2026", "Base"): ("1,100", "350", "4,800 / 500", "100", "300", "330", "4,600 / 650"),
+    ("FY2025", "Downside"): ("800", "150", "5,000 / 400", "0", "200", "360", "4,800 / 350"),
+    ("FY2026", "Downside"): ("(50)", "(200)", "4,800 / 350", "0", "0", "380", "4,800 / 150"),
+}
+METRICS = {
+    ("FY2025", "Base"): ("4.8x / 4.3x", "2.9x", "6.25%"),
+    ("FY2026", "Base"): ("4.2x / 3.6x", "3.3x", "7.6%"),
+    ("FY2025", "Downside"): ("6.0x / 5.6x", "2.2x", "3.1%"),
+    ("FY2026", "Downside"): ("n.m. / n.m.", "(0.1x)", "(4.2%)"),
+}
+DEFINITION = "D1 debt / EBITDA; D2 EBITDA / cash interest; D3 FCF / debt"
+
+
+def cp2g(model=None, metrics=None, unit="USD m", t2h5_unit=None, definition=DEFINITION):
+    model = MODEL if model is None else model
+    metrics = METRICS if metrics is None else metrics
+    five = t2h5_unit or unit
+    return "\n".join(
+        [
+            "## Findings",
+            "### Bottom line",
+            "Leverage falls in the base case.",
+            "### T2H.4 — Operating forecast outputs",
+            (
+                f"| period | case | revenue | EBITDA ({unit}) | margin | CFO | capex | "
+                f"FCF ({unit}) | evidence/assumption IDs |"
+            ),
+            "|---|---|---|---|---|---|---|---|---|",
+            *(
+                f"| {p} | {c} | — | {v[0]} | — | — | — | {v[1]} | A1 |"
+                for (p, c), v in model.items()
+            ),
+            "",
+            "### T2H.5 — Financing and liquidity outputs",
+            (
+                f"| period | case | opening debt/cash ({five}) | issuance ({five}) | "
+                f"repayment ({five}) | interest ({five}) | closing debt/cash ({five}) | "
+                "accessible liquidity |"
+            ),
+            "|---|---|---|---|---|---|---|---|",
+            *(f"| {p} | {c} | {' | '.join(v[2:])} | — |" for (p, c), v in model.items()),
+            "",
+            "### T2H.6 — Credit metrics outputs",
+            (
+                "| period | case | gross/net leverage | coverage | FCF/debt | liquidity runway "
+                "| definition IDs |"
+            ),
+            "|---|---|---|---|---|---|---|",
+            *(
+                f"| {p} | {c} | {' | '.join(v)} | — | {definition} |"
+                for (p, c), v in metrics.items()
+            ),
+            "## Gaps",
+            "None.",
+        ]
+    )
+
+
+def cp2g_status(outcomes):
+    return {o.figure: o.status for o in outcomes}
+
+
+def test_cp2g_all_figures_right():
+    outcomes = ms.run("CP-2G", cp2g())
+    status = cp2g_status(outcomes)
+    assert len(outcomes) == 16 + 12
+    kpis = [f for f in status if not f.startswith(("Opening", "Closing"))]
+    assert {status[f] for f in kpis} == {"agreed"}
+    assert status["Gross leverage (FY2026, Downside)"] == "agreed"  # n.m. against EBITDA -50
+    for case in ("Base", "Downside"):
+        assert status[f"Opening debt (FY2026, {case})"] == "agreed"
+        assert status[f"Opening cash (FY2026, {case})"] == "agreed"
+        assert status[f"Opening debt (FY2025, {case})"] == "not checked"  # no earlier period
+        assert status[f"Closing debt (FY2025, {case})"] == "agreed"
+    by = {o.figure: o for o in outcomes}
+    assert by["Net leverage (FY2026, Base)"].recomputed == pytest.approx(3950 / 1100)
+    assert by["Net leverage (FY2026, Base)"].tolerance == pytest.approx(0.1)
+    assert by["FCF/debt (FY2025, Base)"].recomputed == pytest.approx(6.25)
+    assert ms.issues("CP-2G", cp2g()) == ()
+
+
+def test_cp2g_one_figure_wrong():
+    text = cp2g(metrics=METRICS | {("FY2026", "Base"): ("4.5x / 3.6x", "3.3x", "7.6%")})
+    (issue,) = ms.issues("CP-2G", text)
+    assert "T2H.6 row `Gross leverage (FY2026, Base)` states 4.5 x" in issue
+    assert "recomputes 4.181818" in issue and "credit_metrics.py" in issue
+
+
+def test_cp2g_a_sign_error_is_a_disagreement():
+    text = cp2g(metrics=METRICS | {("FY2025", "Base"): ("4.8x / (4.3x)", "2.9x", "6.25%")})
+    assert cp2g_status(ms.run("CP-2G", text))["Net leverage (FY2025, Base)"] == "disagreed"
+
+
+def test_cp2g_an_opening_balance_that_is_not_the_prior_close_is_a_disagreement():
+    model = MODEL | {
+        ("FY2026", "Base"): ("1,100", "350", "4,900 / 500", "100", "300", "330", "4,700 / 650")
+    }
+    # Opening 4,900 against FY2025's close of 4,800; the year itself rolls (4,900 + 100 - 300).
+    metrics = METRICS | {("FY2026", "Base"): ("4.3x / 3.7x", "3.3x", "7.4%")}
+    outcomes = {o.figure: o for o in ms.run("CP-2G", cp2g(model, metrics))}
+    opening = outcomes["Opening debt (FY2026, Base)"]
+    assert (opening.status, opening.stated, opening.recomputed) == ("disagreed", "4,900", 4800.0)
+    assert outcomes["Closing debt (FY2026, Base)"].status == "agreed"
+    (issue,) = ms.issues("CP-2G", cp2g(model, metrics))
+    assert "prior closing" in issue.lower() or "closing debt in the period before" in issue
+
+
+def test_cp2g_an_opening_is_compared_only_with_the_year_before_it():
+    # FY2026 listed before FY2025: the row before FY2025 is FY2026, not its prior year.
+    order = [("FY2026", "Base"), ("FY2025", "Base")]
+    model = {k: MODEL[k] for k in order}
+    status = cp2g_status(ms.run("CP-2G", cp2g(model, {k: METRICS[k] for k in order})))
+    assert status["Opening debt (FY2025, Base)"] == "not checked"
+    assert status["Opening debt (FY2026, Base)"] == "not checked"  # first row of its case
+
+
+def test_cp2g_a_closing_residual_is_recorded_not_sent_back():
+    # Closing 4,850 against 5,000 + 0 - 200 = 4,800: a residual of 50 the method may have logged.
+    model = MODEL | {
+        ("FY2025", "Base"): ("1,000", "300", "5,000 / 400", "0", "200", "350", "4,850 / 500")
+    }
+    metrics = METRICS | {("FY2025", "Base"): ("4.85x / 4.35x", "2.9x", "6.2%")}
+    outcomes = {o.figure: o for o in ms.run("CP-2G", cp2g(model, metrics))}
+    closing = outcomes["Closing debt (FY2025, Base)"]
+    assert closing.status == "not checked" and "a residual of 50" in closing.reason
+    # FY2026 opens at 4,800, not the 4,850 the model closed FY2025 at: that is a disagreement.
+    assert outcomes["Opening debt (FY2026, Base)"].status == "disagreed"
+
+
+def test_cp2g_a_missing_input_is_not_checked_and_never_zero():
+    model = MODEL | {
+        ("FY2026", "Base"): ("Not supplied: no guidance", "350", *MODEL[("FY2026", "Base")][2:])
+    }
+    status = cp2g_status(ms.run("CP-2G", cp2g(model)))
+    for name in ("Gross leverage", "Net leverage", "Coverage"):
+        assert status[f"{name} (FY2026, Base)"] == "not checked"
+    assert status["FCF/debt (FY2026, Base)"] == "agreed"
+    reason = {o.figure: o.reason for o in ms.run("CP-2G", cp2g(model))}["Coverage (FY2026, Base)"]
+    assert "states no ebitda for FY2026, Base (missing, not zero)" in reason
+
+
+def test_cp2g_a_blank_issuance_is_missing_and_a_zero_is_a_figure():
+    model = MODEL | {
+        ("FY2025", "Base"): (
+            "1,000",
+            "300",
+            "5,000 / 400",
+            "Not supplied: undisclosed",
+            "200",
+            "350",
+            "4,800 / 500",
+        )
+    }
+    assert cp2g_status(ms.run("CP-2G", cp2g(model)))["Closing debt (FY2025, Base)"] == "not checked"
+    assert cp2g_status(ms.run("CP-2G", cp2g()))["Closing debt (FY2025, Base)"] == "agreed"  # 0
+
+
+def test_cp2g_a_unit_mismatch_or_two_currencies_are_not_compared():
+    for t2h5 in ("USD bn", "EUR m"):
+        (outcome,) = ms.run("CP-2G", cp2g(t2h5_unit=t2h5))
+        assert outcome.status == "not checked" and "different units" in outcome.reason
+    unread = ms.run("CP-2G", cp2g(unit="m"))  # a scale with no currency: no figure is read
+    assert {o.status for o in unread} == {"not checked"}
+    assert "states no currency and scale, nor does its column" in unread[0].reason
+
+
+def test_cp2g_an_absent_register_is_not_checked():
+    no_metrics = cp2g().replace("### T2H.6 — Credit metrics outputs", "### Credit metrics")
+    outcomes = ms.run("CP-2G", no_metrics)
+    assert outcomes[0].reason == "the handoff has no T2H.6 register"
+    assert "agreed" in {o.status for o in outcomes}  # the roll-forward still runs
+    no_ops = cp2g().replace("### T2H.4 — Operating forecast outputs", "### Operating forecast")
+    (outcome,) = ms.run("CP-2G", no_ops)
+    assert outcome.reason == "the handoff has no T2H.4 register"
+
+
+def test_cp2g_a_malformed_table_is_not_checked():
+    text = cp2g().replace("| FY2025 | Base | 4.8x / 4.3x |", "| FY2025 | Base | 4.8x | 4.3x |")
+    outcome = ms.run("CP-2G", text)[0]  # T2H.6 is unread; T2H.5's roll-forward still runs
+    assert outcome.status == "not checked" and "a row of 8 cells under 7 columns" in outcome.reason
+
+
+def test_cp2g_a_combined_cell_needs_both_figures_in_its_columns_order():
+    one = cp2g(metrics=METRICS | {("FY2025", "Base"): ("4.8x", "2.9x", "6.25%")})
+    status = cp2g_status(ms.run("CP-2G", one))
+    assert (
+        status["Gross leverage (FY2025, Base)"]
+        == status["Net leverage (FY2025, Base)"]
+        == "not checked"
+    )
+    half = cp2g(metrics=METRICS | {("FY2025", "Base"): ("4.8x / n/a", "2.9x", "6.25%")})
+    status = cp2g_status(ms.run("CP-2G", half))
+    assert status["Gross leverage (FY2025, Base)"] == "agreed"
+    assert status["Net leverage (FY2025, Base)"] == "not checked"
+    swapped = cp2g(metrics=METRICS | {("FY2025", "Base"): ("4.3x / 4.8x", "2.9x", "6.25%")})
+    status = cp2g_status(ms.run("CP-2G", swapped))
+    assert (
+        status["Gross leverage (FY2025, Base)"]
+        == status["Net leverage (FY2025, Base)"]
+        == "disagreed"
+    )
+
+
+def test_cp2g_coverage_on_another_definition_is_compared_only_when_named_ebitda_over_interest():
+    # 2.4x is not 1,000 / 350 = 2.857. Under a fixed-charge definition it is not compared; under
+    # the row's own `EBITDA / cash interest` definition it is a disagreement.
+    metrics = METRICS | {("FY2025", "Base"): ("4.8x / 4.3x", "2.4x", "6.25%")}
+    other = cp2g_status(ms.run("CP-2G", cp2g(metrics=metrics, definition="D2 fixed-charge cover")))
+    assert other["Coverage (FY2025, Base)"] == "not checked"
+    named = cp2g_status(ms.run("CP-2G", cp2g(metrics=metrics)))
+    assert named["Coverage (FY2025, Base)"] == "disagreed"
+
+
+def test_cp2g_a_leverage_multiple_on_negative_ebitda_is_not_calculable():
+    metrics = METRICS | {("FY2026", "Downside"): ("(96.0x) / (93.0x)", "(0.1x)", "(4.2%)")}
+    outcomes = {o.figure: o for o in ms.run("CP-2G", cp2g(metrics=metrics))}
+    gross = outcomes["Gross leverage (FY2026, Downside)"]
+    assert gross.status == "disagreed" and gross.recomputed_label == "Not Calculable"
+    assert "recomputes Not Calculable" in ms.issue(gross)
+
+
+def test_cp2g_leverage_on_a_quarter_is_not_compared():
+    model = {("Q1 2025", "Base"): MODEL[("FY2025", "Base")]}
+    metrics = {("Q1 2025", "Base"): METRICS[("FY2025", "Base")]}
+    status = cp2g_status(ms.run("CP-2G", cp2g(model, metrics)))
+    assert status["Gross leverage (Q1 2025, Base)"] == "not checked"
+    assert status["FCF/debt (Q1 2025, Base)"] == "not checked"
+    assert status["Coverage (Q1 2025, Base)"] == "agreed"
+
+
 # --- the policy -----------------------------------------------------------------------------------
 
 
 def test_modules_without_a_script_check_get_none():
-    assert ms.run("CP-2G", cp2d()) == () and ms.issues("CP-1", "anything") == ()
-    assert ms.record("CP-2G", b"x") is None
+    assert ms.run("CP-0", cp2d()) == () and ms.issues("CP-5", "anything") == ()
+    assert ms.record("CP-0", b"x") is None
 
 
 def test_a_script_that_fails_becomes_not_checked(monkeypatch):

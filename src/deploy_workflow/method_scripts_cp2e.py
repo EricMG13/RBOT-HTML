@@ -9,7 +9,6 @@ column, so each amount states its own (`USD 1,250m`), or the amount column's hea
 exposure and adverse move are free text in T2F.6 and T2F.7, not columns.
 """
 
-import re
 import types
 from dataclasses import dataclass
 from typing import Any
@@ -18,6 +17,7 @@ from deploy_workflow import method_scripts as core
 from deploy_workflow.method_scripts import (
     AMOUNT_STEP,
     ARCHIVE,
+    Amount,
     Loaded,
     Outcome,
     Table,
@@ -25,13 +25,12 @@ from deploy_workflow.method_scripts import (
     _judged,
     _label,
     _NotChecked,
-    _plain,
     _Where,
+    bare,
     blank,
-    currency_of,
-    figure,
+    column,
+    money,
     register_table,
-    scale_of,
     share,
 )
 
@@ -64,49 +63,6 @@ CP2E_NOTE = (
 _UNHEDGED = _Where("CP-2E", RATE_FX, UNHEDGED, "T2F.4")
 _SHARE = _Where("CP-2E", RATE_FX, SHARE, "T2F.4")
 _SHOCK = _Where("CP-2E", RATE_FX, SHOCK, "T2F.5")
-_CODE = re.compile(r"(?<![A-Za-z])[A-Z]{3}(?![A-Za-z])|US\$|[€£$]")
-_SCALE_WORD = re.compile(
-    r"(?<=[\d\s)])(?:m|mn|mm|bn|k|million|millions|billion|billions|thousand|thousands)\.?$",
-    re.IGNORECASE,
-)
-
-
-@dataclass(frozen=True)
-class _Amount:
-    """A money cell as read: its figure (None when it states none) and its unit."""
-
-    value: float | None
-    unit: str | None  # `<currency> <scale>`; None for a cell that states no figure
-    cell: str
-
-
-def _column(table: Table, name: str, where: str) -> tuple[int, str]:
-    """The column named ``name`` (its header may add a unit: `Amount (USD m)`) and the header."""
-    found = [i for i, c in enumerate(table[0]) if re.fullmatch(rf"{name}\b.*", _label(c))]
-    if len(found) != 1:
-        raise _NotChecked(f"{where} has {len(found) or 'no'} `{name}` column{'s' * (found != [])}")
-    return found[0], table[0][found[0]]
-
-
-def _amount(cell: str, header: str, tables: types.ModuleType) -> _Amount:
-    """A money cell: its unit is the cell's own currency and scale, else the column header's."""
-    if blank(cell, tables):
-        return _Amount(None, None, cell)
-    text = _plain(cell)
-    own = (currency_of(text), scale_of(text))
-    head = (currency_of(header), scale_of(header))
-    currency, scale = own[0] or head[0], own[1] or head[1]
-    if currency is None or scale is None:
-        raise _NotChecked(f"`{cell}` states no currency and scale, nor does its column")
-    read = figure(_bare(cell), tables)
-    if isinstance(read, str):
-        raise _NotChecked(read)
-    return _Amount(read[0], f"{currency} {scale}", cell)
-
-
-def _bare(cell: str) -> str:
-    """A money cell's figure without its currency and scale (`USD 1,250m` -> `1,250`)."""
-    return _SCALE_WORD.sub("", _CODE.sub("", _plain(cell))).strip()
 
 
 def _rows(table: Table, item: int, names: tuple[str, ...], where: str) -> dict[str, list[str]]:
@@ -125,7 +81,7 @@ def _rows(table: Table, item: int, names: tuple[str, ...], where: str) -> dict[s
 class _Exposure:
     """T2F.4 as the script reads it, and the two figures it states."""
 
-    amounts: dict[str, _Amount]  # Total, Gross, Hedged, Unhedged rows that are present
+    amounts: dict[str, Amount]  # Total, Gross, Hedged, Unhedged rows that are present
     share: str | None  # the Unhedged debt percentage cell as written
     unit: str
 
@@ -134,10 +90,10 @@ def _exposure(text: str, tables: types.ModuleType) -> _Exposure:
     table = register_table(text, "T2F.4")
     if isinstance(table, str):
         raise _NotChecked(table)
-    metric = _column(table, "metric", "T2F.4")[0]
-    amount, header = _column(table, "amount", "T2F.4")
+    metric = column(table, "metric", "T2F.4")[0]
+    amount, header = column(table, "amount", "T2F.4")
     rows = _rows(table, metric, EXPOSURE_ROWS, "T2F.4")
-    amounts = {n: _amount(r[amount], header, tables) for n, r in rows.items() if n != SHARE}
+    amounts = {n: money(r[amount], header, tables) for n, r in rows.items() if n != SHARE}
     units = {a.unit for a in amounts.values() if a.unit is not None}
     if len(units) > 1:
         shown = "; ".join(f"`{a.cell}`" for a in amounts.values() if a.unit is not None)
@@ -177,7 +133,7 @@ def _unhedged(exposure: _Exposure, result: dict[str, Any], tables: types.ModuleT
         return _UNHEDGED("not checked", stated=stated.cell, reason=gap)
     recomputed = result["unhedged_floating_rate_debt"]
     claim = _Claim(
-        _UNHEDGED, _bare(stated.cell), recomputed, AMOUNT_STEP, exposure.unit, UNHEDGED_FORMULA
+        _UNHEDGED, bare(stated.cell), recomputed, AMOUNT_STEP, exposure.unit, UNHEDGED_FORMULA
     )
     return _judged(claim, tables)
 
@@ -196,16 +152,16 @@ def _share(exposure: _Exposure, result: dict[str, Any], tables: types.ModuleType
     return share(_SHARE, cell, recomputed, SHARE_FORMULA, tables)
 
 
-def _shock_cell(text: str, tables: types.ModuleType) -> _Amount:
+def _shock_cell(text: str, tables: types.ModuleType) -> Amount:
     table = register_table(text, "T2F.5")
     if isinstance(table, str):
         raise _NotChecked(table)
-    item = _column(table, "sensitivity", "T2F.5")[0]
-    impact, header = _column(table, "estimated cash impact", "T2F.5")
+    item = column(table, "sensitivity", "T2F.5")[0]
+    impact, header = column(table, "estimated cash impact", "T2F.5")
     rows = [r for r in table[1] if _label(r[item]).lstrip("+ ") == _label(SHOCK).lstrip("+ ")]
     if len(rows) != 1:
         raise _NotChecked(f"T2F.5 has {len(rows) or 'no'} `{SHOCK}` rows")
-    return _amount(rows[0][impact], header, tables)
+    return money(rows[0][impact], header, tables)
 
 
 def _shock(
@@ -225,7 +181,7 @@ def _shock(
         return _SHOCK("not checked", stated=stated.cell, reason=reason)
     recomputed = result["cash_interest_impact_plus_100bps"]
     claim = _Claim(
-        _SHOCK, _bare(stated.cell), recomputed, AMOUNT_STEP, str(stated.unit), SHOCK_FORMULA
+        _SHOCK, bare(stated.cell), recomputed, AMOUNT_STEP, str(stated.unit), SHOCK_FORMULA
     )
     return _judged(claim, tables)
 

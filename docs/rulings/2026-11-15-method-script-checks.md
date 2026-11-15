@@ -80,9 +80,38 @@ file's manifest sha256 and note, the METHODOLOGY-REVIEW.md appendix row, the mod
   the residual to equity in each case (value the claims do not absorb must not be left
   unallocated). A claim listed twice (a guarantee at two entities) is refused by the script as
   double recovery: not checked. The script allocates one pool; it does not split value by entity.
-- Decision for the owner: ask CP-3 for the table (its instructions gain a note of about 900
-  characters in `credit_snapshot`, `relative_value` and `portfolio_decision`), or leave CP-3
-  unchecked.
+- Decision for the owner: ask CP-3 for the table (its instructions would gain a note like
+  CP-3C's, which is 1,088 characters, in `credit_snapshot`, `relative_value` and
+  `portfolio_decision`), or leave CP-3 unchecked.
+
+### CP-2G, `credit_metrics.py`
+
+- Restored: none needed. T2H.4, T2H.5 and T2H.6 were never cut (only T2H.1, T2H.2 and T2H.9 are).
+- Inputs: T2H.4 `EBITDA`, `FCF`; T2H.5 `opening debt/cash`, `issuance`, `repayment`, `interest`,
+  `closing debt/cash`; matched to T2H.6 by period and case. T2H.4 and T2H.5 have no currency or
+  scale column: each money column's header states it (`EBITDA (USD m)`) or each cell does.
+- Rule for combined cells (decided here): a column whose name joins two figures with `/` holds two
+  figures separated by `/`, in the name's order (`4,500 / 300`, `4.5x / 4.2x`). A gap for the whole
+  cell is a gap for both; a gap on one side is a gap for that side only; a cell that is not two
+  parts states neither figure (not checked, never guessed).
+- Checked per T2H.6 row: gross leverage (closing debt / EBITDA) and net leverage ((closing debt -
+  closing cash) / EBITDA), both against a positive EBITDA and only for annual periods; coverage
+  (EBITDA / |interest|), a disagreement only when the row's definition names EBITDA over interest,
+  otherwise not checked, because the method allows fixed-charge coverage, which no column can
+  recompute; FCF/debt (annual periods). A multiple stated against non-positive EBITDA disagrees
+  with the script's Not Calculable. Per T2H.5 row: opening debt and opening cash against the same
+  case's prior closing (consecutive annual years only), a disagreement otherwise; closing debt =
+  opening + issuance - repayment, agreed when it rolls, otherwise not checked with the residual
+  (the method allows a residual it logs, and T2H.5 has no column for PIK, FX or accretion).
+- Not checked by design: the cash roll-forward (dividends and other cash uses are not columns),
+  accessible liquidity and liquidity runway (not script figures).
+- The owner module `owners/cp2g.py` (the Deploy VII journal path, not wired in) computes the same
+  ratios in Decimal from its own forecast (closing debt and cash, EBITDA, interest as a positive
+  figure) and rolls cash with dividends, which T2H.5 does not carry.
+- Retained evidence: `tests/fixtures/tdg_sol_high_2026_11_13/CP-2G-forecast-block.md` (TransDigm,
+  run of 2026-11-13) is the forecast-inputs block only; it has no T2H register, so the check
+  records "not checked: the handoff has no T2H.4 register". The full CP-2G handoffs, which wrote
+  T2H.4 to T2H.6, are not in this repository.
 
 ## Status
 

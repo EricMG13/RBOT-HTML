@@ -377,6 +377,61 @@ def _judged(claim: _Claim, tables: types.ModuleType) -> Outcome:
     return where("disagreed", **values, reason=claim.formula)
 
 
+class _NotChecked(Exception):
+    """A figure that cannot be checked, and why."""
+
+
+# --- money cells in a register with no currency or scale column ------------------------------
+
+_CODE = re.compile(r"(?<![A-Za-z])[A-Z]{3}(?![A-Za-z])|US\$|[€£$]")
+_SCALE_WORD = re.compile(
+    r"(?<=[\d\s)])(?:m|mn|mm|bn|k|million|millions|billion|billions|thousand|thousands)\.?$",
+    re.IGNORECASE,
+)
+
+
+@dataclass(frozen=True)
+class Amount:
+    """A money cell as read: its figure (None when it states none) and its unit."""
+
+    value: float | None
+    unit: str | None  # `<currency> <scale>`; None for a cell that states no figure
+    cell: str
+
+
+def column(table: Table, name: str, where: str) -> tuple[int, str]:
+    """The column named ``name`` (its header may add a unit: `Amount (USD m)`) and the header."""
+    found = [
+        i
+        for i, c in enumerate(table[0])
+        if re.fullmatch(rf"{re.escape(_label(name))}\b.*", _label(c))
+    ]
+    if len(found) != 1:
+        raise _NotChecked(f"{where} has {len(found) or 'no'} `{name}` column{'s' * (found != [])}")
+    return found[0], table[0][found[0]]
+
+
+def money(cell: str, header: str, tables: types.ModuleType) -> Amount:
+    """A money cell: its unit is the cell's own currency and scale, else the column header's."""
+    if blank(cell, tables):
+        return Amount(None, None, cell)
+    text = _plain(cell)
+    own = (currency_of(text), scale_of(text))
+    head = (currency_of(header), scale_of(header))
+    currency, scale = own[0] or head[0], own[1] or head[1]
+    if currency is None or scale is None:
+        raise _NotChecked(f"`{cell}` states no currency and scale, nor does its column")
+    read = figure(bare(cell), tables)
+    if isinstance(read, str):
+        raise _NotChecked(read)
+    return Amount(read[0], f"{currency} {scale}", cell)
+
+
+def bare(cell: str) -> str:
+    """A money cell's figure without its currency and scale (`USD 1,250m` -> `1,250`)."""
+    return _SCALE_WORD.sub("", _CODE.sub("", _plain(cell))).strip()
+
+
 DECIMAL_STEP = 1e-6  # the scripts round a share or a recovery, a decimal, to six places
 
 
@@ -386,13 +441,13 @@ def share(
     """A share stated with `%`, or as a decimal no larger than 1 (the methods store percentages as
     decimals), against the script's decimal; a bare figure above 1 has no readable unit."""
     text = _plain(cell)
-    percent = text.endswith("%")
+    percent = text.rstrip(") ").endswith("%")  # `(4.2%)` is a negative percentage
     read = figure(cell, tables)
     if not percent and not isinstance(read, str) and abs(read[0]) > 1:
         reason = f"`{cell}` has no `%` and is above 1, so it is not a decimal share"
         return where("not checked", stated=cell, reason=reason)
     scale, unit = (100.0, "%") if percent else (1.0, "")
-    stated = text.removesuffix("%").strip()
+    stated = text.replace("%", "").strip()
     return _judged(
         _Claim(where, stated, decimal * scale, DECIMAL_STEP * scale, unit, formula), tables
     )
@@ -545,10 +600,6 @@ def _mte_result(text: str) -> str:
             "bridge's net outflow over its 12 months"
         )
     return rows[0][cols["Result"]]
-
-
-class _NotChecked(Exception):
-    """A figure that cannot be checked, and why."""
 
 
 def _months(
@@ -852,4 +903,8 @@ def record(module: str, raw: bytes) -> dict[str, Any] | None:
 
 
 # The per-module mappings register themselves when imported; imported last, after all they use.
-from deploy_workflow import method_scripts_cp2e, method_scripts_cp3  # noqa: F401
+from deploy_workflow import (  # noqa: F401
+    method_scripts_cp2e,
+    method_scripts_cp2g,
+    method_scripts_cp3,
+)

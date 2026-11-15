@@ -8740,6 +8740,65 @@ def test_cp2e_is_checked_by_its_script_on_its_restored_registers(tmp_path, pathw
     assert "Missing registers: T2F.4, T2F.5." in missing
 
 
+def _without_placeholders(raw: str, idents: tuple[str, ...]) -> str:
+    """The synthetic answer less its `Not supplied` placeholder for each named register."""
+    for ident in idents:
+        placeholder = f"### {ident} - Register\n\n| Item | Value |\n| --- | --- |\n"
+        placeholder += "| Observed | Not supplied: nothing to report |\n\n"
+        assert raw.count(placeholder) == 1, ident
+        raw = raw.replace(placeholder, "")
+    return raw
+
+
+# SYNTHETIC, USD m, one period and case: gross leverage 4,800 / 1,000 = 4.8x, net
+# (4,800 - 500) / 1,000 = 4.3x, coverage 1,000 / 350 = 2.9x, FCF/debt 300 / 4,800 = 6.25%
+# (worked in tests/test_method_scripts.py).
+T2H456 = """### T2H.4 - Operating forecast outputs
+
+| period | case | EBITDA (USD m) | FCF (USD m) | evidence/assumption IDs |
+|---|---|---|---|---|
+| FY2025 | Base | 1,000 | 300 | A1 |
+
+### T2H.5 - Financing and liquidity outputs
+
+| period | case | opening debt/cash (USD m) | issuance (USD m) | repayment (USD m) \
+| interest (USD m) | closing debt/cash (USD m) |
+|---|---|---|---|---|---|---|
+| FY2025 | Base | 5,000 / 400 | 0 | 200 | 350 | 4,800 / 500 |
+
+### T2H.6 - Credit metrics outputs
+
+| period | case | gross/net leverage | coverage | FCF/debt | definition IDs |
+|---|---|---|---|---|---|
+| FY2025 | Base | {gross} / 4.3x | 2.9x | 6.25% | EBITDA / cash interest |
+
+"""
+
+
+@pytest.mark.parametrize("pathway", ["credit_snapshot", "distressed_restructuring"])
+def test_cp2g_is_checked_by_its_script(tmp_path, pathway):
+    (tmp_path / "texts").mkdir()
+    _, texts = all_instructions(tmp_path / "texts", pathway)
+    assert (
+        texts["CP-2G"].partition(cpos_launch.METHOD_MARK)[0].count(method_scripts.NOTES["CP-2G"])
+        == 1
+    )
+    prepared, task, context = good_task(tmp_path, "CP-2G", pathway)
+    raw = forecast_answer(context, list(prepared.plan.layout.routes), REAL_DECLINED_BLOCK)
+    check = checker(prepared.layout)
+    base = set(_checked_handoff(task, raw.encode(), check))
+    assert not any("recomputes" in issue for issue in base)
+    raw = _without_placeholders(raw, ("T2H.4", "T2H.5", "T2H.6"))
+    right, wrong = (
+        raw.replace("\n## Calculations", "\n" + T2H456.format(gross=g) + "## Calculations")
+        for g in ("4.8x", "5.0x")
+    )
+    assert "agreed" in {o.status for o in method_scripts.run("CP-2G", right)}
+    assert set(_checked_handoff(task, right.encode(), check)) == base
+    (added,) = set(_checked_handoff(task, wrong.encode(), check)) - base
+    assert "T2H.6 row `Gross leverage (FY2025, Base)` states 5.0 x" in added
+
+
 def test_each_attempt_keeps_its_method_script_checks_beside_its_review(tmp_path):
     _, task, _ = good_task(tmp_path, "CP-2D", "credit_snapshot")
     shell = "## Request\n\n## Sources\n\n## Findings\n\n{}## Calculations\n\n## Gaps\n\n"

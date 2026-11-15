@@ -321,6 +321,9 @@ def test_no_check_reader_or_library_names_a_cut_or_routing_register():
     # catalog.json `call.heading` (T5B.7, TDR.3) is read only by `pinned_fields` for an entry whose
     # `path` equals the output (store.py:1164); no catalog entry has a `path`, so nothing reads it.
     allowed = {("catalog.json", "T5B.7"), ("catalog.json", "TDR.3")}
+    # CP-3's method-script check names T3B.2, T3B.4 and T3B.6 only in its docstring, to say why it
+    # does not read them (ruling 2026-11-15-method-script-checks.md); it reads its own table.
+    allowed |= {("method_scripts_cp3.py", i) for i in ("T3B.2", "T3B.4", "T3B.6")}
     hits = []
     for ident in ids:
         pattern = re.compile(rf"(?<![A-Za-z0-9_.]){re.escape(ident)}(?![A-Za-z0-9_]|\.[0-9A-Za-z])")
