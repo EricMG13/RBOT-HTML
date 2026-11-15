@@ -1,7 +1,7 @@
 """Figure producers of the Distressed & Restructuring Front Page (Stage 3 W2 group d).
 
 DR.2 (recovery by class) and DR.3 to DR.5 (value allocation waterfalls) read a settled CP-4C
-through ``deploy_workflow.restructuring_series``; DR.6 is CP-2H's rating trigger headroom frame.
+through ``deploy_vii.restructuring_series``; DR.6 is CP-2H's rating trigger headroom frame.
 Values come only from the settled module view: amount, status, unit and the report's ``G#`` are
 read from the facts, a missing or not-meaningful fact is a gap mark with its ``G#`` and never 0,
 and no chart recomputes a value. ``report_view`` registers ``PRODUCERS`` in its group d block.
@@ -59,7 +59,7 @@ def _point_cell(fact: Fact, unit_class: UnitClass, refs: tuple[str, ...]) -> Cel
 def _cp4c_figures(
     view: View, refs: _Refs, block_id: str, wanted: frozenset[str]
 ) -> tuple[Figure, ...]:
-    from deploy_workflow.restructuring_series import cp4c_chart_series
+    from deploy_vii.restructuring_series import cp4c_chart_series
 
     module = _module(view, "CP-4C")
     if module is None:

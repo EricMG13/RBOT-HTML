@@ -7,6 +7,10 @@ no later module, check, chart, the Forecast page or the library read in either r
 (`docs/sweeps/2026-11-13-optimisation-review/appendix-inventory.md`). The title beside each id is
 the method's own.
 
+CP-6's list no longer names CP-6A's registers T6E.4, T6E.6, T6E.7 and T6E.11: the absorbed CP-6A
+phase is part of the full credit assessment (owner, 2026-11-15; ruling
+`docs/rulings/2026-11-15-full-assessment-cp3c-cp6a.md`), so CP-6 writes them and they are checked.
+
 ## CP-0
 
 Register scope in this transport: do not write P5 Parse jobs record; T3 Source hierarchy; T5 Gaps and conflicts. Any figure, limitation or conclusion you draw from that work goes in a register you do write, in `## Calculations` or in `## Gaps`. A register named here is not required by the method's `required_register_ids`, `appendix_contract`, lossless profile or completeness check, or by the canon's Analytical appendix rule, in this transport: when you run those checks or apply that rule yourself, do not restore it and do not block for want of it. The routing rule's registers for this module are T7 and T8: do not write them; no other required register is a routing register.
@@ -45,4 +49,4 @@ Register scope in this transport: do not write T5B.4 Source Lineage Table; T5B.5
 
 ## CP-6
 
-Register scope in this transport: do not write T6A.6 Chair scoring table (9 dimensions); T6A.11 Gaps ledger table; T6E.4 Compliance cross-examination table + attack summary; T6E.6 CIO scoring table (9 dimensions); T6E.7 Decision matrix; T6E.11 Gaps ledger table (portfolio debate). Any figure, limitation or conclusion you draw from that work goes in a register you do write, in `## Calculations` or in `## Gaps`. A register named here is not required by the method's `required_register_ids`, `appendix_contract`, lossless profile or completeness check, or by the canon's Analytical appendix rule, in this transport: when you run those checks or apply that rule yourself, do not restore it and do not block for want of it. None of this module's required registers is a routing register.
+Register scope in this transport: do not write T6A.6 Chair scoring table (9 dimensions); T6A.11 Gaps ledger table. Any figure, limitation or conclusion you draw from that work goes in a register you do write, in `## Calculations` or in `## Gaps`. A register named here is not required by the method's `required_register_ids`, `appendix_contract`, lossless profile or completeness check, or by the canon's Analytical appendix rule, in this transport: when you run those checks or apply that rule yourself, do not restore it and do not block for want of it. None of this module's required registers is a routing register.

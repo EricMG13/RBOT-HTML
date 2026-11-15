@@ -2,7 +2,8 @@ name: work-pc pack
 
 # After every change to main, record what changed for the work PC (no git there):
 # tools/work_pc_delta.py writes the next numbered pack under docs/work-pc/syncs/,
-# starting where the previous pack ended, and commits it to main.
+# starting where the previous pack ended, and commits it to main. The same commit removes
+# packs older than the retention window (docs/work-pc/README.md); git history keeps them.
 on:
   push:
     branches: [main]
@@ -34,6 +35,10 @@ jobs:
           message=$(python tools/work_pc_delta.py generate --head HEAD)
           echo "$message"
           echo "message=$message" >> "$GITHUB_OUTPUT"
+      - name: remove packs older than the retention window
+        if: startsWith(steps.pack.outputs.message, 'wrote ')
+        continue-on-error: true  # the new pack is still committed when cleanup fails
+        run: python tools/work_pc_delta.py prune
       - name: commit and push the pack
         if: startsWith(steps.pack.outputs.message, 'wrote ')
         run: |

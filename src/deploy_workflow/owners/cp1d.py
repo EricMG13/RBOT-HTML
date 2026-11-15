@@ -1878,11 +1878,6 @@ def _module_shapes(bridge: Bridge | None, gaps: int) -> dict[str, _Shape]:
     }
 
 
-def module_fact_ids(bridge: Bridge | None, gaps: int) -> frozenset[str]:
-    """Every fact id a full composition carries, from the structure alone (no values)."""
-    return frozenset(_module_shapes(bridge, gaps))
-
-
 def _structural_issues(run: ProseRun, shape: _Shape, currency: str | None) -> list[str]:
     """The product's reference checks (`prose._run_issues`, `prose._fact_issues`) that the
     structure decides; whether a numeric fact is known depends on values and is not checked."""
@@ -2103,8 +2098,6 @@ SCOPE = frozenset({"identity", "financial", BRIDGE_SOURCE_ID})
 CP0, CP1, CP1B = "CP-0", "CP-1", "CP-1B"
 SUBMISSION_INPUT = STEP_ID.replace("_", "-") + "-submission"
 _CP1_TABLE = "T4.10"
-# The no-context period; a run with a context reads it from its `PeriodBasis`.
-_CP1_PERIOD = DEFAULT_BASIS.ltm_period
 # Operand name -> CP-1 T4.10 metric (manifest `cp1_fact_selection_rule.metrics`), in
 # `_CP1_FIGURES` order.
 _CP1_METRICS = {
@@ -2116,7 +2109,6 @@ _CP1_METRICS = {
     "total_leverage_adjusted": "total_leverage_adjusted",
     "net_leverage_adjusted": "net_leverage_adjusted",
 }
-_CP1B_BOUND = "CP-1B is bound but its variance evidence is not read in this version."
 
 
 class EarningsQualityReport(Contract):
@@ -2383,15 +2375,6 @@ def _checked(
             _line(f"{'.'.join(map(str, e['loc'])) or '(root)'}: ", e["msg"])
             for e in error.errors(include_input=False, include_url=False, include_context=False)
         ), None
-
-
-def validate_earnings_quality(
-    *, pack: PreparedPack, submission: EarningsQualitySubmission, upstream: Upstream
-) -> tuple[str, ...]:
-    """Every issue of one submission: the bound-input checks, the Stage 1 calculation rules, the
-    model-text types, the overall rationale's references against the module's facts and the
-    seven CP-1 facts, and the product's own record checks. Bounded to `MAX_ISSUES` lines."""
-    return _checked(pack, submission, upstream)[0]
 
 
 def _reference_fact(figure: str, fact: Fact) -> Fact:

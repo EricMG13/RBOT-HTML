@@ -27,6 +27,7 @@ from typing import Any, cast
 import pytest
 from inbox_fixtures import CONTEXT, KEY, layout, pump, settings, submit_run
 
+from deploy_workflow import http_base
 from deploy_workflow.inbox.runs import load_all
 from deploy_workflow.inbox.scheduler import Scheduler
 from deploy_workflow.run_start import service, submissions
@@ -209,6 +210,13 @@ def _raw(svc: Service, request: bytes) -> bytes:
         while chunk := s.recv(4096):
             received += chunk
     return received
+
+
+def test_an_http_09_request_line_is_closed_without_a_reply_or_an_error(svc, caplog):
+    with caplog.at_level(logging.INFO, logger=service.log.name):
+        assert _raw(svc, b"GET /\r\n\r\n") == b""
+        assert svc.call("GET", "/").status == 200  # the service still answers
+    assert not [r for r in caplog.records if r.levelno >= logging.ERROR], caplog.text
 
 
 def test_a_body_without_content_length_is_refused(svc):
@@ -617,8 +625,8 @@ def test_the_library_serves_a_plain_file_and_not_a_link_or_a_folder(svc):
     (library / "real.html").write_text("<p>real</p>", encoding="utf-8")
     (library / "alias.html").symlink_to(library / "real.html")
     assert svc.call("GET", "/library/real.html").body == b"<p>real</p>"
-    assert service._read_regular(library) is None
-    assert service._read_regular(library / "missing") is None
+    assert http_base.read_regular(library) is None
+    assert http_base.read_regular(library / "missing") is None
 
 
 def test_every_reply_the_http_server_writes_itself_carries_the_policy_headers(svc):
@@ -719,7 +727,7 @@ def test_a_top_level_navigation_is_served_even_when_cross_site(svc):
 
 def test_on_port_80_host_and_origin_may_leave_the_port_out(svc):
     server = cast(service._Server, svc.server)
-    server.allowed_hosts, server.advertised_port = service._hosts("127.0.0.1", 80), 80
+    server.allowed_hosts, server.advertised_port = http_base.hosts("127.0.0.1", 80), 80
     assert svc.call("GET", "/", headers={"Host": "127.0.0.1"}).status == 200
     assert svc.call("GET", "/", headers={"Host": "localhost"}).status == 200
     assert svc.call("GET", "/", headers={"Host": "127.0.0.1:80"}).status == 200
@@ -796,7 +804,7 @@ def test_a_fifo_at_a_library_path_is_refused_without_waiting(tmp_path):
     fifo = tmp_path / "data.js"
     os.mkfifo(fifo)
     seen: list[object] = []
-    reader = threading.Thread(target=lambda: seen.append(service._read_regular(fifo)), daemon=True)
+    reader = threading.Thread(target=lambda: seen.append(http_base.read_regular(fifo)), daemon=True)
     reader.start()
     reader.join(5)
     assert not reader.is_alive(), "reading a FIFO blocked the handler"
@@ -819,11 +827,11 @@ def test_a_library_file_is_opened_in_binary_mode_where_the_platform_has_the_flag
     monkeypatch.setattr(platform_io, "flags", spy)
     target = tmp_path / "a.bin"
     target.write_bytes(b"\x1a\r\n\x00x")
-    assert service._read_regular(target) == b"\x1a\r\n\x00x"
+    assert http_base.read_regular(target) == b"\x1a\r\n\x00x"
     assert ("O_BINARY",) in asked
     link = tmp_path / "link.bin"
     link.symlink_to(target)
-    assert service._read_regular(link) is None  # the link refusal is kept
+    assert http_base.read_regular(link) is None  # the link refusal is kept
 
 
 def test_main_stops_on_interrupt_and_releases_the_folder_lock(root, fake_env, monkeypatch):

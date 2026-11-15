@@ -241,7 +241,7 @@ def handoff_metrics(
     return metrics
 
 
-# The files `credit_os/store.py` reads for a model (its CASHFLOW_FILES).
+# The files `credit_os` reads for a model (CASHFLOW_FILES in `credit_os/cashflow.py`).
 MODEL_FILES = ("forecast_exact.json", "calculation.json", "annual.md", "quarter.md")
 
 

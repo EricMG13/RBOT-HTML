@@ -1,6 +1,6 @@
 """Update the Issuer Library: the static Credit OS library and issuer pages of completed runs.
 
-    python apps/issuer-library/update_library.py [--workspace FOLDER]
+    uv run python apps/issuer-library/update_library.py [--workspace FOLDER]
 
 Reads ``FOLDER/runs`` (default: this checkout; the Windows package needs ``--workspace``, which
 ``Update library.cmd`` supplies) and writes only ``FOLDER/library/``: ``index.html`` with its
@@ -28,10 +28,6 @@ HERE = Path(__file__).resolve().parent
 WEB = HERE / "credit_os" / "web"
 PACKAGED = (HERE / "src").is_dir()  # The Windows package keeps the engine's src beside this file.
 ROOT = HERE if PACKAGED else HERE.parents[1]
-if str(ROOT / "src") not in sys.path:
-    sys.path.insert(0, str(ROOT / "src"))
-if str(HERE) not in sys.path:
-    sys.path.insert(0, str(HERE))
 
 from credit_os.store import UnreadableFile, regular_chunks, workspace_store
 

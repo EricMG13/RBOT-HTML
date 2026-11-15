@@ -9,12 +9,10 @@ journaled refusals that are calculation outcomes. Conventions: `docs/CP3D-OWNER-
 
 The last section, "Stage 2 connections", binds the core to the owner workflow: the store
 adapter (`cp3d_upstream`), the report and module builders, the plug-in parts of
-`docs/G1X-OWNER-CORE-PROTOCOL.md` section 2 and the consumer reader. Everything above it stays
-pure.
+`docs/G1X-OWNER-CORE-PROTOCOL.md` section 2. Everything above it stays pure.
 """
 
 import re
-import unicodedata
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date
@@ -24,7 +22,6 @@ from typing import Any, Literal, Protocol, Self
 
 from pydantic import SerializerFunctionWrapHandler, TypeAdapter, ValidationError, model_serializer
 
-from deploy_vii.cp3_relative_value import TALK_MARKERS
 from deploy_vii.contracts import (
     Citation,
     Claim,
@@ -40,11 +37,11 @@ from deploy_vii.contracts import (
     TableColumn,
     TableRow,
 )
+from deploy_vii.cp3_relative_value import TALK_MARKERS
 from deploy_vii.execution import (
     Attempt,
     Execution,
     ExecutionSnapshot,
-    Head,
     Qualification,
     StepValidation,
     clipped,
@@ -69,7 +66,14 @@ from deploy_workflow.context_cites import (
 )
 from deploy_workflow.owners.blank import is_blank
 from deploy_workflow.owners.cp1a import probe_one_step
-from deploy_workflow.owners.pins import pin_issues, pinned_line, pins_of
+from deploy_workflow.owners.pins import (
+    PIN_LABEL_FORGED,
+    _normalised,  # noqa: F401  re-exported as cp3d._normalised
+    pin_issues,
+    pin_label_forged,
+    pinned_line,
+    pins_of,
+)
 from deploy_workflow.workflow import WorkflowError
 
 MODULE_ID = "CP-3D"
@@ -1264,27 +1268,6 @@ def _check_technicals(sub: MarketImpliedSubmission, out: _Issues) -> None:
             out.add(f"{path}: a Documentary Fact needs at least one basis quote")
         for j, b in enumerate(x.basis):
             out.ref_on_page(b, f"{path}.basis[{j}]")
-
-
-PIN_LABEL_FORGED = "the user-supplied pin line is Python's; do not write it"
-
-
-def _normalised(text: str) -> str:
-    """NFKC, no format characters (category Cf), whitespace runs as one space, case folded, the
-    ends trimmed and one trailing full stop dropped: what a reader would take for the same text."""
-    kept = "".join(
-        c for c in unicodedata.normalize("NFKC", text) if unicodedata.category(c) != "Cf"
-    )
-    folded = " ".join(kept.split()).casefold()
-    return folded.removesuffix(".").strip()
-
-
-def pin_label_forged(module_id: str, text: str | None) -> bool:
-    """True when `text` holds `module_id`'s pinned-recovery sentence, or a near copy that differs
-    only as `_normalised` folds (case, spacing, format characters, compatibility forms, the full
-    stop; a homoglyph from another script is not folded). Shared by the modules whose own
-    limitations carry model prose beside Python's pinned line (P6-P13)."""
-    return bool(text) and _normalised(pinned_line(module_id)) in _normalised(text or "")
 
 
 def _check_pin_label(sub: MarketImpliedSubmission, out: _Issues) -> None:
@@ -2849,56 +2832,4 @@ def probe(store: Execution, snapshot: ExecutionSnapshot, attempt: Attempt) -> No
     probe_one_step(store, snapshot, attempt, validate=_validate_step, build=_candidate)
 
 
-# --- the consumer reader (D3 stays OPEN) -------------------------------------------------------
-
-READ_DM_MID, READ_LAMBDA_MID = "T3E.3.r03.mid", "T3E.5.r01.mid"
-READ_PD_MID, READ_RECOVERY = "T3E.5.r02.mid", "T3E.4.r01.value"
-
-
-@dataclass(frozen=True)
-class Reading:
-    """One fact as a consumer sees it: its id, its status and its exact amount (None when the
-    fact is not known; a missing figure is never 0)."""
-
-    fact_id: str
-    status: str
-    amount: Decimal | None
-
-
-@dataclass(frozen=True)
-class Cp3dHead:
-    """What `expected.json#consumption.reader_pinned_for_cp3c` pins CP-3C to read."""
-
-    head_sha256: str
-    status: str
-    discount_margin_mid: Reading
-    intensity_mid: Reading
-    probability_mid: Reading
-    recovery: Reading
-    own_limitations: tuple[str, ...]
-
-
-def _reading(facts: Mapping[str, Fact], fact_id: str) -> Reading:
-    fact = facts.get(fact_id)
-    if fact is None:
-        raise WorkflowError(_INCONSISTENT)
-    return Reading(fact_id, fact.status, fact.amount)
-
-
-def cp3d_reader(store: Execution, head: Head) -> Cp3dHead:
-    """The consumer reader: the head's hash and status, the mid discount margin, default
-    intensity and cumulative probability, the recovery assumption (or its absence) and the own
-    limitations. No consumer core reads it yet, so no consumption is claimed (lease D3)."""
-    if head.module_id != MODULE_ID:
-        raise WorkflowError(_INCONSISTENT)
-    module = store.head_module(head)
-    facts = {f.fact_id: f for f in module.facts}
-    return Cp3dHead(
-        head_sha256=head.result_sha256,
-        status=head.status,
-        discount_margin_mid=_reading(facts, READ_DM_MID),
-        intensity_mid=_reading(facts, READ_LAMBDA_MID),
-        probability_mid=_reading(facts, READ_PD_MID),
-        recovery=_reading(facts, READ_RECOVERY),
-        own_limitations=module.limitations,
-    )
+# The consumer reader (`cp3d_reader`, `Cp3dHead`) that followed here was removed: nothing called it.

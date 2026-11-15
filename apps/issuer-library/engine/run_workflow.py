@@ -5,10 +5,6 @@ only prepares and reviews the run; ``--live`` with a ruling is the paid run (see
 """
 
 import sys
-from pathlib import Path
-
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE / "src" if (HERE / "src").is_dir() else HERE.parents[2] / "src"))
 
 from deploy_workflow.owners.cpos_launch import main
 

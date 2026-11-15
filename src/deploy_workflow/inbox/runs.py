@@ -85,7 +85,8 @@ _SRC = Path(__file__).resolve().parents[2]
 
 def child_environment() -> dict[str, str]:
     """The environment for a launcher child: this process's, plus the engine's ``src`` folder
-    first on ``PYTHONPATH`` (the package is not installed) and UTF-8 output. The provider key
+    first on ``PYTHONPATH`` (so a child started outside the project's environment still finds it)
+    and UTF-8 output. The provider key
     passes through untouched."""
     env = dict(os.environ)
     existing = env.get("PYTHONPATH")

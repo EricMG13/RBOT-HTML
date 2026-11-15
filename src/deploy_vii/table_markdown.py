@@ -28,6 +28,11 @@ def markdown_cell(value: str) -> str:
     )
 
 
+def breaks_a_table_cell(text: str) -> bool:
+    """The cell rule: a text holding a ``|`` or a line break cannot sit in a table cell."""
+    return "|" in text or "\n" in text or "\r" in text
+
+
 def null_confusable(fact: Fact, interface_id: str | None) -> bool:
     """Known interface text a table reader would confuse with a null marker.
 

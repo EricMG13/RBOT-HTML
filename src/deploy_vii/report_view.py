@@ -1951,7 +1951,7 @@ _CP1_SETTLED: frozenset[Status] = frozenset({"accepted", "restricted"})
 
 def _cp1_supplied(module: ModuleView) -> tuple[Any, ...]:
     """The typed producer's figures for this CP1: S.1 to S.4 in order, then any later figure."""
-    from deploy_workflow.financial_series import cp1_chart_series
+    from deploy_vii.financial_series import cp1_chart_series
 
     supplied = tuple(cp1_chart_series(module))
     strip = tuple(fig_id for fig_id, _, _ in _STRIP_FIGURES["model-chart-strip"])
@@ -3053,7 +3053,7 @@ def _cr2_figures(
     refs: Mapping[tuple[str, str], tuple[str, ...]],
 ) -> tuple[Figure, ...]:
     """CR.2: the settled CP-2D cash bridge above the liquidity runway tables (both Pathways)."""
-    from deploy_workflow.liquidity_series import cp2d_chart_series
+    from deploy_vii.liquidity_series import cp2d_chart_series
 
     module = _settled_module(view, "CP-2D")
     if module is None:
@@ -3079,7 +3079,7 @@ def _cr3_figures(
     refs: Mapping[tuple[str, str], tuple[str, ...]],
 ) -> tuple[Figure, ...]:
     """CR.3: the settled CP-3C need by maturity beside the funding gap tables."""
-    from deploy_workflow.liquidity_series import cp3c_chart_series
+    from deploy_vii.liquidity_series import cp3c_chart_series
 
     module = _settled_module(view, "CP-3C")
     if module is None:

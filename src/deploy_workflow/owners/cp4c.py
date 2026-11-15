@@ -85,18 +85,23 @@ from deploy_workflow.owners.blank import is_blank, one_per_page
 from deploy_workflow.owners.cp1a import probe_one_step
 from deploy_workflow.owners.cp1c import EV_READER_FACTS, Cp1cHead, cp1c_reader
 from deploy_workflow.owners.cp2g import stale_issues  # one staleness frame (S07-cp2-gh-C03)
-from deploy_workflow.owners.cp3d import PIN_LABEL_FORGED, _normalised, pin_label_forged
 from deploy_workflow.owners.period_basis import (
     DEFAULT_BASIS,
     PeriodBasis,
     PeriodRefused,
     run_basis,
 )
-from deploy_workflow.owners.pins import pin_issues, pinned_line, pins_of
+from deploy_workflow.owners.pins import (
+    PIN_LABEL_FORGED,
+    _normalised,
+    pin_issues,
+    pin_label_forged,
+    pinned_line,
+    pins_of,
+)
 
 MODULE_ID = "CP-4C"
 STEP_ID = "restructuring_fulcrum"
-SCHEMA_VERSION = "restructuring-fulcrum/1"
 
 # --- arithmetic contexts (lease "Decimal composer") -------------------------------------------
 _RATIO = CONTEXT.copy()  # 38 digits, ROUND_HALF_EVEN: one division of exact decimals
@@ -421,11 +426,6 @@ def waterfall(*, classes: Sequence[ClassClaim], enterprise_value: Val) -> Waterf
     )
 
 
-# --- the inputs (Stage 2 binds them from the settled heads and the pack) ----------------------
-# The no-context basis (Phase 8): a run reads its own `PeriodBasis` through `Cp4cContext.basis`;
-# these names stay for readers of the default.
-LTM_COLUMN = DEFAULT_BASIS.ltm_column
-LTM_PERIOD = DEFAULT_BASIS.ltm_period
 CP1_METRICS = ("total_debt", "ebitda")
 CASE_ROW: Mapping[EbitdaCase, str] = {"base": "b", "down": "d"}
 CASE_WORD: Mapping[EbitdaCase, str] = {"base": "base", "down": "downside"}
@@ -1298,15 +1298,6 @@ def _parsed(payload: str) -> tuple[RestructuringSubmission | None, tuple[str, ..
         return RestructuringSubmission.model_validate_json(exact_json(document)), ()
     except ValidationError as error:
         return None, shape_issues(error)
-
-
-def payload_issues(payload: str, context: Cp4cContext) -> tuple[str, ...]:
-    """Shape issues alone (a payload that does not parse gets no content check), else the
-    content issues."""
-    submission, shape = _parsed(payload)
-    if submission is None:
-        return shape
-    return content_issues(Cp4cInputs(context=context, submission=submission))
 
 
 # --- cells, tables, references, claims -------------------------------------------------------
@@ -3525,47 +3516,4 @@ def probe(store: Execution, snapshot: ExecutionSnapshot, attempt: Attempt) -> No
     probe_one_step(store, snapshot, attempt, validate=_validate_step, build=_candidate)
 
 
-# --- the consumer reader (lease Public API: for CP-5 and later consumers) ----------------------
-
-
-@dataclass(frozen=True)
-class Cp4cHead:
-    """What a consumer reads from a settled CP-4C head: its status and hash, the enterprise
-    value of each valuation, the recovery of each class and the equity residual row, the value
-    break of each valuation (verbatim), and the settled own limitations (with the synthetic line
-    on a synthetic case). A blocked head gives its status and hash only."""
-
-    status: InputStatus
-    head_sha256: str
-    facts: tuple[Fact, ...] = ()
-    limitations: tuple[str, ...] = ()
-
-    def fact(self, fact_id: str) -> Fact:
-        found = next((f for f in self.facts if f.fact_id == fact_id), None)
-        if found is None:
-            raise ValueError(f"CP-4C: {fact_id} is not exposed by the reader")
-        return found
-
-
-_READ_FIELDS = (("T4E.3", "ev"), ("T4E.5", "recovery"), ("T4E.7", "value_break"))
-
-
-def cp4c_reader(store: Execution, head: Head) -> Cp4cHead:
-    """The consumer reader of a settled CP-4C head (lease Public API): EV (T4E.3), recoveries
-    (T4E.5) and the fulcrum (T4E.7 value break) by the head's own rows. A stale head or another
-    module's head raises."""
-    module, status = _settled_module(store, head, MODULE_ID)
-    if status == "blocked":
-        return Cp4cHead(status=status, head_sha256=head.result_sha256)
-    tables = {t.table_id: t for t in module.tables}
-    facts = {f.fact_id: f for f in module.facts}
-    ids = [f"{t}.{r.row_id}.{name}" for t, name in _READ_FIELDS for r in tables[t].rows]
-    missing = [fid for fid in ids if fid not in facts]
-    if missing:
-        raise ValueError(f"CP-4C: the head has no fact {missing[0]}")
-    return Cp4cHead(
-        status=status,
-        head_sha256=head.result_sha256,
-        facts=tuple(facts[fid] for fid in ids),
-        limitations=module.limitations,
-    )
+# The consumer reader (`cp4c_reader`, `Cp4cHead`) that followed here was removed: nothing called it.

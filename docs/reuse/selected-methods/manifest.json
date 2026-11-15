@@ -6,7 +6,8 @@
       "consumed_path": "skills/cp-2g-forward-credit-model/SKILL.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-2g-forward-credit-model/SKILL.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-2g-forward-credit-model/SKILL.md",
-      "sha256": "0337a01d8379f73c3aa9e0697742900c95f8d6b71d286cafe77fa66c8f770207"
+      "sha256": "0337a01d8379f73c3aa9e0697742900c95f8d6b71d286cafe77fa66c8f770207",
+      "source_revision": "not recorded at import; bytes pinned by sha256 (registered 2026-11-04 in final-workflow 5755da5 at the cp-os path, no commit named; see source_revision_note)"
     },
     {
       "consumed_path": "skills/cp-2g-forward-credit-model/references/REF_CP-2G_STEPS.md",
@@ -21,19 +22,24 @@
       "consumed_path": "skills/cp-2e-macro-fx-hedging-sensitivity/SKILL.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-2e-macro-fx-hedging-sensitivity/SKILL.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-2e-macro-fx-hedging-sensitivity/SKILL.md",
-      "sha256": "b931f41bb1ac7630c110f2a8b5d5bd4b5cf07d47232c333ef0a56d26923dfa95"
+      "sha256": "b931f41bb1ac7630c110f2a8b5d5bd4b5cf07d47232c333ef0a56d26923dfa95",
+      "source_revision": "not recorded at import; bytes pinned by sha256 (registered 2026-11-04 in final-workflow 5755da5 at the cp-os path, no commit named; see source_revision_note)"
     },
     {
       "consumed_path": "skills/cp-2e-macro-fx-hedging-sensitivity/references/REF_CP-2E_STEPS.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-2e-macro-fx-hedging-sensitivity/references/REF_CP-2E_STEPS.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-2e-macro-fx-hedging-sensitivity/references/REF_CP-2E_STEPS.md",
-      "sha256": "23ddaf2269f8361e01a301e407b89dbb1ae16a05b8ce7430c9e20a8f83ab15b8"
+      "sha256": "23ddaf2269f8361e01a301e407b89dbb1ae16a05b8ce7430c9e20a8f83ab15b8",
+      "source_revision": "not recorded at import; bytes pinned by sha256 (registered 2026-11-04 in final-workflow 5755da5 at the cp-os path, no commit named; see source_revision_note)",
+      "lineage_check": "git blob equal to caos-databricks vendor/deploy-v/skills/cp-2e-macro-fx-hedging-sensitivity/references/REF_CP-2E_STEPS.md at repo HEAD dfff264 and at its vendor import cc9c3e58 (checked 2026-11-15); a cross-check, not the source this file was copied from"
     },
     {
       "consumed_path": "skills/cp-2e-macro-fx-hedging-sensitivity/references/REF_CP-2F_STEPS.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-2e-macro-fx-hedging-sensitivity/references/REF_CP-2F_STEPS.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-2e-macro-fx-hedging-sensitivity/references/REF_CP-2F_STEPS.md",
-      "sha256": "312301c620990d3810d19125cde30224f9696860c3ef5f04b3f9473652555e08"
+      "sha256": "312301c620990d3810d19125cde30224f9696860c3ef5f04b3f9473652555e08",
+      "source_revision": "not recorded at import; bytes pinned by sha256 (registered 2026-11-04 in final-workflow 5755da5 at the cp-os path, no commit named; see source_revision_note)",
+      "lineage_check": "git blob equal to caos-databricks vendor/deploy-v/skills/cp-2e-macro-fx-hedging-sensitivity/references/REF_CP-2F_STEPS.md at repo HEAD dfff264 and at its vendor import cc9c3e58 (checked 2026-11-15); a cross-check, not the source this file was copied from"
     },
     {
       "consumed_path": "skills/cp-dr-deep-research/SKILL.md",
@@ -42,7 +48,8 @@
       "note": "not a copy of the live cp-os file: this file is the live cp-os file (b57a344, sha256 0cc76aea..., which is source_sha256) plus the named edits in `edit`",
       "sha256": "23ceacf44aa2f67974859d6b93efc19bb7e2ec6e9dc95ae2675dbaf541e0820e",
       "source_sha256": "0cc76aea6e227ff923ca466fc000a80b1f2f6ef3b1fb74b78203e8601d507207",
-      "edit": "Replaced 2026-11-13 by cp-os version 2.0 (cp-os HEAD b57a344, file last changed in 5a78f93), byte-for-byte, then named edits 2a and 2b: (2a) the open-web limits in RESEARCH ITEMS, ANSWER RULES (LOCAL limitation) and CAPABILITY GATE, and (2a-4, fix round 1) the pack-tools-only reading and TDR.6 quote clauses, made conditional on the project's web-search rules, with section C of the step bundle governing web use when granted; (2b) the UNRESOLVED gap row's claim_type is `gap` and missing evidence is Complete with Gaps, never Blocked (wording from caos-databricks vendor/deploy-v c746ad67); named edit 2c (2026-11-13): every clause conditional on the paragraph that begins \"web_search reaches public web pages\" is also conditional on the paragraph that begins \"fetch_page retrieves public web pages\" (RESEARCH ITEMS, ANSWER RULES, TDR.6 quote clause, CAPABILITY GATE; RESEARCH ITEMS names the pair once as \"a web paragraph\" and the later clauses use that term); under the lookup paragraph a page is fetched with `fetch_page` or the `sec_` tools and read with `read_pages` and `search_source`; the RESEARCH ITEMS after-the-as-of-date line gains the exception that a page dated after the cutoff may be cited as a labelled later event that carries no figure; sha256 is this edited file, source_sha256 the byte-for-byte copy of cp-os"
+      "edit": "Replaced 2026-11-13 by cp-os version 2.0 (cp-os HEAD b57a344, file last changed in 5a78f93), byte-for-byte, then named edits 2a and 2b: (2a) the open-web limits in RESEARCH ITEMS, ANSWER RULES (LOCAL limitation) and CAPABILITY GATE, and (2a-4, fix round 1) the pack-tools-only reading and TDR.6 quote clauses, made conditional on the project's web-search rules, with section C of the step bundle governing web use when granted; (2b) the UNRESOLVED gap row's claim_type is `gap` and missing evidence is Complete with Gaps, never Blocked (wording from caos-databricks vendor/deploy-v c746ad67); named edit 2c (2026-11-13): every clause conditional on the paragraph that begins \"web_search reaches public web pages\" is also conditional on the paragraph that begins \"fetch_page retrieves public web pages\" (RESEARCH ITEMS, ANSWER RULES, TDR.6 quote clause, CAPABILITY GATE; RESEARCH ITEMS names the pair once as \"a web paragraph\" and the later clauses use that term); under the lookup paragraph a page is fetched with `fetch_page` or the `sec_` tools and read with `read_pages` and `search_source`; the RESEARCH ITEMS after-the-as-of-date line gains the exception that a page dated after the cutoff may be cited as a labelled later event that carries no figure; sha256 is this edited file, source_sha256 the byte-for-byte copy of cp-os",
+      "edited_copy_of": "/Users/ericguei/Documents/cp-os/skills/cp-dr-deep-research/SKILL.md"
     },
     {
       "consumed_path": "skills/cp-dr-deep-research/references/REF_CP-DR_STEPS.md",
@@ -59,13 +66,16 @@
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-2h-ratings-migration-trigger/SKILL.md",
       "sha256": "19c0a304a1dc3b9a6fa8e94f7256582da0ad22b83de8cd21b5e3a770827e2ad9",
       "source_sha256": "acf25aaea52bee5da74069fdfe3013c511b4cb2f3e1cb9d3c99fc950a27a62bb",
-      "edit": "named edit: `unknown` dropped from the critical_cell_values_casefold blocklist (cp-os 115f664, skills/cp-2h-ratings-migration-trigger/SKILL.md); wording from cp-os 115f664; sha256 is this edited file, source_sha256 the previously archived file"
+      "edit": "named edit: `unknown` dropped from the critical_cell_values_casefold blocklist (cp-os 115f664, skills/cp-2h-ratings-migration-trigger/SKILL.md); wording from cp-os 115f664; sha256 is this edited file, source_sha256 the previously archived file",
+      "source_revision": "cp-os b57a344 (after the named edit this file equals the live cp-os file at b57a344, last changed 115f664, as companions_note states; the copy it was edited from is the cp-os initial-commit text a31f3f5)"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-2h-ratings-migration-trigger/references/REF_CP-2H_STEPS.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-2h-ratings-migration-trigger/references/REF_CP-2H_STEPS.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-2h-ratings-migration-trigger/references/REF_CP-2H_STEPS.md",
-      "sha256": "375615b8f373b15461233bb65e47a0f14c8ca34472cd84449d65dba4112c6b3e"
+      "sha256": "375615b8f373b15461233bb65e47a0f14c8ca34472cd84449d65dba4112c6b3e",
+      "source_revision": "not recorded at import; bytes pinned by sha256 (registered 2026-11-04 in final-workflow 5755da5 at the cp-os path, no commit named; see source_revision_note)",
+      "lineage_check": "git blob equal to caos-databricks vendor/deploy-v/skills/cp-2h-ratings-migration-trigger/references/REF_CP-2H_STEPS.md at its vendor import cc9c3e58, not at repo HEAD dfff264 (changed since) (checked 2026-11-15); a cross-check, not the source this file was copied from"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-2h-ratings-migration-trigger/scripts/covenant_headroom.py",
@@ -86,7 +96,8 @@
       "archive_path": "docs/reuse/selected-methods/skills/cp-5-evidence-trace-validator/SKILL.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-5-evidence-trace-validator/SKILL.md",
       "sha256": "7f21c8712cb40e871abaa1f855fdb95dded5df9887e354c39253e0492dd93390",
-      "use": "unchanged selected methodology; historical source is evidence, not inherited authority"
+      "use": "unchanged selected methodology; historical source is evidence, not inherited authority",
+      "source_revision": "not recorded at import; bytes pinned by sha256 (registered 2026-11-04 in final-workflow 5755da5 at the cp-os path, no commit named; see source_revision_note)"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-5-evidence-trace-validator/references/CP-5_RUNBOOK.md",
@@ -101,7 +112,9 @@
       "archive_path": "docs/reuse/selected-methods/skills/cp-5-evidence-trace-validator/references/REF_CP-5_STEPS.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-5-evidence-trace-validator/references/REF_CP-5_STEPS.md",
       "sha256": "0b5beddbc0a5d3c99065379b7110e3b87fbc5392d38ed243ccbf7fdce70e506a",
-      "use": "unchanged selected methodology; historical source is evidence, not inherited authority"
+      "use": "unchanged selected methodology; historical source is evidence, not inherited authority",
+      "source_revision": "not recorded at import; bytes pinned by sha256 (registered 2026-11-04 in final-workflow 5755da5 at the cp-os path, no commit named; see source_revision_note)",
+      "lineage_check": "git blob equal to caos-databricks vendor/deploy-v/skills/cp-5-evidence-trace-validator/references/REF_CP-5_STEPS.md at repo HEAD dfff264 and at its vendor import cc9c3e58 (checked 2026-11-15); a cross-check, not the source this file was copied from"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-5-evidence-trace-validator/references/REF_CP-5A_STEPS.md",
@@ -133,28 +146,34 @@
       "archive_path": "docs/reuse/selected-methods/skills/cp-6-ic-debate-challenge/references/REF_CP-6_STEPS.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-6-ic-debate-challenge/references/REF_CP-6_STEPS.md",
       "sha256": "6141d27e800d45d2d0208173f38060c75d97005ee9b93013e24a16a40570f1e1",
-      "use": "unchanged selected methodology; historical source is evidence, not inherited authority"
+      "use": "unchanged selected methodology; historical source is evidence, not inherited authority",
+      "source_revision": "not recorded at import; bytes pinned by sha256 (registered 2026-11-04 in final-workflow 5755da5 at the cp-os path, no commit named; see source_revision_note)",
+      "lineage_check": "git blob equal to caos-databricks vendor/deploy-v/skills/cp-6-ic-debate-challenge/references/REF_CP-6_STEPS.md at repo HEAD dfff264 and at its vendor import cc9c3e58 (checked 2026-11-15); a cross-check, not the source this file was copied from"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-6-ic-debate-challenge/references/REF_CP-6A_STEPS.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-6-ic-debate-challenge/references/REF_CP-6A_STEPS.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-6-ic-debate-challenge/references/REF_CP-6A_STEPS.md",
       "sha256": "9e36ee1bc5ed1b2a99ffb2e8bc1ed2a10e2a3d26b70083a00beb598a8d1c9478",
-      "use": "unchanged selected methodology; historical source is evidence, not inherited authority"
+      "use": "unchanged selected methodology; historical source is evidence, not inherited authority",
+      "source_revision": "not recorded at import; bytes pinned by sha256 (registered 2026-11-04 in final-workflow 5755da5 at the cp-os path, no commit named; see source_revision_note)"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-2a-downside-pathway/SKILL.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-2a-downside-pathway/SKILL.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-2a-downside-pathway/SKILL.md",
       "sha256": "4c23c05eb697a09ca557a10d922ba4baad6bd0659c953e2d443859df85d5b213",
-      "use": "unchanged selected methodology; historical source is evidence, not inherited authority"
+      "use": "unchanged selected methodology; historical source is evidence, not inherited authority",
+      "source_revision": "not recorded at import; bytes pinned by sha256 (registered 2026-11-04 in final-workflow 5755da5 at the cp-os path, no commit named; see source_revision_note)"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-2a-downside-pathway/references/REF_CP-2B_STEPS.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-2a-downside-pathway/references/REF_CP-2B_STEPS.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-2a-downside-pathway/references/REF_CP-2B_STEPS.md",
       "sha256": "75434b4a5602c97f001d144ee5934a6601105f76aad9ea0ed2d71638726d7415",
-      "use": "unchanged selected methodology; historical source is evidence, not inherited authority"
+      "use": "unchanged selected methodology; historical source is evidence, not inherited authority",
+      "source_revision": "not recorded at import; bytes pinned by sha256 (registered 2026-11-04 in final-workflow 5755da5 at the cp-os path, no commit named; see source_revision_note)",
+      "lineage_check": "git blob equal to caos-databricks vendor/deploy-v/skills/cp-2a-downside-pathway/references/REF_CP-2B_STEPS.md at repo HEAD dfff264 and at its vendor import cc9c3e58 (checked 2026-11-15); a cross-check, not the source this file was copied from"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-2a-downside-pathway/references/CP-2B_SCHEMA_REFERENCE.md",
@@ -237,7 +256,9 @@
       "archive_path": "docs/reuse/selected-methods/skills/cp-4c-restructuring-fulcrum/references/REF_CP-4C_STEPS.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-4c-restructuring-fulcrum/references/REF_CP-4C_STEPS.md",
       "sha256": "1483f4fe9e37d593bdf0cab58ac8eb0674aaa22745579bd9430380c57e763e97",
-      "use": "Unchanged historical restructuring method/helper; current project instructions govern scope and transport"
+      "use": "Unchanged historical restructuring method/helper; current project instructions govern scope and transport",
+      "source_revision": "not recorded at import; bytes pinned by sha256 (registered 2026-11-04 in final-workflow 5755da5 at the cp-os path, no commit named; see source_revision_note)",
+      "lineage_check": "git blob equal to caos-databricks vendor/deploy-v/skills/cp-4c-restructuring-fulcrum/references/REF_CP-4C_STEPS.md at repo HEAD dfff264 and at its vendor import cc9c3e58 (checked 2026-11-15); a cross-check, not the source this file was copied from"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-4c-restructuring-fulcrum/scripts/recovery_waterfall.py",
@@ -265,28 +286,34 @@
       "archive_path": "docs/reuse/selected-methods/skills/cp-3-relative-value-security-selection/references/CP-3A_RUNBOOK.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-3-relative-value-security-selection/references/CP-3A_RUNBOOK.md",
       "sha256": "cbb19deed431ea93c91b5e4d025d466869169681e8daa2d94a70ecde775dbc8e",
-      "use": "Selected recovery-phase scope and market/preference safeguards; historical method, not inherited authority"
+      "use": "Selected recovery-phase scope and market/preference safeguards; historical method, not inherited authority",
+      "source_revision": "not recorded at import; bytes pinned by sha256 (registered 2026-11-04 in final-workflow 5755da5 at the cp-os path, no commit named; see source_revision_note)"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-3-relative-value-security-selection/references/REF_CP-3A_STEPS.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-3-relative-value-security-selection/references/REF_CP-3A_STEPS.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-3-relative-value-security-selection/references/REF_CP-3A_STEPS.md",
       "sha256": "40ab91d6bd3bf7159eb15b6d11f36f46728306c0afa045a6b36bdd8eb4de08ec",
-      "use": "Selected recovery-phase scope and market/preference safeguards; historical method, not inherited authority"
+      "use": "Selected recovery-phase scope and market/preference safeguards; historical method, not inherited authority",
+      "source_revision": "not recorded at import; bytes pinned by sha256 (registered 2026-11-04 in final-workflow 5755da5 at the cp-os path, no commit named; see source_revision_note)",
+      "lineage_check": "git blob equal to caos-databricks vendor/deploy-v/skills/cp-3-relative-value-security-selection/references/REF_CP-3A_STEPS.md at repo HEAD dfff264 and at its vendor import cc9c3e58 (checked 2026-11-15); a cross-check, not the source this file was copied from"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-1c-peer-benchmark/SKILL.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-1c-peer-benchmark/SKILL.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-1c-peer-benchmark/SKILL.md",
       "sha256": "4bd3b130ce0b49571f7b4b97da25a42a81dbed80b03ea752552ea8ae90cd9f71",
-      "use": "Unchanged peer selection/alignment methodology and statistical helper; project transport and current user instructions govern"
+      "use": "Unchanged peer selection/alignment methodology and statistical helper; project transport and current user instructions govern",
+      "source_revision": "not recorded at import; bytes pinned by sha256 (registered 2026-11-04 in final-workflow 5755da5 at the cp-os path, no commit named; see source_revision_note)"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-1c-peer-benchmark/references/REF_CP-1C_STEPS.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-1c-peer-benchmark/references/REF_CP-1C_STEPS.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-1c-peer-benchmark/references/REF_CP-1C_STEPS.md",
       "sha256": "fbbed9bac006c67a04397303c39c684046817cf491ebad6a4fa1302ecfbfd766",
-      "use": "Unchanged peer selection/alignment methodology and statistical helper; project transport and current user instructions govern"
+      "use": "Unchanged peer selection/alignment methodology and statistical helper; project transport and current user instructions govern",
+      "source_revision": "not recorded at import; bytes pinned by sha256 (registered 2026-11-04 in final-workflow 5755da5 at the cp-os path, no commit named; see source_revision_note)",
+      "lineage_check": "git blob equal to caos-databricks vendor/deploy-v/skills/cp-1c-peer-benchmark/references/REF_CP-1C_STEPS.md at its vendor import cc9c3e58, not at repo HEAD dfff264 (changed since) (checked 2026-11-15); a cross-check, not the source this file was copied from"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-1c-peer-benchmark/scripts/peer_statistics.py",
@@ -314,14 +341,17 @@
       "archive_path": "docs/reuse/selected-methods/skills/cp-3d-market-implied-risk/SKILL.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-3d-market-implied-risk/SKILL.md",
       "sha256": "7b1dcf5967f599a94a6b0c2138a51647a66fd73fc232c385bbec4b20286e02a4",
-      "use": "Selected historical CP-3D market/benchmark/technical questions and unchanged low-level cash-flow PV/yield solver; current project instructions govern transport and scope"
+      "use": "Selected historical CP-3D market/benchmark/technical questions and unchanged low-level cash-flow PV/yield solver; current project instructions govern transport and scope",
+      "source_revision": "not recorded at import; bytes pinned by sha256 (registered 2026-11-04 in final-workflow 5755da5 at the cp-os path, no commit named; see source_revision_note)"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-3d-market-implied-risk/references/REF_CP-3D_STEPS.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-3d-market-implied-risk/references/REF_CP-3D_STEPS.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-3d-market-implied-risk/references/REF_CP-3D_STEPS.md",
       "sha256": "e1a3dc9584611edcf1e1dac66345aebba01e86b573c3ac7e7f848b7350683545",
-      "use": "Selected historical CP-3D market/benchmark/technical questions and unchanged low-level cash-flow PV/yield solver; current project instructions govern transport and scope"
+      "use": "Selected historical CP-3D market/benchmark/technical questions and unchanged low-level cash-flow PV/yield solver; current project instructions govern transport and scope",
+      "source_revision": "not recorded at import; bytes pinned by sha256 (registered 2026-11-04 in final-workflow 5755da5 at the cp-os path, no commit named; see source_revision_note)",
+      "lineage_check": "git blob equal to caos-databricks vendor/deploy-v/skills/cp-3d-market-implied-risk/references/REF_CP-3D_STEPS.md at repo HEAD dfff264 and at its vendor import cc9c3e58 (checked 2026-11-15); a cross-check, not the source this file was copied from"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-3d-market-implied-risk/scripts/bond_analytics.py",
@@ -349,7 +379,9 @@
       "archive_path": "docs/reuse/selected-methods/skills/cp-3-relative-value-security-selection/references/REF_CP-3_STEPS.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-3-relative-value-security-selection/references/REF_CP-3_STEPS.md",
       "sha256": "a142dd66006ea876e3abc9166e0184fcb0685b32bc5cff703e9158da22fe8767",
-      "use": "CP-3 market-intake source gate only; full RV/scoring/portfolio phases not claimed"
+      "use": "CP-3 market-intake source gate only; full RV/scoring/portfolio phases not claimed",
+      "source_revision": "not recorded at import; bytes pinned by sha256 (registered 2026-11-04 in final-workflow 5755da5 at the cp-os path, no commit named; see source_revision_note)",
+      "lineage_check": "git blob equal to caos-databricks vendor/deploy-v/skills/cp-3-relative-value-security-selection/references/REF_CP-3_STEPS.md at repo HEAD dfff264 and at its vendor import cc9c3e58 (checked 2026-11-15); a cross-check, not the source this file was copied from"
     },
     {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-l10-financial-change-screen/SKILL.md",
@@ -495,42 +527,6 @@
       "use": "Selected analytical breadth/labels; current project instructions govern transport, no inherited export/approval/completeness rulings."
     },
     {
-      "consumed_path": "src/deploy_workflow/owners/cpos.py",
-      "archive_path": "docs/reuse/selected-methods/runtime/cpos-before-handoff-orchestration.py",
-      "sha256": "b9e918663aa8c418701aa6b468b9f6e06aad00bf70b2090e799af6207d74ce02",
-      "use": "Exact local pre-edit source for CP-OS integration diff and isolated baseline regression reproduction; historical navigation/delivery behavior is not selected authority."
-    },
-    {
-      "consumed_path": "src/deploy_workflow/handoff_delivery.py",
-      "archive_path": "docs/reuse/selected-methods/runtime/handoff-delivery-before-cpos-verification.py",
-      "sha256": "aa77ae59a2e408f05a3cf2f5c7af92b4dde2b2df635f961545d49fc05bc0e00c",
-      "use": "Exact local pre-edit source for CP-OS integration diff and isolated baseline regression reproduction; historical navigation/delivery behavior is not selected authority."
-    },
-    {
-      "consumed_path": "src/deploy_workflow/owners/cpos.py",
-      "archive_path": "docs/reuse/selected-methods/runtime/cpos-before-retained-handoffs.py",
-      "sha256": "0de23e85c466d7d3cc6be4ffbb963808c98e51fe882c9fe8c387c7af71caee7a",
-      "use": "Exact pre-edit CP-OS snapshot to verify unsupported upstream reuse and review the minimal integration changes; matched the preceding case source hash before archival. No predecessor repository mutation."
-    },
-    {
-      "consumed_path": "src/deploy_workflow/owners/cpos.py",
-      "archive_path": "docs/reuse/selected-methods/runtime/cpos-before-model-publication.py",
-      "sha256": "52eb6f244fc20db6da500a00ce6514c8d8ffe85d1b08c2981c0d7aa739607c08",
-      "use": "Exact pre-edit CP-OS integration source; verified retained analytical identity and unchanged native navigation."
-    },
-    {
-      "consumed_path": "src/deploy_workflow/handoff_delivery.py",
-      "archive_path": "docs/reuse/selected-methods/runtime/handoff-delivery-before-model-publication.py",
-      "sha256": "a9c8971689b25dd93270260cf0ae73d1380385d45e1a84f523ffcb59ab6060fe",
-      "use": "Exact pre-edit separate delivery adapter; optional Model hook preserves previous no-Model behavior."
-    },
-    {
-      "consumed_path": "retained original TDG Model publication script",
-      "archive_path": "docs/reuse/selected-methods/runtime/tdg-model-original-builder.py",
-      "sha256": "a3347373896f2eaab6de38604b31e89432c0a83e88e2480bdc0dc338563affd6",
-      "use": "Recovered original local Model builder promoted into reusable source, with checked missing/period/quantity corrections. Not a new financial engine."
-    },
-    {
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-0-source-readiness/SKILL.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-0-source-readiness/SKILL.md",
       "sha256": "20a3634526648cd4983fcfd412ba68162b9e832781abd7c90b5caa7a236a3e1d",
@@ -551,30 +547,6 @@
       "sha256": "1790ab8edd56e1d3cdaa5c357a0acf09fb50fc1ec141a2e12976e9499a3d6d98",
       "source_revision": "cp-os e67bf0cda2dc80d7a744bee371c4fb3c7b8b8df7 (selected files clean)",
       "use": "Preparation/readiness analytical duties and P1-P8 packaging evidence. Current project rules govern transport, Excel input only and no agents; historical approval/export/role machinery is not inherited authority."
-    },
-    {
-      "consumed_path": "src/deploy_workflow/owners/cpos.py",
-      "archive_path": "docs/reuse/selected-methods/runtime/cpos-before-deliverable-comparison.py",
-      "sha256": "0557929d215f111705e2cf57240c2bc5df14ee5770efe6c410ba4ca59e6debe0",
-      "use": "Exact pre-edit source for the CP-8 deliverable-comparison integration. Existing native/navigation behavior remains historical evidence, not current CP-8 authority."
-    },
-    {
-      "consumed_path": "src/deploy_workflow/handoff_delivery.py",
-      "archive_path": "docs/reuse/selected-methods/runtime/handoff-delivery-before-comparison.py",
-      "sha256": "f992a8ca0e8c13648f19181dd6c6d6f812a2df6c3612b93c39fc331f2204b454",
-      "use": "Exact pre-edit source for the CP-8 deliverable-comparison integration. Existing native/navigation behavior remains historical evidence, not current CP-8 authority."
-    },
-    {
-      "consumed_path": "src/deploy_workflow/owners/cpos.py",
-      "archive_path": "docs/reuse/selected-methods/runtime/cpos-before-earnings-presentation.py",
-      "sha256": "0c14bcd8b61ce4b66b00cdcd130086e7826daca33ebede388ea2fdda4b289158",
-      "use": "Exact pre-edit source before the bounded CP-1B Markdown-to-earnings-report adapter; historical evidence, not an analytical authority."
-    },
-    {
-      "consumed_path": "src/deploy_workflow/handoff_delivery.py",
-      "archive_path": "docs/reuse/selected-methods/runtime/handoff-delivery-before-earnings-presentation.py",
-      "sha256": "d5d7fe76b2cb3c4e1e7ad3bf0b67dd814af0f48e6c3a1c513ef72ea804ca79da",
-      "use": "Exact pre-edit source before the bounded CP-1B Markdown-to-earnings-report adapter; historical evidence, not an analytical authority."
     },
     {
       "consumed_path": "skills/cp-1d-earnings-quality/SKILL.md",
@@ -602,36 +574,6 @@
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-1d-earnings-quality/references/CP-1E_SCHEMA_REFERENCE.md",
       "source_revision": "cp-os e67bf0cda2dc80d7a744bee371c4fb3c7b8b8df7 (selected files clean)",
       "use": "Selected CP-1D/absorbed CP-1E analytical duties; current project transport, orchestration, delivery and Excel-input-only rules govern."
-    },
-    {
-      "consumed_path": "src/deploy_vii/registry.py",
-      "archive_path": "docs/reuse/selected-methods/runtime/before-retained-planning-registry.py",
-      "sha256": "19ec267dff71aa89cbfdfbece02e1a44f6800306572e15f16029d3bd23dc880a",
-      "use": "Exact prior source before retained-handoff planning and standalone ratings presentation; prior PINS preserves the ancestor catalog hash, not financial expected-value changes."
-    },
-    {
-      "consumed_path": "src/deploy_workflow/owners/cpos.py",
-      "archive_path": "docs/reuse/selected-methods/runtime/before-retained-planning-cpos.py",
-      "sha256": "bd6b8097aca9b01a42048be6b567a6e167115d54ebca8117bfbec80afc7c14e2",
-      "use": "Exact prior source before retained-handoff planning and standalone ratings presentation; prior PINS preserves the ancestor catalog hash, not financial expected-value changes."
-    },
-    {
-      "consumed_path": "src/deploy_workflow/handoff_delivery.py",
-      "archive_path": "docs/reuse/selected-methods/runtime/before-retained-planning-handoff_delivery.py",
-      "sha256": "4d505fa46029dc975c4ee33d15fae597d52c6819c8754bb8fdede6973fc43cec",
-      "use": "Exact prior source before retained-handoff planning and standalone ratings presentation; prior PINS preserves the ancestor catalog hash, not financial expected-value changes."
-    },
-    {
-      "consumed_path": "src/deploy_workflow/markdown_delivery.py",
-      "archive_path": "docs/reuse/selected-methods/runtime/before-retained-planning-markdown_delivery.py",
-      "sha256": "9670707024a4745a889f90e5d0d0aae16b294c5a373ca59ee3009541f30dad42",
-      "use": "Exact prior source before retained-handoff planning and standalone ratings presentation; prior PINS preserves the ancestor catalog hash, not financial expected-value changes."
-    },
-    {
-      "consumed_path": "cases/PINS.json",
-      "archive_path": "docs/reuse/selected-methods/runtime/before-retained-planning-PINS.json",
-      "sha256": "9cd1dc8562c51d966972b27ccc5b13889601dd7b11acd46359859d2e0b2bc020",
-      "use": "Exact prior source before retained-handoff planning and standalone ratings presentation; prior PINS preserves the ancestor catalog hash, not financial expected-value changes."
     },
     {
       "consumed_path": "skills/cp-0-source-readiness/references/CP-0_SCHEMA_REFERENCE.md",
@@ -680,7 +622,8 @@
       "consumed_path": "skills/cp-1b-earnings-delta/SKILL.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-1b-earnings-delta/SKILL.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-1b-earnings-delta/SKILL.md",
-      "sha256": "b3a9bd8091c1ea7995a68e909b73ffbc178cf57f4b8021630c3ec4f467ecb569"
+      "sha256": "b3a9bd8091c1ea7995a68e909b73ffbc178cf57f4b8021630c3ec4f467ecb569",
+      "source_revision": "cp-os b57a344 (copied 2026-11-10 in this repo's a2f5e8e, whose message and companions_note name that commit)"
     },
     {
       "consumed_path": "skills/cp-1b-earnings-delta/references/CP-1B_SCHEMA_REFERENCE.md",
@@ -698,7 +641,8 @@
       "consumed_path": "skills/cp-1b-earnings-delta/references/REF_CP-1B_STEPS.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-1b-earnings-delta/references/REF_CP-1B_STEPS.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-1b-earnings-delta/references/REF_CP-1B_STEPS.md",
-      "sha256": "5a5baa859471254ecba1807dfd067a8cc648fb5e0d40907dbc45a9b1edbd4889"
+      "sha256": "5a5baa859471254ecba1807dfd067a8cc648fb5e0d40907dbc45a9b1edbd4889",
+      "source_revision": "cp-os b57a344 (copied 2026-11-10 in this repo's a2f5e8e, whose message and companions_note name that commit)"
     },
     {
       "consumed_path": "skills/cp-1c-peer-benchmark/references/CP-1C_SCHEMA_REFERENCE.md",
@@ -752,7 +696,8 @@
       "consumed_path": "skills/cp-2a-downside-pathway/references/REF_CP-2A_STEPS.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-2a-downside-pathway/references/REF_CP-2A_STEPS.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-2a-downside-pathway/references/REF_CP-2A_STEPS.md",
-      "sha256": "3253d74a88849c0cb9a06cd28f8414f8bef5edc20531cf76a2a428a8dc629643"
+      "sha256": "3253d74a88849c0cb9a06cd28f8414f8bef5edc20531cf76a2a428a8dc629643",
+      "source_revision": "cp-os b57a344 (copied 2026-11-10 in this repo's a2f5e8e, whose message and companions_note name that commit)"
     },
     {
       "consumed_path": "skills/cp-2d-liquidity-cash-flow-bridge/references/CP-2D_SYSTEM_REFERENCE.md",
@@ -851,7 +796,8 @@
       "consumed_path": "skills/cp-3-relative-value-security-selection/references/CP-3B_RUNBOOK.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-3-relative-value-security-selection/references/CP-3B_RUNBOOK.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-3-relative-value-security-selection/references/CP-3B_RUNBOOK.md",
-      "sha256": "b506932e7abb629e5da139f0f049673c4737c662c988f4e0ee69fd799787bafa"
+      "sha256": "b506932e7abb629e5da139f0f049673c4737c662c988f4e0ee69fd799787bafa",
+      "source_revision": "cp-os b57a344 (copied 2026-11-10 in this repo's a2f5e8e, whose message and companions_note name that commit)"
     },
     {
       "consumed_path": "skills/cp-3-relative-value-security-selection/references/CP-3B_SCHEMA_REFERENCE.md",
@@ -869,7 +815,8 @@
       "consumed_path": "skills/cp-3-relative-value-security-selection/references/CP-3_SCHEMA_REFERENCE.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-3-relative-value-security-selection/references/CP-3_SCHEMA_REFERENCE.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-3-relative-value-security-selection/references/CP-3_SCHEMA_REFERENCE.md",
-      "sha256": "31e5ff3c2734e1ce35947e3484bba150413805a1671dacb98c9002db2d427040"
+      "sha256": "31e5ff3c2734e1ce35947e3484bba150413805a1671dacb98c9002db2d427040",
+      "source_revision": "cp-os b57a344 (registered 2026-11-10 in this repo's a2f5e8e, whose message and companions_note name that commit; the same bytes were already in the archive, unregistered, in final-workflow 5755da5 of 2026-11-04)"
     },
     {
       "consumed_path": "skills/cp-3-relative-value-security-selection/references/CP-3_SYSTEM_REFERENCE.md",
@@ -881,7 +828,8 @@
       "consumed_path": "skills/cp-3-relative-value-security-selection/references/REF_CP-3B_STEPS.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-3-relative-value-security-selection/references/REF_CP-3B_STEPS.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-3-relative-value-security-selection/references/REF_CP-3B_STEPS.md",
-      "sha256": "9e134207ab85d004174ef27094948bdcbd798601def55cf307b63c5c302c4711"
+      "sha256": "9e134207ab85d004174ef27094948bdcbd798601def55cf307b63c5c302c4711",
+      "source_revision": "cp-os b57a344 (copied 2026-11-10 in this repo's a2f5e8e, whose message and companions_note name that commit)"
     },
     {
       "consumed_path": "skills/cp-3d-market-implied-risk/references/CP-3D_MarketImpliedRisk.schema.md",
@@ -1007,13 +955,15 @@
       "consumed_path": "CANON_SHARED.md",
       "archive_path": "docs/reuse/selected-methods/CANON_SHARED.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/CANON_SHARED.md",
-      "sha256": "1ab484c5072a92944e1ed8b1591f96dfff2a021baf2cc230b8033eaa913a232d"
+      "sha256": "1ab484c5072a92944e1ed8b1591f96dfff2a021baf2cc230b8033eaa913a232d",
+      "source_revision": "cp-os b57a344 (copied 2026-11-10 in this repo's a2f5e8e, whose message and companions_note name that commit)"
     },
     {
       "consumed_path": "skills/cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md",
-      "sha256": "5028a6476cdff812a457bdb994e614b15b73f7c663eaa96b533b64cfd758fbf0"
+      "sha256": "5028a6476cdff812a457bdb994e614b15b73f7c663eaa96b533b64cfd758fbf0",
+      "source_revision": "cp-os b57a344 (copied 2026-11-10 in this repo's a2f5e8e, whose message and companions_note name that commit)"
     },
     {
       "consumed_path": "skills/cp-2-fundamental-credit-synthesizer/SKILL.md",
@@ -1022,7 +972,8 @@
       "edited_copy_of": "/Users/ericguei/Documents/cp-os/skills/cp-2-fundamental-credit-synthesizer/SKILL.md",
       "sha256": "0b419cb292a5325c6a89398bf802fa605f9b9c6b5e0197e585171e91d784ec6f",
       "source_sha256": "2419ccb707e0bce8659d79b077175f21e43b3ca95ad92968936da7d86da95135",
-      "edit": "named edit: T2.10 `Mixed` removed from the Direction values (caos line 144) and the step 10 index line gains the `None supported` row and split-never-Mixed rule (caos line 283); no other caos hunk ported; wording from caos-databricks vendor/deploy-v (last changed 99069f83, repo HEAD dfff264); sha256 is this edited file, source_sha256 the previously archived file"
+      "edit": "named edit: T2.10 `Mixed` removed from the Direction values (caos line 144) and the step 10 index line gains the `None supported` row and split-never-Mixed rule (caos line 283); no other caos hunk ported; wording from caos-databricks vendor/deploy-v (last changed 99069f83, repo HEAD dfff264); sha256 is this edited file, source_sha256 the previously archived file",
+      "source_revision": "cp-os b57a344 for the copy source_sha256 names (copied byte-for-byte 2026-11-13 in this repo's ff98a8c, whose message names that commit); the named edit followed"
     },
     {
       "consumed_path": "skills/cp-2-fundamental-credit-synthesizer/references/REF_CP-2_STEPS.md",
@@ -1031,25 +982,29 @@
       "edited_copy_of": "/Users/ericguei/Documents/cp-os/skills/cp-2-fundamental-credit-synthesizer/references/REF_CP-2_STEPS.md",
       "sha256": "9200f6b0ab977c454176d7f78f6c55d39e41cfcccfa04a1b772f8c4c18f08bfe",
       "source_sha256": "292f114bc456c5924712d692408550b058ed4424d146719fe42579b092a94a92",
-      "edit": "named edit: T2.10 Direction `Positive / Negative` with the split-never-Mixed rule (caos line 237) and the rule line `Rank at least one Positive and one Negative driver` with the one `None supported` row (caos line 239); no other caos hunk ported; wording from caos-databricks vendor/deploy-v (last changed 99069f83, repo HEAD dfff264); sha256 is this edited file, source_sha256 the previously archived file"
+      "edit": "named edit: T2.10 Direction `Positive / Negative` with the split-never-Mixed rule (caos line 237) and the rule line `Rank at least one Positive and one Negative driver` with the one `None supported` row (caos line 239); no other caos hunk ported; wording from caos-databricks vendor/deploy-v (last changed 99069f83, repo HEAD dfff264); sha256 is this edited file, source_sha256 the previously archived file",
+      "source_revision": "cp-os b57a344 for the copy source_sha256 names (copied byte-for-byte 2026-11-13 in this repo's ff98a8c, whose message names that commit); the named edit followed"
     },
     {
       "consumed_path": "skills/cp-1a-business-transaction-fact-pack/SKILL.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-1a-business-transaction-fact-pack/SKILL.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-1a-business-transaction-fact-pack/SKILL.md",
-      "sha256": "3885bc51b9fa0f8a2e316fe8f3f503505ab5ce28729526c5c28bff18a96e1f9a"
+      "sha256": "3885bc51b9fa0f8a2e316fe8f3f503505ab5ce28729526c5c28bff18a96e1f9a",
+      "source_revision": "cp-os b57a344 (copied byte-for-byte 2026-11-13 in this repo's ff98a8c, whose message names that commit)"
     },
     {
       "consumed_path": "skills/cp-1a-business-transaction-fact-pack/references/REF_CP-1A_STEPS.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-1a-business-transaction-fact-pack/references/REF_CP-1A_STEPS.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-1a-business-transaction-fact-pack/references/REF_CP-1A_STEPS.md",
-      "sha256": "57a22436167df8177363c648041c03ae6d89888523ef9f419b7536943d0d2e55"
+      "sha256": "57a22436167df8177363c648041c03ae6d89888523ef9f419b7536943d0d2e55",
+      "source_revision": "cp-os b57a344 (copied byte-for-byte 2026-11-13 in this repo's ff98a8c, whose message names that commit)"
     },
     {
       "consumed_path": "skills/cp-1a-business-transaction-fact-pack/references/REF_CP-2C_STEPS.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-1a-business-transaction-fact-pack/references/REF_CP-2C_STEPS.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-1a-business-transaction-fact-pack/references/REF_CP-2C_STEPS.md",
-      "sha256": "8e738d43447219ab8cf7f46b4ca97cd32c67eb7831aaae683b365a9f3514ad45"
+      "sha256": "8e738d43447219ab8cf7f46b4ca97cd32c67eb7831aaae683b365a9f3514ad45",
+      "source_revision": "cp-os b57a344 (copied byte-for-byte 2026-11-13 in this repo's ff98a8c, whose message names that commit)"
     },
     {
       "consumed_path": "skills/cp-3c-refinancing-lme-risk/SKILL.md",
@@ -1064,7 +1019,8 @@
       "consumed_path": "skills/cp-3c-refinancing-lme-risk/references/CP-3C_RUNBOOK.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-3c-refinancing-lme-risk/references/CP-3C_RUNBOOK.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/Deploy V/skills/cp-3c-refinancing-lme-risk/references/CP-3C_RUNBOOK.md",
-      "sha256": "13a2525bee2aae103114e7f5bd0ef7f7e6942c82e53041ea61e82aec4a498753"
+      "sha256": "13a2525bee2aae103114e7f5bd0ef7f7e6942c82e53041ea61e82aec4a498753",
+      "source_revision": "Deploy V c4d2e35611151a7f5b45dbb759d92e968c5478b7 (copied byte-for-byte 2026-11-13 in this repo's 67533e3, whose message names that commit for all three CP-3C files; the two sibling entries' source_sha256 name the same commit)"
     },
     {
       "consumed_path": "skills/cp-3c-refinancing-lme-risk/references/REF_CP-3C_STEPS.md",
@@ -1138,10 +1094,35 @@
       "consumed_path": "docs/reuse/selected-methods/CPOS_REGISTER_SCOPE.md",
       "archive_path": "docs/reuse/selected-methods/CPOS_REGISTER_SCOPE.md",
       "exact_copy_found_at": null,
-      "sha256": "a37ec764e687fb824ed8c38bddde393a7c3b3465c9cdf36189768b0851c7ec7f",
+      "sha256": "617c887c18dd294e5fd36b411b0418c21ce46b637c0b81cf94fb4a67f89cff01",
       "use": "project-written (owner, 2026-11-13, T4): one section per measured module naming the registers it does not write in this transport, each with its method id and the method's own title; sent as the last section of that module's method block (CP-0, CP-1A, CP-DR, CP-2, CP-2A, CP-2E, CP-2G, CP-3, CP-5, CP-6); not a copy of any Deploy V file",
-      "note": "ruling docs/rulings/2026-11-13-appendix-and-routing-scope.md; the lists are the registers classified CUT in every inventory row of both retained Sol runs (docs/sweeps/2026-11-13-optimisation-review/appendix-inventory.md)"
+      "note": "ruling docs/rulings/2026-11-13-appendix-and-routing-scope.md; the lists are the registers classified CUT in every inventory row of both retained Sol runs (docs/sweeps/2026-11-13-optimisation-review/appendix-inventory.md); CP-6's list no longer names T6E.4, T6E.6, T6E.7 and T6E.11 (owner, 2026-11-15, ruling docs/rulings/2026-11-15-full-assessment-cp3c-cp6a.md)"
     }
   ],
-  "companions_note": "2026-11-10 (owner: keep a copy of the methodology in the repo): companion references, CANON_SHARED.md, the CP-DR research brief and the cp-1b-earnings-delta skill were first copied read-only from cp-os at commit b57a344. Each file's source is the one its own entry names: `exact_copy_found_at` (a path whose file is byte-equal to the archived file, checked 2026-11-13) or, for a file edited since the copy, `edited_copy_of` with the named `edit`. Not every companion is a cp-os copy: CP-4's six references, the CP-2D steps, the CP-5 runbook and the CP-5A steps are caos-databricks copies; the CP-2G and CP-DR steps are edited cp-os copies; CP-3C is a Deploy V copy; the CP-2A stress copy comes from this repo. Four SKILL.md files were archived earlier (cp-2h, cp-3, cp-6, cp-dr) as the cp-os initial-commit text (a31f3f5), which differs from cp-os at b57a344; as of 2026-11-13 each is stated by its own entry: cp-2h and cp-3 are the live cp-os (b57a344) files exactly, after one named edit each (the 115f664 blocklist change); cp-dr is the live cp-os v2.0 text (b57a344) plus named edits 2a and 2b; cp-6 is the initial-commit text plus named CP-5/CP-6 ordering edits and is not the live cp-os file. Not copied: scripts (not run in this transport) and the three .xlsx deployment placeholders (CP-3 Sector RV, CP-3B portfolio constraints, CP-6A debate inputs)."
+  "companions_note": "2026-11-10 (owner: keep a copy of the methodology in the repo): companion references, CANON_SHARED.md, the CP-DR research brief and the cp-1b-earnings-delta skill were first copied read-only from cp-os at commit b57a344. Each file's source is the one its own entry names: `exact_copy_found_at` (a path whose file is byte-equal to the archived file, checked 2026-11-13) or, for a file edited since the copy, `edited_copy_of` with the named `edit`. Not every companion is a cp-os copy: CP-4's six references, the CP-2D steps, the CP-5 runbook and the CP-5A steps are caos-databricks copies; the CP-2G and CP-DR steps are edited cp-os copies; CP-3C is a Deploy V copy; the CP-2A stress copy comes from this repo. Four SKILL.md files were archived earlier (cp-2h, cp-3, cp-6, cp-dr) as the cp-os initial-commit text (a31f3f5), which differs from cp-os at b57a344; as of 2026-11-13 each is stated by its own entry: cp-2h and cp-3 are the live cp-os (b57a344) files exactly, after one named edit each (the 115f664 blocklist change); cp-dr is the live cp-os v2.0 text (b57a344) plus named edits 2a and 2b; cp-6 is the initial-commit text plus named CP-5/CP-6 ordering edits and is not the live cp-os file. Not copied: scripts (not run in this transport) and the three .xlsx deployment placeholders (CP-3 Sector RV, CP-3B portfolio constraints, CP-6A debate inputs).",
+  "runtime_snapshots_note": "2026-11-15 (owner: move history out of the working tree): the 17 files of docs/reuse/selected-methods/runtime/ (15 pre-edit snapshots of this repository's own code and cases/PINS.json, each listed here with its sha256 and use, and two unlisted pre-edit method texts) were removed from the tree. Nothing read them. The files and their 15 entries are in git history at 9d040f8 and earlier.",
+  "project_files": [
+    {
+      "path": "prompts/CP-1.md",
+      "sha256": "f34798b2be157631d7eead0c1ffc87ab92f8958ef389d4256c955725d850f749",
+      "source": "this repository",
+      "source_revision": "this repository: first committed in 5c6e61b (2026-11-09, imported from final-workflow ffb75ba); unchanged since",
+      "use": "project-written CP-1 instructions, sent to CP-1 after its skill on every pathway"
+    },
+    {
+      "path": "src/deploy_vii/methods/cpl10.md",
+      "sha256": "8c1eac8940dd89175bcea2ef641c31fb5dfa9f904ced314fbce997258bdb3481",
+      "source": "this repository",
+      "source_revision": "this repository: first committed in 5c6e61b (2026-11-09, imported from final-workflow ffb75ba); these bytes last changed in 0dde647",
+      "use": "project-written CP-L10 change-screen method, sent to CP-L10"
+    },
+    {
+      "path": "src/deploy_vii/methods/cp8.md",
+      "sha256": "a13bab5ef754d6eb6af6094324e09253cebe915482581c7a9b8808166ce31923",
+      "source": "this repository",
+      "source_revision": "this repository: first committed in 5c6e61b (2026-11-09, imported from final-workflow ffb75ba); these bytes last changed in 6489622",
+      "use": "project-written CP-8 same-pathway run comparison (rewritten 2026-11-12), sent to CP-8"
+    }
+  ],
+  "source_revision_note": "2026-11-15 (owner: fix the provenance gaps): an entry's `source_revision` names the commit its bytes were taken from, with the basis. \"not recorded at import\" means no commit was recorded when the file entered the archive (final-workflow 5755da5, 2026-11-04, copied from the cp-os working copy) and none could be established later: cp-os was not reachable, and final-workflow names no commit for these files. Their cp-os paths were checked byte-equal on 2026-11-13 while cp-os HEAD was b57a344, but the cp-os working tree's state against that commit was not recorded, so the check fixes no commit. CP-3A_RUNBOOK.md and REF_CP-6A_STEPS.md are among them: both were registered on 2026-11-04, before b57a344 is named anywhere, so companions_note's \"first copied from cp-os at commit b57a344\" does not cover them. `lineage_check` records a byte-identical blob in a repository that could be read; it is a cross-check, not the source. `project_files` lists the method files CP-OS sends from outside this archive; their revision is this repository's history."
 }

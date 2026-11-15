@@ -1,0 +1,70 @@
+; Import direction, checked whole-tree by `lint-imports` (docs/QUALITY-GATE.md, "Import direction").
+; Every import counts: module level, inside a function, and under TYPE_CHECKING.
+; A contract may only tighten. Each ignored import is debt: the line above it says what removes it.
+; Not covered: the declared run-time cycle between deploy_workflow and the issuer library
+; (credit_os, update_library; pyproject.toml). It is no contract's subject, so no exception is listed.
+
+[importlinter]
+root_packages =
+    deploy_vii
+    deploy_workflow
+    credit_os
+
+[importlinter:contract:engine-imports-nothing-above]
+; update_library is a single module, which import-linter cannot take as a root package.
+name = deploy_vii, the engine, imports neither deploy_workflow nor the issuer library's credit_os
+type = forbidden
+source_modules =
+    deploy_vii
+forbidden_modules =
+    deploy_workflow
+    credit_os
+
+[importlinter:contract:deploy-workflow-layers]
+; Layers derived from the import graph, top to bottom; a module may import its own layer and those
+; below. Members of one layer are joined by ":" (they may import each other).
+; Analytical holds the runtime its modules share (host, workflow, model, prompts, research, tools,
+; run_inputs, run_events): those packages are in one import cycle with owner_workflow by design
+; (model.loop and prompts.compose drive and describe the owners' steps; the owners call workflow and
+; host), so no layer boundary runs between them.
+; exhaustive: every direct child of deploy_workflow must be listed, so a new module fails here until
+; it is placed. owners is split across layers; its children are listed by name, and the next contract
+; makes the list exhaustive for them.
+name = deploy_workflow: services, orchestration, delivery, analytical, engine
+type = layers
+containers =
+    deploy_workflow
+exhaustive = true
+exhaustive_ignores =
+    owners
+layers =
+    run_start : inbox : signal
+    owners.cpos_launch : owners.cpos_launch_methods : owners.cpos_launch_prompts : owners.cpos_launch_review : owners.cpos_launch_tables : owners.cpos : run_pathway : replay : model_testing
+    library_index : changes : changes_check : credit_os_catalogue : credit_os_chips : markdown_delivery : handoff_delivery : model_handoff_delivery : owner_rendering : rendering : financial_rendering : reader_summary : owners.cpos_cp1_check
+    owner_workflow : earnings_workflow : earnings : financial_workflow : owners.cp0_attachments : owners.cp1a : owners.cp1b : owners.cp1c : owners.cp1d : owners.cp2 : owners.cp2a : owners.cp2d : owners.cp2e : owners.cp2g : owners.cp2h : owners.cp3 : owners.cp3c : owners.cp3d : owners.cp4 : owners.cp4c : owners.cp5 : owners.cp6 : owners.cp8 : owners.cpdr : owners.cpl10 : owners.cpos_forecast : owners.cpos_facilities : owners.cpos_periods : owners.blank : owners.valuation_basis : owners.period_basis : host : workflow : model : prompts : research : tools : run_inputs : run_events
+    confidence : context : context_cites : context_periods : cpos_status : docx_text : html_text : http_base : identity_check : inline_xbrl : pdf_headers : platform_io : prose_checks : run_expectations : run_scopes : statement_compose : statement_lines : unit_maps : trailing_period : financial_series : liquidity_series : restructuring_series : owners.pins
+ignore_imports =
+    ; Index reads CP-OS's request fingerprint: move request_fingerprint out of owners.cpos into a
+    ; delivery or engine module both import.
+    deploy_workflow.library_index -> deploy_workflow.owners.cpos
+    ; Index reads the launcher's METHODS, METHOD_MARK and method texts: move the method definitions
+    ; out of owners.cpos_launch into a module below delivery.
+    deploy_workflow.library_index -> deploy_workflow.owners.cpos_launch
+    ; Handoff executor reads the test configurations: move CONFIGS below model_testing (into model).
+    deploy_workflow.model.handoff -> deploy_workflow.model_testing.configs
+    ; Handoff executor calls CP-OS's _checked_handoff and types HandoffTask: pass the check in.
+    deploy_workflow.model.handoff -> deploy_workflow.owners.cpos
+    ; Handoff executor takes the pathway's _single_writer lock: move the lock into model.
+    deploy_workflow.model.handoff -> deploy_workflow.run_pathway
+
+[importlinter:contract:owners-listed]
+; Membership only: the contract above orders the owners modules. This one is exhaustive over the
+; owners package, so a new owners module fails here until it is listed, here and in a layer of the
+; contract above (tests/test_quality_gate.py checks that both name the same modules).
+name = every deploy_workflow.owners module is listed
+type = layers
+containers =
+    deploy_workflow.owners
+exhaustive = true
+layers =
+    cpos_launch : cpos_launch_methods : cpos_launch_prompts : cpos_launch_review : cpos_launch_tables : cpos : cpos_cp1_check : cp0_attachments : cp1a : cp1b : cp1c : cp1d : cp2 : cp2a : cp2d : cp2e : cp2g : cp2h : cp3 : cp3c : cp3d : cp4 : cp4c : cp5 : cp6 : cp8 : cpdr : cpl10 : cpos_forecast : cpos_facilities : cpos_periods : blank : valuation_basis : period_basis : pins

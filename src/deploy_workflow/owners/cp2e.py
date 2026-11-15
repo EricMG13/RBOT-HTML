@@ -5,10 +5,9 @@ source, a static upward parallel rate shock and a foreign-currency strengthening
 analyst supplies only the shock sizes, an optional hedge ratio, the assessments and a summary.
 Missing is never 0: every derived value is known, missing (with its reason) or not applicable.
 
-The calculation (everything down to ``compute``) does no I/O and touches no store, host, session
+The calculation (everything above Stage 2) does no I/O and touches no store, host, session
 or renderer. Stage 2 appends the G1-X protocol section 2 seams after it: the stored submission
-schema, ``RULES``, ``submit``, ``probe``, ``ENTRY_VALIDATOR``, the ``Module`` builder and the
-consumer reader.
+schema, ``RULES``, ``submit``, ``probe``, ``ENTRY_VALIDATOR`` and the ``Module`` builder.
 """
 
 import re
@@ -37,7 +36,6 @@ from deploy_vii.execution import (
     Attempt,
     Execution,
     ExecutionSnapshot,
-    Head,
     Qualification,
     StepValidation,
     clipped,
@@ -477,8 +475,8 @@ class MacroFxInputs:
     source_names: Mapping[str, str]
     # `macro_fx` sets `pinned` when a context pins this module and `hedge_pinned` when that
     # context also states a hedge ratio; the last own limitation then says the shocks (and the
-    # hedge ratio) are user-supplied. `compute` only reads the flags: `_pin_lines` compares the
-    # submitted values with the pins before `macro_fx` composes anything.
+    # hedge ratio) are user-supplied. The composition only reads the flags: `_pin_lines` compares
+    # the submitted values with the pins before `macro_fx` composes anything.
     pinned: bool = False
     hedge_pinned: bool = False
     periods: Periods = DEFAULT_PERIODS
@@ -2295,67 +2293,3 @@ def submit(
             qualification=QUALIFICATION,
         )
     return Submitted(attempt, normal, resolved, (), (), None)
-
-
-# --- the consumer reader (D3 is OPEN: pinned, no completion is claimed) -----------------------------
-@dataclass(frozen=True)
-class Reading:
-    """One fact as a consumer reads it: known with its amount, or a gap with its reason."""
-
-    state: Literal["known", "missing", "conflicting", "not_applicable"]
-    amount: Decimal | None
-    reason: str | None
-
-
-@dataclass(frozen=True)
-class ShockReading:
-    shock_bp: Reading
-    added_interest: Reading  # before hedges (T2F.3 gross)
-    cov_after: Reading
-    after_hedge: Reading  # T2F.3 net: missing until a hedge ratio is stated
-
-
-@dataclass(frozen=True)
-class Cp2eHead:
-    head_sha256: str
-    status: str
-    floating_debt: Reading
-    shocks: tuple[ShockReading, ...]
-    foreign_debt: Reading
-    hedge_ratio: Reading  # the ratio, or missing with the absence reason
-    limitations: tuple[str, ...]
-
-
-def cp2e_reader(store: Execution, head: Head) -> Cp2eHead:
-    """What a consumer must read of a settled CP-2E head (``expected.consumption``)."""
-    module = store.head_module(head)
-    if module.module_id != MODULE_ID:
-        raise ValueError(f"{MODULE_ID} reader: head is {module.module_id}")
-    facts = {fact.fact_id: fact for fact in module.facts}
-
-    def read(fact_id: str) -> Reading:
-        fact = facts.get(fact_id)
-        if fact is None:
-            raise ValueError(f"{MODULE_ID} reader: T2F fact {fact_id} is absent from the head")
-        return Reading(fact.status, fact.amount, fact.limitation)
-
-    rows = [r.row_id for t in module.tables if t.table_id == "T2F.3" for r in t.rows]
-    if not rows:
-        raise ValueError(f"{MODULE_ID} reader: T2F.3 is absent from the head")
-    return Cp2eHead(
-        head_sha256=head.result_sha256,
-        status=head.status,
-        floating_debt=read("T2F.2.r01.value"),
-        shocks=tuple(
-            ShockReading(
-                shock_bp=read(f"T2F.3.{row}.shock"),
-                added_interest=read(f"T2F.3.{row}.gross"),
-                cov_after=read(f"T2F.3.{row}.cov_after"),
-                after_hedge=read(f"T2F.3.{row}.net"),
-            )
-            for row in rows
-        ),
-        foreign_debt=read("T2F.2.r05.value"),
-        hedge_ratio=read("T2F.5.r01.value"),
-        limitations=module.limitations,
-    )

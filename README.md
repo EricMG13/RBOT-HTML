@@ -108,11 +108,11 @@ The finished report appears in the issuer library. Analysts never handle a conte
 From a checkout:
 
 ```bash
-PYTHONPATH=src uv run python -m deploy_workflow.run_start --root /path/to/shared-folder --host <address> --port 8765
+uv run python -m deploy_workflow.run_start --root /path/to/shared-folder --host <address> --port 8765
 ```
 
-On Windows, put `set PYTHONPATH=src` on its own line before the command. The package is not
-installed in a checkout, so without `PYTHONPATH` the command fails with `ModuleNotFoundError`.
+`uv sync` installs the engine and the issuer library into the checkout's environment, so no
+`PYTHONPATH` is needed.
 
 From the Windows package: `Start run page.cmd <root> [address]`. Without a folder it uses
 `FINAL_WORKFLOW_WORKSPACE`; with neither it prints the usage and exits 1. Without an address it
@@ -161,7 +161,10 @@ the run uses it, and a later step stays locked while an earlier one has an error
 2. **Purpose.** Pick one of `credit_snapshot`, `earnings_update`, `relative_value`,
    `covenant_refinancing`, `distressed_restructuring`, `portfolio_decision` or
    `lite_credit_assessment` (the Lite credit assessment: CP-0, CP-1, CP-1A, CP-2 and CP-2A; no
-   forecast is published). `credit_snapshot` is titled "Full credit assessment". The short credit
+   forecast is published). `credit_snapshot` is titled "Full credit assessment": CP-0, CP-1, CP-1A,
+   CP-DR, CP-2, CP-2A, CP-2D, CP-2E, CP-2G, CP-4, CP-3C, CP-3, CP-5 and CP-6 with the forecast;
+   CP-6 runs its portfolio debate (CP-6A) on every run (owner, 2026-11-15, ruling
+   `docs/rulings/2026-11-15-full-assessment-cp3c-cp6a.md`). The short credit
    snapshot (`short_snapshot`, CP-0, CP-1 and one CP-L10 page) is deactivated: it is not offered and
    a new run of it is refused; the lite credit assessment is the short option. Each row lists its
    modules. Pick Basic,

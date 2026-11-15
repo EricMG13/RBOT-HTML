@@ -416,7 +416,7 @@ def context_authority_issues(pack: PreparedPack, review: ReadinessReview) -> lis
     assessment of any source is admitted only when the context frozen in the pack declares
     `legal_documents: draft`; the context is read once, and only when a draft is assessed.
     """
-    from deploy_workflow.context import CONTEXT_SOURCE_ID, ContextRefused, context_facts
+    from deploy_vii.context import CONTEXT_SOURCE_ID, ContextRefused, context_facts
 
     issues = [
         f"Context source cannot be classified {item.authority}"

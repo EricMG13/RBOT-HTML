@@ -60,7 +60,6 @@ from deploy_vii.execution import (
     Head,
     Qualification,
     StepValidation,
-    bounded_issues,
     clipped,
     current_inputs,
     inherited_limitations,
@@ -83,22 +82,13 @@ from deploy_workflow.owners.period_basis import (
 )
 
 MODULE_ID = "CP-2G"
-SCHEMA_VERSION = "forward-credit-model/1"
 
 # --- arithmetic contexts (lease "Decimal composer"; L7) --------------------------------------
 _RATIO = CONTEXT.copy()  # 38 digits, ROUND_HALF_EVEN: one division of exact decimals
 _EXACT = CONTEXT.copy()  # the same context with the Inexact trap: a rounded sum or product raises
 _EXACT.traps[Inexact] = True
 
-# --- periods (fixed by the lease: the CP-1 LTM column and the three fiscal years after it) ----
-# The no-context basis (Phase 8): a run with a context reads the `PeriodBasis` of its own CP-1
-# period register through `ForwardContext.basis`; these names stay for readers of the default.
-LTM_COLUMN = DEFAULT_BASIS.ltm_column
-LTM_PERIOD = DEFAULT_BASIS.ltm_period
-BASE_YEAR = DEFAULT_BASIS.base_year
-YEARS = DEFAULT_BASIS.years
 FY = DEFAULT_BASIS.year_labels
-NOT_REACHED = DEFAULT_BASIS.not_reached_text
 NOT_CALCULABLE = "Not calculable"
 
 
@@ -1003,15 +993,6 @@ def _parsed(payload: str) -> tuple[ForwardSubmission | None, tuple[str, ...]]:
         return None, shape_issues(error)
 
 
-def payload_issues(payload: str, context: ForwardContext) -> tuple[str, ...]:
-    """Shape issues alone (a payload that does not parse gets no content check), else the
-    content issues."""
-    submission, shape = _parsed(payload)
-    if submission is None:
-        return shape
-    return content_issues(ForwardInputs(context=context, submission=submission))
-
-
 def stale_issues(*, bound: Sequence[Input], current: Sequence[Input] | str) -> tuple[str, ...]:
     """Every bound upstream that changed (ruling 10), in the `cp2_synthesis._stale_issues` form.
     Returned alone, like shape issues (G-decisions): Stage 2 runs no content check on a stale
@@ -1364,7 +1345,7 @@ def _supported(cp1d: tuple[Fact, Fact, Fact] | None, why: str | None, basis: Per
 
 
 def _resolve(inputs: ForwardInputs) -> _Run:
-    """The run of a submission `content_issues` already accepted (`compute`, `_composed`)."""
+    """The run of a submission `content_issues` already accepted (`_composed`)."""
     sub, ctx = inputs.submission, inputs.context
     require_calendar(ctx.basis)
     ops = Operands.from_cp1(ctx.cp1_facts, ctx.basis)
@@ -2696,17 +2677,8 @@ def _cite(b: _Book, run: _Run) -> None:
     b.by_id = {cell.fact.fact_id: cell for cell in b.cells}
 
 
-def compute(inputs: ForwardInputs) -> ForwardResult:
-    """The forward model of one valid submission; raises ValueError on any issue."""
-    require_calendar(inputs.context.basis)
-    found = content_issues(inputs)
-    if found:
-        raise ValueError("CP-2G submission has issues: " + "; ".join(bounded_issues(found)))
-    return _composed(inputs)
-
-
 def _composed(inputs: ForwardInputs) -> ForwardResult:
-    """`compute` of a submission whose content issues are already known to be none (one
+    """The composition of a submission whose content issues are already known to be none (one
     validation per step, S07-cp2-gh-C01)."""
     run = _resolve(inputs)
     tests, unverified = _tests(run)
@@ -2837,22 +2809,6 @@ def _settled_module(store: Execution, head: Head, module_id: str) -> tuple[Modul
     if status is None:
         raise ValueError(f"CP-2G: the {module_id} head is {head.status}")
     return store.head_module(head), status
-
-
-def cp2a_reader(store: Execution, head: Head) -> Cp2aHead:
-    """D3: the T2B.1 scenarios and T2B.6 breaks of a settled CP-2A head (`cp2a_of`). CP-2A is a
-    required edge, so a blocked head is never bound and is refused here."""
-    module, status = _settled_module(store, head, CP2A)
-    if status == "blocked":
-        raise ValueError("CP-2G: the CP-2A head is blocked")
-    return cp2a_of(module)
-
-
-def cp1d_reader(store: Execution, head: Head) -> Cp1dHead:
-    """D3: T1D.3.supported.value and T1D.6.supported.total_leverage / net_leverage of a settled
-    CP-1D head, or its blocked state (`cp1d_of`)."""
-    module, status = _settled_module(store, head, CP1D)
-    return cp1d_of(module, status)
 
 
 @dataclass(frozen=True)
@@ -3040,16 +2996,6 @@ def _reference_table(ref: RefTable) -> ReportTable:
         row_header=ref.row_header,
         limitation=ref.note,
     )
-
-
-def forward_model(
-    *, pack: PreparedPack, submission: ForwardSubmission, upstream: Upstream
-) -> ForwardReport:
-    """The composed report of a valid submission; raises ValueError on any issue."""
-    inputs, issues = _checked(pack, submission, upstream)
-    if inputs is None:
-        raise ValueError("; ".join(bounded_issues(issues)))
-    return _report(pack, submission, inputs)
 
 
 def _report(

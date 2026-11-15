@@ -750,7 +750,7 @@ def _with_remainder(
 def model_files(
     cp1: bytes, handoff: bytes, source: str = "CP-2G", *, history: bool = False
 ) -> dict[str, bytes]:
-    """The five files `credit_os/store.py` reads for a model, from the CP-1 handoff and the
+    """The five files `credit_os/cashflow.py` reads for a model, from the CP-1 handoff and the
     forecast source's (CP-2G's, or CP-1's own for a layer-1 forecast: then `handoff` is `cp1`)."""
     inputs = parse(handoff.decode("utf-8"), cp1.decode("utf-8"), source)
     operands = cp2g.Operands(

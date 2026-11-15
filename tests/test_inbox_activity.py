@@ -19,6 +19,9 @@ from deploy_workflow.model.budget import Budget, OverrunStop
 from deploy_workflow.run_events import append_event
 
 
+AS_ROOT = hasattr(os, "geteuid") and os.geteuid() == 0  # no geteuid on Windows
+
+
 @pytest.fixture
 def layout() -> Iterator[Layout]:
     with tempfile.TemporaryDirectory(prefix="ib", dir="/tmp") as root:
@@ -147,6 +150,7 @@ def test_written_script_cannot_close_its_element(layout):
     assert not list(layout.engine.glob("*.tmp"))
 
 
+@pytest.mark.skipif(AS_ROOT, reason="root reads any folder")
 def test_spend_of_an_unreadable_run_folder_is_unknown(tmp_path):
     run = tmp_path / "run"
     run.mkdir()

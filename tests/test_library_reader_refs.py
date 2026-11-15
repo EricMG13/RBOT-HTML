@@ -12,7 +12,6 @@ import json
 import re
 import shutil
 import subprocess
-import sys
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
@@ -20,7 +19,6 @@ from typing import Any
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "apps/issuer-library"))
 from credit_os import store
 
 FIXTURES = ROOT / "apps/issuer-library/fixtures/synthetic-new-format"
@@ -44,6 +42,10 @@ EXPECTED = {
         "source_cells": 2,
     },  # lines 18:2 23:2 25:2 27:1 32:1 40:1 42:1; Sources 2
     "SYNTHETIC-CP-2D.md": {"basis_items": 0, "source_cells": 0},
+    # Basis lines 17:2 22:1 24:1 29:1 = 5; Sources 1 + refinancing need 1
+    "SYNTHETIC-CP-3C.md": {"basis_items": 5, "source_cells": 2},
+    # Basis lines 17:2 22:1 28:1 37:1 42:1 = 6; Sources 1 + T6A.4 1 + T6E.4 1
+    "SYNTHETIC-CP-6.md": {"basis_items": 6, "source_cells": 3},
 }
 
 RENDER = r"""

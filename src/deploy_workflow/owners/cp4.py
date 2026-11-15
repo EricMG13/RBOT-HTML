@@ -1,8 +1,7 @@
 """CP-4 (legal and covenants) owner core, Stage 1: the calculation (docs/CP4-OWNER-LEASE.md).
 
 CP-4 writes no new analytical core: `cp4_legal.covenant_interpretation` composes the 31 tables
-and owns every number. This module adds the lease's semantic gate (LEAD ruling Q1 = A) and a pure
-`compute` that runs the gate, then the engine's validator, then its composer.
+and owns every number. This module adds the lease's semantic gate (LEAD ruling Q1 = A).
 
 Stage 2 connects it to G1 (rulings stage2 Q3, Q4): the entry validator, the exact `step_context`
 view, the verifier probe and the `precheck` hook that runs the semantic gate. `cp4_legal` reads
@@ -12,12 +11,11 @@ the bound CP-0/CP-1 heads itself (`upstream_of`), so there is no further store a
 import hashlib
 import json
 import re
-from dataclasses import dataclass
 
 from pydantic import ValidationError
 
 from deploy_vii import cp4_legal
-from deploy_vii.contracts import Input, Module
+from deploy_vii.contracts import Module
 from deploy_vii.execution import Attempt, Execution, ExecutionSnapshot
 from deploy_vii.live.schema import json_object
 from deploy_vii.preparation import PreparedPack
@@ -131,41 +129,6 @@ def semantic_issues(
             documents = "; ".join(f"'{doc}'" for doc in missing)
             issues.append(_MISSING_DOCUMENT_ISSUE.format(index=index, documents=documents))
     return tuple(issues)
-
-
-@dataclass(frozen=True)
-class Cp4Inputs:
-    """Every operand CP-4 reads: the pack, the analyst submission (judgment and quotes), what
-    CP-4 read from the bound CP-0/CP-1 heads and the bound inputs themselves."""
-
-    pack: PreparedPack
-    submission: cp4_legal.CovenantInterpretationSubmission
-    upstream: cp4_legal.Upstream
-    inputs: tuple[Input, ...]
-
-
-@dataclass(frozen=True)
-class Cp4Result:
-    """The refusal issues, or the composed report (never both)."""
-
-    issues: tuple[str, ...]
-    report: cp4_legal.CovenantInterpretationReport | None
-
-
-def compute(inputs: Cp4Inputs) -> Cp4Result:
-    """Gate first, then the engine's validator, then its composer."""
-    gated = semantic_issues(pack=inputs.pack, submission=inputs.submission)
-    if gated:
-        return Cp4Result(issues=gated, report=None)
-    issues = cp4_legal.validate_covenant_interpretation(
-        inputs.pack, inputs.submission, inputs.upstream, inputs.inputs
-    )
-    if issues:
-        return Cp4Result(issues=issues, report=None)
-    report = cp4_legal.covenant_interpretation(
-        inputs.pack, inputs.submission, inputs.upstream, inputs.inputs
-    )
-    return Cp4Result(issues=(), report=report)
 
 
 # --- Stage 2: the plug-in parts of docs/G1X-OWNER-CORE-PROTOCOL.md section 2 ------------------

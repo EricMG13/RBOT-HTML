@@ -83,9 +83,11 @@ COVENANT_ROUTES = {
 # producers such as CP-1A are added). Owner, 2026-11-11: CP-DR and CP-2E are in every preset except
 # the lite credit assessment (listed here) and the deactivated short snapshot (SHORT_SNAPSHOT).
 PATHWAY_MODULES = {
+    # Owner, 2026-11-15: CP-3C joins the full assessment; it requires CP-2D (after CP-2, which
+    # it requires), CP-2G consumes CP-2D and CP-3 consumes CP-3C when they are in the run.
     "credit_snapshot": (
-        *("CP-0", "CP-1", "CP-1A", "CP-DR", "CP-4", "CP-2", "CP-2A", "CP-2E", "CP-2G", "CP-3"),
-        *("CP-5", "CP-6"),
+        *("CP-0", "CP-1", "CP-1A", "CP-DR", "CP-4", "CP-2", "CP-2A", "CP-2E", "CP-2D", "CP-2G"),
+        *("CP-3C", "CP-3", "CP-5", "CP-6"),
     ),
     "earnings_update": ("CP-0", "CP-1", "CP-1B", "CP-DR", "CP-2E", "CP-1D", "CP-5"),
     "relative_value": (
@@ -104,7 +106,10 @@ PATHWAY_MODULES = {
 }
 # The owner's preset answer key (2026-11-11), hand-written as sets: what each pathway requests.
 PRESET_ANSWER_KEY = {
-    "credit_snapshot": "CP-0 CP-1 CP-MODEL CP-1A CP-DR CP-2 CP-2A CP-2E CP-2G CP-4 CP-3 CP-5 CP-6",
+    # Owner, 2026-11-15 ("cp-3c ... part of full credit assessment"), with its required CP-2D.
+    "credit_snapshot": (
+        "CP-0 CP-1 CP-MODEL CP-1A CP-DR CP-2 CP-2A CP-2D CP-2E CP-2G CP-4 CP-3C CP-3 CP-5 CP-6"
+    ),
     "earnings_update": "CP-0 CP-1 CP-MODEL CP-1B CP-1D CP-DR CP-2E CP-5",
     "relative_value": "CP-0 CP-1 CP-MODEL CP-1C CP-DR CP-2 CP-2D CP-2E CP-3 CP-3C CP-3D CP-5",
     "covenant_refinancing": (
@@ -586,6 +591,17 @@ PASSAGES = (
 )
 
 
+# Hand-written: the method's Step 8 formulation (REF_CP-6A_STEPS.md, REF_CP-6A_08), synthetic.
+CP6A_POSTURE = (
+    "Final Sizing Posture: Requires More Work. The decision is driven by the absence of mandate "
+    "and exposure data, because no portfolio limit is supplied, which implies the size is not "
+    "established.\nBasis: annual.txt, page 2"
+)
+
+# Sections a module owes beside its tables: CP-6's portfolio debate decision (owner, 2026-11-15).
+OWNED_SECTIONS = {"CP-6": ["### Portfolio posture", "", CP6A_POSTURE, ""]}
+
+
 def register_rows(module: str) -> list[str]:
     """The in-scope registers a real handoff of the ten measured modules carries (T4 presence
     check), each with the row the method allows for one with nothing to report."""
@@ -634,6 +650,7 @@ def answer(context: dict, plan_routes: list) -> str:
         lines += ["### Post-balance-sheet adjustments", "", POST_BS_NONE, ""]
     for heading, table in OWNER_TABLES.get(context["module_id"], {}).items():
         lines += [f"### {heading}", "", table, ""]
+    lines += OWNED_SECTIONS.get(context["module_id"], [])
     lines += register_rows(context["module_id"])
     for heading in ("Calculations", "Gaps", "Next module"):
         held = heading == "Calculations" and context["module_id"] not in DATA_MODULE_IDS
@@ -1378,16 +1395,17 @@ def test_every_lite_block_is_routed_to_a_module_in_the_run(tmp_path):
     assert cpos_launch.PERIOD_TABLE_BLOCK not in cp1
 
 
-def test_the_credit_snapshot_is_the_full_credit_assessment_with_its_modules_and_blocks_unchanged():
+def test_the_credit_snapshot_is_the_full_credit_assessment_with_its_modules_and_blocks():
     from deploy_vii.contracts import PATHWAY_MODULES as PRESETS
     from deploy_vii.report_view import pathways
 
     full = next(p for p in pathways() if p.id == "credit_snapshot")
     assert full.title == "Full credit assessment"
     assert full.blocks == FULL_BLOCKS
+    # Owner, 2026-11-15: CP-3C and its required CP-2D added; the report blocks are unchanged.
     assert tuple(PRESETS["credit_snapshot"]) == (
-        *("CP-0", "CP-1", "CP-MODEL", "CP-1A", "CP-DR", "CP-2", "CP-2A", "CP-2E", "CP-2G"),
-        *("CP-4", "CP-3", "CP-5", "CP-6"),
+        *("CP-0", "CP-1", "CP-MODEL", "CP-1A", "CP-DR", "CP-2", "CP-2A", "CP-2D", "CP-2E"),
+        *("CP-2G", "CP-4", "CP-3C", "CP-3", "CP-5", "CP-6"),
     )
 
 
@@ -1452,9 +1470,12 @@ def test_the_lite_pathway_runs_end_to_end_to_a_verified_delivery_with_a_syntheti
 # 1,091,950; distressed_restructuring 1,124,925; earnings_update 518,628; portfolio_decision
 # 902,476; relative_value 1,017,908; short_snapshot 140,075) rounded up to the next 10,000 plus 5%.
 # credit_snapshot measured 1,273,034 and lite_credit_assessment 392,429 (CP-MODEL removed).
+# 2026-11-15: credit_snapshot gains CP-3C, its required CP-2D and CP-6's portfolio debate block
+# (owner: "cp-3c ... part of full credit assessment"); measured 1,316,558 before and 1,460,205 after
+# on this file's input. Its ceiling is the owner's 1,340,000 plus that measured 143,647.
 INSTRUCTION_BUDGET = {
     "lite_credit_assessment": 420_000,
-    "credit_snapshot": 1_340_000,
+    "credit_snapshot": 1_483_647,
     "covenant_refinancing": 1_155_000,
     "distressed_restructuring": 1_186_500,
     "earnings_update": 546_000,
@@ -2878,6 +2899,9 @@ def test_every_module_is_told_what_stands_for_acceptance_scripts_and_questions(t
 # (T4, ruling 2026-11-13-appendix-and-routing-scope.md): CP-0, CP-1A, CP-DR, CP-2, CP-2A, CP-2E,
 # CP-2G, CP-3, CP-5 and CP-6 now end their method block with their
 # section of CPOS_REGISTER_SCOPE.md; the added text is that section and nothing else.
+# CP-6 pin recomputed on 2026-11-15 (owner: "module cp-6A within cp-6 should be fully functional"):
+# its scope section no longer names T6E.4, T6E.6, T6E.7 and T6E.11, so runs made before it are
+# correctly marked "Earlier methods" for CP-6; nothing else in its method block changed.
 METHOD_TEXT_SHA256_AT_1B41E65 = {
     "CP-0": "307017934f4e8e75fc432e8b7ef100bba82ce84f1bb6910f37c7e715fe701e72",
     "CP-1": "f047d555dd9ae1284a8fbf42feb3b63096b00077c021a303357fa16ce933d493",
@@ -2897,7 +2921,7 @@ METHOD_TEXT_SHA256_AT_1B41E65 = {
     "CP-4": "a769b7456e5661d70cb25388fc4acb444cfd0aecd8f778554f98369ebadc7f7e",
     "CP-4C": "1d96547563190f89b909c37ea47969ecb04a2c794c5971b6db8f7c94c836b1f8",
     "CP-5": "d9298b83eba40be26a7cc6ddf5d5c12558e5c5cd471e7ce39e9c3942dc27f733",
-    "CP-6": "3c5666e0da9f1898005a01dfdecc117580118bd2cdaa9796b84e646262ed80d5",
+    "CP-6": "31de155b03d7632332e3f3e6f887767477b362cd1c963436afa6469b91c94b4a",
     "CP-8": "0a0b339a9f9a284328b9a6fb50513a9bd03f2aa58dd45a387fe057b6ce2612c3",
     "CP-DR": "476b3e75a7b1f5d0d3349512bb220fde603988caa9cd4af5f8f62996dae0cd81",
     "CP-L10": "5b0e904dd62e1d1b341ec3d7d1717500d68ce1aee734b347e0dbbdfbe696b006",
@@ -8470,3 +8494,122 @@ def test_only_the_two_ratio_tables_say_the_adjusted_names_may_head_their_columns
     for figure in ("S.3", "S.4"):
         route = cpos_launch._chart_route("model-chart-strip", figure)
         assert "adjusted" not in cpos_launch._selector(route), figure
+
+
+# --- CP-6A within CP-6 (owner, 2026-11-15: "module cp-6A within cp-6 should be fully functional")
+# The six postures as the method's Step 8 lists them (REF_CP-6A_08), copied by hand.
+METHOD_POSTURES = (
+    *("Include", "Avoid", "Resize-Reduce", "Resize-Increase", "Maintain-Hold"),
+    "Requires More Work",
+)
+
+
+@pytest.mark.parametrize("pathway", ["credit_snapshot", "portfolio_decision"])
+def test_cp6_is_asked_for_the_portfolio_debate_registers_and_posture(tmp_path, pathway):
+    _, texts = all_instructions(tmp_path, pathway)
+    head, _, method = texts["CP-6"].partition(cpos_launch.METHOD_MARK)
+    opening = "Portfolio debate: the method's absorbed CP-6A phase is part of this run."
+    assert head.count(opening) == 1
+    assert "registers T6E.4, T6E.6, T6E.7 and T6E.11" in head
+    assert "headed exactly `### Portfolio posture`, after `### Limitations`" in head
+    assert "starts exactly `Final Sizing Posture: ` followed by one of" in head
+    for posture in METHOD_POSTURES:
+        assert posture in head.partition("followed by one of")[2].partition(".")[0], posture
+    assert "ends with its Basis line" in head
+    # The method is sent whole and its scope section no longer excludes CP-6A's registers.
+    assert "=== docs/reuse/selected-methods/skills/cp-6-ic-debate-challenge/references/" in method
+    assert "REF_CP-6A_STEPS.md sha256 " in method
+    scope = method.rpartition("Register scope in this transport:")[2]
+    assert "T6E" not in scope and "T6A.6" in scope and "T6A.11" in scope
+    for module, text in texts.items():
+        if module != "CP-6":
+            assert "Portfolio debate: the method's absorbed CP-6A" not in text, module
+
+
+def cp6_checked(tmp_path: Path, edit=lambda raw: raw) -> tuple[str, ...]:
+    prepared, task, context = good_task(tmp_path, "CP-6", "credit_snapshot")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    assert "### Portfolio posture" in raw and "### T6E.4 - Register" in raw
+    return _checked_handoff(task, edit(raw).encode(), checker(prepared.layout))
+
+
+def test_a_complete_cp6_handoff_with_the_portfolio_debate_passes(tmp_path):
+    assert cp6_checked(tmp_path) == ()
+
+
+@pytest.mark.parametrize("posture", METHOD_POSTURES)
+def test_each_method_posture_is_accepted(tmp_path, posture):
+    issues = cp6_checked(
+        tmp_path, lambda raw: raw.replace("Posture: Requires More Work.", f"Posture: {posture}.")
+    )
+    assert issues == ()
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "complaint"),
+    [
+        # The section is missing (a handoff written to the old scope).
+        ("### Portfolio posture\n\n" + CP6A_POSTURE + "\n", "", "under `### Portfolio posture`"),
+        # The heading is renamed.
+        ("### Portfolio posture", "### Portfolio view", "under `### Portfolio posture`"),
+        # The section is empty.
+        (CP6A_POSTURE, "", "under `### Portfolio posture`"),
+        # A posture outside the method's six.
+        ("Posture: Requires More Work.", "Posture: Overweight.", "the method's formulation"),
+        ("Posture: Requires More Work.", "Posture: Includes.", "the method's formulation"),
+        ("Posture: Requires More Work.", "Posture: Resize.", "the method's formulation"),
+        # The formulation is not the first sentence.
+        ("Final Sizing Posture: ", "We hold that the Final Sizing Posture: ", "formulation"),
+        # Lower-case wording is not the method's formulation.
+        ("Final Sizing Posture: ", "final sizing posture: ", "the method's formulation"),
+        # Only a Basis line: alone it ends no paragraph, so it is read as a sentence.
+        (CP6A_POSTURE, "Basis: annual.txt, page 2", "the method's formulation"),
+        # A CP-6A register is left out.
+        ("### T6E.7 - Register", "### Decision matrix", "Missing registers: T6E.7"),
+    ],
+)
+def test_a_cp6_handoff_without_the_portfolio_debate_is_refused(tmp_path, old, new, complaint):
+    issues = cp6_checked(tmp_path, lambda raw: raw.replace(old, new, 1))
+    assert any(complaint in issue for issue in issues), issues
+
+
+def test_a_source_reference_in_the_posture_sentence_instead_of_a_basis_line_is_refused(tmp_path):
+    """The reader sentence rules hold the section as they hold every shown section: a page
+    locator or module code in the sentence belongs in its Basis line."""
+    issues = cp6_checked(
+        tmp_path,
+        lambda raw: raw.replace(
+            "established.\nBasis: annual.txt, page 2",
+            "established, as annual.txt page 2 and CP-3 show.",
+        ),
+    )
+    assert any("no page locator" in i and "Portfolio posture" in i for i in issues), issues
+    assert any("no module code" in i and "Portfolio posture" in i for i in issues), issues
+
+
+@pytest.mark.parametrize(
+    "written",
+    [
+        "**Final Sizing Posture: Avoid.**",
+        "**Final Sizing Posture:** Avoid.",
+        "Final Sizing Posture: **Avoid**.",
+        "- Final Sizing Posture: `Avoid`.",
+    ],
+)
+def test_emphasis_around_the_formulation_is_not_wording(tmp_path, written):
+    issues = cp6_checked(
+        tmp_path, lambda raw: raw.replace("Final Sizing Posture: Requires More Work.", written)
+    )
+    assert issues == ()
+
+
+def test_a_blocked_cp6_owes_no_posture_section():
+    blocked = "---\nmodule_status: Blocked\n---\n# CP-6\n\n## Findings\n\n### Bottom line\n"
+    assert cpos_launch.posture_issues("CP-6", blocked) == ()
+    assert cpos_launch.posture_issues("CP-6", blocked.replace("Blocked", "Complete")) != ()
+
+
+def test_only_cp6_owes_the_posture_section():
+    for module in METHODS:
+        if module != "CP-6":
+            assert cpos_launch.posture_issues(module, "## Findings\n") == (), module

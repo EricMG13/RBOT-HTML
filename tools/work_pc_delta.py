@@ -8,11 +8,14 @@ changed between the commit it last adapted (base) and the commit being downloade
     python tools/work_pc_delta.py generate --base 04e7221            # first pack
     python tools/work_pc_delta.py generate --base "2026-11-10 18:00"  # base by date
     python tools/work_pc_delta.py generate                            # next pack
+    python tools/work_pc_delta.py prune --dry-run                     # packs past the window
     python tools/work_pc_delta.py check <folder>                      # on the work PC
     python tools/work_pc_delta.py plan --new <download> --adapted <copy>  # on the work PC
 
 Each pack goes to docs/work-pc/syncs/<NNN>_<date>_<base>-<head>/ (CHANGES.md, changes.patch,
-SYNC.json); packs chain, each starting where the previous one ended. manifest.json holds
+SYNC.json); packs chain, each starting where the previous one ended. NNN is one more than
+the highest number ever issued (manifest.json keeps it as last_pack), so numbers never
+repeat after `prune` removes packs older than the retention window. manifest.json holds
 the git blob hash of every file at the latest head, so `check` (no git needed) shows
 whether a downloaded copy matches it, i.e. whether the packs cover everything. `plan`
 sorts every file into copy, delete, merge or keep by comparing the download and the
@@ -26,11 +29,12 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tomllib
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -47,6 +51,8 @@ SKIPPED_DIRS = {
     ".pytest_cache",
 }
 SCOPE = ("--", ".", f":(exclude){PACK_DIR}")
+PACK_NAME = re.compile(r"^(\d{3,})_(\d{4}-\d{2}-\d{2})_")
+KEEP_DAYS = 14
 HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
 
 
@@ -257,11 +263,56 @@ def blob_hash(data: bytes) -> str:
     return hashlib.sha1(b"blob %d\0" % len(data) + data, usedforsecurity=False).hexdigest()
 
 
+def packs(syncs: Path) -> tuple[list[tuple[int, date, Path]], list[Path]]:
+    """Pack folders as (number, date, folder), and the entries not named like a pack."""
+    named, other = [], []
+    for entry in sorted(syncs.iterdir()) if syncs.is_dir() else []:
+        match = PACK_NAME.match(entry.name)
+        try:
+            day = date.fromisoformat(match[2]) if match and entry.is_dir() else None
+        except ValueError:
+            day = None
+        if match and day:
+            named.append((int(match[1]), day, entry))
+        else:
+            other.append(entry)
+    return named, other
+
+
+def last_pack_number(root: Path) -> int:
+    """The highest pack number ever issued: the manifest's record or a folder still here."""
+    record = root / PACK_DIR / "manifest.json"
+    recorded = json.loads(record.read_text(encoding="utf-8")) if record.is_file() else {}
+    present = [number for number, _, _ in packs(root / PACK_DIR / "syncs")[0]]
+    return max([int(recorded.get("last_pack", 0)), *present])
+
+
+def prune(root: Path, keep_days: int, today: date, dry_run: bool) -> list[str]:
+    """Remove packs dated more than keep_days before today; never the newest pack."""
+    if keep_days < 0:
+        raise SystemExit("--keep-days must be 0 or more")
+    named, other = packs(root / PACK_DIR / "syncs")
+    newest = max((number for number, _, _ in named), default=0)
+    expired = [
+        folder
+        for number, day, folder in named
+        if number != newest and (today - day).days > keep_days
+    ]
+    report = [f"{'would remove' if dry_run else 'removed'} {folder.name}" for folder in expired]
+    report += [f"left alone (not NNN_YYYY-MM-DD_...): {entry.name}" for entry in other]
+    if not dry_run:
+        for folder in expired:
+            shutil.rmtree(folder)
+    summary = f"prune: {len(expired)} {'to remove' if dry_run else 'removed'}"
+    kept = f"{len(named) - len(expired)} kept, {len(other)} left alone"
+    return [*report, f"{summary}, {kept}; window {keep_days} days before {today.isoformat()}"]
+
+
 def write_pack(root: Path, base: str, head: str) -> Path:
     changes = file_changes(root, base, head)
     commit_date = git(root, "log", "-1", "--format=%cI", head).strip()
     syncs = root / PACK_DIR / "syncs"
-    number = len(list(syncs.glob("[0-9][0-9][0-9]_*"))) + 1 if syncs.is_dir() else 1
+    number = last_pack_number(root) + 1
     out = syncs / f"{number:03d}_{commit_date[:10]}_{base[:7]}-{head[:7]}"
     out.mkdir(parents=True)
     sync = {
@@ -286,7 +337,12 @@ def write_pack(root: Path, base: str, head: str) -> Path:
     patch = git(root, "diff", "-M", "--binary", base, head, *SCOPE)
     (out / "changes.patch").write_text(patch, encoding="utf-8", newline="\n")
     (out / "SYNC.json").write_text(json.dumps(sync, indent=2) + "\n", encoding="utf-8")
-    record = {"head": head, "head_date": commit_date, "files": manifest(root, head)}
+    record = {
+        "head": head,
+        "head_date": commit_date,
+        "last_pack": number,
+        "files": manifest(root, head),
+    }
     (root / PACK_DIR / "manifest.json").write_text(
         json.dumps(record, indent=1, sort_keys=True) + "\n", encoding="utf-8"
     )
@@ -381,8 +437,19 @@ def main(argv: list[str] | None = None) -> int:
         help="manifest of the version the copy was adapted from; "
         "default: <adapted>/docs/work-pc/manifest.json",
     )
+    expire = commands.add_parser("prune", help="remove packs older than the retention window")
+    expire.add_argument(
+        "--keep-days",
+        type=int,
+        default=KEEP_DAYS,
+        help=f"keep packs dated within this many days of today, UTC (default {KEEP_DAYS})",
+    )
+    expire.add_argument("--dry-run", action="store_true", help="list, remove nothing")
     root = Path(__file__).resolve().parents[1]
     args = parser.parse_args(argv)
+    if args.command == "prune":
+        print("\n".join(prune(root, args.keep_days, datetime.now(UTC).date(), args.dry_run)))
+        return 0
     if args.command == "generate":
         print(generate(root, args.base, args.head))
         return 0

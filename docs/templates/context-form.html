@@ -7,7 +7,7 @@
 <meta name="color-scheme" content="light">
 <title>Start a run</title>
 <style>
-/* The run context form: writes context.json (schema context/1), read by src/deploy_workflow/context.py;
+/* The run context form: writes context.json (schema context/1), read by src/deploy_vii/context.py;
    build() is the normative rule set, plus the form-only rules marked in it. Adopted 2026-11-10 (owner:
    "Approved"); docs/design/2026-11-10-context-form-proposal.md holds the module review and the design.
    Styled in the Credit OS language of apps/issuer-library/credit_os/web/screen.css: its tokens, its
@@ -730,7 +730,7 @@ const $ = id => document.getElementById(id);
 /* ======================================================================= Reference data */
 // Requested modules per pathway: src/deploy_vii/contracts.py PATHWAY_MODULES.
 const PATHWAYS = {
-  credit_snapshot: ['CP-0','CP-1','CP-MODEL','CP-1A','CP-DR','CP-2','CP-2A','CP-2E','CP-2G','CP-4','CP-3','CP-5','CP-6'],
+  credit_snapshot: ['CP-0','CP-1','CP-MODEL','CP-1A','CP-DR','CP-2','CP-2A','CP-2D','CP-2E','CP-2G','CP-4','CP-3C','CP-3','CP-5','CP-6'],
   lite_credit_assessment: ['CP-0','CP-1','CP-1A','CP-2','CP-2A'],
   earnings_update: ['CP-0','CP-1','CP-MODEL','CP-1B','CP-1D','CP-DR','CP-2E','CP-5'],
   relative_value: ['CP-0','CP-1','CP-MODEL','CP-1C','CP-DR','CP-2','CP-2D','CP-2E','CP-3','CP-3C','CP-3D','CP-5'],
@@ -744,7 +744,7 @@ const PATHWAYS = {
 // 2026-11-11: CP-DR and CP-2E are in every pathway, so CP-1C always has its peer research.
 // tests/test_context_form.py keeps both tables to the code.
 const RUN_ORDER = {
-  credit_snapshot: ['CP-0','CP-1','CP-1A','CP-DR','CP-4','CP-2','CP-2A','CP-2E','CP-2G','CP-3','CP-5','CP-6'],
+  credit_snapshot: ['CP-0','CP-1','CP-1A','CP-DR','CP-4','CP-2','CP-2A','CP-2E','CP-2D','CP-2G','CP-3C','CP-3','CP-5','CP-6'],
   lite_credit_assessment: ['CP-0','CP-1','CP-1A','CP-2','CP-2A'],
   earnings_update: ['CP-0','CP-1','CP-1B','CP-DR','CP-2E','CP-1D','CP-5'],
   relative_value: ['CP-0','CP-1','CP-1A','CP-3D','CP-DR','CP-1C','CP-2','CP-2E','CP-2D','CP-3C','CP-3','CP-5'],
@@ -755,7 +755,7 @@ const RUN_ORDER = {
 };
 // Consumer -> producer -> b (a refusal blocks it) | r (it restricts): deploy_vii.registry.edge_rule, as
 // run_expectations.edges_for returns it for the orders above. Only producers in the run count.
-const EDGES = {"CP-1":{"CP-0":"b"},"CP-2E":{"CP-0":"b","CP-1":"r","CP-1A":"r","CP-2":"r"},"CP-2A":{"CP-0":"b","CP-1":"b","CP-2":"r"},"CP-2":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-DR":"r","CP-1C":"r"},"CP-DR":{"CP-0":"b","CP-1":"b"},"CP-4":{"CP-0":"b","CP-1":"r","CP-1A":"r"},"CP-3":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-2":"b","CP-2G":"r","CP-4":"r","CP-1C":"r","CP-2D":"r","CP-3C":"r","CP-3D":"r"},"CP-2G":{"CP-0":"b","CP-1":"b","CP-2A":"b","CP-2D":"r"},"CP-6":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-2":"b","CP-2A":"r","CP-2E":"r","CP-3":"b","CP-4":"r","CP-5":"b"},"CP-1A":{"CP-0":"b"},"CP-5":{"CP-0":"b","CP-1":"r","CP-1A":"r","CP-2":"r","CP-2A":"r","CP-2E":"r","CP-2G":"r","CP-3":"r","CP-4":"r","CP-DR":"r","CP-1B":"r","CP-1D":"r","CP-1C":"r","CP-2D":"r","CP-3C":"r","CP-3D":"r","CP-2H":"r","CP-4C":"r"},"CP-1D":{"CP-0":"b","CP-1":"b","CP-1B":"r"},"CP-1B":{"CP-0":"b","CP-1":"b"},"CP-3C":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-2D":"b","CP-3D":"r","CP-2A":"r","CP-4":"r"},"CP-2D":{"CP-0":"b","CP-1":"b","CP-2":"b"},"CP-1C":{"CP-0":"b","CP-1":"b","CP-DR":"r"},"CP-3D":{"CP-0":"b"},"CP-2H":{"CP-0":"b","CP-1":"b","CP-2G":"b"},"CP-4C":{"CP-0":"b","CP-1":"b","CP-1C":"r","CP-2A":"b","CP-2G":"b","CP-4":"b"},"CP-L10":{"CP-0":"b","CP-1":"b"}};
+const EDGES = {"CP-1":{"CP-0":"b"},"CP-2E":{"CP-0":"b","CP-1":"r","CP-1A":"r","CP-2":"r"},"CP-2A":{"CP-0":"b","CP-1":"b","CP-2":"r"},"CP-2":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-DR":"r","CP-1C":"r"},"CP-DR":{"CP-0":"b","CP-1":"b"},"CP-4":{"CP-0":"b","CP-1":"r","CP-1A":"r"},"CP-3":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-2":"b","CP-2G":"r","CP-4":"r","CP-1C":"r","CP-2D":"r","CP-3C":"r","CP-3D":"r"},"CP-2G":{"CP-0":"b","CP-1":"b","CP-2A":"b","CP-2D":"r"},"CP-6":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-2":"b","CP-2A":"r","CP-2E":"r","CP-2D":"r","CP-3C":"r","CP-3":"b","CP-4":"r","CP-5":"b"},"CP-1A":{"CP-0":"b"},"CP-5":{"CP-0":"b","CP-1":"r","CP-1A":"r","CP-2":"r","CP-2A":"r","CP-2E":"r","CP-2G":"r","CP-3":"r","CP-4":"r","CP-DR":"r","CP-1B":"r","CP-1D":"r","CP-1C":"r","CP-2D":"r","CP-3C":"r","CP-3D":"r","CP-2H":"r","CP-4C":"r"},"CP-1D":{"CP-0":"b","CP-1":"b","CP-1B":"r"},"CP-1B":{"CP-0":"b","CP-1":"b"},"CP-3C":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-2D":"b","CP-3D":"r","CP-2A":"r","CP-4":"r"},"CP-2D":{"CP-0":"b","CP-1":"b","CP-2":"b"},"CP-1C":{"CP-0":"b","CP-1":"b","CP-DR":"r"},"CP-3D":{"CP-0":"b"},"CP-2H":{"CP-0":"b","CP-1":"b","CP-2G":"b"},"CP-4C":{"CP-0":"b","CP-1":"b","CP-1C":"r","CP-2A":"b","CP-2G":"b","CP-4":"b"},"CP-L10":{"CP-0":"b","CP-1":"b"}};
 // Reader names: the module groups of apps/issuer-library/credit_os/web/screen.js.
 const MODULES = {
   'CP-0': ['Source readiness', 'Classifies every file and checks your declarations against them.'],

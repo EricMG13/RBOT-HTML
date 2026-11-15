@@ -16,7 +16,11 @@ jobs:
         with:
           version: "0.12.5"
       - run: uv sync --group dev
-      - run: uv run python tools/quality_gate.py --base "${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || 'HEAD~1' }}"
+      - name: changed code (ruff, format, complexity, mypy)
+        run: uv run python tools/quality_gate.py --checks code --base "${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || 'HEAD~1' }}"
+      - name: import direction (.importlinter, whole tree)
+        if: ${{ !cancelled() }}
+        run: uv run python tools/quality_gate.py --checks imports
 
   fast-tests:
     name: fast tests and page logic
@@ -53,4 +57,5 @@ jobs:
             tests/test_library_reader_refs.py \
             tests/test_changes.py tests/test_citation_markers.py \
             tests/test_web_search_scope.py tests/test_prose_checks.py \
-            tests/test_confidence.py
+            tests/test_confidence.py \
+            tests/test_http_base.py tests/test_methodology_selection.py
