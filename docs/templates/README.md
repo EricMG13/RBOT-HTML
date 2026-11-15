@@ -175,9 +175,16 @@ information-only rows belong on `Exposure_Summary` as metrics. Known limitation:
 ### Check the file
 
 ```
-deploy-vii validate-input portfolio path/to/portfolio.xlsx          # one line per issue, then a summary
-deploy-vii validate-input portfolio path/to/portfolio.xlsx --json   # the report as JSON
+uv run deploy-vii validate-input portfolio path/to/portfolio.xlsx                      # one line per issue, then a summary
+uv run deploy-vii validate-input portfolio path/to/portfolio.xlsx --as-of 2026-11-15   # also check its dates against the run's as-of date
+uv run deploy-vii validate-input portfolio path/to/portfolio.xlsx --json               # the report as JSON
 ```
+
+`--as-of` is the run's as-of date: the Mandate `as_of` must then be on or before it and at most 30
+days before it, and no `last_checked` after it. The launcher runs the same check with the run's
+as-of date on every portfolio workbook among a full credit assessment's or portfolio decision's
+documents and tells CP-0, CP-3 and CP-6 each finding (ruling
+`docs/rulings/2026-11-15-full-assessment-portfolio-workbook.md`).
 
 The command exits 0 when the file passes and 1 otherwise. A passing file ends
 `OK: <n> sheets, <m> compliance rows` (the template prints `OK: 8 sheets, 5 compliance rows`;
@@ -267,6 +274,40 @@ has an issue. These are the fixes it can print:
 | `par` empty | enter the par amount as a plain number |
 | `market_value` empty | enter the market value as a plain number |
 | `seniority` empty | enter the seniority, e.g. 1st Lien |
+
+The checks of sums and values (owner, 2026-11-15: "check data first likely incorrect sums and
+values"). Arithmetic is exact. Shares are stored to two decimals, so a share recomputed from
+amounts is compared to within 0.01 and a sum of n stored shares to within n x 0.005; a figure
+missing or already reported is never taken as 0, and the rule that needs it is skipped.
+
+| Finding | Fix printed |
+| --- | --- |
+| `Maturity_Profile` `pct_nav` sum outside 99.0 to 101.0 | correct the percentages, or add a row Unknown with the remainder of NAV |
+| `Rating_Distribution` or `Maturity_Profile` sum between 0.99 and 1.01 (shares entered as fractions) | enter each share in percent of NAV: 2.5 means 2.5 % NAV, not 0.025 |
+| `Sector_Exposure`, `Top_Holdings` or `Holdings_Detail` `pct_nav` sum above 101.0 | correct the percentages: these rows are parts of NAV and cannot add to more than all of it |
+| `Holdings_Detail` `pct_nav` not `market_value` / Mandate `nav` x 100 (to within 0.01) | enter market_value / nav x 100, or correct market_value or the Mandate nav (both in the same unit and currency) |
+| `Holdings_Detail` `market_value` per 100 of `par` outside 1 to 150 | enter par and market_value in the same unit and currency (both in units, not thousands) |
+| `par` or `market_value` not above 0 | enter a number above 0 |
+| `limit`, `current_value` or `limit_pct_nav` below 0 | enter a number of at least 0: a limit or an exposure is never negative |
+| `Top_Holdings` ranked out of size order (a holding larger than the one ranked above it) | rank the holdings from the largest share of NAV down |
+| `Top_Holdings` two rows with the same `issuer` and `instrument` | keep one row per issuer and instrument, or correct the repeated value |
+| `Top_Holdings` `pct_nav` not the `Holdings_Detail` rows of the same issuer and instrument | enter the same share of NAV on Top_Holdings and Holdings_Detail, or correct the one that is wrong |
+| `Exposure_Summary` `top10_pct_nav` below the ten largest holdings, or (ten listed) above them | correct top10_pct_nav or the Top_Holdings percentages: the ten largest holdings add to top10_pct_nav |
+| `Holdings_Detail` rows of a sector adding to more than its `Sector_Exposure` `pct_nav` | correct the sector's pct_nav or the holdings' sector or pct_nav: the holdings in a sector cannot add to more than the sector |
+| `SECTOR` row's `current_value` or `limit` not the `pct_nav` or `limit_pct_nav` of the one sector its `parameter` names | enter the same figure on Compliance_Monitor and Sector_Exposure, or correct the one that is wrong |
+| A currency-unit `current_value` above the Mandate `nav` | enter the current value in the Mandate nav_currency and the same unit as nav (units, not thousands), or correct it |
+| An `Exposure_Summary` amount in another currency than the Mandate `nav_currency` | enter the amount in the Mandate nav_currency, or move it to another workbook: an amount in another currency is not comparable with NAV |
+| An `Exposure_Summary` `as_of` other than the Mandate `as_of` | enter the metric as at the Mandate as_of date, or correct the date |
+| A `last_checked` before the Mandate `as_of` | check the row again at the Mandate as_of date and enter that date |
+| A `Holdings_Detail` `maturity` before the Mandate `as_of` | delete the matured position, or correct its maturity date |
+| With `--as-of`: the Mandate `as_of` or a `last_checked` after the run's as-of date | enter the date the figures were measured, on or before the run's as-of date |
+| With `--as-of`: the Mandate `as_of` more than 30 days before it | supply the workbook as at a date at most 30 days before the run's as-of date |
+
+Not checkable from the template's columns, so not checked: limit utilisation (no utilisation
+column), par times price (no price column; the 1 to 150 range above catches a unit mix-up only),
+issuer counts against `obligors` (an issuer can sit in two rating buckets), and `headroom` on
+currency rows (stated, never used for room). A formula is refused outright, so a cached value that
+disagrees with its operands is never read.
 
 ### How the file reaches the Portfolio Fit module
 

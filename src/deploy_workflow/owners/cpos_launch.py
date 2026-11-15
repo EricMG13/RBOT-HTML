@@ -179,6 +179,10 @@ from deploy_workflow.prose_checks import (
 )
 from deploy_workflow.research.intake import effective_cutoff
 from deploy_workflow.research.weblookup import USER_AGENT_ENV, bare_host_problem, usable_user_agent
+from deploy_workflow.portfolio_workbook import NOT_COLLECTED, PortfolioCheck
+from deploy_workflow.portfolio_workbook import check as portfolio_check
+from deploy_workflow.portfolio_workbook import instructions as portfolio_instructions
+from deploy_workflow.portfolio_workbook import readiness_lines as portfolio_lines
 from deploy_workflow.run_expectations import Item, edges_for, expectations, guess_kind
 from deploy_workflow.workflow import _put
 
@@ -334,6 +338,7 @@ class Prepared:
     expectations: tuple[Item, ...] = ()  # What the run is expected to do (offline forecast).
     prior: PriorRun | None = None  # The earlier run CP-8 compares with, when one is listed.
     changes: str = ""  # The one line the run records about that comparison.
+    portfolio: PortfolioCheck = NOT_COLLECTED  # The portfolio workbook found and its checks.
 
 
 def _sha(raw: bytes) -> str:
@@ -436,6 +441,20 @@ def _documents(
         for key, g in guesses.items()
     )
     return guesses, rows
+
+
+def _workbooks(pinned: Mapping[str, HandoffInput], folder: Path) -> dict[str, bytes]:
+    """The bytes of each pinned `.xlsx` source (its name is its path in the issuer folder), as
+    pinned: a file changed since it was hashed refuses the launch rather than be checked in a
+    state the run would not read."""
+    found: dict[str, bytes] = {}
+    for name, pin in pinned.items():
+        if name.lower().endswith(".xlsx"):
+            raw = (folder / name).read_bytes()
+            if _sha(raw) != pin.sha256:
+                raise LaunchRefused(f"--sources: {name} changed while it was read; try again")
+            found[name] = raw
+    return found
 
 
 def read_documents(folder: Path) -> Reading:
@@ -1039,6 +1058,12 @@ def _prepare(  # noqa: PLR0913, PLR0915 - `prepare`'s body: one keyword per sett
         raise LaunchRefused(
             f"--sources: {', '.join(clash)} would be taken for an earlier run's handoff; rename it"
         )
+    portfolio = portfolio_check(
+        _workbooks(pinned, folder),
+        pathway=settings.run.pathway,
+        declared=settings.attachments.portfolio_workbook,
+        run_date=run.as_of,
+    )
     aliases = tuple(a for a in settings.identity.aliases if a.strip())
     forecast = "CP-1" in ordered and (model_wanted or "CP-2G" in ordered)
     layout, omitted = _layout(run, ordered, aliases, config, forecast=forecast)
@@ -1077,6 +1102,11 @@ def _prepare(  # noqa: PLR0913, PLR0915 - `prepare`'s body: one keyword per sett
         ("CP-6", CP6A_BLOCK, True),
         ("CP-6", DEEP_DEBATE_BLOCK, options.cp6_deep_debate),
         *((m, note, True) for m, note in method_scripts.NOTES.items()),
+        *(
+            (told, text, bool(text))
+            for told in ("CP-0", "CP-3", "CP-6")
+            for text in (portfolio_instructions(portfolio, told, run.as_of),)
+        ),
         (
             "CP-8",
             CP8_BLOCK.format(prior=describe_run(prior)) if prior is not None else "",
@@ -1088,7 +1118,12 @@ def _prepare(  # noqa: PLR0913, PLR0915 - `prepare`'s body: one keyword per sett
             texts[module] = head + block.encode() + mark + method
     guesses, documents = _documents(covers)
     items = expectations(
-        ordered, tuple(guesses.values()), settings, edges_for(ordered), omitted=omitted
+        ordered,
+        tuple(guesses.values()),
+        settings,
+        edges_for(ordered),
+        omitted=omitted,
+        portfolio=portfolio,
     )
     request = HandoffPlan(
         run=run,
@@ -1155,6 +1190,7 @@ def _prepare(  # noqa: PLR0913, PLR0915 - `prepare`'s body: one keyword per sett
         tuple(items),
         prior,
         note or "",
+        portfolio,
     )
 
 
@@ -1589,6 +1625,7 @@ def _readiness(
             f"Modules:  {', '.join(prepared.ordered)}",
             f"Sources:  {', '.join(names)}",
             f"Ignored:  {', '.join(prepared.ignored) or 'none'}",
+            *portfolio_lines(prepared.portfolio),
             f"Report:   {', '.join(prepared.layout.blocks)}",
             f"Omitted:  {', '.join(prepared.omitted) or 'none'}",
             f"Changes:  {prepared.changes.removeprefix('changes: ') or 'not recorded'}",

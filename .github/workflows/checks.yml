@@ -58,4 +58,5 @@ jobs:
             tests/test_changes.py tests/test_citation_markers.py \
             tests/test_web_search_scope.py tests/test_prose_checks.py \
             tests/test_confidence.py tests/test_method_scripts.py \
-            tests/test_http_base.py tests/test_methodology_selection.py
+            tests/test_http_base.py tests/test_methodology_selection.py \
+            tests/test_portfolio_workbook.py

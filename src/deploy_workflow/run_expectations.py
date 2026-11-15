@@ -15,6 +15,7 @@ from typing import Literal, TypedDict
 
 from deploy_vii.registry import dependencies, edge_rule
 from deploy_workflow.context import RunContext
+from deploy_workflow.portfolio_workbook import NOT_COLLECTED, PortfolioCheck, count, finding_text
 
 KINDS = (
     "financial_report",
@@ -293,6 +294,7 @@ class Facts:
     ordered: tuple[str, ...]
     guesses: tuple[Guess, ...]
     context: RunContext
+    portfolio: PortfolioCheck = NOT_COLLECTED  # The launcher's search and checks of the workbook.
 
     def kind(self, *kinds: str) -> Guess | None:
         return next((g for g in self.guesses if g.kind in kinds), None)
@@ -348,9 +350,37 @@ class Rule:
     basis: str
     evidence: Literal["per method", "observed offline", "observed live"]
     cite: Callable[[Facts], Guess | None] | None = None  # A guessed document the reason names.
+    detail: Callable[[Facts], str] | None = None  # Run-specific words after the reason.
 
 
 _SK = "docs/reuse/selected-methods/skills/"
+_CP6A_GATE = (
+    _SK + "cp-6-ic-debate-challenge/references/REF_CP-6A_STEPS.md REF_CP-6A_01 step 4: "
+    "'Mandate/portfolio constraints missing \u2192 exact constraint = [Insufficient Information].'"
+)
+_CP6A_STALE = (
+    _SK + "cp-6-ic-debate-challenge/SKILL.md line 343: 'Treat blanks, formula errors and `#N/A` "
+    "as missing; mismatched or stale rows create a gap and cannot become a live constraint or "
+    "exposure.'"
+)
+_FOUND = "owner-path: src/deploy_workflow/portfolio_workbook.py check"
+
+
+def _workbook_names(f: Facts) -> str:
+    return " Found: " + ", ".join(book.source for book in f.portfolio.workbooks) + "."
+
+
+def _failing(f: Facts) -> str:
+    parts = []
+    for book in f.portfolio.failing:
+        first = book.report.issues[0]
+        parts.append(
+            f"{book.source}: {count(len(book.report.issues), 'finding')}; first: "
+            f"{finding_text(first)}."
+        )
+    return " " + " ".join(parts)
+
+
 _STEPS4 = _SK + "cp-4-legal-covenant-interpreter/references/REF_CP-4_STEPS.md"
 _CP3 = _SK + "cp-3-relative-value-security-selection/SKILL.md"
 _CP3D = _SK + "cp-3d-market-implied-risk/SKILL.md"
@@ -582,6 +612,73 @@ RULES: tuple[Rule, ...] = (
         ".xlsx is the live consolidated portfolio reference.'",
         "per method",
     ),
+    # Owner, 2026-11-15: "yes, wire in the portfolio workbook." and "check data first likely
+    # incorrect sums and values" (ruling 2026-11-15-full-assessment-portfolio-workbook). These
+    # read the launcher's search and checks, so they fire only where it looked (`collected`).
+    Rule(
+        "portfolio-workbook-none",
+        "CP-6",
+        lambda f: (
+            f.portfolio.collected
+            and f.context.run.pathway == "credit_snapshot"
+            and not f.context.attachments.portfolio_workbook
+            and not f.portfolio.workbooks
+        ),
+        "information",
+        "No portfolio workbook chosen: the committee's portfolio posture states that the fund's "
+        "mandate and limits were not supplied, so sizing within them is not tested.",
+        "Add the fund's workbook, in the layout of the portfolio template, and choose it under "
+        "Issuer and dates.",
+        _CP6A_GATE,
+        "per method",
+    ),
+    Rule(
+        "portfolio-workbook-not-found",
+        "CP-6",
+        lambda f: (
+            f.portfolio.collected
+            and f.context.attachments.portfolio_workbook
+            and not f.portfolio.workbooks
+        ),
+        "check",
+        "You chose a portfolio workbook, but no uploaded workbook is in the layout of the "
+        "portfolio template, so none is checked and the committee takes the fund's limits as "
+        "not supplied.",
+        "Upload the fund's workbook in the layout of the portfolio template, or choose no "
+        "portfolio workbook.",
+        _FOUND,
+        "observed offline",
+    ),
+    Rule(
+        "portfolio-workbook-not-chosen",
+        "CP-6",
+        lambda f: (
+            f.portfolio.collected
+            and not f.context.attachments.portfolio_workbook
+            and bool(f.portfolio.workbooks)
+        ),
+        "check",
+        "A workbook in the layout of the portfolio template is among the documents but is not "
+        "chosen as the portfolio workbook; the modules are told it is there and how its checks "
+        "came out.",
+        "Choose it as the portfolio workbook under Issuer and dates, or remove it.",
+        _FOUND,
+        "observed offline",
+        detail=_workbook_names,
+    ),
+    Rule(
+        "portfolio-workbook-fails-checks",
+        "CP-6",
+        lambda f: bool(f.portfolio.failing),
+        "limited",
+        "The portfolio workbook fails the template's checks of its sums, values and dates. The "
+        "modules are told each finding, and the committee's posture cannot rest on a figure "
+        "that does not reconcile.",
+        "Correct the figures each finding names and upload the workbook again.",
+        _CP6A_STALE,
+        "observed offline",
+        detail=_failing,
+    ),
 )
 SEVERITY = {name: rank for rank, name in enumerate(PROPAGATING)}
 
@@ -611,7 +708,8 @@ def _item(
 
 
 def _from_rule(rule: Rule, facts: Facts) -> Item:
-    reason = rule.reason + likely(rule.cite(facts) if rule.cite else None)
+    reason = rule.reason + (rule.detail(facts) if rule.detail else "")
+    reason += likely(rule.cite(facts) if rule.cite else None)
     words = Words(reason, rule.fix, rule.basis, rule.evidence)
     return _item(rule.scope, rule.key, rule.outcome, words)
 
@@ -641,19 +739,20 @@ def _inherit(
     return _item(module, f"from:{names[0]}", worst, words, names)
 
 
-def expectations(
+def expectations(  # noqa: PLR0913 - one keyword per forecast input; the portfolio's is new
     ordered: Sequence[str],
     guesses: Sequence[Guess],
     context: RunContext,
     registry: Edges,
     *,
     omitted: Sequence[str] = (),
+    portfolio: PortfolioCheck = NOT_COLLECTED,
 ) -> list[Item]:
     """Expected outcome rows: run first, then each module in order, inherited row last.
 
     `registry` is `edges_for(ordered)`. Only Will refuse and Limited propagate, transitively through
     each module's effective outcome; Gap and Check never do."""
-    facts = Facts(tuple(ordered), tuple(guesses), context)
+    facts = Facts(tuple(ordered), tuple(guesses), context, portfolio)
     fired = [
         r for r in RULES if (r.scope == RUN or r.scope in facts.ordered) and r.condition(facts)
     ]
