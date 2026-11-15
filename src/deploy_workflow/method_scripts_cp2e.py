@@ -10,7 +10,7 @@ exposure and adverse move are free text in T2F.6 and T2F.7, not columns.
 """
 
 import types
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from deploy_workflow import method_scripts as core
@@ -30,6 +30,7 @@ from deploy_workflow.method_scripts import (
     blank,
     column,
     money,
+    quotient_slack,
     register_table,
     share,
 )
@@ -81,7 +82,7 @@ def _rows(table: Table, item: int, names: tuple[str, ...], where: str) -> dict[s
 class _Exposure:
     """T2F.4 as the script reads it, and the two figures it states."""
 
-    amounts: dict[str, Amount]  # Total, Gross, Hedged, Unhedged rows that are present
+    amounts: dict[str, Amount | str]  # Total, Gross, Hedged, Unhedged rows present (str: unread)
     share: str | None  # the Unhedged debt percentage cell as written
     unit: str
 
@@ -93,17 +94,26 @@ def _exposure(text: str, tables: types.ModuleType) -> _Exposure:
     metric = column(table, "metric", "T2F.4")[0]
     amount, header = column(table, "amount", "T2F.4")
     rows = _rows(table, metric, EXPOSURE_ROWS, "T2F.4")
-    amounts = {n: money(r[amount], header, tables) for n, r in rows.items() if n != SHARE}
-    units = {a.unit for a in amounts.values() if a.unit is not None}
+    amounts = {n: _read(r[amount], header, tables) for n, r in rows.items() if n != SHARE}
+    read = [a for a in amounts.values() if isinstance(a, Amount) and a.unit is not None]
+    units = {str(a.unit) for a in read}
     if len(units) > 1:
-        shown = "; ".join(f"`{a.cell}`" for a in amounts.values() if a.unit is not None)
+        shown = "; ".join(f"`{a.cell}`" for a in read)
         raise _NotChecked(f"T2F.4's amounts state different currencies or scales: {shown}")
     share = rows[SHARE][amount] if SHARE in rows else None
     return _Exposure(amounts, share, units.pop() if units else "")
 
 
+def _read(cell: str, header: str, tables: types.ModuleType) -> Amount | str:
+    """An amount, or why it is not read: an unread row stops only the checks that use it."""
+    try:
+        return money(cell, header, tables)
+    except _NotChecked as why:
+        return str(why)
+
+
 def _inputs(exposure: _Exposure) -> dict[str, float | None]:
-    values = {n: a.value for n, a in exposure.amounts.items()}
+    values = {n: a.value for n, a in exposure.amounts.items() if isinstance(a, Amount)}
     return {
         "total_debt": values.get(TOTAL),
         "gross_floating_rate_debt": values.get(GROSS),
@@ -115,7 +125,10 @@ def _missing(exposure: _Exposure, names: tuple[str, ...]) -> str | None:
     absent = [n for n in names if n not in exposure.amounts]
     if absent:
         return f"T2F.4 has no {', '.join(f'`{n}`' for n in absent)} row (absent, not zero)"
-    blanks = [n for n in names if exposure.amounts[n].value is None]
+    unread = [a for n in names if isinstance(a := exposure.amounts[n], str)]
+    if unread:
+        return unread[0]
+    blanks = [n for n in names if _value(exposure, n) is None]
     if blanks:
         return (
             f"T2F.4 states no amount for {', '.join(f'`{n}`' for n in blanks)} (missing, not zero)"
@@ -123,8 +136,20 @@ def _missing(exposure: _Exposure, names: tuple[str, ...]) -> str | None:
     return None
 
 
+def _value(exposure: _Exposure, name: str) -> float | None:
+    amount = exposure.amounts.get(name)
+    return amount.value if isinstance(amount, Amount) else None
+
+
+def _half(exposure: _Exposure, *names: str) -> float:
+    """The summed half-last-place rounding of the named amounts (their displayed precision)."""
+    return sum(a.half for n in names if isinstance(a := exposure.amounts.get(n), Amount))
+
+
 def _unhedged(exposure: _Exposure, result: dict[str, Any], tables: types.ModuleType) -> Outcome:
     stated = exposure.amounts.get(UNHEDGED)
+    if isinstance(stated, str):
+        return _UNHEDGED("not checked", reason=stated)
     if stated is None or stated.value is None:
         cell = None if stated is None else stated.cell
         return _UNHEDGED("not checked", stated=cell, reason=f"T2F.4 states no {UNHEDGED} figure")
@@ -135,7 +160,7 @@ def _unhedged(exposure: _Exposure, result: dict[str, Any], tables: types.ModuleT
     claim = _Claim(
         _UNHEDGED, bare(stated.cell), recomputed, AMOUNT_STEP, exposure.unit, UNHEDGED_FORMULA
     )
-    return _judged(claim, tables)
+    return _judged(replace(claim, slack=_half(exposure, GROSS, HEDGED)), tables)
 
 
 def _share(exposure: _Exposure, result: dict[str, Any], tables: types.ModuleType) -> Outcome:
@@ -149,7 +174,11 @@ def _share(exposure: _Exposure, result: dict[str, Any], tables: types.ModuleType
     if recomputed is None:
         reason = "Total debt is zero, so the script gives no percentage"
         return _SHARE("not checked", stated=cell, reason=reason)
-    return share(_SHARE, cell, recomputed, SHARE_FORMULA, tables)
+    unhedged = float(result["unhedged_floating_rate_debt"])
+    total = float(_value(exposure, TOTAL) or 0.0)
+    slack = quotient_slack(unhedged, _half(exposure, GROSS, HEDGED), total, _half(exposure, TOTAL))
+    claim = _Claim(_SHARE, cell, recomputed, AMOUNT_STEP, "", SHARE_FORMULA, slack=slack)
+    return share(claim, tables)
 
 
 def _shock_cell(text: str, tables: types.ModuleType) -> Amount:
@@ -180,10 +209,17 @@ def _shock(
         reason = f"T2F.5's impact is in `{stated.unit}`, T2F.4's amounts in `{exposure.unit}`"
         return _SHOCK("not checked", stated=stated.cell, reason=reason)
     recomputed = result["cash_interest_impact_plus_100bps"]
-    claim = _Claim(
-        _SHOCK, bare(stated.cell), recomputed, AMOUNT_STEP, str(stated.unit), SHOCK_FORMULA
-    )
-    return _judged(claim, tables)
+    # Neither the method nor the note fixes this cell's sign: an increase in cash interest may be
+    # written as an outflow. The magnitude is compared and the stated sign kept in the record.
+    written = bare(stated.cell)
+    size = written.strip("()").lstrip("-+").strip() if stated.value < 0 else written
+    slack = 0.01 * _half(exposure, GROSS, HEDGED)  # BPS_SHOCK times the inputs' rounding
+    claim = _Claim(_SHOCK, size, recomputed, AMOUNT_STEP, str(stated.unit), SHOCK_FORMULA)
+    outcome = _judged(replace(claim, slack=slack), tables)
+    if stated.value >= 0:
+        return outcome
+    sign = "; compared as a magnitude: the cell writes the impact as an outflow (negative)"
+    return replace(outcome, stated=written, reason=outcome.reason + sign)
 
 
 def check(text: str, loaded: Loaded) -> list[Outcome]:

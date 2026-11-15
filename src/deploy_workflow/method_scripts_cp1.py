@@ -26,6 +26,7 @@ ceiling (ruling 2026-11-15-method-script-checks.md).
 
 import re
 import types
+from dataclasses import dataclass
 
 from deploy_workflow import method_scripts as core
 from deploy_workflow.method_scripts import (
@@ -33,7 +34,6 @@ from deploy_workflow.method_scripts import (
     Amount,
     Loaded,
     Outcome,
-    Status,
     _Claim,
     _columns,
     _judged,
@@ -47,8 +47,11 @@ from deploy_workflow.method_scripts import (
     compare,
     currency_of,
     figure,
+    half,
     money,
+    quotient_slack,
     register_table,
+    said_none,
 )
 
 CREDIT_METRICS = ARCHIVE + "skills/cp-1-canonical-data-foundation/scripts/credit_metrics.py"
@@ -82,6 +85,9 @@ LTM_FORMULA = (
     "LTM = Full-Year Component + Current Stub - Prior-Year Stub (REF_CP-1_08; the script's "
     "derive_periods)"
 )
+_GROWTH = re.compile(r"-\s*1\b|−\s*1\b|\bgrowth\b|\bchange\b|\byoy\b|year on year")
+_PERCENT = re.compile(r"[x×*]\s*100\b|%|\bper ?cent\b")
+_POSITIVE_FAMILY = re.compile(r"leverage|cover|/[^|]*\b(?:ebitda|interest|debt)\b")
 _QUOTIENT = re.compile(r"/|÷|\bdivided by\b|\bover\b|\bratio\b|\bmargin\b|\bconversion\b")
 
 
@@ -92,21 +98,46 @@ def _where(register: str, figure_name: str) -> _Where:
 # --- T4.9: the free-name rows -------------------------------------------------------------------
 
 
-def _forms(n: float, d: float, script: types.ModuleType) -> list[tuple[str, float]]:
-    """The script's readings of one quotient: ratio and growth, each as stated or in percent."""
-    ratio = script.ratio(n, d)
-    change = script.growth(n, d)
-    out = []
-    for name, value in (("ratio", ratio), ("growth", change)):
-        if value is not None:
-            out += [(name, value), (f"{name} in percent", value * 100)]
-    return out
+@dataclass(frozen=True)
+class _Quotient:
+    """One free-name row's operands, their displayed rounding and what its words say."""
+
+    n: float
+    d: float
+    hn: float
+    hd: float
+    text: str  # the row's Metric Name and Formula, as labelled
+
+    @property
+    def growth(self) -> bool:
+        """A change (n / d - 1) rather than a ratio, by the row's own words."""
+        return bool(_GROWTH.search(self.text))
+
+    @property
+    def positive_family(self) -> bool:
+        """A leverage, coverage or debt-based quotient: the script's convention is that its
+        denominator must be above zero (`ratio(..., positive_denominator=True)`)."""
+        return bool(_POSITIVE_FAMILY.search(self.text))
+
+
+def _forms(q: _Quotient, stated: str, script: types.ModuleType) -> list[tuple[str, float, float]]:
+    """The readings the row's words allow: (form, the script's value, its rounding bound). The
+    Formula's own words choose ratio or growth and, where they say, percent or not."""
+    name = "growth" if q.growth else "ratio"
+    value = script.growth(q.n, q.d) if q.growth else script.ratio(q.n, q.d)
+    if value is None:
+        return []
+    slack = quotient_slack(q.n, q.hn, q.d, q.hd)
+    percent = bool(_PERCENT.search(q.text)) or _plain(stated).rstrip(") ").endswith("%")
+    multiple = _plain(stated).rstrip(") ").lower().endswith("x")
+    out = [] if percent else [(name, value, slack)]
+    return out + ([] if multiple else [(f"{name} in percent", value * 100, slack * 100)])
 
 
 def _operands(
     row: list[str], cols: dict[str, int], tables: types.ModuleType
-) -> tuple[float, float]:
-    values = []
+) -> tuple[float, float, float, float]:
+    values, halves = [], []
     for name in ("Numerator Value", "Denominator Value"):
         cell = row[cols[name]]
         if blank(cell, tables):
@@ -115,7 +146,8 @@ def _operands(
         if isinstance(read, str):
             raise _NotChecked(f"{name}: {read}")
         values.append(read[0])
-    return values[0], values[1]
+        halves.append(half(read[1]))
+    return values[0], values[1], halves[0], halves[1]
 
 
 def _free_row(row: list[str], cols: dict[str, int], loaded: Loaded) -> Outcome:
@@ -127,44 +159,58 @@ def _free_row(row: list[str], cols: dict[str, int], loaded: Loaded) -> Outcome:
             raise _NotChecked(f"its Formula `{row[cols['Formula']]}` is not a quotient")
         if blank(row[cols["Currency"]], loaded.tables) or blank(row[cols["Unit"]], loaded.tables):
             raise _NotChecked("T4.9 states no Currency or Unit for its operands")
-        n, d = _operands(row, cols, loaded.tables)
+        n, d, hn, hd = _operands(row, cols, loaded.tables)
     except _NotChecked as why:
         return where("not checked", stated=stated, reason=str(why))
-    return _judged_forms(where, stated, n, d, loaded)
+    words = _label(f"{row[cols['Metric Name']]} | {row[cols['Formula']]}")
+    return _judged_forms(where, stated, _Quotient(n, d, hn, hd, words), loaded)
 
 
-def _judged_forms(where: _Where, stated: str, n: float, d: float, loaded: Loaded) -> Outcome:
-    said_none = _label(stated).startswith("not calculable")
-    if blank(stated, loaded.tables) and not said_none:
-        return where("not checked", stated=stated, reason="T4.9 states no Calculated Value")
-    forms = _forms(n, d, loaded.script)
-    if said_none or not forms:
-        agreed = said_none and loaded.script.ratio(n, d) is None
-        status: Status = "agreed" if agreed else "disagreed"
-        label = "Not Calculable" if not forms else None
-        first = forms[0][1] if forms else None
+def _not_positive(where: _Where, stated: str, q: _Quotient) -> Outcome:
+    """A denominator at or below zero. A null word agrees (the method's Not Calculable). A figure
+    divided by zero disagrees; below zero, it disagrees for a leverage or coverage quotient (the
+    script gives none), and for any other (a growth or margin may have a negative base) it is not
+    checked: the script fixes no convention for it."""
+    if said_none(stated):
         return where(
-            status, stated=stated, recomputed=first, recomputed_label=label, reason=RATIO_FORMULA
+            "agreed", stated=stated, recomputed_label="Not Calculable", reason=RATIO_FORMULA
         )
+    if q.d == 0 or q.positive_family:
+        why = (
+            f"{RATIO_FORMULA}; the denominator {q.d:g} is not above zero, so the script gives none"
+        )
+        return where("disagreed", stated=stated, recomputed_label="Not Calculable", reason=why)
+    why = (
+        f"the denominator {q.d:g} is below zero and the script fixes no convention for this formula"
+    )
+    return where("not checked", stated=stated, reason=why)
+
+
+def _judged_forms(where: _Where, stated: str, q: _Quotient, loaded: Loaded) -> Outcome:
+    none = said_none(stated)
+    if blank(stated, loaded.tables) and not none:
+        return where("not checked", stated=stated, reason="T4.9 states no Calculated Value")
+    if q.d <= 0:
+        return _not_positive(where, stated, q)
+    forms = _forms(q, stated, loaded.script)
+    if none or not forms:  # a positive denominator: the script gives a figure
+        first = forms[0][1] if forms else None
+        return where("disagreed", stated=stated, recomputed=first, reason=RATIO_FORMULA)
     read = figure(re.sub(r"(?i)\s*(?:x|%)(?=\)?$)", "", _plain(stated)), loaded.tables)
     if isinstance(read, str):
         return where("not checked", stated=stated, reason=read)
-    for form, value in forms:
-        close, tolerance = compare(read, value, RATIO_STEP)
+    judged = [
+        (form, value, compare(read, value, RATIO_STEP, slack)) for form, value, slack in forms
+    ]
+    for form, value, (close, tolerance) in judged:
         if close:
             reason = f"{RATIO_FORMULA}; agrees as the {form}"
             return where(
                 "agreed", stated=stated, recomputed=value, tolerance=tolerance, reason=reason
             )
-    form, nearest = min(forms, key=lambda f: abs(f[1] - read[0]))  # the form it was meant in
-    tolerance = compare(read, nearest, RATIO_STEP)[1]
-    return where(
-        "disagreed",
-        stated=stated,
-        recomputed=nearest,
-        tolerance=tolerance,
-        reason=f"{RATIO_FORMULA}; nearest as the {form}",
-    )
+    form, nearest, (_, tolerance) = min(judged, key=lambda j: abs(j[1] - read[0]))
+    reason = f"{RATIO_FORMULA}; nearest as the {form}"
+    return where("disagreed", stated=stated, recomputed=nearest, tolerance=tolerance, reason=reason)
 
 
 def _t49(text: str, loaded: Loaded) -> list[Outcome]:

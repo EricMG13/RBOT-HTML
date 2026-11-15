@@ -204,6 +204,44 @@ edited here).
   (high) characters, about 2,500 to 3,300 more output tokens for CP-3, and CP-5 and CP-6 (and CP-8
   when listed) read that much more of CP-3's handoff. Not measured under these instructions.
 
+## Review fixes (2026-11-15, after the coordinating session's adversarial review)
+
+An independent review ran adversarial handoffs through the checks and found correct handoffs
+refused; each case was reproduced, fixed and tested with hand-worked expectations.
+
+- Rounding of the displayed inputs, for every check (CP-2D and CP-3C included): a stated figure
+  agrees within one unit of its last displayed place (or the script's own rounding step), plus the
+  bound the inputs' half-last-place rounding puts on the recomputed figure: for a sum or
+  difference, the sum of the inputs' half-units; for a quotient n / d, the first-order bound
+  (h_n + |n / d| h_d) / |d|; for a share or percentage, the same scaled. A figure computed from
+  unrounded inputs is no longer refused for the rounding of the inputs it displays; a figure wrong
+  by more than the bound still disagrees (tested per module). Two CP-2D expectations changed with
+  the rule: the ending's tolerance on nine whole-number inputs is 5.5, not 1; Months to Empty's on
+  the test bridge is 2.08, so 48.2 against 48 now agrees and 50.2 disagrees.
+- One vocabulary of null words for every check (`Not Calculable`, `Not meaningful`, `n.m.`, `n/m`,
+  `nm`, `n.c.`), alone or followed by its explanation (`Not meaningful (negative EBITDA)`).
+- A money cell wholly in brackets is a negative amount (`(USD 30m)` as `USD (30)m`).
+- CP-2E: the +100 bps impact's sign is fixed by neither the method nor the note, so its magnitude is
+  compared and a stated outflow's sign is kept in the record. An amount row with no readable unit
+  now stops only the checks that use it.
+- CP-1: a denominator at or below zero: a null word agrees; a figure over zero disagrees (the script
+  gives none); a figure over a negative denominator disagrees for a leverage, coverage or
+  debt-based quotient (the script's positive-denominator convention) and is not checked for any
+  other (a growth or margin may have a negative base). The row's own words choose the form: growth
+  (`- 1`, growth, change) or ratio, percent only when the formula says `x 100` or `%` or the figure
+  carries `%`; a figure is no longer accepted by matching another form.
+- CP-2G: a leverage or FCF/debt mismatch is not checked when the row's `definition IDs` cell names
+  another basis (covenant or agency EBITDA, lease-adjusted, IFRS 16, pro forma, run-rate,
+  principal, face value, average debt), as coverage already was. Known limit: the method's
+  definition ids (REF_CP-2G_B: "separate definition IDs for reported EBITDA, CP-1 normalized EBITDA,
+  covenant EBITDA and agency-adjusted metrics") are opaque labels whose meaning is in the handoff's
+  definition-lock prose, so an id alone (`D4`) is not recognised and such a row is still compared;
+  the forward model "normally uses CP-1 definitions", the EBITDA T2H.4 states. An unread T2H.6
+  column no longer discards T2H.5's roll-forward outcomes.
+- CP-4: Status is not decided when the recomputed headroom is within its inputs' rounding of zero
+  (a stated Breached from an unrounded input at the threshold is not sent back).
+- CP-3 (not asked): a fulcrum named with a note (`Senior Notes (partial)`) is read as the claim.
+
 ## Decisions for the owner
 
 1. CP-3: ask CP-3 for the `### Recovery waterfall` table (a new model output), or leave CP-3

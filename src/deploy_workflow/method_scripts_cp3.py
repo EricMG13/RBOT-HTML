@@ -20,8 +20,9 @@ Claims are allocated in row order, senior first, as the script takes them. A han
 table has every figure "not checked".
 """
 
+import re
 import types
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from deploy_workflow import method_scripts as core
@@ -32,6 +33,7 @@ from deploy_workflow.method_scripts import (
     Outcome,
     Status,
     Table,
+    _cell_half,
     _Claim,
     _columns,
     _judged,
@@ -43,6 +45,7 @@ from deploy_workflow.method_scripts import (
     blank,
     currency_of,
     heading_table,
+    quotient_slack,
     scale_of,
     share,
 )
@@ -84,6 +87,7 @@ class _Waterfall:
     residual: list[str] | None
     unit: str
     cols: dict[str, int]
+    halves: dict[str, float]  # `costs`, `claim:<name>`, `ev:<case>`: displayed rounding
 
 
 def _kind(line: str) -> tuple[str, str]:
@@ -117,6 +121,7 @@ def _read(table: Table, tables: types.ModuleType) -> _Waterfall:
     if isinstance(cols, str):
         raise _NotChecked(cols)
     claims, costs, money = [], [], []
+    halves: dict[str, float] = {"costs": 0.0}
     stated: dict[str, list[str]] = {}
     labelled: dict[str, list[list[str]]] = {}
     for row in table[1]:
@@ -126,8 +131,10 @@ def _read(table: Table, tables: types.ModuleType) -> _Waterfall:
                 {"claim_id": name, "class": name, "amount": _value(row[cols["Amount"]], tables)}
             )
             stated[name] = row
+            halves[f"claim:{name}"] = _cell_half(row[cols["Amount"]], tables)
         elif kind == "cost":
             costs.append({"label": name, "amount": _value(row[cols["Amount"]], tables)})
+            halves["costs"] += _cell_half(row[cols["Amount"]], tables)
         elif kind not in (_label(EV), _label(FULCRUM), _label(RESIDUAL)):
             raise _NotChecked(
                 f"{_HEADING} has a row the check does not read: `{row[cols['Line']]}`"
@@ -140,6 +147,7 @@ def _read(table: Table, tables: types.ModuleType) -> _Waterfall:
     if ev_row is None:
         raise _NotChecked(f"{_HEADING} has no `{EV}` row")
     ev = {case: _value(ev_row[cols[case]], tables) for case in CASES}
+    halves |= {f"ev:{case}": _cell_half(ev_row[cols[case]], tables) for case in CASES}
     return _Waterfall(
         claims,
         stated,
@@ -149,6 +157,7 @@ def _read(table: Table, tables: types.ModuleType) -> _Waterfall:
         _single(labelled, RESIDUAL),
         _unit(money, cols),
         cols,
+        halves,
     )
 
 
@@ -156,8 +165,10 @@ def _recoveries(
     case: str, w: _Waterfall, result: dict[str, Any], tables: types.ModuleType
 ) -> list[Outcome]:
     out = []
+    above = w.halves[f"ev:{case}"] + w.halves["costs"]  # rounding of the value left for a claim
     for row in result["claims"]:
         name = row["claim_id"]
+        own = w.halves.get(f"claim:{name}", 0.0)
         where = _where(f"Recovery: {name} ({case})")
         cell = w.stated[name][w.cols[case]]
         if blank(cell, tables):
@@ -170,7 +181,10 @@ def _recoveries(
             why = result.get("note") or f"{name}'s claim is 0, so it has no recovery percentage"
             out.append(where("not checked", stated=cell, reason=str(why)))
         else:
-            out.append(share(where, cell, row["recovery_pct"], RECOVERY_FORMULA, tables))
+            slack = quotient_slack(row["recovered"], above, row["amount"], own)
+            claim = _Claim(where, cell, row["recovery_pct"], 0.0, "", RECOVERY_FORMULA)
+            out.append(share(replace(claim, slack=slack), tables))
+        above += own  # a junior claim's value is what is left after this one
     return out
 
 
@@ -182,8 +196,8 @@ def _fulcrum(case: str, w: _Waterfall, result: dict[str, Any]) -> Outcome:
     if result["status"] != "complete":
         return where("not checked", stated=cell, reason=str(result.get("note")))
     found = result["fulcrum_claim_id"]
-    said_none = _label(cell) in NO_FULCRUM
-    agreed = said_none if found is None else _label(cell) == _label(found)
+    name = re.sub(r"\s*\([^)]*\)$", "", _label(cell))  # `Senior Notes (partial)` names the notes
+    agreed = name in NO_FULCRUM if found is None else name == _label(found)
     label = "no fulcrum" if found is None else str(found)
     status: Status = "agreed" if agreed else "disagreed"
     return where(status, stated=cell, recomputed_label=label, reason=FULCRUM_FORMULA)
@@ -201,7 +215,9 @@ def _residual(
     if result["residual_to_equity"] is None:
         return where("not checked", stated=cell, reason=str(result.get("note")))
     claim = _Claim(where, cell, result["residual_to_equity"], AMOUNT_STEP, w.unit, RESIDUAL_FORMULA)
-    return _judged(claim, tables)
+    claims = sum(h for k, h in w.halves.items() if k.startswith("claim:"))
+    slack = w.halves[f"ev:{case}"] + w.halves["costs"] + claims  # a difference of all of them
+    return _judged(replace(claim, slack=slack), tables)
 
 
 def _case(case: str, w: _Waterfall, loaded: Loaded) -> list[Outcome]:

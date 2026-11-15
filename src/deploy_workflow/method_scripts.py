@@ -276,6 +276,17 @@ def blank(cell: str, tables: types.ModuleType) -> bool:
     return stated_gap or bool(tables.is_null(text))
 
 
+NOT_MEANINGFUL = ("not calculable", "not meaningful", "n.m.", "n/m", "nm", "n.c.")
+
+
+def said_none(cell: str | None) -> bool:
+    """A cell that says there is no figure to compute: one of the null words (`Not Calculable`,
+    `Not meaningful`, `n.m.`), alone or followed by its explanation (`Not meaningful (negative
+    EBITDA)`, `Not calculable: no sales`). One vocabulary for every check."""
+    text = _plain(cell or "").casefold()
+    return any(re.match(rf"{re.escape(w)}(?:$|[\s:(,;\-—–])", text) for w in NOT_MEANINGFUL)
+
+
 def figure(cell: str, tables: types.ModuleType, suffix: str = "") -> tuple[float, int] | str:
     """The cell as the script's own `parse_figure` reads it, with its displayed decimal places;
     ``suffix`` is a unit word the cell may end with (`months`, `years`)."""
@@ -321,10 +332,25 @@ def _tolerance(places: int, script_step: float) -> float:
     return max(10.0**-places, script_step)
 
 
-def compare(stated: tuple[float, int], recomputed: float, script_step: float) -> tuple[bool, float]:
+def half(places: int) -> float:
+    """Half a unit in a displayed figure's last place: the most its rounding can have moved it."""
+    return 0.5 * 10.0**-places
+
+
+def quotient_slack(n: float, hn: float, d: float, hd: float) -> float:
+    """The first-order bound the rounding of n (by up to hn) and d (by up to hd) puts on n / d."""
+    return 0.0 if d == 0 else (hn + abs(n / d) * hd) / abs(d)
+
+
+def compare(
+    stated: tuple[float, int], recomputed: float, script_step: float, slack: float = 0.0
+) -> tuple[bool, float]:
     """Whether the stated figure agrees with the script's, and the tolerance applied: one unit in
-    the stated figure's last displayed place, or the script's own rounding step if coarser."""
-    tolerance = _tolerance(stated[1], script_step)
+    the stated figure's last displayed place (or the script's own rounding step if coarser), plus
+    ``slack``, the bound the half-last-place rounding of the displayed inputs puts on the
+    recomputed figure. A figure computed from unrounded inputs may differ from one recomputed
+    from their displayed values by that much and still be right."""
+    tolerance = _tolerance(stated[1], script_step) + slack
     close = abs(stated[0] - recomputed) <= tolerance + 1e-9 * max(1.0, abs(recomputed))
     return close, tolerance
 
@@ -356,6 +382,7 @@ class _Claim:
     formula: str
     suffix: str = ""  # a unit word the cell may end with
     others: tuple[str, ...] = ()  # rows outside the formula, which may explain a difference
+    slack: float = 0.0  # the bound the inputs' displayed rounding puts on ``recomputed``
 
 
 def _judged(claim: _Claim, tables: types.ModuleType) -> Outcome:
@@ -363,7 +390,7 @@ def _judged(claim: _Claim, tables: types.ModuleType) -> Outcome:
     read = figure(claim.stated, tables, claim.suffix)
     if isinstance(read, str):
         return where("not checked", stated=claim.stated, reason=read)
-    close, tolerance = compare(read, claim.recomputed, claim.step)
+    close, tolerance = compare(read, claim.recomputed, claim.step, claim.slack)
     values = {"stated": claim.stated, "recomputed": claim.recomputed, "tolerance": tolerance}
     values |= {"unit": claim.unit}
     if close:
@@ -397,6 +424,7 @@ class Amount:
     value: float | None
     unit: str | None  # `<currency> <scale>`; None for a cell that states no figure
     cell: str
+    half: float = 0.0  # half a unit in its last displayed place
 
 
 def column(table: Table, name: str, where: str) -> tuple[int, str]:
@@ -424,22 +452,26 @@ def money(cell: str, header: str, tables: types.ModuleType) -> Amount:
     read = figure(bare(cell), tables)
     if isinstance(read, str):
         raise _NotChecked(read)
-    return Amount(read[0], f"{currency} {scale}", cell)
+    return Amount(read[0], f"{currency} {scale}", cell, half(read[1]))
 
 
 def bare(cell: str) -> str:
-    """A money cell's figure without its currency and scale (`USD 1,250m` -> `1,250`)."""
-    return _SCALE_WORD.sub("", _CODE.sub("", _plain(cell))).strip()
+    """A money cell's figure without its currency and scale (`USD 1,250m` -> `1,250`). A whole
+    cell in brackets is a negative amount, as a bracketed figure is (`(USD 30m)` -> `(30)`)."""
+    text = _plain(cell)
+    if text.startswith("(") and text.endswith(")") and text.count("(") == 1:
+        return f"({bare(text[1:-1])})"
+    return _SCALE_WORD.sub("", _CODE.sub("", text)).strip()
 
 
 DECIMAL_STEP = 1e-6  # the scripts round a share or a recovery, a decimal, to six places
 
 
-def share(
-    where: _Where, cell: str, decimal: float, formula: str, tables: types.ModuleType
-) -> Outcome:
+def share(claim: _Claim, tables: types.ModuleType) -> Outcome:
     """A share stated with `%`, or as a decimal no larger than 1 (the methods store percentages as
-    decimals), against the script's decimal; a bare figure above 1 has no readable unit."""
+    decimals), against the script's decimal (``claim.recomputed``; ``claim.slack`` is the inputs'
+    rounding bound on it, in the same decimal); a bare figure above 1 has no readable unit."""
+    where, cell = claim.where, claim.stated
     text = _plain(cell)
     percent = text.rstrip(") ").endswith("%")  # `(4.2%)` is a negative percentage
     read = figure(cell, tables)
@@ -448,9 +480,9 @@ def share(
         return where("not checked", stated=cell, reason=reason)
     scale, unit = (100.0, "%") if percent else (1.0, "")
     stated = text.replace("%", "").strip()
-    return _judged(
-        _Claim(where, stated, decimal * scale, DECIMAL_STEP * scale, unit, formula), tables
-    )
+    scaled = (claim.recomputed * scale, DECIMAL_STEP * scale, claim.slack * scale)
+    shown = replace(claim, stated=stated, recomputed=scaled[0], step=scaled[1], unit=unit)
+    return _judged(replace(shown, slack=scaled[2]), tables)
 
 
 # --- CP-2D: liquidity_bridge.py on T2E.5 and T2E.6 ---------------------------------------------
@@ -513,6 +545,7 @@ class _Bridge:
     others: tuple[str, ...]  # rows outside the formula
     ending: str  # the Ending row's Amount cell, as written
     unit: str
+    halves: dict[str, float]  # each read input's half-last-place rounding
 
 
 def _bridge_rows(table: Table, item: int) -> dict[str, list[str]] | str:
@@ -549,6 +582,7 @@ def _read_bridge(table: Table, tables: types.ModuleType) -> _Bridge | str:
     if None in keys or len(keys) != 1:
         return f"T2E.5's rows state different or unread currency and scale: {'; '.join(units)}"
     inputs: dict[str, float | None] = dict.fromkeys(BRIDGE_ROWS)
+    halves: dict[str, float] = {}
     absent: list[str] = []
     blanks: list[str] = []
     for field, names in BRIDGE_ROWS.items():
@@ -557,10 +591,12 @@ def _read_bridge(table: Table, tables: types.ModuleType) -> _Bridge | str:
         if isinstance(read, str):
             return f"T2E.5 `{names[0]}`: {read}"
         inputs[field] = None if read is None else read[0]
+        halves[field] = 0.0 if read is None else half(read[1])
         (absent if cell is None else blanks).extend([names[0]] if read is None else [])
     others = tuple(k.removeprefix("other:") for k in rows if k.startswith("other:"))
     ending = rows["ending"][cols["Amount"]]
-    return _Bridge(inputs, _bridge_gap(absent, blanks), others, ending, str(keys.pop()))
+    gap = _bridge_gap(absent, blanks)
+    return _Bridge(inputs, gap, others, ending, str(keys.pop()), halves)
 
 
 def _cp2d(text: str, loaded: Loaded) -> list[Outcome]:
@@ -581,7 +617,8 @@ def _ending(bridge: _Bridge, result: dict[str, Any], tables: types.ModuleType) -
     claim = _Claim(
         _CP2D_ENDING, bridge.ending, recomputed, AMOUNT_STEP, bridge.unit, BRIDGE_FORMULA
     )
-    return _judged(replace(claim, others=bridge.others), tables)
+    slack = sum(bridge.halves.values())  # a sum: its inputs' rounding adds up
+    return _judged(replace(claim, others=bridge.others, slack=slack), tables)
 
 
 def _mte_result(text: str) -> str:
@@ -609,9 +646,8 @@ def _months(
         stated = _mte_result(text)
     except _NotChecked as why:
         return _CP2D_MTE("not checked", reason=str(why))
-    words = _plain(stated).casefold()
-    said_none = words.startswith("not calculable")
-    if blank(stated, tables) and not said_none:
+    none = said_none(stated)
+    if blank(stated, tables) and not none:
         return _CP2D_MTE("not checked", stated=stated, reason=f"T2E.6 states no {MTE} figure")
     if bridge.gap is not None:
         return _CP2D_MTE("not checked", stated=stated, reason=bridge.gap)
@@ -619,8 +655,8 @@ def _months(
     no_runway = months is None and result["average_monthly_burn"] is not None
     if months is None and not no_runway:  # beginning accessible liquidity is missing
         return _CP2D_MTE("not checked", stated=stated, reason=result["months_to_empty_note"])
-    if said_none or no_runway:
-        status: Status = "agreed" if said_none and no_runway else "disagreed"
+    if none or no_runway:
+        status: Status = "agreed" if none and no_runway else "disagreed"
         recomputed = None if no_runway else months
         note = (
             ""
@@ -629,7 +665,17 @@ def _months(
         )
         return _CP2D_MTE(status, stated=stated, recomputed=recomputed, reason=MTE_FORMULA + note)
     claim = _Claim(_CP2D_MTE, stated, months, MONTHS_STEP, "months", MTE_FORMULA, suffix="month")
-    return _judged(claim, tables)
+    return _judged(replace(claim, slack=_months_slack(bridge, result)), tables)
+
+
+def _months_slack(bridge: _Bridge, result: dict[str, Any]) -> float:
+    """Months to Empty is beginning liquidity over the burn (the other inputs' sum over 12): the
+    first-order bound their displayed rounding puts on it."""
+    begin = "beginning_accessible_liquidity"
+    flows = sum(h for k, h in bridge.halves.items() if k != begin)
+    liquidity = float(bridge.inputs[begin] or 0.0)
+    burn = float(result["average_monthly_burn"])
+    return quotient_slack(liquidity, bridge.halves[begin], burn, flows / BRIDGE_MONTHS)
 
 
 # --- CP-3C: funding_gap.py on T3D.2 and `### Funding gap` ---------------------------------------
@@ -693,6 +739,7 @@ class _Funding:
     payload: dict[str, Any]
     stated: dict[str, str]  # result line -> its Amount cell as written
     unit: str
+    halves: dict[str, float]  # `cash`, `fcf`, `instrument:<name>`, `facility:<name>` rounding
 
 
 def _value(cell: str, tables: types.ModuleType, suffix: str = "") -> float | None:
@@ -799,7 +846,51 @@ def _read_funding(text: str, tables: types.ModuleType) -> _Funding:
     stated = {
         line: rows[_label(line)][cols["Amount"]] for line in FUNDING_RESULTS if _label(line) in rows
     }
-    return _Funding(payload, stated, f"{currency} {scale}")
+    halves = _funding_halves(text, rows, cols, tables)
+    return _Funding(payload, stated, f"{currency} {scale}", halves)
+
+
+def _cell_half(cell: str | None, tables: types.ModuleType) -> float:
+    """Half a unit in the last place a figure cell displays; 0 for a cell that states none."""
+    read = None if cell is None else figure(cell, tables)
+    return 0.0 if read is None or isinstance(read, str) else half(read[1])
+
+
+def _funding_halves(
+    text: str, rows: dict[str, list[str]], cols: dict[str, int], tables: types.ModuleType
+) -> dict[str, float]:
+    amount = cols["Amount"]
+
+    def line(name: str) -> float:
+        row = rows.get(_label(name))
+        return 0.0 if row is None else _cell_half(row[amount], tables)
+
+    out = {"cash": line("Cash"), "fcf": line("Forecast free cash flow")}
+    for key, row in rows.items():
+        if key.startswith("facility:"):
+            both = _cell_half(row[amount], tables) + _cell_half(row[cols["Drawn"]], tables)
+            out[key] = both
+    wall = register_table(text, "T3D.2")
+    wall_cols = wall if isinstance(wall, str) else _columns(wall, WALL_COLUMNS, "T3D.2")
+    if not isinstance(wall, str) and not isinstance(wall_cols, str):
+        for row in wall[1]:
+            name = row[wall_cols["Instrument"]]
+            out[f"instrument:{name}"] = _cell_half(row[wall_cols["Amount"]], tables)
+    return out
+
+
+def _funding_slack(line: str, funding: _Funding, view: dict[str, Any]) -> float:
+    """The bound the displayed rounding of the summed inputs puts on a result line: the
+    instruments due inside the horizon, the cash and the counted facilities, the forecast."""
+    halves = funding.halves
+    due = sum(
+        halves.get(f"instrument:{r['instrument']}", 0.0)
+        for r in view["maturity_wall"].get("due_within_horizon", [])
+    )
+    counted = [r for r in view["liquidity"].get("facilities", []) if r.get("counted")]
+    liquidity = halves["cash"] + sum(halves.get(f"facility:{r['facility']}", 0.0) for r in counted)
+    by_line = {"Maturities due": due, "Available liquidity": liquidity}
+    return by_line.get(line, due + liquidity + halves["fcf"])
 
 
 def _cp3c(text: str, loaded: Loaded) -> list[Outcome]:
@@ -825,7 +916,8 @@ def _funding_line(
     recomputed = view[part].get(key)
     if recomputed is None:
         return where("not checked", stated=stated, reason=str(view[part].get("reason")))
-    return _judged(_Claim(where, stated, recomputed, AMOUNT_STEP, funding.unit, formula), tables)
+    claim = _Claim(where, stated, recomputed, AMOUNT_STEP, funding.unit, formula)
+    return _judged(replace(claim, slack=_funding_slack(line, funding, view)), tables)
 
 
 # --- the checks, their issues and their record --------------------------------------------------

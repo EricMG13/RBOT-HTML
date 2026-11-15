@@ -50,7 +50,9 @@ from deploy_workflow.method_scripts import (
     blank,
     column,
     money,
+    quotient_slack,
     register_table,
+    said_none,
     share,
 )
 
@@ -65,9 +67,12 @@ T2H5_MONEY = {
     "closing debt/cash": ("closing_debt", "closing_cash"),
 }
 RATIO_STEP = 1e-9  # the script does not round its ratios
-NOT_MEANINGFUL = ("n.m.", "nm", "not meaningful", "not calculable")
 _PART = re.compile(r"\s*/\s*")
 _NOT_ANNUAL = re.compile(r"\b(?:q[1-4]|h[12]|[1-9]m|quarter|half|month|ytd)\b")
+_OTHER_BASIS = re.compile(
+    r"covenant|agency|rating|lease[ -]?adjusted|ifrs ?16|pro ?forma|run[ -]?rate|principal|"
+    r"face value|average debt"
+)
 _EBITDA_OVER_INTEREST = re.compile(r"ebitda\s*(?:/|to|over)\s*(?:\(?cash\s+|net\s+)?interest")
 CP2G_NOTE = (
     "Python checks figures in T2H.5 and T2H.6 after you answer, with the method's own "
@@ -231,6 +236,26 @@ def _inputs(model: _Model, key: Key, names: tuple[str, ...]) -> dict[str, float]
     return values
 
 
+def _halves(model: _Model, key: Key) -> dict[str, float]:
+    """Each read input's half-last-place rounding for one period and case."""
+    row = model.fields.get(_norm(key), {})
+    return {name: f.half for name, f in row.items() if isinstance(f, Amount)}
+
+
+def _kpi_slack(kpi: str, v: dict[str, float], h: dict[str, float]) -> float:
+    """The first-order bound the inputs' displayed rounding puts on the script's KPI."""
+    debt, ebitda = v.get("closing_debt", 0.0), v.get("ebitda", 0.0)
+    hd, he = h.get("closing_debt", 0.0), h.get("ebitda", 0.0)
+    if kpi == "total_leverage":
+        return quotient_slack(debt, hd, ebitda, he)
+    if kpi == "net_leverage":
+        net, hn = debt - v.get("closing_cash", 0.0), hd + h.get("closing_cash", 0.0)
+        return quotient_slack(net, hn, ebitda, he)
+    if kpi == "interest_coverage":
+        return quotient_slack(ebitda, he, abs(v.get("interest", 0.0)), h.get("interest", 0.0))
+    return quotient_slack(v.get("fcf", 0.0), h.get("fcf", 0.0), debt, hd)
+
+
 def _register_of(name: str) -> str:
     return "T2H.4" if name in ("ebitda", "fcf") else "T2H.5"
 
@@ -255,8 +280,8 @@ def _kpi(kpi: _Kpi, key: Key, stated: str | None, model: _Model, loaded: Loaded)
     where = _where("T2H.6", kpi.name, key)
     if stated is None:
         return where("not checked", reason="T2H.6's `gross/net leverage` cell is not two figures")
-    said_none = _label(stated) in NOT_MEANINGFUL
-    if blank(stated, loaded.tables) and not said_none:
+    none = said_none(stated)
+    if blank(stated, loaded.tables) and not none:
         return where("not checked", stated=stated, reason=f"T2H.6 states no {kpi.name} figure")
     if kpi.annual and _NOT_ANNUAL.search(_label(key[0])):
         reason = f"{key[0]} is not an annual period: its EBITDA or FCF is not a full year's"
@@ -267,8 +292,8 @@ def _kpi(kpi: _Kpi, key: Key, stated: str | None, model: _Model, loaded: Loaded)
     names = {"closing_debt": "total_debt", "closing_cash": "cash_and_equivalents"}
     names |= {"interest": "cash_interest_paid"}
     value = loaded.script.compute_kpis({names.get(k, k): v for k, v in inputs.items()})[kpi.kpi]
-    if value is None or said_none:
-        agreed = value is None and said_none
+    if value is None or none:
+        agreed = value is None and none
         label = "Not Calculable" if value is None else None
         return where(
             "agreed" if agreed else "disagreed",
@@ -277,7 +302,9 @@ def _kpi(kpi: _Kpi, key: Key, stated: str | None, model: _Model, loaded: Loaded)
             recomputed_label=label,
             reason=kpi.formula,
         )
-    return _ratio(kpi, where, stated, value, loaded.tables)
+    slack = _kpi_slack(kpi.kpi, inputs, _halves(model, key))
+    claim = _Claim(where, stated, value, RATIO_STEP, "x", kpi.formula, slack=slack)
+    return _ratio(kpi, claim, loaded.tables)
 
 
 def _coverage_defined(outcome: Outcome, definition: str) -> Outcome:
@@ -293,30 +320,43 @@ def _coverage_defined(outcome: Outcome, definition: str) -> Outcome:
     return replace(outcome, status="not checked", reason=reason)
 
 
-def _ratio(
-    kpi: _Kpi, where: _Where, stated: str, value: float, tables: types.ModuleType
-) -> Outcome:
+def _ratio(kpi: _Kpi, claim: _Claim, tables: types.ModuleType) -> Outcome:
     if kpi.name == "FCF/debt":
-        return share(where, stated, value, kpi.formula, tables)
-    multiple = re.sub(r"(?i)\s*x(?=\)?$)", "", _plain(stated))  # `4.5x` is 4.5, unit x
-    claim = _Claim(where, multiple, value, RATIO_STEP, "x", kpi.formula)
-    return _judged(claim, tables)
+        return share(claim, tables)
+    multiple = re.sub(r"(?i)\s*x(?=\)?$)", "", _plain(claim.stated))  # `4.5x` is 4.5, unit x
+    return _judged(replace(claim, stated=multiple), tables)
+
+
+def _basis_defined(outcome: Outcome, definition: str) -> Outcome:
+    """A leverage or FCF/debt figure that disagrees is not sent back when the row's definition
+    names another basis than closing debt over the period's EBITDA (covenant or agency EBITDA,
+    lease-adjusted, pro forma); the method keeps such definitions apart (REF_CP-2G_B)."""
+    other = _OTHER_BASIS.search(_label(definition))
+    if outcome.status != "disagreed" or other is None:
+        return outcome
+    reason = f"the row's definition (`{other[0]}`) is not the script's closing debt / EBITDA"
+    return replace(outcome, status="not checked", reason=reason)
 
 
 def _kpis(text: str, model: _Model, loaded: Loaded) -> list[Outcome]:
     table = register_table(text, "T2H.6")
     if isinstance(table, str):
         return [_Where("CP-2G", CREDIT_METRICS, "T2H.6", "T2H.6")("not checked", reason=table)]
-    rows = _keyed(table, "T2H.6")
     names = ("gross/net leverage", "coverage", "FCF/debt", "definition IDs")
-    cols = {name: column(table, name, "T2H.6")[0] for name in names}
+    try:  # an unread T2H.6 leaves T2H.5's roll-forward checked
+        rows = _keyed(table, "T2H.6")
+        cols = {name: column(table, name, "T2H.6")[0] for name in names}
+    except _NotChecked as why:
+        return [_Where("CP-2G", CREDIT_METRICS, "T2H.6", "T2H.6")("not checked", reason=str(why))]
     out = []
     for key, row in rows.items():
         stated = _stated_kpis(row, cols, loaded.tables)
         definition = f"{row[cols['definition IDs']]} {table[0][cols['coverage']]}"
         outcomes = [_kpi(k, key, stated[k.name], model, loaded) for k in KPIS]
         out += [
-            _coverage_defined(o, definition) if o.figure.startswith("Coverage") else o
+            _coverage_defined(o, definition)
+            if o.figure.startswith("Coverage")
+            else _basis_defined(o, row[cols["definition IDs"]])
             for o in outcomes
         ]
     return out
@@ -366,7 +406,8 @@ def _opening(what: str, key: Key, prior: Key | None, model: _Model, loaded: Load
     claim = _Claim(
         where, bare(field.cell), rolled["expected_closing"], AMOUNT_STEP, model.unit, formula
     )
-    return _judged(claim, loaded.tables)
+    prior_half = _halves(model, prior).get(f"closing_{what}", 0.0)  # the prior close's rounding
+    return _judged(replace(claim, slack=prior_half), loaded.tables)
 
 
 def _closing(key: Key, model: _Model, loaded: Loaded) -> Outcome:
@@ -381,7 +422,8 @@ def _closing(key: Key, model: _Model, loaded: Loaded) -> Outcome:
     claim = _Claim(
         where, stated, rolled["expected_closing"], AMOUNT_STEP, model.unit, CLOSING_FORMULA
     )
-    outcome = _judged(claim, loaded.tables)
+    flows_half = sum(_halves(model, key).get(n, 0.0) for n in names[:3])
+    outcome = _judged(replace(claim, slack=flows_half), loaded.tables)
     if outcome.status == "disagreed":
         reason = (
             f"a residual of {rolled['residual']:g}: the method allows a residual it logs, and "

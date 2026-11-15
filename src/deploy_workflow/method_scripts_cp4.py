@@ -20,7 +20,7 @@ Input`, not columns.
 """
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from deploy_workflow import method_scripts as core
@@ -39,6 +39,7 @@ from deploy_workflow.method_scripts import (
     blank,
     currency_of,
     figure,
+    half,
     register_table,
     scale_of,
 )
@@ -119,7 +120,7 @@ def _row(row: list[str], cols: dict[str, int], loaded: Loaded) -> list[Outcome]:
         claim = _Claim(
             headroom, stated.text, result["headroom"], HEADROOM_STEP, stated.unit, HEADROOM_FORMULA
         )
-        first = _judged(claim, loaded.tables)
+        first = _judged(replace(claim, slack=result["slack"]), loaded.tables)
     return [first, _status(status, row[cols["Status"]], result)]
 
 
@@ -127,6 +128,7 @@ def _headroom(row: list[str], cols: dict[str, int], loaded: Loaded) -> dict[str,
     direction = _test_type(row[cols["Test Type"]], loaded)
     values: dict[str, float] = {}
     units: set[str] = set()
+    slack = 0.0
     for name in ("Threshold", "Current Basis"):
         cell = row[cols[name]]
         if blank(cell, loaded.tables):
@@ -136,11 +138,12 @@ def _headroom(row: list[str], cols: dict[str, int], loaded: Loaded) -> dict[str,
         if isinstance(number, str):
             raise _NotChecked(f"{name}: {number}")
         values[name], units = number[0], units | {read.unit}
+        slack += half(number[1])  # a difference: its inputs' rounding adds up
     if len(units) != 1:
         raise _NotChecked(f"Threshold and Current Basis are in different units: {sorted(units)}")
     test: dict[str, Any] = {"test": _plain(row[cols["Test"]]), "test_type": direction}
     test |= {"threshold": values["Threshold"], "current_ratio": values["Current Basis"]}
-    return {**loaded.script.headroom(test), "unit": units.pop()}
+    return {**loaded.script.headroom(test), "unit": units.pop(), "slack": slack}
 
 
 def _status(where: _Where, cell: str, result: dict[str, Any]) -> Outcome:
@@ -150,6 +153,13 @@ def _status(where: _Where, cell: str, result: dict[str, Any]) -> Outcome:
         why = f"Status `{cell}` is none of Compliant, At threshold, Breached"
         return where("not checked", stated=cell, reason=why)
     found = str(result["status"])
+    if _label(found) != word and abs(result["headroom"]) <= result["slack"]:
+        why = (
+            f"the recomputed headroom {result['headroom']:g} is within the displayed inputs' "
+            f"rounding ({result['slack']:g}) of zero, so they cannot settle `{cell}` against "
+            f"{found}"
+        )
+        return where("not checked", stated=cell, recomputed_label=found, reason=why)
     agreed: Status = "agreed" if _label(found) == word else "disagreed"
     return where(agreed, stated=cell, recomputed_label=found, reason=HEADROOM_FORMULA)
 
