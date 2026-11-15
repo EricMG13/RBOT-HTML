@@ -52,7 +52,7 @@ _AGENCIES = re.compile(r"\s+/\s+")  # Moody's / S&P; "#N/A" holds an unspaced sl
 SHOWN = Decimal("0.01")
 LISTED = 5  # rows named in one aggregated finding
 FILE_FIX = "export the file again from the source system"
-ROLES = ("mandate", "constraints", "exposure", "holdings")
+ROLES = ("mandate", "constraints", "exposure", "holdings", "market")
 
 FIX: Mapping[str, str] = {
     "par": (
@@ -80,6 +80,10 @@ FIX: Mapping[str, str] = {
     "name": "export the file again with UTF-8 text, or correct the name",
     "ranking": "enter the lien ranking (e.g. 1st Lien) in Ranking; the rating goes in Ratings",
     "empty_rows": "delete the empty rows below the data",
+    "bid_ask": "correct the quote: a bid is at or below its ask",
+    "tranche": "correct the position or the tranche size: a holding is part of its tranche",
+    "kind": "move the value to its own column",
+    "borrower_tickers": "give each borrower one ticker, or correct the ticker",
     "stale": f"supply figures measured at most {STALE_DAYS} days before the run's as-of date",
     "future": "enter the date the figures were measured, on or before the run's as-of date",
     "unit": "enter the figure with its unit, e.g. 2.5% NAV, 313 bps or 4.8 yrs",
@@ -188,7 +192,8 @@ def figure(value: Decimal) -> str:
 
 
 def count(number: int, noun: str) -> str:
-    return f"{number} {noun}{'' if number == 1 else 's'}"
+    plural = noun[:-1] + "ies" if noun.endswith("y") else noun + "s"
+    return f"{number} {noun if number == 1 else plural}"
 
 
 def pct(value: Decimal) -> str:
@@ -333,6 +338,7 @@ _HOLDING_COLUMNS: Mapping[str, tuple[str, ...]] = {
     "ask": ("ask", "offer"),
     "ytm": ("ytm", "yield"),
     "dm": ("dm", "discount margin"),
+    "size": ("size",),
     "change_1m": ("δ 1m", "1m"),
     "change_ytd": ("δ ytd", "ytd"),
     "par": ("holdings", "par", "position", "quantity"),
@@ -419,8 +425,8 @@ class Section:
 class Export:
     """The recognised files: each role's file name, rows and parsed content."""
 
-    files: dict[str, str] = field(default_factory=dict)  # role -> the first file of the role
-    roles: dict[str, str] = field(default_factory=dict)  # file name -> role, every file
+    files: dict[str, str] = field(default_factory=dict)  # role -> the first part's label
+    roles: dict[str, str] = field(default_factory=dict)  # part label -> role, every part
     mandate: list[tuple[int, list[str]]] = field(default_factory=list)
     constraints: list[tuple[str, list[tuple[int, list[str]]], list[str]]] = field(
         default_factory=list
@@ -429,37 +435,88 @@ class Export:
     holdings: list[Holding] = field(default_factory=list)
     market: list[Holding] = field(default_factory=list)
     holding_columns: dict[str, int] = field(default_factory=dict)
+    book: str = ""  # the workbook that holds the holdings
     empty_rows: dict[str, list[int]] = field(default_factory=dict)  # sheet -> row numbers
 
 
-def recognise(files: Mapping[str, bytes]) -> dict[str, str]:
-    """Each file's role (mandate, constraints, exposure, holdings), for the files that have one."""
-    roles: dict[str, str] = {}
-    for name, raw in files.items():
-        lower = name.lower()
+@dataclass(frozen=True)
+class Part:
+    """One recognised part of the export: a CSV file, or one sheet of a workbook."""
+
+    file: str
+    sheet: str | None
+    role: str
+    rows: tuple[tuple[int, tuple[str, ...]], ...] = ()  # (row number, cells)
+
+    @property
+    def label(self) -> str:
+        return self.file if self.sheet is None else f"{self.file} [{self.sheet}]"
+
+
+def _role(rows: Sequence[Sequence[str]]) -> str | None:
+    if is_mandate(rows):
+        return "mandate"
+    if is_constraints(rows):
+        return "constraints"
+    return "exposure" if is_exposure(rows) else None
+
+
+def _text(cell: Cell) -> str:
+    """A workbook cell as the CSV export would write it: a date cell as its ISO date."""
+    if cell.date_format:
+        when = read_date(cell)
+        return when.isoformat() if when is not None else cell.text
+    return cell.text
+
+
+def _workbook_parts(name: str, raw: bytes) -> list[Part]:
+    found: list[Part] = []
+    for sheet in workbook_sheets(raw):
+        rows = sheet_rows(raw, sheet) or []
+        if folded(sheet) in ("holdings", "market data") or (
+            (header := holdings_header(rows)) is not None and "par" in header[1]
+        ):
+            kind = "market" if folded(sheet) == "market data" else "holdings"
+            found.append(Part(name, sheet, kind))
+            continue
+        texts = [[_text(cell) for cell in cells] for _, cells in rows]
+        if (role := _role(texts)) is not None:
+            numbered = tuple((n, tuple(r)) for (n, _), r in zip(rows, texts, strict=True))
+            found.append(Part(name, sheet, role, numbered))
+    return found
+
+
+def parts(files: Mapping[str, bytes]) -> list[Part]:
+    """Every recognised part, CSV files and workbook sheets alike, in file order. A workbook's
+    `Holdings` sheet (or any sheet whose header has a borrower and a par column) is the holdings;
+    its `Market Data` sheet the quote universe."""
+    found: list[Part] = []
+    for name in sorted(files):
+        raw, lower = files[name], name.lower()
         if lower.endswith(".csv"):
             rows = csv_rows(raw)
-            role = (
-                "mandate"
-                if is_mandate(rows)
-                else "constraints"
-                if is_constraints(rows)
-                else "exposure"
-                if is_exposure(rows)
-                else None
-            )
-            if role is not None:
-                roles[name] = role
-        elif lower.endswith(".xlsx") and any(folded(s) == "holdings" for s in workbook_sheets(raw)):
-            roles[name] = "holdings"
-    return roles
+            if (role := _role(rows)) is not None:
+                numbered = tuple((n, tuple(r)) for n, r in enumerate(rows, 1))
+                found.append(Part(name, None, role, numbered))
+        elif lower.endswith(".xlsx"):
+            found += _workbook_parts(name, raw)
+    return found
 
 
-def sections(rows: Sequence[Sequence[str]]) -> dict[str, Section]:
+def recognise(files: Mapping[str, bytes]) -> dict[str, str]:
+    """The files that hold a part of the export, with their parts' roles."""
+    roles: dict[str, list[str]] = {}
+    for part in parts(files):
+        if part.role != "market":
+            roles.setdefault(part.file, []).append(part.role)
+    return {name: ", ".join(found) for name, found in roles.items()}
+
+
+def sections(rows: Sequence[tuple[int, Sequence[str]]]) -> dict[str, Section]:
     """The exposure report's stacked sections: a title row, a header row, then data rows."""
     found: dict[str, Section] = {}
     current: Section | None = None
-    for number, row in enumerate(rows, 1):
+    for number, row in rows:
         if not _cells(row):
             continue
         if _is_title(row) and (key := section_key(row[0])) is not None:
@@ -488,7 +545,7 @@ def holding_rows(raw: bytes, sheet: str, export: Export) -> list[Holding]:
     if header is None:
         return []
     start, columns = header
-    if sheet == "Holdings":
+    if "par" in columns:
         export.holding_columns = dict(columns)
     out: list[Holding] = []
     for number, cells in rows:
@@ -503,34 +560,54 @@ def holding_rows(raw: bytes, sheet: str, export: Export) -> list[Holding]:
 
 def read_export(files: Mapping[str, bytes]) -> Export:
     export = Export()
-    export.roles = recognise(files)
-    for name, role in export.roles.items():
-        export.files.setdefault(role, name)
-        raw = files[name]
-        if role == "mandate":
-            export.mandate = list(enumerate(csv_rows(raw), 1))
-        elif role == "constraints":
-            rows = list(enumerate(csv_rows(raw), 1))
+    for part in parts(files):
+        export.roles[part.label] = part.role
+        if part.role == "market":
+            export.market = holding_rows(files[part.file], part.sheet or "", export)
+            continue
+        export.files.setdefault(part.role, part.label)
+        rows = [(number, list(row)) for number, row in part.rows]
+        if part.role == "mandate":
+            export.mandate = rows
+        elif part.role == "constraints":
             header = next(row for _, row in rows if _cells(row))
-            export.constraints.append((name, rows, header))
-        elif role == "exposure":
-            export.sections = sections(csv_rows(raw))
+            export.constraints.append((part.label, rows, header))
+        elif part.role == "exposure":
+            export.sections = sections(rows)
         else:
-            export.holdings = holding_rows(raw, "Holdings", export)
-            export.market = holding_rows(raw, "Market Data", export)
+            export.book = part.file
+            export.holdings = holding_rows(files[part.file], part.sheet or "", export)
     return export
 
 
 # --- Findings ------------------------------------------------------------------------------------
 
 
+# The order findings are reported in, most consequential first: a breach a wrong figure hides, a
+# total or balance that does not reconcile (or a file that cannot be read), a stated figure the
+# holdings contradict, a stale or future date, then cell defects.
+PRIORITY: Mapping[str, int] = {
+    "breach": 0,
+    **dict.fromkeys(("total", "capital", "missing", "layout", "column"), 1),
+    **dict.fromkeys(
+        ("par", "nav", "count", "share", "absent", "metric", "plausible", "headroom", "status"), 2
+    ),
+    **dict.fromkeys(("stale", "future"), 3),
+}
+
+
 @dataclass
 class Findings:
-    issues: list[Issue] = field(default_factory=list)
+    issues: list[tuple[int, Issue]] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    table: list[tuple[str, str, str, str]] = field(default_factory=list)
 
     def add(self, file: str, where: str, cell: str, problem: str, fix: str) -> None:
-        self.issues.append(Issue(file=file, sheet=where, cell=cell, problem=problem, fix=FIX[fix]))
+        issue = Issue(file=file, sheet=where, cell=cell, problem=problem, fix=FIX[fix])
+        self.issues.append((PRIORITY.get(fix, 4), issue))
+
+    def ordered(self) -> tuple[Issue, ...]:
+        return tuple(issue for _, issue in sorted(self.issues, key=lambda item: item[0]))
 
 
 class ExportReport(ValidationReport):
@@ -541,14 +618,33 @@ class ExportReport(ValidationReport):
     files: tuple[tuple[str, str], ...] = ()
     recomputed: tuple[str, ...] = ()
     notes: tuple[str, ...] = ()
+    table: tuple[tuple[str, str, str, str], ...] = ()
+
+    @property
+    def sources(self) -> tuple[str, ...]:
+        """The file names the parts come from, each once."""
+        return tuple(dict.fromkeys(label.split(" [")[0] for label, _ in self.files))
 
     def lines(self) -> tuple[str, ...]:
         summary = (
-            f"OK: {len(self.files)} files, {self.rows} holdings"
+            f"OK: {len(self.files)} parts, {self.rows} holdings"
             if self.ok
             else f"FAILED: {len(self.issues)} issues"
         )
         return (*(render(issue) for issue in self.issues), summary)
+
+    def table_lines(self) -> tuple[str, ...]:
+        """The headline figures, stated against the holdings, as an aligned table."""
+        if not self.table:
+            return ()
+        rows = [("figure", "stated", "holdings", "difference"), *self.table]
+        widths = [max(len(row[i]) for row in rows) for i in range(4)]
+        out = ["Reconciliation, stated against the holdings:"]
+        out += [
+            "  " + "  ".join(c.ljust(w) for c, w in zip(row, widths, strict=True)).rstrip()
+            for row in rows
+        ]
+        return tuple(out)
 
 
 def render(issue: Issue) -> str:
@@ -563,7 +659,7 @@ def render(issue: Issue) -> str:
 
 # --- Typed holdings ------------------------------------------------------------------------------
 
-_NUMERIC = ("par", "bid", "ask", "margin", "ytm", "dm", "change_1m", "change_ytd")
+_NUMERIC = ("par", "bid", "ask", "margin", "ytm", "dm", "change_1m", "change_ytd", "size")
 
 
 @dataclass
@@ -629,6 +725,7 @@ class Recomputed:
     ytm: Decimal | None = None
     ytm_all: Decimal | None = None
     names: dict[str, str] = field(default_factory=dict)  # folded borrower -> as written
+    sheet: str = "Holdings"
 
     def issuer_share(self, name: str) -> Decimal:
         return share(self.issuer_value.get(folded(name), Decimal(0)), self.value)
@@ -651,7 +748,7 @@ def _weighted(rows: Iterable[tuple[Decimal, Decimal]]) -> Decimal | None:
 
 
 def recompute(rows: Sequence[Holding]) -> Recomputed:
-    out = Recomputed()
+    out = Recomputed(sheet=rows[0].sheet if rows else "Holdings")
     priced: list[tuple[Decimal, Decimal]] = []
     for holding in rows:
         par = holding.numbers.get("par")
@@ -738,18 +835,24 @@ _COLUMN_NAME = {
     "dm": "Mid 3Y DM",
     "maturity": "Maturity",
     "change_1m": "Δ 1M",
+    "size": "Size ($Mn)",
     "change_ytd": "Δ YTD",
 }
 
 
-def tally_findings(file: str, sheet: str, tally: Tally, findings: Findings) -> None:
-    """A column's error tokens and unreadable cells (par has its own finding, `par_findings`)."""
+def tally_findings(
+    file: str, sheet: str, tally: Tally, findings: Findings, par_of: Mapping[int, Decimal]
+) -> None:
+    """A column's error tokens and unreadable cells (par has its own finding, `par_findings`),
+    with the par of the positions a missing price leaves out of the market value."""
     for key, numbers in tally.tokens.items():
         if key == "par":
             continue
+        affected = sum((par_of.get(n, Decimal(0)) for n in numbers), Decimal(0))
+        priced = f"; par affected {money(affected)}" if key in ("bid", "ask") and affected else ""
         problem = (
             f"{_COLUMN_NAME.get(key, key)} holds a vendor error token such as #N/A N/A on "
-            f"{rows_named(numbers)}; read as missing, never as zero"
+            f"{rows_named(numbers)}; read as missing, never as zero{priced}"
         )
         findings.add(file, sheet, _COLUMN_NAME.get(key, key), problem, "token")
     for key, numbers in tally.unreadable.items():
@@ -813,7 +916,7 @@ def range_findings(
                 f"{rows_named([h.row for h in bad])} ({'from ' if len(values) > 1 else ''}"
                 f"{seen.replace(', ', ' to ')})"
             )
-            if key == "ytm" and sheet == "Holdings" and found.ytm_all is not None:
+            if key == "ytm" and sheet == found.sheet and found.ytm_all is not None:
                 problem += (
                     f"; with them the par-weighted yield is {pct(found.ytm_all)}, without them "
                     f"{pct(found.ytm) if found.ytm is not None else 'not computable'}"
@@ -913,14 +1016,14 @@ def rating_findings(file: str, rows: Sequence[Holding], findings: Findings) -> N
 
 
 def par_findings(file: str, rows: Sequence[Holding], findings: Findings) -> None:
-    lacking = [h.row for h in rows if h.sheet == "Holdings" and "par" not in h.numbers]
+    lacking = [h.row for h in rows if "par" not in h.numbers]
     if lacking:
         problem = (
             f"positions without a readable par, left out of every recomputed figure: "
             f"{len(lacking)} ({rows_named(lacking)}; an error token, an unreadable value or an "
             "empty cell)"
         )
-        findings.add(file, "Holdings", "Holdings (par)", problem, "par_cell")
+        findings.add(file, rows[0].sheet, "Holdings (par)", problem, "par_cell")
 
 
 def empty_row_findings(file: str, export: Export, findings: Findings) -> None:
@@ -935,6 +1038,8 @@ def empty_row_findings(file: str, export: Export, findings: Findings) -> None:
 
 _METRICS = (
     ("second_lien", ("2nd lien", "second lien")),
+    ("first_lien", ("1st lien", "first lien")),
+    ("wal", ("wal", "weighted average life", "average life")),
     ("top10", ("top 10", "top10", "top ten")),
     ("largest", ("largest issuer", "largest obligor", "largest borrower", "single issuer")),
     ("positions", ("position", "number of loans", "facilities")),
@@ -965,6 +1070,8 @@ _METRIC_UNITS: Mapping[str, frozenset[str]] = {
     "margin": frozenset({"", "bps"}),
     "ytm": _SHARE,
     "second_lien": _SHARE,
+    "first_lien": _SHARE,
+    "wal": frozenset({"yrs"}),
     "largest": _SHARE,
     "top10": _SHARE,
 }
@@ -1029,11 +1136,13 @@ def _claim_finding(
     """One stated figure against the holdings' figure; `how` holds `marked`, `fix`, `shown`
     (a formatter) and `note` (words after the figures)."""
     marked = bool(how.get("marked", False))
-    if within(claim.value, exact, marked=marked):
-        return
     show = how.get("shown", figure)
     assert callable(show)
     gap = EXACT.abs(EXACT.subtract(claim.value.value, exact))
+    if how.get("table"):
+        findings.table.append((str(how["table"]), claim.text, show(exact), show(gap)))
+    if within(claim.value, exact, marked=marked):
+        return
     problem = (
         f"{label} is stated as {claim.text}; the holdings give {show(exact)}, a difference of "
         f"{show(gap)}{how.get('note', '')}"
@@ -1046,71 +1155,149 @@ def _count(value: Decimal) -> str:
 
 
 def summary_findings(
-    export: Export, claims: Mapping[str, Claim], found: Recomputed, findings: Findings
+    export: Export,
+    claims: Mapping[str, Claim],
+    found: Recomputed,
+    shape: Profile,
+    findings: Findings,
 ) -> None:
     file = export.files["exposure"]
+    for key, label, exact, how in _headline(found, shape):
+        if exact is None or (not found.value and key not in _COUNTED):
+            continue
+        if key in claims:
+            _claim_finding(file, claims[key], label, exact, findings, **how)
+        else:
+            show = how.get("shown", figure)
+            assert callable(show)
+            findings.table.append((str(how["table"]), "not stated", show(exact), ""))
+    _internal_findings(file, claims, findings)
+
+
+_COUNTED = ("par", "positions", "obligors", "sectors")
+
+
+def _years(value: Decimal) -> str:
+    return f"{plain(value.quantize(SHOWN, context=EXACT))} yrs"
+
+
+def _life_note(shape: Profile) -> str:
+    if not shape.centuries or shape.life_corrected is None:
+        return ""
+    fixed = plain(shape.life_corrected.quantize(SHOWN, context=EXACT))
+    return (
+        f"; with the {count(shape.centuries, 'maturity')} before 1950 read as 20xx it would be "
+        f"{fixed} yrs (not applied)"
+    )
+
+
+def _headline(
+    found: Recomputed, shape: Profile
+) -> tuple[tuple[str, str, Decimal | None, dict[str, object]], ...]:
+    """Each headline figure: its summary key, its words, the holdings' figure and how to show it."""
+    name, largest = found.largest_issuer()
     unpriced = (
         f"; it leaves out {count(len(found.unpriced), 'position')} with no price"
         if found.unpriced
         else ""
     )
-    name, largest = found.largest_issuer()
-    checks: tuple[tuple[str, str, Decimal | None, dict[str, object]], ...] = (
-        ("par", "total par", found.par, {"fix": "par", "shown": money}),
+    return (
+        ("par", "total par", found.par, {"fix": "par", "shown": money, "table": "total par"}),
         (
             "nav",
             "NAV",
             found.value,
-            {"fix": "nav", "shown": money, "marked": True, "note": unpriced},
+            {
+                "fix": "nav",
+                "shown": money,
+                "marked": True,
+                "note": unpriced,
+                "table": "NAV / market value at mid",
+            },
         ),
         (
             "positions",
             "the number of positions",
             Decimal(found.positions),
-            {"fix": "count", "shown": _count},
+            {"fix": "count", "shown": _count, "table": "positions"},
         ),
         (
             "obligors",
             "the number of obligors",
             Decimal(len(found.borrowers)),
-            {"fix": "count", "shown": _count, "note": f" ({len(found.tickers)} tickers)"},
+            {
+                "fix": "count",
+                "shown": _count,
+                "note": f" (by borrower name; {len(found.tickers)} tickers)",
+                "table": "obligors (by borrower name)",
+            },
         ),
         (
             "sectors",
             "the number of sectors",
             Decimal(len(found.sectors)),
-            {"fix": "count", "shown": _count},
-        ),
-        ("price", "the weighted average price", found.price, {"marked": True}),
-        ("margin", "the weighted average margin", found.margin, {}),
-        ("ytm", "the weighted average yield to maturity", found.ytm, {}),
-        (
-            "second_lien",
-            "the second-lien share",
-            share(found.second_lien, found.value),
-            {"fix": "share", "marked": True, "shown": pct},
+            {"fix": "count", "shown": _count, "table": "sectors"},
         ),
         (
             "largest",
             "the largest issuer's share",
             largest,
-            {"fix": "share", "marked": True, "shown": pct, "note": f" ({name})"},
+            {
+                "fix": "share",
+                "marked": True,
+                "shown": pct,
+                "note": f" ({name})",
+                "table": "largest issuer",
+            },
         ),
         (
             "top10",
             "the ten largest issuers' share",
             found.top_ten(),
-            {"fix": "share", "marked": True, "shown": pct},
+            {"fix": "share", "marked": True, "shown": pct, "table": "ten largest issuers"},
+        ),
+        (
+            "first_lien",
+            "the first-lien share",
+            share(shape.liens.get("first", Decimal(0)), found.value),
+            {"fix": "share", "marked": True, "shown": pct, "table": "first lien"},
+        ),
+        (
+            "second_lien",
+            "the second-lien share",
+            share(found.second_lien, found.value),
+            {"fix": "share", "marked": True, "shown": pct, "table": "second lien"},
+        ),
+        (
+            "price",
+            "the weighted average price",
+            found.price,
+            {"marked": True, "table": "weighted average price"},
+        ),
+        (
+            "margin",
+            "the weighted average margin",
+            found.margin,
+            {"table": "weighted average margin (bps)"},
+        ),
+        (
+            "ytm",
+            "the weighted average yield to maturity",
+            found.ytm,
+            {"table": "weighted average yield (%)"},
+        ),
+        (
+            "wal",
+            "the weighted average life",
+            shape.life,
+            {
+                "marked": True,
+                "shown": _years,
+                "note": _life_note(shape),
+                "table": "weighted average life",
+            },
         ),
     )
-    for key, label, exact, how in checks:
-        if (
-            key in claims
-            and exact is not None
-            and (found.value or key in ("par", "positions", "obligors", "sectors"))
-        ):
-            _claim_finding(file, claims[key], label, exact, findings, **how)
-    _internal_findings(file, claims, findings)
 
 
 def _internal_findings(file: str, claims: Mapping[str, Claim], findings: Findings) -> None:
@@ -1557,64 +1744,85 @@ def stale_findings(dated: Sequence[tuple[str, date]], run_date: date, findings: 
 
 
 def validate_export(files: Mapping[str, bytes], *, run_date: date | None = None) -> ExportReport:
-    """Check a portfolio export (any of its four files) with the holdings as the authority."""
+    """Check a portfolio export (any of its parts, as CSV files or workbook sheets) with the
+    holdings as the authority. Findings come most consequential first (`PRIORITY`)."""
     findings = Findings()
     export = read_export(files)
     rows = [*export.holdings, *export.market]
     tallies = type_rows(rows)
     found = recompute(export.holdings)
-    holdings_file = export.files.get("holdings", "")
-    if holdings_file:
-        _holdings_checks(holdings_file, export, tallies, found, findings)
+    if export.book:
+        _holdings_checks(export, tallies, found, findings)
     elif export.files:
-        findings.add(
-            next(iter(export.files.values())),
-            "files",
-            "holdings",
-            "no holdings sheet is among the files",
-            "missing",
-        )
+        first = next(iter(export.files.values()))
+        findings.add(first, "files", "holdings", "no holdings sheet is among the files", "missing")
     claims, unchecked = summary_claims(export, findings) if "exposure" in export.files else ({}, [])
     dated = mandate_findings(export, claims, findings) if "mandate" in export.files else []
     dated += report_dates(export)
+    data_date = next((when for _, when in dated), None)
     dated += constraint_findings(export, found, findings)
-    if "exposure" in export.files and holdings_file:
-        summary_findings(export, claims, found, findings)
-        holding_section_findings(export, found, findings)
-        sector_section_findings(export, found, findings)
-    for section in export.sections.values():
-        if section.key != "summary":
-            total_findings(export.files["exposure"], section, findings)
-    if "exposure" in export.files and not export.sections:
-        findings.add(export.files["exposure"], "layout", "A1", "no sections found", "layout")
-    as_of = next((when for _, when in dated), None)
-    date_findings(holdings_file, rows, run_date or as_of, findings)
+    shape = profile(export.holdings, data_date or run_date)
+    if "exposure" in export.files:
+        _report_checks(export, (claims, found, shape), data_date or run_date, findings)
+    date_findings(export.book, rows, run_date or data_date, findings)
     if run_date is not None:
         stale_findings(dated, run_date, findings)
     notes = [*findings.notes, *(f"not checked: {item}" for item in unchecked)]
+    if "ratings" in export.sections and export.book:
+        notes.append(BUCKET_RULE)
+    order = sorted(export.roles.items(), key=lambda item: (ROLES.index(item[1]), item[0]))
     return ExportReport(
         ok=not findings.issues,
         rows=found.positions,
-        issues=tuple(findings.issues),
-        files=tuple(sorted(export.roles.items(), key=lambda item: (ROLES.index(item[1]), item[0]))),
-        recomputed=recomputed_lines(found) if holdings_file else (),
+        issues=findings.ordered(),
+        files=tuple(order),
+        recomputed=recomputed_lines(found) if export.book else (),
         notes=tuple(notes),
+        table=tuple(findings.table),
     )
 
 
-def _holdings_checks(
-    file: str, export: Export, tallies: Mapping[str, Tally], found: Recomputed, findings: Findings
+def _report_checks(
+    export: Export,
+    facts: tuple[Mapping[str, Claim], Recomputed, Profile],
+    as_of: date | None,
+    findings: Findings,
 ) -> None:
+    """The exposure report: its figures against the holdings, then its own totals."""
+    claims, found, shape = facts
+    if export.book:
+        summary_findings(export, claims, found, shape, findings)
+        holding_section_findings(export, found, findings)
+        sector_section_findings(export, found, findings)
+        rating_section_findings(export, found, shape, findings)
+        maturity_section_findings(export, found, shape, as_of, findings)
+    for section in export.sections.values():
+        if section.key != "summary":
+            total_findings(export.files["exposure"], section, findings)
+    if not export.sections:
+        findings.add(export.files["exposure"], "layout", "A1", "no sections found", "layout")
+
+
+def _holdings_checks(
+    export: Export, tallies: Mapping[str, Tally], found: Recomputed, findings: Findings
+) -> None:
+    file = export.book
     missing = [key for key in _REQUIRED_HOLDING if key not in export.holding_columns]
     if missing:
-        problem = f"the Holdings header has no column for {', '.join(missing)}"
-        findings.add(file, "Holdings", "header", problem, "column")
+        problem = f"the holdings header has no column for {', '.join(missing)}"
+        findings.add(file, found.sheet, "header", problem, "column")
     rows = [*export.holdings, *export.market]
+    par_of = {h.row: h.numbers["par"] for h in export.holdings if "par" in h.numbers}
     for sheet, tally in tallies.items():
-        tally_findings(file, sheet, tally, findings)
-    par_findings(file, export.holdings, findings)
+        tally_findings(file, sheet, tally, findings, par_of if sheet == found.sheet else {})
+    if export.holdings:
+        par_findings(file, export.holdings, findings)
+        tranche_findings(file, export.holdings, findings)
+        borrower_ticker_findings(file, export.holdings, findings)
     range_findings(file, rows, found, findings)
+    quote_findings(file, rows, findings)
     identifier_findings(file, rows, findings)
+    kind_findings(file, rows, findings)
     for sheet_rows_ in (export.holdings, export.market):
         if sheet_rows_:
             rating_findings(file, sheet_rows_, findings)
@@ -1637,7 +1845,7 @@ def validate_export_paths(paths: Sequence[Path], *, run_date: date | None = None
             )
             return ExportReport(ok=False, rows=0, issues=(issue,))
     report = validate_export(files, run_date=run_date)
-    unknown = [name for name in files if name not in dict(report.files)]
+    unknown = [name for name in files if name not in report.sources]
     if not unknown:
         return report
     extra = tuple(
@@ -1651,3 +1859,304 @@ def validate_export_paths(paths: Sequence[Path], *, run_date: date | None = None
         for name in unknown
     )
     return report.model_copy(update={"ok": False, "issues": (*report.issues, *extra)})
+
+
+# --- Ratings, liens, life and maturities ---------------------------------------------------------
+
+# Moody's and S&P scales as one number each (Aaa/AAA 1 .. C 21, D 22); the constraint
+# `≥ Caa1 (numeric ≤ 17)` uses the same numbers.
+MOODYS = (
+    *("Aaa", "Aa1", "Aa2", "Aa3", "A1", "A2", "A3", "Baa1", "Baa2", "Baa3", "Ba1", "Ba2", "Ba3"),
+    *("B1", "B2", "B3", "Caa1", "Caa2", "Caa3", "Ca", "C"),
+)
+SP = (
+    *("AAA", "AA+", "AA", "AA-", "A+", "A", "A-", "BBB+", "BBB", "BBB-", "BB+", "BB", "BB-"),
+    *("B+", "B", "B-", "CCC+", "CCC", "CCC-", "CC", "C", "D"),
+)
+# The bucket rule: Moody's when it rates the loan, else S&P; 1-10 investment grade, 11-13 BB,
+# 14-16 B, 17 and worse CCC; no rating (withdrawn, not rated, an error token) unrated.
+BUCKETS = (("IG", 10), ("BB", 13), ("B", 16), ("CCC", 99))
+BUCKET_RULE = (
+    "rating buckets recomputed from Moody's, else S&P: Baa3/BBB- or better IG, Ba1-Ba3/BB+ to "
+    "BB- BB, B1-B3/B+ to B- B, Caa1/CCC+ or worse CCC, no rating Unrated; 'Other' is not "
+    "recomputed"
+)
+WATCH = re.compile(r"\s*\*\s*[+-]?\s*$|\s*\(?\b(?:sf|pi|u)\)?$")
+YEAR_DAYS = Decimal("365.25")
+
+
+def rating_number(holding: Holding) -> int | None:
+    parts = [WATCH.sub("", p.strip()) for p in _AGENCIES.split(holding.text.get("ratings", ""))]
+    for scale, part in zip((MOODYS, SP), (*parts, "", ""), strict=False):
+        if part in scale:
+            return scale.index(part) + 1
+    return None
+
+
+def rating_bucket(holding: Holding) -> str:
+    number = rating_number(holding)
+    if number is None:
+        return "Unrated"
+    return next(name for name, worst in BUCKETS if number <= worst)
+
+
+def label_bucket(label: str) -> str | None:
+    """The bucket a report's rating row names, or None (e.g. Other) when it names none."""
+    text = folded(label)
+    for bucket, words in (
+        ("Unrated", ("unrated", "not rated", "nr")),
+        ("CCC", ("ccc", "caa")),
+        ("IG", ("ig", "investment", "baa", "bbb")),
+        ("BB", ("bb", "ba")),
+        ("B", ("b",)),
+    ):
+        if any(re.search(rf"(?<![a-z]){re.escape(w)}(?![a-z])", text) for w in words):
+            return bucket
+    return None
+
+
+def lien(holding: Holding) -> str:
+    text = folded(holding.text.get("ranking", ""))
+    if "2nd" in text or "second" in text:
+        return "second"
+    return "first" if "1st" in text or "first" in text else "other"
+
+
+def corrected(when: date) -> date:
+    """A maturity whose two-digit year was read as 19xx, read as 20xx instead."""
+    return when.replace(year=when.year + 100) if when.year < CENTURY else when
+
+
+def years_to(when: date, as_of: date) -> Decimal:
+    return EXACT.divide(Decimal((when - as_of).days), YEAR_DAYS)
+
+
+@dataclass
+class Profile:
+    """Market value by rating bucket (with the borrowers in each), by lien, and by maturity, and
+    the par-weighted life, from the priced positions; maturities as given and, when some fall
+    before 1950, also with those years read as 20xx."""
+
+    buckets: dict[str, Decimal] = field(default_factory=dict)
+    bucket_borrowers: dict[str, set[str]] = field(default_factory=dict)
+    liens: dict[str, Decimal] = field(default_factory=dict)
+    life: Decimal | None = None
+    life_corrected: Decimal | None = None
+    by_maturity: list[tuple[date, date, Decimal]] = field(default_factory=list)  # given, fixed, mv
+    centuries: int = 0
+
+
+def profile(rows: Sequence[Holding], as_of: date | None) -> Profile:
+    out = Profile()
+    lives: list[tuple[Decimal, Decimal, Decimal]] = []
+    for holding in rows:
+        par, price = holding.numbers.get("par"), mid(holding)
+        if par is None or price is None:
+            continue
+        value = EXACT.divide(EXACT.multiply(par, price), HUNDRED)
+        bucket = rating_bucket(holding)
+        out.buckets[bucket] = EXACT.add(out.buckets.get(bucket, Decimal(0)), value)
+        out.bucket_borrowers.setdefault(bucket, set()).add(folded(holding.text["borrower"]))
+        out.liens[lien(holding)] = EXACT.add(out.liens.get(lien(holding), Decimal(0)), value)
+        if holding.maturity is not None:
+            fixed = corrected(holding.maturity)
+            out.centuries += fixed != holding.maturity
+            out.by_maturity.append((holding.maturity, fixed, value))
+            if as_of is not None:
+                lives.append((par, years_to(holding.maturity, as_of), years_to(fixed, as_of)))
+    out.life = _weighted((w, given) for w, given, _ in lives)
+    out.life_corrected = _weighted((w, fixed) for w, _, fixed in lives)
+    return out
+
+
+_RANGE = re.compile(r"(?:(\d+(?:\.\d+)?)\s*(?:-|to|–)\s*)?(\d+(?:\.\d+)?)\s*\+?\s*y", re.IGNORECASE)
+
+
+def maturity_bounds(label: str) -> tuple[Decimal, Decimal] | int | None:
+    """A maturity bucket's label as a calendar year, or as years to maturity [low, high), or None
+    when it is neither: `2028`; `1-2 Years`; `< 1 Year`; `> 7 Years` or `7+ Years`."""
+    text = folded(label)
+    if re.fullmatch(r"(?:19|20)\d\d", text):
+        return int(text)
+    found = _RANGE.search(text)
+    if found is None:
+        return None
+    high = Decimal(found[2])
+    if found[1] is not None:
+        return Decimal(found[1]), high
+    if text.startswith(("<", "under", "less", "up to")):
+        return Decimal(0), high
+    if text.startswith((">", "over", "more")) or "+" in text:
+        return high, Decimal(10**6)
+    return None
+
+
+def maturity_value(
+    found: Profile, bounds: tuple[Decimal, Decimal] | int, as_of: date | None, fixed: bool
+) -> Decimal | None:
+    total = Decimal(0)
+    for given, mended, value in found.by_maturity:
+        when = mended if fixed else given
+        if isinstance(bounds, int):
+            hit = when.year == bounds
+        elif as_of is None:
+            return None
+        else:
+            years = years_to(when, as_of)
+            hit = bounds[0] <= years < bounds[1]
+        if hit:
+            total = EXACT.add(total, value)
+    return total
+
+
+# --- More cell checks ----------------------------------------------------------------------------
+
+_FIGI_LIKE = re.compile(r"^BBG[A-Z0-9]{6,}$")
+
+
+def quote_findings(file: str, rows: Sequence[Holding], findings: Findings) -> None:
+    """A bid above its ask, per sheet."""
+    for sheet in dict.fromkeys(h.sheet for h in rows):
+        crossed = [
+            h
+            for h in rows
+            if h.sheet == sheet
+            and "bid" in h.numbers
+            and "ask" in h.numbers
+            and h.numbers["bid"] > h.numbers["ask"]
+        ]
+        if crossed:
+            first = crossed[0]
+            problem = (
+                f"the bid is above the ask on {rows_named([h.row for h in crossed])} (row "
+                f"{first.row}: bid {first.text['bid']}, ask {first.text['ask']})"
+            )
+            findings.add(file, sheet, "Bid", problem, "bid_ask")
+
+
+def tranche_findings(file: str, rows: Sequence[Holding], findings: Findings) -> None:
+    """A holding's par above its tranche's size (Size ($Mn), in millions)."""
+    for holding in rows:
+        par, size = holding.numbers.get("par"), holding.numbers.get("size")
+        if par is not None and size is not None and par > EXACT.multiply(size, Decimal(10**6)):
+            problem = (
+                f"row {holding.row} holds par {money(par)} of a tranche of "
+                f"{holding.text['size']} million"
+            )
+            findings.add(file, holding.sheet, "Holdings (par)", problem, "tranche")
+
+
+def borrower_ticker_findings(file: str, rows: Sequence[Holding], findings: Findings) -> None:
+    """A borrower name under two tickers (the reverse of a ticker naming two borrowers)."""
+    tickers: dict[str, dict[str, int]] = {}
+    shown: dict[str, str] = {}
+    for holding in rows:
+        name, ticker = holding.text.get("borrower", ""), holding.text.get("ticker", "")
+        if name and ticker:
+            shown.setdefault(folded(name), name)
+            tickers.setdefault(folded(name), {}).setdefault(ticker, holding.row)
+    for key, found in tickers.items():
+        if len(found) > 1:
+            listed = "; ".join(f"{ticker} (row {row})" for ticker, row in found.items())
+            problem = f"borrower {shown[key]} has {len(found)} tickers: {listed}"
+            findings.add(file, rows[0].sheet, "Ticker", problem, "borrower_tickers")
+
+
+def kind_findings(file: str, rows: Sequence[Holding], findings: Findings) -> None:
+    """A cell holding another column's kind of value: a lien in Ratings, a FIGI in a name."""
+    for holding in rows:
+        ratings = holding.text.get("ratings", "")
+        if "lien" in folded(ratings):
+            problem = f"Ratings on row {holding.row} holds a ranking, '{ratings}'"
+            findings.add(file, holding.sheet, "Ratings", problem, "kind")
+        for key, column in (("borrower", "Borrower Name"), ("loan", "Loan Name")):
+            if _FIGI_LIKE.match(holding.text.get(key, "")):
+                problem = f"{column} on row {holding.row} holds a FIGI, '{holding.text[key]}'"
+                findings.add(file, holding.sheet, column, problem, "kind")
+
+
+# --- The report's ratings and maturities against the holdings ------------------------------------
+
+
+def rating_section_findings(
+    export: Export, found: Recomputed, shape: Profile, findings: Findings
+) -> None:
+    """Each rating bucket the report states, by `BUCKET_RULE`: its share and its issuer count;
+    then each bucket the holdings fill that the report does not list."""
+    section = export.sections.get("ratings")
+    if section is None or not found.value:
+        return
+    file, columns = export.files["exposure"], section_columns(section.header)
+    listed: set[str] = set()
+    for number, row in section.rows:
+        bucket = label_bucket(row[0]) if _label_kind(row[0]) == "row" else None
+        if bucket is None:
+            continue
+        listed.add(bucket)
+        borrowers = Decimal(len(shape.bucket_borrowers.get(bucket, ())))
+        value = share(shape.buckets.get(bucket, Decimal(0)), found.value)
+        for index, label, exact, how in (
+            (columns.pct, "its share", value, {"marked": True, "shown": pct}),
+            (columns.count, "its issuer count", borrowers, {"shown": _count}),
+        ):
+            text, stated = _stated(row, index)
+            if stated is not None:
+                claim = Claim(section.title, f"row {number}", text, stated)
+                words = f"rating bucket {row[0]} ({bucket}): {label}"
+                _claim_finding(file, claim, words, exact, findings, fix="share", **how)
+    for bucket, value in shape.buckets.items():
+        if bucket not in listed and value:
+            issuers = count(len(shape.bucket_borrowers[bucket]), "issuer")
+            problem = (
+                f"the report lists no {bucket} row; the holdings put "
+                f"{pct(share(value, found.value))} ({issuers}) there"
+            )
+            findings.add(file, section.title, "rows", problem, "share")
+
+
+def maturity_section_findings(
+    export: Export, found: Recomputed, shape: Profile, as_of: date | None, findings: Findings
+) -> None:
+    """Each maturity bucket the report states: its share and market value, from the maturities as
+    given; with the 19xx years read as 20xx the figure is given beside it, never applied."""
+    section = export.sections.get("maturity")
+    if section is None or not found.value:
+        return
+    file, columns = export.files["exposure"], section_columns(section.header)
+    for number, row in section.rows:
+        bounds = maturity_bounds(row[0]) if _label_kind(row[0]) == "row" else None
+        given = maturity_value(shape, bounds, as_of, False) if bounds is not None else None
+        if bounds is None or given is None:
+            continue
+        mended = maturity_value(shape, bounds, as_of, True)
+        for index, label, exact, shown, other in (
+            (
+                columns.pct,
+                "its share",
+                share(given, found.value),
+                pct,
+                share(mended or Decimal(0), found.value),
+            ),
+            (columns.value, "its market value", given, money, mended or Decimal(0)),
+        ):
+            text, stated = _stated(row, index)
+            if stated is None:
+                continue
+            note = (
+                f"; with the maturities before 1950 read as 20xx it would be {shown(other)} "
+                "(not applied)"
+                if shape.centuries and other != exact
+                else ""
+            )
+            claim = Claim(section.title, f"row {number}", text, stated)
+            _claim_finding(
+                file,
+                claim,
+                f"maturity bucket {row[0]}: {label}",
+                exact,
+                findings,
+                fix="share",
+                marked=True,
+                shown=shown,
+                note=note,
+            )

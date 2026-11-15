@@ -109,7 +109,7 @@ def check(
     roles = recognise(rest)
     if roles:
         report = validate_export({name: rest[name] for name in roles}, run_date=run_date)
-        found.append(Workbook(", ".join(name for name, _ in report.files), report))
+        found.append(Workbook(", ".join(report.sources), report))
     return PortfolioCheck(collected=True, declared=declared, workbooks=tuple(found))
 
 
@@ -223,6 +223,13 @@ def _export_text(book: Workbook, as_of: date) -> str:
     if report.recomputed:
         lines.append("What the holdings give:")
         lines += [f"- {printable(line)}" for line in report.recomputed]
+    if report.table:
+        lines.append("Headline figures, stated against the holdings:")
+        lines += [
+            f"- {printable(name)}: stated {printable(stated)}; holdings {held}"
+            + (f"; difference {gap}" if gap else "")
+            for name, stated, held, gap in report.table
+        ]
     if report.notes:
         lines.append("Read, and not a defect:")
         lines += [f"- {printable(note)}" for note in report.notes]

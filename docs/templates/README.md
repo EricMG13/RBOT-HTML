@@ -348,6 +348,7 @@ by their headers among a full credit assessment's or portfolio decision's docume
 | Mandate (CSV) | first row `Section`, `Field`, `Value` (and `Notes`); capital structure rows under a `Capital Structure` section with a `Total` row; an `As of` field |
 | Constraints (CSV, one or more) | a header with `Parameter`, `Limit` and `Current Value` (optional `ID`, `Constraint Category`, `Breach Type`, `Source Document`, `Headroom`, `Status`, `Last Checked`, `Checked By`) |
 | Exposure report (CSV) | sections stacked in one sheet, each a title row (one cell), a header row and data rows: summary metrics, rating distribution, sectors, largest holdings, maturity profile, recognised by the title's words; `Total`, `Subtotal` and `Other` rows |
+| Any of the above as a workbook sheet | the same first rows, on a sheet of any name |
 | Holdings (XLSX) | a `Holdings` sheet whose header has a borrower column (also `Ticker`, `Index Sector`, `Loan Name`, `FIGI`, `Ranking`, `Ratings`, `Margin`, `Maturity`, `Bid`, `Ask`, `Δ 1M`, `Δ YTD`, `Mid YTM`, `Mid 3Y DM` and `Holdings` = par); an optional `Market Data` sheet |
 
 Values keep their unit: `≤ 2.5% NAV`, `≥ Caa1 (numeric ≤ 17)`, `B1 (14.3)`, `313 bps`, `4.82 yrs`,
@@ -374,11 +375,29 @@ them. The classes of defect checked:
 | 11 | Dates after the run's as-of date or more than 30 days before it |
 | 12 | Limits and values that cannot be read with their unit, approximate values, a value without the limit's unit; status and headroom against limit and value; each constraint the holdings can recompute (largest issuer, largest sector, second lien) against them |
 
-Not recomputed: rating and maturity distributions (no rating scale or bucket rule is part of the
-export), the weighted average life and rating factors. They are listed as not checked.
+Also recomputed and compared: rating buckets and their issuer counts (Moody's, else S&P: Baa3/BBB-
+or better IG, Ba BB, B B, Caa1/CCC+ or worse CCC, no rating Unrated; a bucket the holdings fill but
+the report omits is reported; Other is not recomputed), the lien split, the par-weighted life (days
+/ 365.25 from the report's as-of date) and maturity buckets (a calendar year such as `2028`, or a
+range of years to maturity such as `1-2 Years`, `< 1 Year`, `> 7 Years`). Maturity figures are
+compared as given; where maturities fall before 1950 the figure with those years read as 20xx is
+given beside it, labelled "not applied", never substituted. Further cell checks: a bid above its
+ask, a holding larger than its tranche (Size ($Mn)), a borrower under two tickers, a ranking in
+Ratings or a FIGI in a name, and the par a missing price leaves out. Obligors are counted by
+borrower name; the ticker count is shown beside it.
+
+Findings come most consequential first: a breach a wrong figure hides, then totals and balances
+that do not reconcile (and files that cannot be read), then stated figures the holdings
+contradict, then stale or future dates, then cell defects. Before them the command prints a
+reconciliation table of the headline figures (par, NAV, counts, largest issuer, top ten, liens,
+average price, margin, yield and life), stated against the holdings with the difference.
+
+Not recomputed, and listed as not checked: rating factors (WARF), and any metric whose unit is not
+the one its name implies.
 
 ```
-uv run deploy-vii validate-input portfolio-export <mandate>.csv <constraints>.csv <exposure>.csv <holdings>.xlsx --as-of 2026-11-15
+uv run deploy-vii validate-input portfolio-exports "<folder holding the export>" --as-of 2026-11-15
+uv run deploy-vii validate-input portfolio-exports <mandate>.csv <constraints>.csv <exposure>.csv <holdings>.xlsx --as-of 2026-11-15
 ```
 
 `tools/synthetic_portfolio_exports.py` builds a SYNTHETIC clean export and one per class.
