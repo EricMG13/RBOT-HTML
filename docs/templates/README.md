@@ -295,7 +295,7 @@ repository.
 
 ## Run context form (`context-form.html`, `context.json`, schema `context/1`)
 
-The form writes `context.json`; `src/deploy_workflow/context.py` reads it, and the form's `build()` is the
+The form writes `context.json`; `src/deploy_vii/context.py` reads it, and the form's `build()` is the
 normative rule set. The file is now also the run start page: `python -m deploy_workflow.run_start`
 serves it, Submit after an approved summary takes the place of the Download step, and the service
 writes `context.json` into the run's own source folder, so analysts no longer handle the file or

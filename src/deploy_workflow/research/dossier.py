@@ -13,6 +13,9 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Final
 
+from deploy_vii.table_markdown import (  # one cell rule; the run context applies it too
+    breaks_a_table_cell as breaks_a_table_cell,  # noqa: PLC0414 - re-export (mypy strict)
+)
 from deploy_workflow.prompts.fence import FenceError, data_block
 from deploy_workflow.research.contracts import (
     METHOD_VERSION_CPDR,
@@ -79,11 +82,6 @@ class RenderedDossier:
 
 def _sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-
-def breaks_a_table_cell(text: str) -> bool:
-    """The cell rule: a text holding a ``|`` or a line break cannot sit in a table cell."""
-    return "|" in text or "\n" in text or "\r" in text
 
 
 def _cell(where: str, value: object) -> str:

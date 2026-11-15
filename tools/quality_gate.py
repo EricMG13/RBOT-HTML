@@ -1,13 +1,16 @@
 """Quality gate for changed Python code: readability, maintainability, complexity, types.
 
-    uv run python tools/quality_gate.py [--base origin/main] [--json]
+    uv run python tools/quality_gate.py [--base origin/main] [--json] [--checks all|code|imports]
 
 Compares the working tree with ``--base`` and checks only the code that changed:
 every changed line, plus the whole body of every function a changed line falls in.
-New files are checked whole. The checks are ``ruff check`` with the rules in
+New files are checked whole; a moved file is compared with the file it was moved from.
+The checks are ``ruff check`` with the rules in
 ``tools/ruff-gate.toml``, ``ruff format``, and strict ``mypy`` (tests excluded from
 mypy). A finding outside the changed code is not reported, so the gate holds new
-work to the standard without a rewrite of the existing code. Exit status 1 when a
+work to the standard without a rewrite of the existing code. A separate step runs
+``lint-imports`` on the contracts in ``.importlinter``: the import direction is a property
+of the whole tree, so that step is not limited to the changed code. Exit status 1 when a
 finding remains, 2 when the gate itself could not run. Standard library only.
 """
 
@@ -15,7 +18,9 @@ from __future__ import annotations
 
 import argparse
 import ast
+import difflib
 import json
+import os
 import re
 import subprocess
 import sys
@@ -27,6 +32,9 @@ GATE_CONFIG = ROOT / "tools" / "ruff-gate.toml"
 HUNK = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 MYPY_LINE = re.compile(r"^(?P<path>[^:\n]+):(?P<line>\d+):(?:\d+:)? error: (?P<message>.*)$")
 DUPLICATE_MODULE = ("Duplicate module named", "Source file found twice")
+IMPORT_CONTRACTS = ".importlinter"
+BROKEN = re.compile(r"^(?P<name>.+) BROKEN(?: \(\d+ ignored imports?\))?$", re.MULTILINE)
+LINT_IMPORTS = "import sys; from importlinter.cli import lint_imports_command as c; sys.exit(c())"
 
 
 @dataclass(frozen=True)
@@ -45,9 +53,13 @@ class GateError(Exception):
     """The gate could not run (bad base ref, tool missing)."""
 
 
-def _run(command: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
+def _run(
+    command: list[str], cwd: Path, env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
     try:
-        return subprocess.run(command, cwd=cwd, capture_output=True, text=True, check=False)
+        return subprocess.run(
+            command, cwd=cwd, env=env, capture_output=True, text=True, check=False
+        )
     except OSError as error:
         raise GateError(f"cannot run {command[0]}: {error}") from error
 
@@ -90,6 +102,27 @@ def changed_lines(root: Path, base: str, path: str) -> set[int] | None:
     if not git(root, "ls-files", "--", path).strip():
         return None
     return hunk_lines(git(root, "diff", "-U0", base, "--", path), side=3)
+
+
+def moved_sources(root: Path, base: str) -> dict[str, str]:
+    """``{path: path in base}`` for the files git reports moved since ``base``.
+
+    ``-B -M``: a rename, or a copy whose source was rewritten (a file whose content moved and
+    whose old name now holds something else, such as an alias). A copy of a file that stays as
+    it was is not moved; it is new code and is checked whole.
+    """
+    status = git(root, "diff", "--name-status", "-z", "-B", "-M", "--diff-filter=RC", base)
+    fields = status.split("\0")
+    # -z: each entry is the status, then the old and the new name, NUL separated.
+    return {fields[i + 2]: fields[i + 1] for i in range(0, len(fields) - 2, 3) if fields[i]}
+
+
+def moved_lines(root: Path, base: str, source: str, path: str) -> set[int]:
+    """Line numbers of ``path`` that differ from ``source`` as it was in ``base``."""
+    before = git(root, "show", f"{base}:{source}").splitlines(keepends=True)
+    after = (root / path).read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
+    headers = (line for line in difflib.unified_diff(before, after, n=0) if line.startswith("@@"))
+    return hunk_lines("\n".join(headers), side=3)
 
 
 def function_spans(source: str) -> list[tuple[int, int]]:
@@ -190,20 +223,58 @@ def _relative(root: Path, name: str) -> str:
     return path.as_posix()
 
 
+def import_findings(root: Path, python: str) -> tuple[str, list[Finding]]:
+    """One finding per broken contract of ``.importlinter``, and lint-imports' report of them."""
+    command = [python, "-c", LINT_IMPORTS, "--config", IMPORT_CONTRACTS, "--no-cache", "--no-logo"]
+    done = _run(command, root, env={**os.environ, "COLUMNS": "1000"})  # one contract a line
+    if done.returncode == 0:
+        return "", []
+    names = [match["name"] for match in BROKEN.finditer(done.stdout)]
+    if not names:
+        raise GateError(f"lint-imports failed: {(done.stderr or done.stdout).strip()}")
+    lines = (root / IMPORT_CONTRACTS).read_text(encoding="utf-8").splitlines()
+    return done.stdout, [
+        Finding("imports", IMPORT_CONTRACTS, _line_of(lines, f"name = {name}"), "BROKEN", name)
+        for name in names
+    ]
+
+
+def _line_of(lines: list[str], text: str) -> int:
+    return next((number for number, line in enumerate(lines, 1) if line == text), 0)
+
+
 @dataclass(frozen=True)
 class GateResult:
     files: list[str]
     owned: int
     findings: list[Finding]
+    imports: str = ""  # lint-imports' report when a contract is broken
 
 
-def run_gate(root: Path, base: str, python: str = sys.executable) -> GateResult:
-    """Every finding of every check that falls inside the changed code."""
+def run_gate(
+    root: Path, base: str, python: str = sys.executable, checks: str = "all"
+) -> GateResult:
+    """The findings of the selected checks: ``code`` (in the changed code), ``imports``
+    (``.importlinter``, whole tree) or ``all``."""
+    result = code_gate(root, base, python) if checks != "imports" else GateResult([], 0, [])
+    if checks == "code":
+        return result
+    report, broken = import_findings(root, python)
+    return GateResult(result.files, result.owned, [*result.findings, *broken], report)
+
+
+def code_gate(root: Path, base: str, python: str = sys.executable) -> GateResult:
+    """Every finding of every code check that falls inside the changed code."""
     files = changed_files(root, base)
+    moved = moved_sources(root, base)
     owned = {}
     for name in files:
         source = (root / name).read_text(encoding="utf-8", errors="replace")
-        owned[name] = owned_lines(source, changed_lines(root, base, name))
+        if name in moved:
+            changed: set[int] | None = moved_lines(root, base, moved[name], name)
+        else:
+            changed = changed_lines(root, base, name)
+        owned[name] = owned_lines(source, changed)
     findings = []
     if files:
         findings += ruff_findings(root, python, files)
@@ -221,15 +292,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--base", default="origin/main", help="ref to compare with")
     parser.add_argument("--json", action="store_true", help="machine-readable output")
     parser.add_argument("--root", type=Path, default=ROOT)
+    parser.add_argument("--checks", choices=("all", "code", "imports"), default="all")
     arguments = parser.parse_args(argv)
     try:
-        result = run_gate(arguments.root, arguments.base)
+        result = run_gate(arguments.root, arguments.base, checks=arguments.checks)
     except GateError as error:
         print(f"quality gate could not run: {error}", file=sys.stderr)
         return 2
     if arguments.json:
         print(json.dumps({**asdict(result), "findings": [asdict(f) for f in result.findings]}))
     else:
+        print(result.imports, end="")
         for finding in result.findings:
             print(finding)
         print(
