@@ -307,3 +307,74 @@ def test_an_unknown_pathway_has_no_cap(root: Path) -> None:
     # A pathway that is not even text (a hand-edited record) must not stop the activity poll.
     odd = Record("r2", cast(str, ["credit_snapshot"]), "Acme", "queued", "t")
     assert snapshot(layout(root), [odd], now=_NOW)["runs"][0]["cap"] is None
+
+
+def _launch_argv(tmp_path: Path, pathway: str, *extra: str) -> list[str]:
+    issuer = tmp_path / "issuer"
+    issuer.mkdir(exist_ok=True)
+    (issuer / "annual.txt").write_text("Net sales were 100.", encoding="utf-8")
+    argv = ["--context", str(_context(tmp_path, pathway)), "--sources", str(issuer)]
+    return [*argv, "--config", "sol-medium", "--out", str(tmp_path / "out"), "--no-library", *extra]
+
+
+@pytest.mark.parametrize(
+    ("pathway", "asked", "ruled"),
+    [
+        ("lite_credit_assessment", "500", "15"),
+        ("lite_credit_assessment", "15.01", "15"),
+        ("credit_snapshot", "40", "25"),  # Deep's cap on a Full context: the context is what runs
+        (DEEP, "40.5", "40"),
+        ("relative_value", "25", "20"),
+    ],
+)
+def test_the_launcher_refuses_a_cap_above_the_pathways(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], pathway: str, asked: str, ruled: str
+) -> None:
+    """Owner: "Hard cap per pathway". Every launch ends at the launcher, so it holds there."""
+    assert main(_launch_argv(tmp_path, pathway, "--cap", asked)) == 2
+    assert f"--cap {asked}: above the {pathway} cap of USD {ruled}" in capsys.readouterr().err
+    assert not (tmp_path / "out").exists()
+
+
+def test_the_launcher_takes_a_lower_cap_and_names_the_cap_of_a_folder_it_cannot_resume(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A folder started under the earlier USD 20 resumes only at that cap; its cap never rises."""
+    assert main(_launch_argv(tmp_path, "credit_snapshot", "--cap", "20")) == 0
+    manifest = tmp_path / "out/workflow.json"
+    held = manifest.read_bytes()
+    assert json.loads(held)["provider_cap_usd"] == "20"
+    capsys.readouterr()
+    assert main(_launch_argv(tmp_path, "credit_snapshot")) == 2  # the default is now USD 25
+    refusal = capsys.readouterr().err
+    assert "the folder was started at a cap of USD 20, not USD 25" in refusal
+    assert "resume it with --cap 20" in refusal
+    assert manifest.read_bytes() == held
+    assert main(_launch_argv(tmp_path, "credit_snapshot", "--cap", "20")) == 0
+
+
+def test_start_up_refuses_a_cap_table_above_the_ruled_figures(
+    root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The ruled figures are written twice (`startup.RULED_CAPS_USD`): raising one in the table
+    alone, or adding a pathway with no ruled figure, stops the service from starting."""
+    from deploy_workflow.inbox import startup
+    from deploy_workflow.inbox.scheduler import StartupRefused
+
+    assert startup.RULED_CAPS_USD == {p: int(c) for p, c in CAPS.items()}  # CAPS is hand-written
+    Scheduler(settings(root)).close()
+    for pathway, cap, words in (
+        (
+            "lite_credit_assessment",
+            D(400),
+            "lite_credit_assessment cap USD 400 is above the ruled USD 15",
+        ),
+        (DEEP, D("40.01"), "deep_credit_assessment cap USD 40.01 is above the ruled USD 40"),
+        ("new_pathway", D(5), "new_pathway cap USD 5 has no ruled figure"),
+        ("credit_snapshot", D("NaN"), "credit_snapshot cap USD NaN is above the ruled USD 25"),
+    ):
+        monkeypatch.setattr(startup, "PATHWAY_CAP_USD", {**CAPS, pathway: cap})
+        with pytest.raises(StartupRefused, match=words):
+            Scheduler(settings(root))
+    monkeypatch.setattr(startup, "PATHWAY_CAP_USD", {**CAPS, DEEP: D(30)})  # lower is allowed
+    Scheduler(settings(root)).close()

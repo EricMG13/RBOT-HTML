@@ -1866,7 +1866,8 @@ async function requestSummary(key) {
   let result;
   try {
     for (let tries = 1; ; tries++) {
-      result = await call('POST', `/api/submissions/${SUB}/summary`, JSON.stringify(sent));
+      // The cap this page shows for the pathway goes with the request: the service refuses a page that shows another (an old tab).
+      result = await call('POST', `/api/submissions/${SUB}/summary`, JSON.stringify(sent), (PATHS[sent.context.run.pathway] || {}).cap);
       if (result.error !== SUMMARY_CHANGED || tries >= SUMMARY_TRIES) break; // the service says the documents moved: ask again
     }
   } catch (err) { result = {error: err.message}; }
@@ -2055,7 +2056,7 @@ async function submitRun() {
   SUBMIT_ERROR = '';
   $('submit').disabled = true;
   try {
-    RUN = (await call('POST', `/api/submissions/${SUB}/submit`, JSON.stringify({answers: S.answers, digest: S.digest}))).run;
+    RUN = (await call('POST', `/api/submissions/${SUB}/submit`, JSON.stringify({answers: S.answers, digest: S.digest}), S.cap)).run;
     forget();
     try { localStorage.setItem(RUN_STORE, JSON.stringify({v: 1, id: RUN})); } catch (err) { storeFailed(err); }
     showProgress();
@@ -2151,9 +2152,10 @@ function relName(f) { const p = (f.webkitRelativePath || f.name).split('/'); ret
 // The launcher leaves names with a leading "." out without saying so, so they are not sent.
 const hiddenName = name => name.split('/').some(part => part.startsWith('.'));
 // One request. A refusal is the service's own sentence; an answer that is not JSON is its status.
-async function call(method, path, body) {
+// `shownCap` (summary and submit) is the cap this page displays, sent as X-Shown-Cap.
+async function call(method, path, body, shownCap) {
   let r;
-  try { r = await fetch(path, {method, body}); }
+  try { r = await fetch(path, shownCap ? {method, body, headers: {'X-Shown-Cap': shownCap}} : {method, body}); }
   catch (err) { throw Object.assign(new Error('the start service could not be reached (' + err.message + ')'), {status: 0}); }
   let data = null;
   try { data = await r.json(); } catch (err) { data = null; } // not JSON: reported below as its status

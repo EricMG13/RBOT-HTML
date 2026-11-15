@@ -72,6 +72,9 @@ class Service:
     watcher: Scheduler
     server: ThreadingHTTPServer
     root: Path
+    # The cap the page displays (Full's USD 25), sent as the page sends it with a summary or
+    # submit; None leaves the header out, as a page loaded before the per-pathway caps did.
+    shown_cap: str | None = "25"
 
     @property
     def host(self) -> str:
@@ -88,6 +91,8 @@ class Service:
     ) -> Reply:
         data = json.dumps(body).encode() if isinstance(body, dict) else body
         request = urllib.request.Request(f"http://{self.host}{path}", data=data, method=method)
+        if self.shown_cap is not None and path.endswith(("/summary", "/submit")):
+            request.add_header("X-Shown-Cap", self.shown_cap)
         if origin == "":
             origin = f"http://{self.host}"
         if origin is not None and method != "GET":
@@ -236,6 +241,29 @@ def test_a_body_without_content_length_is_refused(svc):
         f"Origin: http://{svc.host}\r\n\r\n"
     )
     assert _raw(svc, summary.encode()).startswith(b"HTTP/1.0 411")
+
+
+def test_a_page_that_does_not_show_the_pathways_cap_is_told_to_reload(svc):
+    """Ruling 2026-11-15-pathway-tiers-and-caps: the approved summary is the paid action, so a tab
+    opened before the caps changed (it shows USD 20 and sends no cap, or another figure) gets no
+    summary and starts no run. Full's cap is USD 25."""
+    sid = svc.new()
+    svc.call("POST", f"/api/submissions/{sid}/files?name=a.txt", b"Net sales were 100.")
+    answers = answers_for()
+    stale = "this page is out of date: it does not show this pathway's cap of USD 25"
+    for svc.shown_cap in (None, "20", "40", "25.0", ""):
+        reply = svc.call("POST", f"/api/submissions/{sid}/summary", answers)
+        assert reply.status == 400 and stale in reply.json()["error"], svc.shown_cap
+    svc.shown_cap = "25"
+    good = svc.call("POST", f"/api/submissions/{sid}/summary", answers)
+    assert good.status == 200 and good.json()["cap"] == "25"
+    body = {"answers": answers, "digest": good.json()["digest"]}
+    for svc.shown_cap in (None, "20"):
+        reply = svc.call("POST", f"/api/submissions/{sid}/submit", body)
+        assert reply.status == 400 and stale in reply.json()["error"], svc.shown_cap
+    assert load_all(layout(svc.root)) == []  # nothing was queued
+    svc.shown_cap = "25"
+    assert svc.call("POST", f"/api/submissions/{sid}/submit", body).status == 200
 
 
 def test_json_bodies_are_capped_and_must_be_json(svc):

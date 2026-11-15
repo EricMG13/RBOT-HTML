@@ -753,7 +753,7 @@ def launch(tmp_path: Path, *extra: str, pathway: str = "covenant_refinancing") -
     return [
         *("--context", str(context_file(tmp_path, pathway))),
         *("--sources", str(issuer_folder(tmp_path))),
-        *("--config", "sol-medium", "--cap", "50", "--out", str(tmp_path / "out")),
+        *("--config", "sol-medium", "--cap", "15", "--out", str(tmp_path / "out")),
         *extra,
     ]
 
@@ -761,7 +761,7 @@ def launch(tmp_path: Path, *extra: str, pathway: str = "covenant_refinancing") -
 def test_folder_files_are_pinned_and_unusable_ones_reported(tmp_path):
     folder = issuer_folder(tmp_path)
     prepared = prepare(
-        context_file(tmp_path), folder, tmp_path / "out", config="sol-medium", cap="50"
+        context_file(tmp_path), folder, tmp_path / "out", config="sol-medium", cap="15"
     )
     assert set(prepared.plan.sources) == {"annual.txt", "filings/notes.md", "context"}
     assert prepared.plan.sources["annual.txt"].sha256 == (
@@ -780,7 +780,7 @@ def test_underscore_folders_are_reported_rather_than_silently_dropped(tmp_path):
     (folder / "_archive").mkdir()
     (folder / "_archive/old.txt").write_text("Old filing.")
     prepared = prepare(
-        context_file(tmp_path), folder, tmp_path / "out", config="sol-medium", cap="50"
+        context_file(tmp_path), folder, tmp_path / "out", config="sol-medium", cap="15"
     )
     assert "_archive/old.txt" in prepared.ignored
     assert "_archive/old.txt" not in prepared.plan.sources
@@ -800,7 +800,7 @@ def test_html_filings_reach_the_model_as_visible_text(tmp_path, name, raw):
     original = raw if isinstance(raw, bytes) else raw.encode()
     (folder / name).write_bytes(original)
     prepared = prepare(
-        context_file(tmp_path), folder, tmp_path / "out", config="sol-medium", cap="50"
+        context_file(tmp_path), folder, tmp_path / "out", config="sol-medium", cap="15"
     )
     key = name + ".jsonl"
     pinned = (tmp_path / "out" / prepared.plan.sources[key].path).read_bytes()
@@ -819,7 +819,7 @@ def test_word_documents_reach_the_model_as_text(tmp_path):
     original = docx(para("<w:t>Net sales were 100.</w:t>"))
     (folder / "lender memo.docx").write_bytes(original)
     prepared = prepare(
-        context_file(tmp_path), folder, tmp_path / "out", config="sol-medium", cap="50"
+        context_file(tmp_path), folder, tmp_path / "out", config="sol-medium", cap="15"
     )
     key = "lender memo.docx.jsonl"
     pinned = (tmp_path / "out" / prepared.plan.sources[key].path).read_bytes()
@@ -841,7 +841,7 @@ def test_html_filing_and_a_file_named_like_its_text_refuse_instead_of_overwritin
     (folder / f"{html}.jsonl").write_text(json.dumps({"page": 1, "text": "older extract"}) + "\n")
     expected = f"--sources: {html} and {html}.jsonl would both be source {html}.jsonl"
     with pytest.raises(LaunchRefused, match=re.escape(expected)):
-        prepare(context_file(tmp_path), folder, tmp_path / "out", config="sol-medium", cap="50")
+        prepare(context_file(tmp_path), folder, tmp_path / "out", config="sol-medium", cap="15")
     assert not (tmp_path / "out" / "workflow.json").exists()
 
 
@@ -853,7 +853,7 @@ def test_html_filings_use_the_page_size_of_the_cp_os_loop(tmp_path):
     long_line = "y" * 5000
     (folder / "filing.htm").write_text(f"<html><body>{paragraphs}<p>{long_line}</p></body></html>")
     prepared = prepare(
-        context_file(tmp_path), folder, tmp_path / "out", config="sol-medium", cap="50"
+        context_file(tmp_path), folder, tmp_path / "out", config="sol-medium", cap="15"
     )
     key = "filing.htm.jsonl"
     pages = _pages(key, (tmp_path / "out" / prepared.plan.sources[key].path).read_bytes())
@@ -869,7 +869,7 @@ def test_context_file_inside_the_folder_is_not_counted_as_issuer_evidence(tmp_pa
     folder = issuer_folder(tmp_path)
     inside = folder / "context.json"
     inside.write_text(context_file(tmp_path).read_text())
-    prepared = prepare(inside, folder, tmp_path / "out", config="sol-medium", cap="50")
+    prepared = prepare(inside, folder, tmp_path / "out", config="sol-medium", cap="15")
     assert set(prepared.plan.sources) == {"annual.txt", "filings/notes.md", "context"}
 
 
@@ -905,7 +905,7 @@ def test_folder_must_hold_usable_files(tmp_path, capsys, folder):
     code = main(
         [
             *("--context", str(context_file(tmp_path)), "--sources", str(tmp_path / folder)),
-            *("--config", "sol-medium", "--cap", "50", "--out", str(tmp_path / "out")),
+            *("--config", "sol-medium", "--cap", "15", "--out", str(tmp_path / "out")),
         ]
     )
     assert code == 2
@@ -919,7 +919,7 @@ def test_context_sets_run_identity_modules_and_report_routes(tmp_path):
         issuer_folder(tmp_path),
         tmp_path / "out",
         config="sol-medium",
-        cap="50",
+        cap="15",
     )
     run = prepared.plan.run
     assert (run.issuer_id, run.issuer_name, run.as_of.isoformat()) == ("nbg", ISSUER, AS_OF)
@@ -939,7 +939,7 @@ def test_selected_method_and_report_selectors_reach_the_instructions(tmp_path):
         issuer_folder(tmp_path),
         tmp_path / "out",
         config="sol-medium",
-        cap="50",
+        cap="15",
     )
     text = (tmp_path / "out" / prepared.plan.instructions["CP-4"].path).read_text()
     method = ROOT / "docs/reuse/selected-methods/skills/cp-4-legal-covenant-interpreter/SKILL.md"
@@ -956,7 +956,7 @@ def test_instructions_ask_for_the_reader_passages_and_keep_the_method_verbatim(t
         issuer_folder(tmp_path),
         tmp_path / "out",
         config="sol-medium",
-        cap="50",
+        cap="15",
     )
     text = (tmp_path / "out" / prepared.plan.instructions["CP-4"].path).read_text()
     assert "### Reader summary" not in text and "Reader summary" not in text
@@ -973,7 +973,7 @@ def test_explicit_modules_narrow_the_run_and_keep_dependencies(tmp_path):
         issuer_folder(tmp_path),
         tmp_path / "out",
         config="sol-medium",
-        cap="50",
+        cap="15",
         modules=("CP-4",),
     )
     assert prepared.ordered == ("CP-0", "CP-1", "CP-4")
@@ -1056,7 +1056,7 @@ def search_holds(tmp_path: Path, kind: str) -> tuple[Decimal, Decimal, list[str]
             tmp_path / "issuer",
             tmp_path / name,
             config="sol-medium",
-            cap="50",
+            cap="15",
             modules=("CP-DR",),
             web_search=searching,
         ).hold
@@ -1092,7 +1092,7 @@ def test_a_ruling_that_lists_web_search_makes_the_command_line_check_the_search_
         tmp_path / "issuer",
         tmp_path / "probe",
         config="sol-medium",
-        cap="50",
+        cap="15",
         modules=("CP-DR",),
     )
     base[base.index("--cap") + 1] = str(plain.hold + Decimal("0.05"))
@@ -1199,7 +1199,7 @@ def prepare_routes(
             tmp_path / "issuer",
             tmp_path / "preview",
             config=config,
-            cap="50",
+            cap="15",
             modules=modules,
         ).plan.layout.routes
     )
@@ -1287,7 +1287,7 @@ def test_a_short_snapshot_still_runs_end_to_end_through_the_lower_level_function
         tmp_path / "issuer",
         tmp_path / "out",
         config="sol-medium",
-        cap="50",
+        cap="15",
     )
     routes = list(prepared.plan.layout.routes)
     provider.answer = lambda context: short_snapshot_answer(context, routes)
@@ -1469,7 +1469,7 @@ def test_the_lite_pathway_runs_end_to_end_to_a_verified_delivery_with_a_syntheti
             tmp_path / "issuer",
             tmp_path / "preview",
             config="sol-medium",
-            cap="50",
+            cap="15",
         ).plan.layout.routes
     )
     # No CP-MODEL and no CP-2G: CP-1 writes no forecast block, and none is published.
@@ -1546,7 +1546,7 @@ def test_every_pathway_runs_end_to_end_to_a_verified_report(tmp_path, provider, 
             tmp_path / "issuer",
             tmp_path / "preview",
             config="sol-medium",
-            cap="50",
+            cap="15",
         ).plan.layout.routes
     )
     # CP-2G after CP-1 must write a forecast block; the declined one publishes no model.
@@ -1749,7 +1749,7 @@ def good_task(tmp_path: Path, module: str = "CP-2", pathway: str | None = None):
         issuer_folder(tmp_path),
         tmp_path / "out",
         config="sol-medium",
-        cap="50",
+        cap="15",
     )
     upstream = {"CP-1": b"# upstream"}
     task = HandoffTask(
@@ -1854,7 +1854,7 @@ def all_texts(tmp_path: Path) -> dict[str, str]:
         issuer_folder(tmp_path),
         tmp_path / "out",
         config="sol-medium",
-        cap="50",
+        cap="15",
     )
     return {
         module: (tmp_path / "out" / ref.path).read_text()
@@ -1893,7 +1893,7 @@ def test_a_report_selector_named_like_a_passage_is_the_passage_and_is_asked_once
         issuer_folder(tmp_path),
         tmp_path / "out",
         config="sol-medium",
-        cap="50",
+        cap="15",
     )
     named = [r for r in prepared.plan.layout.routes if r.heading == "Key findings"]
     assert [(r.module_id, r.kind) for r in named] == [("CP-2", "prose")]
@@ -2853,7 +2853,7 @@ def all_instructions(tmp_path, pathway="distressed_restructuring", modules=None,
         issuer_folder(tmp_path),
         tmp_path / "out",
         config="sol-medium",
-        cap="50",
+        cap="15",
         modules=modules,
     )
     return prepared, {
@@ -3181,7 +3181,7 @@ def test_the_bottom_line_is_retained_in_the_accepted_handoff(tmp_path, provider)
             tmp_path / "issuer",
             tmp_path / "preview",
             config="sol-medium",
-            cap="50",
+            cap="15",
         ).plan.layout.routes
     )
     provider.answer = lambda context: covenant_answer(context, routes)
@@ -3309,7 +3309,7 @@ def test_a_run_without_cp1_still_omits_the_chart_block(tmp_path):
         issuer_folder(tmp_path),
         tmp_path / "out",
         config="sol-medium",
-        cap="50",
+        cap="15",
         modules=("CP-1A",),
     )
     assert "CP-1" not in prepared.ordered
@@ -3322,7 +3322,7 @@ def test_yield_against_maturity_stays_omitted(tmp_path):
         issuer_folder(tmp_path),
         tmp_path / "out",
         config="sol-medium",
-        cap="50",
+        cap="15",
     )
     assert "yield-against-maturity" in prepared.omitted
 
@@ -3340,7 +3340,7 @@ def test_the_report_scope_no_longer_says_charts_are_unpublished(tmp_path):
         issuer_folder(tmp_path / "b"),
         tmp_path / "b" / "out",
         config="sol-medium",
-        cap="50",
+        cap="15",
         modules=("CP-1",),
     )
     assert "The HTML Model and calculation JSON are not published" in bare.plan.layout.scope
@@ -3541,7 +3541,7 @@ def test_the_launcher_layout_has_no_front_routes_now_the_reader_summary_is_retir
         issuer_folder(tmp_path),
         tmp_path / "out",
         config="sol-medium",
-        cap="50",
+        cap="15",
     )
     assert full.plan.layout.front == ()
 
@@ -3567,7 +3567,7 @@ def report_folder(tmp_path: Path) -> Path:
 
 
 def prepared_with(tmp_path: Path, context: Path, folder: Path, **extra):
-    return prepare(context, folder, tmp_path / "out", config="sol-medium", cap="50", **extra)
+    return prepare(context, folder, tmp_path / "out", config="sol-medium", cap="15", **extra)
 
 
 def test_prepared_carries_each_pinned_sources_guess_and_the_expectations(tmp_path):
@@ -3649,7 +3649,7 @@ def test_the_declarations_do_not_change_any_instruction_byte(tmp_path):
         data["run"]["run_type"] = run_type
         context.write_text(json.dumps(data))
         prepared = prepare(
-            context, report_folder(tmp_path / legal), out, config="sol-medium", cap="50"
+            context, report_folder(tmp_path / legal), out, config="sol-medium", cap="15"
         )
         return {m: (out / "instructions" / f"{m}.md").read_bytes() for m in prepared.ordered}
 
@@ -3920,7 +3920,7 @@ def forecast_run(  # noqa: PLR0913 - one keyword per scenario setting
             tmp_path / "issuer",
             tmp_path / "preview",
             config="sol-medium",
-            cap="50",
+            cap="15",
             modules=modules,
         ).plan.layout.routes
     )
@@ -4400,7 +4400,7 @@ def test_cp1_gets_the_layer_1_block_only_when_the_forecast_lacks_cp2g(tmp_path):
             issuer_folder(folder),
             folder / "out",
             config="sol-medium",
-            cap="50",
+            cap="15",
             modules=modules,
         )
         return prepared, (folder / "out/instructions/CP-1.md").read_text()
@@ -4532,7 +4532,7 @@ def test_the_forecast_instructions_come_before_the_method_block_and_leave_it_unc
         issuer_folder(tmp_path),
         tmp_path / "out",
         config="sol-medium",
-        cap="50",
+        cap="15",
         modules=("CP-2G",),
     )
     text = (tmp_path / "out/instructions/CP-2G.md").read_text()
@@ -4775,7 +4775,7 @@ def test_a_short_snapshot_run_in_the_library_is_listed_with_its_label_and_cp_l10
         tmp_path / "issuer",
         tmp_path / "runs" / RUN_ID,
         config="sol-medium",
-        cap="50",
+        cap="15",
     )
     routes = list(prepared.plan.layout.routes)
     provider.answer = lambda context: short_snapshot_answer(context, routes)
@@ -4832,7 +4832,7 @@ def test_each_pathways_run_reaches_the_library_screens(tmp_path, provider, capsy
             tmp_path / "issuer",
             tmp_path / "preview",
             config="sol-medium",
-            cap="50",
+            cap="15",
         ).plan.layout.routes
     )
     forecast = "CP-2G" in PATHWAY_MODULES[pathway]
@@ -4882,7 +4882,7 @@ def test_a_lite_run_fills_the_library_pages_and_its_forecast_page_states_the_gap
             tmp_path / "issuer",
             tmp_path / "preview",
             config="sol-medium",
-            cap="50",
+            cap="15",
         ).plan.layout.routes
     )
     provider.answer = lambda context: answer(context, routes)
@@ -6390,7 +6390,7 @@ def test_run_live_handoffs_hands_the_effort_map_to_the_executor(tmp_path, monkey
         issuer_folder(tmp_path),
         tmp_path / "out",
         config="sol-medium",
-        cap="50",
+        cap="15",
     )
     with pytest.raises(Stop):
         cpos.run_live_handoffs(
@@ -6466,7 +6466,7 @@ def test_a_claude_run_under_a_ruling_that_lists_web_search_runs_with_search_off(
         issuer_folder(tmp_path),
         tmp_path / "out",
         config="opus-medium",
-        cap="50",
+        cap="15",
         modules=("CP-DR",),
     )
     for config, searching in (("opus-medium", False), ("sol-medium", True)):
@@ -6491,7 +6491,7 @@ def test_a_claude_launch_says_search_is_off_and_holds_no_search_fee(tmp_path, ca
         tmp_path / "issuer",
         tmp_path / "probe",
         config="opus-medium",
-        cap="50",
+        cap="15",
         modules=("CP-DR",),
     )
     argv[argv.index("--cap") + 1] = str(plain.hold + Decimal("0.05"))  # a 0.16 fee would not fit
@@ -6542,7 +6542,7 @@ def test_the_offline_hold_follows_the_larger_anthropic_output_limit(tmp_path, mo
 
     def hold(config: str, out: str) -> Decimal:
         return prepare(
-            context, folder, tmp_path / out, config=config, cap="50", modules=("CP-4",)
+            context, folder, tmp_path / out, config=config, cap="15", modules=("CP-4",)
         ).hold
 
     now = hold("opus-medium", "now")
@@ -7235,7 +7235,7 @@ def _built_instruction(tmp_path, module, modules):
         issuer_folder(tmp_path),
         tmp_path / "out",
         config="sol-medium",
-        cap="50",
+        cap="15",
         modules=modules,
     )
     return (tmp_path / "out" / prepared.plan.instructions[module].path).read_text()
@@ -7616,7 +7616,7 @@ def copilot_readiness(tmp_path, monkeypatch, limit):
     monkeypatch.setattr(copilot, "TOKEN_LIMITS", {"gpt-6.1-sol": limit})
     prepared = prepare(
         context_file(tmp_path), issuer_folder(tmp_path), tmp_path / "out",
-        config="copilot-sol-medium", cap="50",
+        config="copilot-sol-medium", cap="15",
     )  # fmt: skip
     return prepared, cpos_launch._readiness(prepared, "copilot-sol-medium")
 
@@ -7655,7 +7655,7 @@ def test_readiness_is_silent_when_every_first_prompt_is_well_inside_the_limit(
 def test_readiness_has_no_context_lines_off_the_copilot_route(tmp_path):
     prepared = prepare(
         context_file(tmp_path), issuer_folder(tmp_path), tmp_path / "out",
-        config="sol-medium", cap="50",
+        config="sol-medium", cap="15",
     )  # fmt: skip
     assert "Context:" not in cpos_launch._readiness(prepared, "sol-medium")
 
@@ -7663,7 +7663,7 @@ def test_readiness_has_no_context_lines_off_the_copilot_route(tmp_path):
 def test_a_model_whose_limit_is_not_known_gets_no_first_prompt_estimate(tmp_path):
     prepared = prepare(
         context_file(tmp_path), issuer_folder(tmp_path), tmp_path / "out",
-        config="copilot-opus-medium", cap="50",
+        config="copilot-opus-medium", cap="15",
     )  # fmt: skip
     assert cpos_launch._first_prompt_lines(prepared, "copilot-opus-medium") == ()
 
@@ -8063,7 +8063,7 @@ def test_run_live_handoffs_resolves_the_default_against_the_case_kind(tmp_path, 
             issuer_folder(out),
             out / "out",
             config="sol-medium",
-            cap="50",
+            cap="15",
         )
         with pytest.raises(Stop):
             cpos.run_live_handoffs(

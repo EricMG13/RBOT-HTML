@@ -66,8 +66,23 @@ pass the cap, and the run stops as `capped`.
 
 Read by: the run start page's pathway choices and its summary (the service's answer names the cap);
 the service's launches (`runs.cap_of`, passed as `--cap`); the run activity (each run's cap); and the
-launcher's default when `--cap` is not given. The service no longer has a cap of its own, so start-up
-no longer checks one.
+launcher, as its default when `--cap` is not given and as the most `--cap` may ask.
+
+- The launcher refuses a `--cap` above the cap of the context's pathway, whoever asks; a lower cap
+  is allowed. This is a tightening: before this change the command line took any positive `--cap`
+  (the USD 20 was enforced only by the run start service), and owner-commissioned runs used USD 12
+  and USD 25. A run above its pathway's cap now needs the table and this ruling changed first.
+- The ruled figures are written a second time in `inbox/startup.py` (`RULED_CAPS_USD`). The service
+  refuses to start when a table entry is above its ruled figure or has none, so raising a cap takes
+  a ruling and two deliberate edits, as the single USD 20 check did before.
+- The page sends the cap it displays with each summary and Submit (`X-Shown-Cap`); the service
+  refuses a request without it or with another figure ("this page is out of date ... Reload the
+  page"). A tab opened before this change shows USD 20 and sends none, so it can neither get a
+  summary nor start a run. The page's per-pathway caps are a copy of the table; a test holds the
+  copy to hand-written figures and to the table.
+- A run folder started under the earlier USD 20 resumes only at that cap: the launcher refuses the
+  pathway's new default with the folder's cap named, and `--cap 20` resumes it. A folder's cap
+  never rises.
 
 - A summary records the cap it showed beside its digest; Submit refuses when the table now gives
   another cap ("review the summary again"), and the queued record keeps the cap.
@@ -76,6 +91,10 @@ no longer checks one.
   (a queued Lite run at USD 15, a Full run at USD 20).
 - A summary issued before this change records no cap, so Submit refuses it; the analyst makes a new
   summary, which shows the new cap.
+- Known: a summary that returned an error issues no digest and no cap; a Submit after it is refused
+  as "the documents or answers changed after approval", which does not name the cause.
+- The page still opens with Full selected; only the order of the choices changed (Lite first).
+- The run start summary shows the cap and no spend estimate; none was added.
 
 ## Estimated spend against the caps
 
