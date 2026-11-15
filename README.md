@@ -173,7 +173,19 @@ the run uses it, and a later step stays locked while an earlier one has an error
 3. **Confirm.** Issuer name and ID (at most 40 characters), as-of date, periods and currency. An
    as-of date before the newest document is a limit for the whole run, and you must tick it on the
    summary. Legal, where CP-4, CP-2A or CP-4C runs: choose the uploaded agreement file, or say there
-   is none. `executed` and `draft` can be chosen only by selecting a file.
+   is none. `executed` and `draft` can be chosen only by selecting a file. Portfolio workbook, in
+   the full credit assessment and the portfolio decision: choose the uploaded fund workbook (its
+   mandate, exposures and compliance limits, in the layout of
+   `docs/templates/portfolio.template.xlsx`), or none. It is asked for, not required (owner,
+   2026-11-15, ruling `docs/rulings/2026-11-15-full-assessment-portfolio-workbook.md`). The launcher
+   checks it before the run: its sums, shares, units and dates against the run's as-of date; CP-0,
+   CP-3 and CP-6 are told each finding, and a workbook that fails is a Limited item to tick. With
+   none, CP-6's portfolio posture states that the fund's limits were not supplied (a Note, no
+   tick, in the full assessment; the portfolio decision's Gap is unchanged). The fund's own export
+   (mandate, constraints and exposure report CSVs and a holdings workbook) is accepted beside the
+   template and checked with the holdings as the authority; upload all its files and choose the
+   holdings workbook. Check before uploading: `uv run deploy-vii validate-input portfolio <file>
+   --as-of <as-of date>`, or `... validate-input portfolio-export <files> --as-of <as-of date>`.
 4. **More context.** Standard and Advanced (at Basic only for a primary run, a held answer, an error
    or "Answer this now"): market and ratings; peers, valuation and module modes (the peer source,
    your own peers, the Relative value mode and Deep Debate for the Committee module); research

@@ -17,7 +17,7 @@ import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date
-from decimal import Context, Decimal
+from decimal import ROUND_HALF_EVEN, Context, Decimal
 from itertools import pairwise
 from pathlib import Path
 from typing import ClassVar, Literal, cast
@@ -76,6 +76,22 @@ SCOPES = (
 TOLERANCE = Decimal("0.01")  # stated headroom against limit minus current value
 WATCH_SHARE = Decimal("0.1")  # Watch is allowed while headroom is under 10 % of the limit
 RATING_SUM = (Decimal("99.0"), Decimal("101.0"))
+# The checks of sums and shares (owner, 2026-11-15: "check data first likely incorrect sums and
+# values"; ruling 2026-11-15-full-assessment-portfolio-workbook). A distribution of NAV
+# (Rating_Distribution, Maturity_Profile) adds to `RATING_SUM`; a part of NAV (Sector_Exposure,
+# Top_Holdings, Holdings_Detail) adds to at most its upper end. Shares are stored to two decimals,
+# so a share recomputed from amounts is compared to within `TOLERANCE` and a sum of n stored
+# shares to within n times `SHARE_ROUNDING`, half a unit in the second decimal.
+SHARE_ROUNDING = Decimal("0.005")
+FRACTION_SUM = (Decimal("0.99"), Decimal("1.01"))  # a distribution entered as fractions of 1
+HUNDRED = Decimal(100)
+PRICE_RANGE = (Decimal(1), Decimal(150))  # market value per 100 of par, outside: a unit mix-up
+STALE_DAYS = 30  # the workbook's as_of may be at most this many days before the run's as-of date
+TOP_TEN = 10
+TOP10_METRIC = "top10_pct_nav"
+SHOWN = Decimal("0.0001")  # a recomputed share is shown to four decimals; compared exactly
+NON_NEGATIVE = frozenset({"pct_nav", "limit_pct_nav", "limit", "current_value"})
+POSITIVE = frozenset({"par", "market_value"})
 MAX_NUMBER = 40  # characters of a number lexeme
 # A plain decimal with at most a two-digit exponent: with `MAX_NUMBER` characters every value
 # lies within 1e-140..1e140, so `EXACT` adds, subtracts and takes a tenth without rounding.
@@ -126,6 +142,52 @@ RULE_FIX: Mapping[str, str] = {
     ),
     "one_pct_nav": "delete the one_pct_nav row; Python computes 1 % of NAV from nav",
     "rating_sum": "correct the percentages, or add a row Unallocated with the remainder of NAV",
+    "maturity_sum": "correct the percentages, or add a row Unknown with the remainder of NAV",
+    "fraction": "enter each share in percent of NAV: 2.5 means 2.5 % NAV, not 0.025",
+    "part_sum": (
+        "correct the percentages: these rows are parts of NAV and cannot add to more than all of it"
+    ),
+    "holding_share": (
+        "enter market_value / nav x 100, or correct market_value or the Mandate nav (both in "
+        "the same unit and currency)"
+    ),
+    "price": (
+        "enter par and market_value in the same unit and currency (both in units, not thousands)"
+    ),
+    "rank_order": "rank the holdings from the largest share of NAV down",
+    "top_detail": (
+        "enter the same share of NAV on Top_Holdings and Holdings_Detail, or correct the one that "
+        "is wrong"
+    ),
+    "top10": (
+        "correct top10_pct_nav or the Top_Holdings percentages: the ten largest holdings add to "
+        "top10_pct_nav"
+    ),
+    "sector_holdings": (
+        "correct the sector's pct_nav or the holdings' sector or pct_nav: the holdings in a "
+        "sector cannot add to more than the sector"
+    ),
+    "sector_row": (
+        "enter the same figure on Compliance_Monitor and Sector_Exposure, or correct the one "
+        "that is wrong"
+    ),
+    "amount_nav": (
+        "enter the current value in the Mandate nav_currency and the same unit as nav (units, "
+        "not thousands), or correct it"
+    ),
+    "metric_currency": (
+        "enter the amount in the Mandate nav_currency (an amount in another currency is not "
+        "comparable with NAV); write a unit that is not a currency in lower case, e.g. bps"
+    ),
+    "metric_as_of": "enter the metric as at the Mandate as_of date, or correct the date",
+    "checked_before": "check the row again at the Mandate as_of date and enter that date",
+    "matured": "delete the matured position, or correct its maturity date",
+    "after_run": "enter the date the figures were measured, on or before the run's as-of date",
+    "stale": (
+        f"supply the workbook as at a date at most {STALE_DAYS} days before the run's as-of date"
+    ),
+    "negative_amount": "enter a number of at least 0: a limit or an exposure is never negative",
+    "not_positive": "enter a number above 0",
     "ranks": RANK_FIX,
     "headroom": "enter limit minus current_value, or correct limit or current_value",
     "sector_headroom": "enter limit_pct_nav minus pct_nav, or correct the limit or the exposure",
@@ -569,6 +631,8 @@ class NavBasis:
     nav: Decimal | None = None
     nav_cell: str = ""
     currency: str | None = None
+    as_of: date | None = None
+    as_of_cell: str = ""
 
 
 def report(
@@ -583,8 +647,9 @@ def report(
     )
 
 
-def validate_portfolio(path: Path) -> PortfolioReport:
-    """Validate one user-supplied portfolio workbook; every finding is an `Issue` with a fix."""
+def validate_portfolio(path: Path, *, run_date: date | None = None) -> PortfolioReport:
+    """Validate one user-supplied portfolio workbook; every finding is an `Issue` with a fix.
+    With `run_date` (the run's as-of date) its dates are also checked against it."""
     try:
         with path.open("rb") as stream:
             raw = stream.read(MAX_BYTES + 1)
@@ -598,10 +663,12 @@ def validate_portfolio(path: Path) -> PortfolioReport:
             fix=RULE_FIX["read"],
         )
         return report(0, (issue,))
-    return validate_portfolio_bytes(path.name, raw)
+    return validate_portfolio_bytes(path.name, raw, run_date=run_date)
 
 
-def validate_portfolio_bytes(file: str, raw: bytes) -> PortfolioReport:
+def validate_portfolio_bytes(
+    file: str, raw: bytes, *, run_date: date | None = None
+) -> PortfolioReport:
     """`validate_portfolio` on bytes already read; `file` names the workbook in each issue."""
     request = SourceRequest(source_id="portfolio", path=file, media_type=MEDIA_TYPE)
     try:
@@ -619,7 +686,7 @@ def validate_portfolio_bytes(file: str, raw: bytes) -> PortfolioReport:
         findings = Findings(file)
         findings.add(WORKBOOK_SHEET, "A1", problem, RULE_FIX["damaged"])
         return report(0, findings.issues)
-    return read(file, source)[0]
+    return read(file, source, run_date)[0]
 
 
 def portfolio_facts(source: Source) -> PortfolioFacts:
@@ -636,7 +703,9 @@ def portfolio_facts(source: Source) -> PortfolioFacts:
     return typed_facts
 
 
-def read(file: str, source: Source) -> tuple[PortfolioReport, PortfolioFacts | None]:
+def read(
+    file: str, source: Source, run_date: date | None = None
+) -> tuple[PortfolioReport, PortfolioFacts | None]:
     findings = Findings(file)
     if source.status != "ready" or source.extraction_status == "blocked" or not source.coverage:
         # `prepare_source` failed to extract: the same refusal `prepare` would freeze.
@@ -675,6 +744,7 @@ def read(file: str, source: Source) -> tuple[PortfolioReport, PortfolioFacts | N
             if table is not None:
                 tables[sheet.name] = table
                 SHEET_RULES[sheet.name](table, tables, findings)
+    workbook_rules(tables, findings, run_date)
     present = sum(1 for sheet in SHEETS if sheet.name in names)
     compliance = len(tables[COMPLIANCE.name].rows) if COMPLIANCE.name in tables else 0
     rows = sum(len(table.rows) for table in tables.values())
@@ -863,6 +933,16 @@ def parse_number(name: str, value: str) -> tuple[Decimal, tuple[str, str] | None
     return Decimal(value), None
 
 
+def range_problem(name: str, shown: str, number: Decimal) -> tuple[str, str] | None:
+    """A share, limit or exposure below 0, or a par amount or market value not above 0."""
+    if name in NON_NEGATIVE and number < 0:
+        fix = RULE_FIX["negative" if name == "pct_nav" else "negative_amount"]
+        return f"{name} '{shown}' is negative", fix
+    if name in POSITIVE and number <= 0:
+        return f"{name} '{shown}' is not above 0", RULE_FIX["not_positive"]
+    return None
+
+
 def parse_date(name: str, value: str) -> tuple[date, tuple[str, str] | None]:
     if iso_date(value):
         return date.fromisoformat(value), None
@@ -875,9 +955,7 @@ def parse_value(column: Column, value: str) -> tuple[Value, tuple[str, str] | No
     name, shown = column.name, echo(value)
     if column.kind == "number":
         number, problem = parse_number(name, value)
-        if problem is None and name == "pct_nav" and number < 0:
-            problem = (f"{name} '{shown}' is negative", RULE_FIX["negative"])
-        return number, problem
+        return number, problem or range_problem(name, shown, number)
     if column.kind in ("count", "rank"):
         least = 0 if column.kind == "count" else 1
         number, problem = parse_number(name, value)
@@ -903,16 +981,19 @@ def parse_value(column: Column, value: str) -> tuple[Value, tuple[str, str] | No
     return value, None
 
 
-def key_findings(sheet: Sheet, rows: Sequence[Row], findings: Findings) -> None:
-    """A repeated key is one issue on the later row; rows with an invalid key cell are not also
-    duplicates."""
+def key_findings(
+    sheet: Sheet, rows: Sequence[Row], findings: Findings, names: tuple[str, ...] = ()
+) -> None:
+    """A repeated key (the sheet's, or `names`) is one issue on the later row; rows with an
+    invalid key cell are not also duplicates."""
+    names = names or sheet.key
     seen: dict[tuple[Value, ...], int] = {}
-    key = " and ".join(sheet.key)
-    first, last = sheet.letter(sheet.key[0]), sheet.letter(sheet.key[-1])
+    key = " and ".join(names)
+    first, last = sheet.letter(names[0]), sheet.letter(names[-1])
     for row in rows:
-        if not row.ok(*sheet.key):
+        if not row.ok(*names):
             continue
-        values = tuple(row.values[name] for name in sheet.key)
+        values = tuple(row.values[name] for name in names)
         if values in seen:
             cell = f"{first}{row.number}" + ("" if first == last else f":{last}{row.number}")
             problem = f"duplicates row {seen[values]} on {key}"
@@ -926,11 +1007,13 @@ def nav_basis(tables: Mapping[str, Table]) -> NavBasis:
     if table is None:
         return NavBasis()
     values = mandate_values(table)
-    nav, currency = values.get("nav"), values.get("nav_currency")
+    nav, currency, as_of = values.get("nav"), values.get("nav_currency"), values.get("as_of")
     return NavBasis(
         nav=nav[0] if nav is not None and isinstance(nav[0], Decimal) else None,
         nav_cell=f"Mandate!C{nav[1]}" if nav is not None else "",
         currency=currency[0] if currency is not None and isinstance(currency[0], str) else None,
+        as_of=as_of[0] if as_of is not None and isinstance(as_of[0], date) else None,
+        as_of_cell=f"Mandate!C{as_of[1]}" if as_of is not None else "",
     )
 
 
@@ -985,9 +1068,36 @@ def mandate_rules(table: Table, tables: Mapping[str, Table], findings: Findings)
             findings.add(MANDATE.name, f"A{last + 1}", f"no {section} row with field {name}", fix)
 
 
+def metric_findings(row: Row, basis: NavBasis, findings: Findings) -> None:
+    """An Exposure_Summary row measured on another date than the Mandate as_of, or an amount in
+    another currency than the Mandate nav_currency (the nav row's unit has its own rule)."""
+    sheet, as_of = EXPOSURE.name, row.values.get("as_of")
+    if basis.as_of is not None and isinstance(as_of, date) and as_of != basis.as_of:
+        problem = (
+            f"as_of {as_of} of {echo(row.raw['metric'])} is not the Mandate as_of "
+            f"{basis.as_of} ({basis.as_of_cell}): the metric is from another date"
+        )
+        findings.add(sheet, f"D{row.number}", problem, RULE_FIX["metric_as_of"])
+    unit = row.raw["unit"]
+    if (
+        row.raw["metric"] != "nav"
+        and row.ok("unit")
+        and CURRENCY.match(unit)
+        and basis.currency is not None
+        and unit != basis.currency
+    ):
+        problem = (
+            f"unit {unit} of {echo(row.raw['metric'])} reads as a currency code other than the "
+            f"Mandate nav_currency {basis.currency}: two currencies in one workbook's amounts"
+        )
+        findings.add(sheet, f"C{row.number}", problem, RULE_FIX["metric_currency"])
+
+
 def exposure_rules(table: Table, tables: Mapping[str, Table], findings: Findings) -> None:
     basis = nav_basis(tables)
     sheet = EXPOSURE.name
+    for row in table.rows:
+        metric_findings(row, basis, findings)
     navs = [row for row in table.rows if row.raw["metric"] == "nav"]
     for row in table.rows:
         if row.raw["metric"] == "one_pct_nav":
@@ -1011,17 +1121,74 @@ def exposure_rules(table: Table, tables: Mapping[str, Table], findings: Findings
         findings.add(sheet, f"C{nav.number}", problem, RULE_FIX["exposure_unit"])
 
 
-def rating_rules(table: Table, tables: Mapping[str, Table], findings: Findings) -> None:
+def plain(value: Decimal) -> str:
+    """An exact figure as a plain decimal, never in exponent form."""
+    return f"{value:f}"
+
+
+def rounded(value: Decimal) -> str:
+    """A recomputed figure shown to four decimals; every comparison uses it exactly."""
+    return plain(value.quantize(SHOWN, rounding=ROUND_HALF_EVEN, context=EXACT))
+
+
+def sum_of(rows: Sequence[Row], name: str) -> Decimal:
+    total = Decimal(0)
+    for row in rows:
+        total = EXACT.add(total, row.number_of(name))
+    return total
+
+
+def row_list(rows: Sequence[Row]) -> str:
+    numbers = ", ".join(str(row.number) for row in rows)
+    return f"row{'s' if len(rows) > 1 else ''} {numbers}"
+
+
+def column_cells(sheet: Sheet, rows: Sequence[Row], name: str) -> str:
+    letter = sheet.letter(name)
+    return f"{letter}{rows[0].number}:{letter}{rows[-1].number}"
+
+
+def distribution_findings(table: Table, fix: str, findings: Findings) -> None:
+    """A distribution of NAV adds to 99 to 101 (`RATING_SUM`); one that adds to about 1 holds
+    fractions. Skipped while a row's pct_nav has an issue: a missing share is never 0."""
     if not all(row.ok("pct_nav") for row in table.rows):
         return
-    total = Decimal(0)
-    for row in table.rows:
-        total = EXACT.add(total, row.number_of("pct_nav"))
+    total = sum_of(table.rows, "pct_nav")
     low, high = RATING_SUM
-    if not low <= total <= high:
-        cells = f"B{table.rows[0].number}:B{table.rows[-1].number}"
-        problem = f"pct_nav sums to {total}, outside {low} to {high}"
-        findings.add(RATINGS.name, cells, problem, RULE_FIX["rating_sum"])
+    if low <= total <= high:
+        return
+    off = EXACT.subtract(total, HUNDRED)
+    side = f"{plain(off)} more than 100" if off > 0 else f"{plain(off.copy_abs())} short of 100"
+    problem = (
+        f"pct_nav of the {len(table.rows)} rows sums to {plain(total)}, outside {low} to "
+        f"{high} ({side})"
+    )
+    if FRACTION_SUM[0] <= total <= FRACTION_SUM[1]:
+        problem += "; the shares look like fractions of 1"
+        fix = RULE_FIX["fraction"]
+    findings.add(table.sheet.name, column_cells(table.sheet, table.rows, "pct_nav"), problem, fix)
+
+
+def part_findings(table: Table, findings: Findings) -> None:
+    """Rows that are parts of NAV add to at most the upper end of `RATING_SUM`."""
+    if not all(row.ok("pct_nav") for row in table.rows):
+        return
+    total, high = sum_of(table.rows, "pct_nav"), RATING_SUM[1]
+    if total > high:
+        problem = (
+            f"pct_nav of the {len(table.rows)} rows sums to {plain(total)}, more than {high} "
+            f"({plain(EXACT.subtract(total, HUNDRED))} more than all of NAV)"
+        )
+        cells = column_cells(table.sheet, table.rows, "pct_nav")
+        findings.add(table.sheet.name, cells, problem, RULE_FIX["part_sum"])
+
+
+def rating_rules(table: Table, tables: Mapping[str, Table], findings: Findings) -> None:
+    distribution_findings(table, RULE_FIX["rating_sum"], findings)
+
+
+def maturity_rules(table: Table, tables: Mapping[str, Table], findings: Findings) -> None:
+    distribution_findings(table, RULE_FIX["maturity_sum"], findings)
 
 
 def status_problem(row: Row, status: str, limit: str, current: str) -> tuple[str, str] | None:
@@ -1058,6 +1225,7 @@ def headroom_problem(
 
 def sector_rules(table: Table, tables: Mapping[str, Table], findings: Findings) -> None:
     sheet = SECTORS.name
+    part_findings(table, findings)
     for row in table.rows:
         limited = bool(row.raw["limit_pct_nav"])
         if row.raw["headroom_pct_nav"] and not limited:
@@ -1079,6 +1247,8 @@ def sector_rules(table: Table, tables: Mapping[str, Table], findings: Findings) 
 
 
 def top_holding_rules(table: Table, tables: Mapping[str, Table], findings: Findings) -> None:
+    part_findings(table, findings)
+    key_findings(TOP_HOLDINGS, table.rows, findings, ("issuer", "instrument"))
     if not all(row.ok("rank") for row in table.rows):
         return
     ranks = {cast(int, row.values["rank"]) for row in table.rows}
@@ -1088,11 +1258,29 @@ def top_holding_rules(table: Table, tables: Mapping[str, Table], findings: Findi
         cells = f"A{table.rows[0].number}:A{table.rows[-1].number}"
         problem = f"ranks are not 1 to {count}: {missing} missing"
         findings.add(TOP_HOLDINGS.name, cells, problem, RULE_FIX["ranks"])
+    elif len(ranks) == count:
+        rank_order_findings(table, findings)
+
+
+def rank_order_findings(table: Table, findings: Findings) -> None:
+    """Rank 1 is the largest share of NAV: a holding larger than the one ranked above it."""
+    ordered = sorted(table.rows, key=lambda row: cast(int, row.values["rank"]))
+    for above, below in pairwise(ordered):
+        if above.ok("pct_nav") and below.ok("pct_nav"):
+            larger = below.number_of("pct_nav") > above.number_of("pct_nav")
+            if larger:
+                problem = (
+                    f"rank {below.values['rank']} holds {below.raw['pct_nav']} % NAV, more than "
+                    f"rank {above.values['rank']}'s {above.raw['pct_nav']}"
+                )
+                cell = f"{TOP_HOLDINGS.letter('pct_nav')}{below.number}"
+                findings.add(TOP_HOLDINGS.name, cell, problem, RULE_FIX["rank_order"])
 
 
 def compliance_rules(table: Table, tables: Mapping[str, Table], findings: Findings) -> None:
     sheet = COMPLIANCE.name
-    currency = nav_basis(tables).currency
+    basis = nav_basis(tables)
+    currency = basis.currency
     for row in table.rows:
         unit = row.raw["limit_unit"]
         if row.ok("limit_unit") and unit != PCT_NAV and currency is not None and unit != currency:
@@ -1108,10 +1296,217 @@ def compliance_rules(table: Table, tables: Mapping[str, Table], findings: Findin
             found = status_problem(row, "status", "limit", "current_value")
             if found is not None:
                 findings.add(sheet, f"K{row.number}", *found)
+        constraint_findings(row, basis, findings)
+        sector_row_findings(row, tables.get(SECTORS.name), findings)
 
 
-def no_rules(table: Table, tables: Mapping[str, Table], findings: Findings) -> None:
-    """Holdings_Detail has only its column and key rules."""
+def constraint_findings(row: Row, basis: NavBasis, findings: Findings) -> None:
+    """A row checked before the Mandate as_of, and an amount above the fund's NAV in its own
+    currency (a unit mix-up: thousands or millions against units)."""
+    sheet, checked = COMPLIANCE.name, row.values.get("last_checked")
+    if basis.as_of is not None and isinstance(checked, date) and checked < basis.as_of:
+        problem = (
+            f"last_checked {checked} is before the Mandate as_of {basis.as_of} "
+            f"({basis.as_of_cell}): the row was checked against older exposures"
+        )
+        findings.add(sheet, f"L{row.number}", problem, RULE_FIX["checked_before"])
+    if (
+        basis.nav is not None
+        and row.raw["limit_unit"] == basis.currency
+        and row.ok("current_value")
+        and row.number_of("current_value") > basis.nav
+    ):
+        problem = (
+            f"current_value {row.raw['current_value']} {basis.currency} is more than the fund's "
+            f"nav {plain(basis.nav)} ({basis.nav_cell}) by "
+            f"{plain(EXACT.subtract(row.number_of('current_value'), basis.nav))}"
+        )
+        findings.add(sheet, f"I{row.number}", problem, RULE_FIX["amount_nav"])
+
+
+def sector_row_findings(row: Row, sectors: Table | None, findings: Findings) -> None:
+    """The sector-limit row against the Sector_Exposure row its parameter names (exactly one):
+    the same exposure and, where the sector states one, the same limit, to within `TOLERANCE`."""
+    if sectors is None or row.raw["id"] != SECTOR_ID or row.raw["limit_unit"] != PCT_NAV:
+        return
+    named = [s for s in sectors.rows if s.ok("sector") and s.raw["sector"] in row.raw["parameter"]]
+    if len(named) != 1:
+        return
+    (sector,) = named
+    for mine, theirs in (("current_value", "pct_nav"), ("limit", "limit_pct_nav")):
+        if row.ok(mine) and sector.ok(theirs):
+            off = EXACT.abs(EXACT.subtract(row.number_of(mine), sector.number_of(theirs)))
+            if off > TOLERANCE:
+                problem = (
+                    f"{mine} {row.raw[mine]} of the sector-limit row is not the {theirs} "
+                    f"{sector.raw[theirs]} of {echo(sector.raw['sector'])} on Sector_Exposure "
+                    f"(row {sector.number}); difference {plain(off)}, more than {TOLERANCE}"
+                )
+                cell = f"{COMPLIANCE.letter(mine)}{row.number}"
+                findings.add(COMPLIANCE.name, cell, problem, RULE_FIX["sector_row"])
+
+
+def holding_rules(table: Table, tables: Mapping[str, Table], findings: Findings) -> None:
+    part_findings(table, findings)
+    basis = nav_basis(tables)
+    for row in table.rows:
+        price_findings(row, findings)
+        share_findings(row, basis, findings)
+        maturity = row.values.get("maturity")
+        if basis.as_of is not None and isinstance(maturity, date) and maturity < basis.as_of:
+            problem = (
+                f"maturity {maturity} is before the Mandate as_of {basis.as_of} "
+                f"({basis.as_of_cell}): a matured position is not held"
+            )
+            findings.add(HOLDINGS.name, f"J{row.number}", problem, RULE_FIX["matured"])
+
+
+def price_findings(row: Row, findings: Findings) -> None:
+    """market_value per 100 of par outside `PRICE_RANGE`: par and market value in other units."""
+    if not row.ok("par", "market_value"):
+        return
+    par, value = row.number_of("par"), row.number_of("market_value")
+    scaled = EXACT.multiply(value, HUNDRED)
+    low, high = PRICE_RANGE
+    if EXACT.multiply(par, low) <= scaled <= EXACT.multiply(par, high):
+        return
+    price = EXACT.divide(scaled, par)
+    problem = (
+        f"market_value {row.raw['market_value']} is {rounded(price)} per 100 of par "
+        f"{row.raw['par']}, outside {low} to {high}: par and market_value look like different "
+        "units"
+    )
+    findings.add(HOLDINGS.name, f"E{row.number}", problem, RULE_FIX["price"])
+
+
+def share_findings(row: Row, basis: NavBasis, findings: Findings) -> None:
+    """pct_nav against market_value / nav x 100, to within `TOLERANCE` (compared exactly as
+    |pct_nav x nav - market_value x 100| <= TOLERANCE x nav, with no division)."""
+    if basis.nav is None or not row.ok("pct_nav", "market_value"):
+        return
+    pct, value = row.number_of("pct_nav"), row.number_of("market_value")
+    gap = EXACT.subtract(EXACT.multiply(pct, basis.nav), EXACT.multiply(value, HUNDRED))
+    if EXACT.abs(gap) <= EXACT.multiply(TOLERANCE, basis.nav):
+        return
+    share = EXACT.divide(EXACT.multiply(value, HUNDRED), basis.nav)
+    problem = (
+        f"pct_nav {row.raw['pct_nav']} is not market_value {row.raw['market_value']} / Mandate "
+        f"nav {plain(basis.nav)} ({basis.nav_cell}) x 100 = {rounded(share)}; difference "
+        f"{rounded(EXACT.abs(EXACT.subtract(pct, share)))}, more than {TOLERANCE}"
+    )
+    findings.add(HOLDINGS.name, f"F{row.number}", problem, RULE_FIX["holding_share"])
+
+
+def workbook_rules(tables: Mapping[str, Table], findings: Findings, run_date: date | None) -> None:
+    """The rules that compare sheets read after the one they report on, and the dates against the
+    run's as-of date when one is given (the launcher gives it; the self-check takes --as-of)."""
+    top10_findings(tables, findings)
+    sector_holding_findings(tables, findings)
+    top_detail_findings(tables, findings)
+    if run_date is not None:
+        run_date_findings(tables, findings, run_date)
+
+
+def top10_findings(tables: Mapping[str, Table], findings: Findings) -> None:
+    """The holdings ranked 1 to 10 against the Exposure_Summary top10_pct_nav: never more, and
+    equal when ten are listed, each to within n x `SHARE_ROUNDING`."""
+    exposure, top = tables.get(EXPOSURE.name), tables.get(TOP_HOLDINGS.name)
+    if exposure is None or top is None or not all(r.ok("rank", "pct_nav") for r in top.rows):
+        return
+    metrics = [
+        r
+        for r in exposure.rows
+        if r.raw["metric"] == TOP10_METRIC and r.raw["unit"] == PCT_NAV and r.ok("value")
+    ]
+    listed = [r for r in top.rows if cast(int, r.values["rank"]) <= TOP_TEN]
+    if len(metrics) != 1 or not listed:
+        return
+    (metric,) = metrics
+    stated, total = metric.number_of("value"), sum_of(listed, "pct_nav")
+    allowance = EXACT.multiply(SHARE_ROUNDING, Decimal(len(listed)))
+    off = EXACT.subtract(total, stated)
+    if off > allowance or (len(listed) == TOP_TEN and off.copy_negate() > allowance):
+        side = "less" if off > 0 else "more"
+        problem = (
+            f"top10_pct_nav {metric.raw['value']} is {side} than the {plain(total)} that the "
+            f"{len(listed)} largest holdings on Top_Holdings add to; difference "
+            f"{plain(off.copy_abs())}, more than {plain(allowance.normalize())}"
+        )
+        findings.add(EXPOSURE.name, f"B{metric.number}", problem, RULE_FIX["top10"])
+
+
+def sector_holding_findings(tables: Mapping[str, Table], findings: Findings) -> None:
+    """The Holdings_Detail rows of a sector add to at most its Sector_Exposure pct_nav."""
+    sectors, holdings = tables.get(SECTORS.name), tables.get(HOLDINGS.name)
+    if sectors is None or holdings is None:
+        return
+    by_name = {s.raw["sector"]: s for s in sectors.rows if s.ok("sector", "pct_nav")}
+    groups: dict[str, list[Row]] = {}
+    for row in holdings.rows:
+        if row.ok("sector", "pct_nav") and row.raw["sector"] in by_name:
+            groups.setdefault(row.raw["sector"], []).append(row)
+    for name, rows in groups.items():
+        sector, total = by_name[name], sum_of(rows, "pct_nav")
+        allowance = EXACT.multiply(SHARE_ROUNDING, Decimal(len(rows) + 1))
+        off = EXACT.subtract(total, sector.number_of("pct_nav"))
+        if off > allowance:
+            problem = (
+                f"pct_nav {sector.raw['pct_nav']} of {echo(name)} is less than the "
+                f"{plain(total)} its holdings on Holdings_Detail ({row_list(rows)}) add to; "
+                f"difference {plain(off)}, more than {plain(allowance.normalize())}"
+            )
+            cell = f"{SECTORS.letter('pct_nav')}{sector.number}"
+            findings.add(SECTORS.name, cell, problem, RULE_FIX["sector_holdings"])
+
+
+def top_detail_findings(tables: Mapping[str, Table], findings: Findings) -> None:
+    """A top holding against the Holdings_Detail rows of the same issuer and instrument."""
+    top, holdings = tables.get(TOP_HOLDINGS.name), tables.get(HOLDINGS.name)
+    if top is None or holdings is None:
+        return
+    detail: dict[tuple[str, str], list[Row]] = {}
+    for row in holdings.rows:
+        if row.ok("issuer", "instrument", "pct_nav"):
+            detail.setdefault((row.raw["issuer"], row.raw["instrument"]), []).append(row)
+    for row in top.rows:
+        rows = detail.get((row.raw["issuer"], row.raw["instrument"]), [])
+        if not rows or not row.ok("issuer", "instrument", "pct_nav"):
+            continue
+        total = sum_of(rows, "pct_nav")
+        allowance = EXACT.multiply(SHARE_ROUNDING, Decimal(len(rows) + 1))
+        off = EXACT.abs(EXACT.subtract(row.number_of("pct_nav"), total))
+        if off > allowance:
+            problem = (
+                f"pct_nav {row.raw['pct_nav']} is not the {plain(total)} that Holdings_Detail "
+                f"({row_list(rows)}) gives the same issuer and instrument; difference "
+                f"{plain(off)}, more than {plain(allowance.normalize())}"
+            )
+            cell = f"{TOP_HOLDINGS.letter('pct_nav')}{row.number}"
+            findings.add(TOP_HOLDINGS.name, cell, problem, RULE_FIX["top_detail"])
+
+
+def run_date_findings(tables: Mapping[str, Table], findings: Findings, run_date: date) -> None:
+    """The Mandate as_of after the run's as-of date or more than `STALE_DAYS` before it, and a
+    Compliance_Monitor row checked after the run's as-of date."""
+    basis = nav_basis(tables)
+    if basis.as_of is not None:
+        cell = basis.as_of_cell.partition("!")[2]
+        days = (run_date - basis.as_of).days
+        if days < 0:
+            problem = f"as_of {basis.as_of} is after the run's as-of date {run_date}"
+            findings.add(MANDATE.name, cell, problem, RULE_FIX["after_run"])
+        elif days > STALE_DAYS:
+            problem = (
+                f"as_of {basis.as_of} is {days} days before the run's as-of date {run_date}, "
+                f"more than {STALE_DAYS}: the fund's exposures and compliance are stale"
+            )
+            findings.add(MANDATE.name, cell, problem, RULE_FIX["stale"])
+    compliance = tables.get(COMPLIANCE.name)
+    for row in compliance.rows if compliance is not None else ():
+        checked = row.values.get("last_checked")
+        if isinstance(checked, date) and checked > run_date:
+            problem = f"last_checked {checked} is after the run's as-of date {run_date}"
+            findings.add(COMPLIANCE.name, f"L{row.number}", problem, RULE_FIX["after_run"])
 
 
 SHEET_RULES = {
@@ -1120,9 +1515,9 @@ SHEET_RULES = {
     RATINGS.name: rating_rules,
     SECTORS.name: sector_rules,
     TOP_HOLDINGS.name: top_holding_rules,
-    MATURITIES.name: no_rules,
+    MATURITIES.name: maturity_rules,
     COMPLIANCE.name: compliance_rules,
-    HOLDINGS.name: no_rules,
+    HOLDINGS.name: holding_rules,
 }
 
 
