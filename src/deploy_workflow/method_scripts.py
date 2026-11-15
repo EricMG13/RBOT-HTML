@@ -45,7 +45,11 @@ FUNDING_GAP = ARCHIVE + "skills/cp-3c-refinancing-lme-risk/scripts/funding_gap.p
 RECORD_KIND = "method-script-checks/1"
 RECORD_SUFFIX = ".method-checks.json"  # beside a request folder's `<attempt>.review.json`
 
-Status = Literal["agreed", "disagreed", "not checked"]
+# `contradicted`: two stated inputs contradict each other and the script refuses them, so nothing
+# is recomputed; an acceptance issue like a disagreement (owner, 2026-11-15, CP-2E's hedged debt
+# above gross: "approved"). Every other refusal is "not checked".
+Status = Literal["agreed", "disagreed", "not checked", "contradicted"]
+SENT_BACK = ("disagreed", "contradicted")
 
 
 class ScriptRefused(ValueError):
@@ -956,7 +960,14 @@ def run(module: str, text: str) -> tuple[Outcome, ...]:
 
 
 def issue(outcome: Outcome) -> str:
-    """The acceptance issue for a disagreement, in words the module can act on."""
+    """The acceptance issue for a disagreement or a contradiction, in words the module can act
+    on."""
+    if outcome.status == "contradicted":
+        return (
+            f"{outcome.register} states {outcome.stated}, and the method's "
+            f"`{Path(outcome.script).name}` refuses them: {outcome.reason}. Nothing can be "
+            "recomputed from rows that contradict each other: correct the figure that is wrong."
+        )
     unit = "" if outcome.unit in (None, "months") else f" {outcome.unit}"
     value = outcome.recomputed
     shown = "" if value is None else f"{value:.6f}".rstrip("0").rstrip(".")
@@ -970,8 +981,9 @@ def issue(outcome: Outcome) -> str:
 
 
 def issues(module: str, text: str) -> tuple[str, ...]:
-    """The acceptance issues: one per disagreement; a figure not checked is no issue."""
-    return tuple(issue(o) for o in run(module, text) if o.status == "disagreed")
+    """The acceptance issues: one per disagreement or contradiction; a figure not checked is no
+    issue."""
+    return tuple(issue(o) for o in run(module, text) if o.status in SENT_BACK)
 
 
 def record(module: str, raw: bytes) -> dict[str, Any] | None:

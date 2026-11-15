@@ -661,19 +661,32 @@ def test_cp2e_fully_hedged_is_zero_unhedged_and_agreed():
     assert statuses(outcomes) == dict.fromkeys(CP2E_FIGURES, "agreed")
 
 
-def test_cp2e_hedged_above_gross_is_refused_by_the_script_not_clamped_to_zero():
+def test_cp2e_hedged_above_gross_is_sent_back_as_a_contradiction():
     # Hedged 900 against gross 800: the perimeters differ or a hedge is double-counted. The script
-    # refuses rather than report zero unhedged exposure; the stated 0 is neither passed nor sent
-    # back: it is recorded as not checked, with the script's reason.
+    # refuses rather than report zero unhedged exposure. Owner, 2026-11-15 ("approved"): the pair
+    # is sent back as a contradiction, nothing recomputed; the three figures are not checked.
     rows = EXPOSURE | {
         "Hedged floating-rate debt": "USD 900m",
         "Unhedged floating-rate debt": "USD 0m",
         "Unhedged debt percentage": "0.0%",
     }
     outcomes = ms.run("CP-2E", cp2e(rows, impact="USD 0m"))
-    assert statuses(outcomes) == dict.fromkeys(CP2E_FIGURES, "not checked")
-    assert "exceeds gross floating-rate debt" in outcomes[0].reason
-    assert ms.issues("CP-2E", cp2e(rows, impact="USD 0m")) == ()
+    pair = f"{ms.method_scripts_cp2e.HEDGED} against {ms.method_scripts_cp2e.GROSS}"
+    assert statuses(outcomes) == {pair: "contradicted"} | dict.fromkeys(CP2E_FIGURES, "not checked")
+    assert (
+        outcomes[0].recomputed is None and "exceeds gross floating-rate debt" in outcomes[0].reason
+    )
+    (issue,) = ms.issues("CP-2E", cp2e(rows, impact="USD 0m"))
+    assert "Hedged floating-rate debt `USD 900m` above Gross floating-rate debt `USD 800m`" in issue
+    assert "perimeters differ or a hedge is double-counted" in issue and "recomputes" not in issue
+
+
+def test_cp2e_other_refusals_of_the_script_stay_not_checked():
+    # A negative gross: the script refuses, but no two rows contradict each other.
+    outcomes = ms.run("CP-2E", cp2e(EXPOSURE | {"Gross floating-rate debt": "USD (800)m"}))
+    assert {o.status for o in outcomes} == {"not checked"}
+    assert "is negative" in outcomes[0].reason
+    assert ms.issues("CP-2E", cp2e(EXPOSURE | {"Gross floating-rate debt": "USD (800)m"})) == ()
 
 
 def test_cp2e_a_scale_mismatch_is_not_compared():

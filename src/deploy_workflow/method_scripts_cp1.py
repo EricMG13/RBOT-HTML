@@ -20,8 +20,8 @@ what it does not cover:
   headers, and the same one; otherwise it is not checked. Other derived types (Q2, Q3, Q4, YTD) are
   not checked: T4.8's three component columns do not say which periods they hold.
 
-CP-1 is sent no note: the `earnings_update` instructions are within 93 characters of their
-ceiling (ruling 2026-11-15-method-script-checks.md).
+CP-1 is sent a note (`CP1_NOTE`); the owner raised the `earnings_update` instruction ceiling by its
+length to make room (ruling 2026-11-15-method-script-checks.md).
 """
 
 import re
@@ -288,4 +288,12 @@ def check(text: str, loaded: Loaded) -> list[Outcome]:
     return [*_t48(text, loaded), *_t49(text, loaded)]
 
 
-core.register("CP-1", CREDIT_METRICS, check, None)  # no note: the earnings_update ceiling
+CP1_NOTE = (
+    "Python checks two kinds of your figures after you answer, with the method's own "
+    "`credit_metrics.py` (you cannot run it): each T4.8 LTM Derived Value (Full-Year Component + "
+    "Current Stub - Prior-Year Stub) and each free-name T4.9 Calculated Value (Numerator Value / "
+    "Denominator Value, or the change n / d - 1). State T4.8's currency and scale in each cell or "
+    "column header (`USD 1,250m`). A figure that disagrees is sent back for repair; one whose "
+    "input is missing is not checked, never read as zero.\n\n"
+)
+core.register("CP-1", CREDIT_METRICS, check, CP1_NOTE)

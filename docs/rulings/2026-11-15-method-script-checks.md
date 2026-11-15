@@ -159,11 +159,10 @@ file's manifest sha256 and note, the METHODOLOGY-REVIEW.md appendix row, the mod
   one, and the same one; otherwise not checked. Not checked by design: other derived types (Q2, Q3,
   Q4, YTD; T4.8's three component columns do not say which periods they hold), and free-name rows
   that are sums or differences.
-- No note: CP-1 runs in every pathway, and `earnings_update`'s instructions measure 545,907 of its
-  546,000-character ceiling. The smallest useful note (500 characters, below) would take them to
-  546,407, 407 over. The ceiling is not raised; the owner decides. Without the note the check reads
-  the method's own registers as written, and T4.8 rows will usually be not checked (no units).
-  Proposed note: "Python checks two kinds of your figures after you answer, with the method's own
+- Note: CP-1 runs in every pathway, and `earnings_update`'s instructions measured 545,907 of its
+  546,000-character ceiling; the note (500 characters) takes them to 546,407. The owner
+  approved raising that ceiling by the note's length (see the owner's answers). The note sent:
+  "Python checks two kinds of your figures after you answer, with the method's own
   `credit_metrics.py` (you cannot run it): each T4.8 LTM Derived Value (Full-Year Component +
   Current Stub - Prior-Year Stub) and each free-name T4.9 Calculated Value (Numerator Value /
   Denominator Value, or the change n / d - 1). State T4.8's currency and scale in each cell or
@@ -242,14 +241,25 @@ refused; each case was reproduced, fixed and tested with hand-worked expectation
   (a stated Breached from an unrounded input at the threshold is not sent back).
 - CP-3 (not asked): a fulcrum named with a note (`Senior Notes (partial)`) is read as the claim.
 
-## Decisions for the owner
+## Decisions for the owner, and the owner's answers
 
-1. CP-3: ask CP-3 for the `### Recovery waterfall` table (a new model output), or leave CP-3
-   unchecked. Nothing was restored for CP-3.
-2. CP-1: raise `earnings_update`'s ceiling by at least 407 characters for CP-1's note, or leave
-   CP-1 without a note.
-3. CP-2E: hedged floating-rate debt above gross is refused by the script and so recorded as not
-   checked; whether it should be sent back as an acceptance issue.
+Asked through the coordinating session; the owner's words, 2026-11-15, to the numbered list (1 CP-3
+has no enterprise value to read; 2 raise the `earnings_update` ceiling for CP-1's note; 3 send back
+hedged above gross; 4 the cost of the restores): "1. cp-dr or cp-1c is supposed to do by default
+using peer multiples 2. approved 3. approved 4. its is fine".
+
+1. CP-3: under investigation (where the method puts an enterprise value from peer multiples).
+   Until then CP-3 is not asked for the table.
+2. CP-1's note is sent (`CP1_NOTE`, 500 characters, in every pathway). The `earnings_update`
+   ceiling (`INSTRUCTION_BUDGET` in `tests/test_cpos_launch.py`) is the owner's 546,000 plus that
+   measured 500: 546,500 (545,907 before, 546,407 after on the test input). No other ceiling moved.
+3. Hedged floating-rate debt above gross is sent back. It is recorded with its own status,
+   `contradicted`: two stated rows contradict each other and the script refuses them ("perimeters
+   differ or a hedge is double-counted"), so nothing is recomputed, which a `disagreed` record
+   would misstate. The issue names both rows and the script's reason; the three figures are not
+   checked. Only that refusal is sent back: every other refusal of a script (a negative amount, a
+   test type it does not read, a missing input) stays "not checked".
+4. No action.
 
 ## Status
 
