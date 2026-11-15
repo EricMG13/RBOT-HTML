@@ -395,6 +395,34 @@ average price, margin, yield and life), stated against the holdings with the dif
 Not recomputed, and listed as not checked: rating factors (WARF), and any metric whose unit is not
 the one its name implies.
 
+How the real layout is read (pinned by SYNTHETIC fixtures in `tools/synthetic_portfolio_exports.py`):
+
+- Capital structure: each row's leading amount (`$280,000,000 — SOFR + 130bps` is 280,000,000; the
+  spread is a note); the row whose field holds "Total" (`Total Liabilities + Equity`) is the total.
+- Constraints: either layout (`Limit`/`Current Value` with ID and dates, or `Limit / Guideline`/
+  `Current Exposure` without). A parameter is checked against what it says: `Aggregate top 10
+  issuers` the ten largest; `Max single issuer exposure (largest: <name>)` the largest issuer, and
+  the name against the holdings' largest; `Max single sector (largest: <sector>)` and `2nd largest
+  sector: <sector>` that named sector's share, and the name against the holdings' n-th largest;
+  `Min 1st Lien / Senior Secured` and `Max 2nd Lien / Unsecured` the lien split; `Max unrated
+  exposure` the unrated bucket; `Max WAL` the life; `Min number of obligors` the borrower count. A
+  parameter naming nothing the holdings give (a CCC row that includes Other, a WAR minimum, equity)
+  is listed as not checked, never matched to the nearest. `0% NAV` takes its direction from Max or
+  Min; `Info only` has no limit; an em dash is not applicable. Two constraints files are compared
+  row by row on limit, current value, headroom and status.
+- Summary cells holding a name and a figure (`<name> (2.37%)`) are read as both; the name is
+  compared with the holdings' largest issuer or sector.
+- Largest holdings: `Rank, Issuer, # Positions, ...`; the issuer column is the name and the row
+  whose issuer reads `Top 10 Total` is a total. A report name is matched to the holdings' borrowers
+  by its words, ignoring case, punctuation and legal suffixes: exactly, by ticker, or as a
+  whole-word prefix of the borrower name. Each match is listed; two or more borrowers is
+  ambiguous and not compared; none is a finding.
+- Sector section: `Top 20 Subtotal` is checked against its rows and `Total` against the rows and
+  `Other Sectors`; a count is not checked where a row states none, and that is said.
+- Ranking: the lien is the leading `1L`/`2L` token (or the words first/second lien, unsecured);
+  a Ranking with none is reported as not classified, never counted as first lien.
+- Recomputed figures and differences are shown to the stated figure's places plus two.
+
 ```
 uv run deploy-vii validate-input portfolio-exports "<folder holding the export>" --as-of 2026-11-15
 uv run deploy-vii validate-input portfolio-exports <mandate>.csv <constraints>.csv <exposure>.csv <holdings>.xlsx --as-of 2026-11-15

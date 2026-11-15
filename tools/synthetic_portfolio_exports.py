@@ -49,7 +49,7 @@ POSITIONS: list[tuple[object, ...]] = [
         "Software",
         "ASTR TL B",
         "BBG00SYN0001",
-        "1st Lien",
+        "1L Gtd Sr. Secd",
         "B2 / B",
         300,
         date(2029, 6, 30),
@@ -65,7 +65,7 @@ POSITIONS: list[tuple[object, ...]] = [
         "Software",
         "ASTR TL B2",
         "BBG00SYN0002",
-        "1st Lien",
+        "1L Sr. Secd",
         "B2 / B",
         350,
         date(2030, 1, 31),
@@ -81,7 +81,7 @@ POSITIONS: list[tuple[object, ...]] = [
         "Chemicals",
         "BRCH TL",
         "BBG00SYN0003",
-        "1st Lien",
+        "1L Sr. Secd",
         "Ba3 / BB-",
         400,
         date(2028, 3, 31),
@@ -97,7 +97,7 @@ POSITIONS: list[tuple[object, ...]] = [
         "Software",
         "CEDR TL",
         "BBG00SYN0004",
-        "1st Lien",
+        "1L Sr. Secd",
         "B3 / B-",
         325,
         date(2029, 9, 30),
@@ -113,7 +113,7 @@ POSITIONS: list[tuple[object, ...]] = [
         "Healthcare",
         "DUNE TL B",
         "BBG00SYN0005",
-        "1st Lien",
+        "1L Sr. Secd",
         "B1 / B+",
         275,
         date(2030, 6, 30),
@@ -129,7 +129,7 @@ POSITIONS: list[tuple[object, ...]] = [
         "Healthcare",
         "ELMI 2L TL",
         "BBG00SYN0006",
-        "2nd Lien",
+        "2L Secd",
         "Caa1 / CCC+",
         600,
         date(2031, 3, 31),
@@ -145,7 +145,7 @@ POSITIONS: list[tuple[object, ...]] = [
         "Chemicals",
         "FERN TL",
         "BBG00SYN0007",
-        "1st Lien",
+        "1L Sr. Secd",
         "Ba2 / BB",
         450,
         date(2028, 12, 31),
@@ -163,7 +163,7 @@ MARKET: list[tuple[object, ...]] = [
         "Software",
         "GLDN TL",
         "BBG00SYN0101",
-        "1st Lien",
+        "1L Sr. Secd",
         "B2 / B",
         375,
         date(2029, 3, 31),
@@ -178,7 +178,7 @@ MARKET: list[tuple[object, ...]] = [
         "Chemicals",
         "HAZL TL",
         "BBG00SYN0102",
-        "1st Lien",
+        "1L Sr. Secd",
         "B1 / B",
         325,
         date(2030, 3, 31),
@@ -193,7 +193,7 @@ MARKET: list[tuple[object, ...]] = [
         "Healthcare",
         "IRIS TL",
         "BBG00SYN0103",
-        "1st Lien",
+        "1L Sr. Secd",
         "Ba3 / BB-",
         300,
         date(2028, 9, 30),
@@ -229,17 +229,83 @@ def _holding(values: tuple[object, ...], with_par: bool = True) -> Row:
     return [*row, values[13]] if with_par else row
 
 
+def _constraint(cells: str, stamp: str) -> Row:
+    """One monitor row from `ID | Category | Parameter | Limit | Breach | Current | Headroom |
+    Status`; the source document and checker are fixed, an em dash marks not applicable."""
+    ident, category, parameter, limit, breach, current, room, status = cells.split(" | ")
+    source = "—" if breach == "—" else "Indenture 7 (fictional)"
+    return [
+        ident,
+        category,
+        parameter,
+        limit,
+        breach,
+        source,
+        current,
+        room,
+        status,
+        stamp,
+        "analyst",
+    ]
+
+
+# The monitor's rows, phrased as the real export phrases them (fictional names and figures).
+MONITOR_ROWS = (
+    (
+        "C-01 | Single Name | Max single issuer exposure (largest: Aster) | ≤ 30.0% NAV | Hard | "
+        "29.80% | 0.20% | Watch"
+    ),
+    (
+        "C-02 | Concentration | Aggregate top 10 issuers | ≤ 100.0% NAV | Soft | 100.00% | 0.00% | "
+        "Pass"
+    ),
+    (
+        "C-03 | Sector | Max single sector (largest: Software) | ≤ 40.0% NAV | Soft | 39.70% | "
+        "0.30% | Watch"
+    ),
+    "C-04 | Sector | 2nd largest sector: Healthcare | ≤ 40.0% NAV | Soft | 35.10% | 4.90% | Pass",
+    "C-05 | Sector | 3rd largest sector: Chemicals | ≤ 40.0% NAV | Soft | 25.20% | 14.80% | Pass",
+    "C-06 | Seniority | Min 1st Lien / Senior Secured | ≥ 85.0% NAV | Hard | 89.90% | 4.90% | Pass",
+    "C-07 | Seniority | Max 2nd Lien / Unsecured | ≤ 15.0% NAV | Hard | 10.10% | 4.90% | Pass",
+    (
+        "C-08 | Rating | Max CCC+ and below (incl. Unrated & Other) | ≤ 12.5% NAV | Hard | "
+        "10.10% | "
+        "2.40% | Pass"
+    ),
+    "C-09 | Rating | Max unrated exposure | ≤ 5.0% NAV | Soft | 0.00% | 5.00% | Pass",
+    (
+        "C-10 | Rating | Min portfolio WAR | ≥ Caa1 (numeric ≤ 17) | Hard | B1 (14.3) | "
+        "2.7 notches | "
+        "Pass"
+    ),
+    "C-11 | Tenor | Max WAL (weighted avg life) | ≤ 6.00 yrs | Soft | 4.52 yrs | 1.48 yrs | Pass",
+    "C-12 | Diversification | Min number of obligors | ≥ 5 | Soft | 6 | 1 | Pass",
+    "C-13 | Prohibited | Max equity exposure | 0% NAV | Hard | 0.00% | — | Pass",
+    "C-14 | Spread | Weighted average spread | Info only | — | 361.25 bps | — | Info",
+)
+# The second constraints export: other column names, no ID, source or checked columns.
+FIT_HEADER: Row = [
+    *("Constraint Category", "Parameter", "Limit / Guideline", "Breach Type"),
+    *("Current Exposure", "Headroom", "Status"),
+]
+
+
 def clean(as_of: date = AS_OF) -> Spec:
     stamp = as_of.strftime("%d-%b-%Y")
+    monitor = [_constraint(cells, stamp) for cells in MONITOR_ROWS]
     return Spec(
         mandate=[
             ["Section", "Field", "Value", "Notes"],
             ["Strategy", "Fund Name", "SYNTHETIC Example Loan Fund (fictional)", ""],
             ["Key Parties", "Collateral Manager", "Example Manager LLP (fictional)", ""],
-            ["Capital Structure", "Class A Notes", "USD 60,000,000", "senior"],
-            ["Capital Structure", "Class B Notes", "USD 25,000,000", "mezzanine"],
-            ["Capital Structure", "Subordinated Notes", "USD 15,000,000", "first loss"],
-            ["Capital Structure", "Total", "USD 100,000,000", ""],
+            ["Capital Structure", "Class A-1 Notes", "$40,000,000 — SOFR + 130bps", "AAA"],
+            ["Capital Structure", "Class A-2 Notes", "$15,000,000 — SOFR + 160bps", "AAA"],
+            ["Capital Structure", "Class B Notes", "$10,000,000 — SOFR + 190bps", "AA"],
+            ["Capital Structure", "Class C Notes", "$8,000,000 — SOFR + 240bps", "A"],
+            ["Capital Structure", "Class D Notes", "$7,000,000 — SOFR + 350bps", "BBB-"],
+            ["Capital Structure", "Class E Notes", "$5,000,000 — SOFR + 650bps", "BB-"],
+            ["Capital Structure", "Subordinated Notes / Equity", "$15,000,000", "first loss"],
+            ["Capital Structure", "Total Liabilities + Equity", "$100,000,000", ""],
             ["Fees", "Senior Management Fee", "0.20% p.a.", ""],
             ["Reporting", "As of Date", stamp, "positions and compliance date"],
         ],
@@ -249,100 +315,11 @@ def clean(as_of: date = AS_OF) -> Spec:
                 *("Source Document", "Current Value", "Headroom", "Status", "Last Checked"),
                 "Checked By",
             ],
-            [
-                "C-01",
-                "Single Name",
-                "Max single issuer exposure",
-                "≤ 30.0% NAV",
-                "Hard",
-                "Indenture 7.1 (fictional)",
-                "29.80%",
-                "0.20%",
-                "Watch",
-                stamp,
-                "analyst",
-            ],
-            [
-                "C-02",
-                "Sector",
-                "Max single sector exposure",
-                "≤ 40.0% NAV",
-                "Soft",
-                "Indenture 7.2 (fictional)",
-                "39.70%",
-                "0.30%",
-                "Pass",
-                stamp,
-                "analyst",
-            ],
-            [
-                "C-03",
-                "Seniority",
-                "Max 2nd lien",
-                "≤ 15.0% NAV",
-                "Hard",
-                "Indenture 7.3 (fictional)",
-                "10.10%",
-                "4.90%",
-                "Pass",
-                stamp,
-                "analyst",
-            ],
-            [
-                "C-04",
-                "Rating",
-                "Min weighted average rating",
-                "≥ Caa1 (numeric ≤ 17)",
-                "Hard",
-                "Indenture 7.4 (fictional)",
-                "B1 (14.3)",
-                "2.7 notches",
-                "Pass",
-                stamp,
-                "analyst",
-            ],
-            [
-                "C-05",
-                "Tenor",
-                "Weighted average life",
-                "Info only",
-                "Soft",
-                "Indenture 7.5 (fictional)",
-                "4.52 yrs",
-                "",
-                "Pass",
-                stamp,
-                "analyst",
-            ],
+            *monitor,
         ],
         fit_constraints=[
-            [
-                "Constraint Category",
-                "Parameter",
-                "Limit",
-                "Breach Type",
-                "Current Value",
-                "Headroom",
-                "Status",
-            ],
-            [
-                "Single Name",
-                "Max single issuer exposure",
-                "≤ 30.0% NAV",
-                "Hard",
-                "29.80%",
-                "0.20%",
-                "Watch",
-            ],
-            [
-                "Sector",
-                "Max single sector exposure",
-                "≤ 40.0% NAV",
-                "Soft",
-                "39.70%",
-                "0.30%",
-                "Pass",
-            ],
+            FIT_HEADER,
+            *([row[1], row[2], row[3], row[4], row[6], row[7], row[8]] for row in monitor[:7]),
         ],
         exposure=[
             ["A. Summary Metrics"],
@@ -355,10 +332,12 @@ def clean(as_of: date = AS_OF) -> Spec:
             ["WA Price", "100.00", ""],
             ["WA Margin", "361.25 bps", ""],
             ["WA YTM", "8.61%", ""],
-            ["Largest Issuer", "29.80%", "Aster Fictional Co"],
+            ["Max Single Issuer", "Aster (29.80%)", ""],
+            ["Max Single Sector", "Software (39.70%)", ""],
             ["Top 10 Issuers", "100.00%", ""],
             ["1st Lien", "89.90%", ""],
             ["2nd Lien", "10.10%", ""],
+            ["Weighted Average Rating (WAR)", "B1 (14.3)", ""],
             ["WAL", "4.52 yrs", ""],
             [],
             ["B. Rating Distribution"],
@@ -368,24 +347,32 @@ def clean(as_of: date = AS_OF) -> Spec:
             ["CCC", "10.10%", "1"],
             ["Total", "100.00%", "6"],
             [],
-            ["C. Top Sectors"],
+            ["C. Top 20 Sectors"],
             ["Sector", "% NAV", "Issuers", "Limit", "Headroom", "Status"],
             ["Software", "39.70%", "2", "≤ 40.0% NAV", "0.30%", "Pass"],
             ["Healthcare", "35.10%", "2", "≤ 40.0% NAV", "4.90%", "Pass"],
-            ["Chemicals", "25.20%", "2", "≤ 40.0% NAV", "14.80%", "Pass"],
-            ["Top 3 Subtotal", "100.00%", "6", "", "", ""],
-            ["Other Sectors", "0.00%", "0", "", "", ""],
+            ["Top 20 Subtotal", "74.80%", "", "", "", ""],
+            ["Other Sectors", "25.20%", "", "", "", ""],
             ["Total", "100.00%", "6", "", "", ""],
             [],
             ["D. Top 10 Holdings"],
-            ["Issuer", "Positions", "MV (USD)", "% NAV"],
-            ["Aster Fictional Co", "2", "29,800,000", "29.80%"],
-            ["Dune Sample Corp", "1", "25,000,000", "25.00%"],
-            ["Birch Imaginary Inc", "1", "15,000,000", "15.00%"],
-            ["Fern Placeholder SA", "1", "10,200,000", "10.20%"],
-            ["Elm Invented Ltd", "1", "10,100,000", "10.10%"],
-            ["Cedar Example LLC", "1", "9,900,000", "9.90%"],
-            ["Top 10 Total", "7", "100,000,000", "100.00%"],
+            [
+                "Rank",
+                "Issuer",
+                "# Positions",
+                "Rating",
+                "Sector",
+                "MV ($)",
+                "% NAV",
+                "Rating Bucket",
+            ],
+            ["1", "Aster", "2", "B2", "Software", "29,800,000", "29.80%", "B"],
+            ["2", "Dune Sample", "1", "B1", "Healthcare", "25,000,000", "25.00%", "B"],
+            ["3", "Birch", "1", "Ba3", "Chemicals", "15,000,000", "15.00%", "BB"],
+            ["4", "Fern", "1", "Ba2", "Chemicals", "10,200,000", "10.20%", "BB"],
+            ["5", "Elm", "1", "Caa1", "Healthcare", "10,100,000", "10.10%", "CCC"],
+            ["6", "Cedar", "1", "B3", "Software", "9,900,000", "9.90%", "B"],
+            ["", "Top 10 Total", "7", "", "", "100,000,000", "100.00%", ""],
             [],
             ["E. Maturity Profile"],
             ["Bucket", "% NAV", "MV (USD)"],
@@ -484,14 +471,21 @@ def _report_not_holdings(spec: Spec) -> None:  # class 1
         _set(spec.exposure, metric, 1, value)
 
 
+def _issuer_row(spec: Spec, issuer: str) -> Row:
+    return next(row for row in spec.exposure if len(row) > 1 and row[1] == issuer)
+
+
 def _concentration(spec: Spec) -> None:  # class 2
-    _set(spec.exposure, "Largest Issuer", 1, "35.00%")
+    _set(spec.exposure, "Max Single Issuer", 1, "Aster (35.00%)")
     _set(spec.exposure, "Top 10 Issuers", 1, "95.00%")
-    aster = _find(spec.exposure, "Aster Fictional Co")
-    aster[1:4] = ["3", "35,000,000", "35.00%"]
-    at = spec.exposure.index(_find(spec.exposure, "Top 10 Total"))
-    spec.exposure.insert(at, ["Ghost Fictional Holdings", "1", "5,000,000", "5.00%"])
-    _find(spec.exposure, "Top 10 Total")[1:4] = ["9", "110,200,000", "110.20%"]
+    aster = _issuer_row(spec, "Aster")
+    aster[2], aster[5], aster[6] = "3", "35,000,000", "35.00%"
+    total = _issuer_row(spec, "Top 10 Total")
+    spec.exposure.insert(
+        spec.exposure.index(total),
+        ["7", "Ghost", "1", "B2", "Software", "5,000,000", "5.00%", "B"],
+    )
+    total[2], total[5], total[6] = "9", "110,200,000", "110.20%"
 
 
 def _hidden_breach(spec: Spec) -> None:  # class 3
@@ -518,9 +512,11 @@ def _summary_metrics(spec: Spec) -> None:  # class 5
 
 
 def _capital(spec: Spec) -> None:  # class 6
-    _set(spec.mandate, "Capital Structure", 2, "USD 50,000,000")
-    rows = [row for row in spec.mandate if row[0] == "Capital Structure"]
-    rows[1][2], rows[2][2], rows[3][2] = "USD 20,000,000", "USD 10,000,000", "USD 90,000,000"
+    # Class A-1 at 20m instead of 40m: the tranches add to 80m against a stated total of 90m,
+    # and 90m is 90% of the collateral.
+    _set(spec.mandate, "Capital Structure", 2, "$20,000,000 — SOFR + 130bps")
+    total = next(row for row in spec.mandate if row[1] == "Total Liabilities + Equity")
+    total[2] = "$90,000,000"
 
 
 def _century(spec: Spec) -> None:  # class 7
@@ -593,6 +589,29 @@ def _lien_split(spec: Spec) -> None:
     _set(spec.exposure, "1st Lien", 1, "85.00%")
 
 
+def _named_largest(spec: Spec) -> None:
+    # The fund names Dune as its largest issuer and Chemicals as its second largest sector; the
+    # holdings' largest issuer is Aster (29.80%) and second largest sector Healthcare (35.10%).
+    _set(spec.exposure, "Max Single Issuer", 1, "Dune Sample (25.00%)")
+    _set(spec.constraints, "C-01", 2, "Max single issuer exposure (largest: Dune Sample)")
+    _set(spec.constraints, "C-04", 2, "2nd largest sector: Chemicals")
+
+
+def _files_differ(spec: Spec) -> None:
+    second_lien = next(row for row in spec.fit_constraints if row[1] == "Max 2nd Lien / Unsecured")
+    second_lien[4] = "12.10%"
+
+
+def _ambiguous_name(spec: Spec) -> None:
+    # Cedar's position held under a second Aster entity: the report's "Aster" now matches two
+    # borrowers and its "Cedar" matches none.
+    spec.holdings[3][1] = "Aster Sample LLC"
+
+
+def _unclassified_lien(spec: Spec) -> None:
+    spec.holdings[2][6] = "Sr. Secd"  # row 4: Birch's ranking without a lien token
+
+
 BROKEN: dict[str, Callable[[Spec], None]] = {
     "report-not-holdings": _report_not_holdings,
     "concentration": _concentration,
@@ -613,6 +632,10 @@ BROKEN: dict[str, Callable[[Spec], None]] = {
     "rating-buckets": _rating_buckets,
     "maturity-buckets": _maturity_buckets,
     "lien-split": _lien_split,
+    "named-largest": _named_largest,
+    "constraint-files-differ": _files_differ,
+    "ambiguous-name": _ambiguous_name,
+    "unclassified-lien": _unclassified_lien,
 }
 
 
