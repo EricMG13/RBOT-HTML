@@ -106,18 +106,9 @@ from deploy_workflow.owners.period_basis import (
 
 MODULE_ID = "CP-2H"
 STEP_ID = "rating_triggers"
-SCHEMA_VERSION = "rating-triggers/1"
 RATINGS_SOURCE_ID = "ratings"
 
-# --- periods (fixed by the lease: CP-2G's twelve-month base and its three forecast years) -----
-# The no-context basis (Phase 8): a run with a context reads the `PeriodBasis` of its own CP-1
-# period register through `TriggerUpstream.basis`; these names stay for readers of the default.
-LTM_COLUMN = DEFAULT_BASIS.ltm_column
-LTM_PERIOD = DEFAULT_BASIS.ltm_period
-BASE_YEAR = DEFAULT_BASIS.base_year
-YEARS = DEFAULT_BASIS.years
 FY = DEFAULT_BASIS.year_labels
-NOT_REACHED = DEFAULT_BASIS.not_reached_text
 NOT_CALCULABLE = "Not calculable"
 CASES = ("base", "down")
 CASE_LABEL = {"base": "Base", "down": "Downside"}
@@ -1959,7 +1950,7 @@ def _gap_issues(
             issues += _prose(f"gaps[{i}].{name}", getattr(g, name), bound, names)
             if name != "gap":
                 continue
-            try:  # the gap becomes a limitation, which `compute` spells
+            try:  # the gap becomes a limitation, which `_computed` spells
                 runs = prose.tokenize(g.gap, gaps=gaps)
             except ValueError:
                 continue  # malformed syntax is already reported by `_prose` above
@@ -2075,7 +2066,7 @@ def validate(inputs: TriggerInputs) -> tuple[str, ...]:
     is not ready or does not parse alone (s01, s02; round 7 items 2-8), then the content issues
     in the order views, overall, gaps (round 7 (a)). A period basis the run context or the CP-1
     register refuses (`PeriodRefused`, or a refused context) is that refusal text alone, after
-    staleness. Shape issues come from `payload_issues`.
+    staleness. Shape issues are the submission model's own.
     Tool-use rules (cited page read) are Stage 2.
     """
     return _validated(inputs)[1]
@@ -2128,15 +2119,6 @@ def _parsed(payload: str) -> tuple[TriggerSubmission | None, tuple[str, ...]]:
         return TriggerSubmission.model_validate_json(exact_json(document)), ()
     except ValidationError as error:
         return None, shape_issues(error)
-
-
-def payload_issues(payload: str, *, pack: PackScope, upstream: TriggerUpstream) -> tuple[str, ...]:
-    """Shape issues alone (a payload that does not parse gets no content check), else the
-    calculation-level issues of `validate`."""
-    submission, shape = _parsed(payload)
-    if submission is None:
-        return shape
-    return validate(TriggerInputs(pack=pack, upstream=upstream, submission=submission))
 
 
 # --- claims, references, own limitations -----------------------------------------------------------
@@ -2346,17 +2328,8 @@ def _own_limitations(
 # --- the calculation -------------------------------------------------------------------------------
 
 
-def compute(inputs: TriggerInputs) -> TriggerReport:
-    """The lease's tables, references, claims and own limitations of one valid submission;
-    raises ValueError on any issue."""
-    register, issues = _validated(inputs)
-    if register is None:
-        raise ValueError("; ".join(bounded_issues(issues)))
-    return _computed(inputs, register)
-
-
 def _computed(inputs: TriggerInputs, register: _Register) -> TriggerReport:
-    """`compute` over the register `_validated` accepted (no second validation or parse)."""
+    """The composition over the register `_validated` accepted (no second validation or parse)."""
     up, sub = inputs.upstream, inputs.submission
     ratings, source, citations = register
     book, mechanics = _compose(ratings, source, up, sub, citations)

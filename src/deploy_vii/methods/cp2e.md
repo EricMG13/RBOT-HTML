@@ -36,8 +36,8 @@ transport; the analytical responsibilities below are unchanged.
   50 percent, at most three of each) are screening policy, not a source limit.
 - Deliverables: the module page (`Module.tables` layouts) and the Evidence and Limitations
   rails. No Front Page block is assigned (lease D7).
-- Consumption (D3) is OPEN: `cp2e_reader` exposes what a consumer must read; no consumer reads
-  CP-2E, so the module is not complete.
+- Consumption (D3) is OPEN: no consumer reads CP-2E, so the module is not complete. (Its unused
+  consumer reader, `cp2e_reader`, was removed on 2026-11-15.)
 
 ## Accepted costs of the quote guards (Stage 2 notes)
 A quoted figure must occur once in the quote as a whole, unsigned number, and the page must

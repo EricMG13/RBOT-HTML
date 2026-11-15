@@ -126,7 +126,6 @@ def mixed_period(basis: PeriodBasis) -> str:
     return f"Mixed: issuer {basis.ltm_tag}, each peer's own twelve months"
 
 
-MIXED_PERIOD = mixed_period(DEFAULT_BASIS)  # the default basis; a run's basis builds its own
 PROHIBITED_KINDS = ("instrument recommendation", "recovery conclusion")
 EXCLUDED = "Not meaningful: the peer is excluded from the universe"
 NO_MEDIAN = "Not calculable: no peer median (fewer than three included peers have a value)"
@@ -1586,7 +1585,6 @@ def currency_period_line(basis: PeriodBasis) -> str:
     )
 
 
-CURRENCY_PERIOD_LINE = currency_period_line(DEFAULT_BASIS)
 # The formula of a selected multiple, by the basis that was selected.
 SELECTED_FORMULAS: Mapping[str, str] = {
     "public_comps": "median of the admitted public comps' multiples, rounded half-even to 2 dp",
@@ -2643,9 +2641,9 @@ def _prose_texts(submission: PeerBenchmarkSubmission) -> list[str]:
 
 
 def _calculation(inputs: PeerBenchmarkInputs) -> tuple[tuple[str, ...], _Composed | None]:
-    """`calculation_issues` and the composition it built to bind the references (None when it
+    """The calculation issues and the composition built to bind the references (None when it
     built none: an unreadable table or an inconsistent assessment set). With no issue the
-    composition is always built, so `compute` and `_checked` reuse it (S05-C08)."""
+    composition is always built, so `_checked` reuses it (S05-C08)."""
     submission = inputs.submission
     try:
         sheet = _sheet_of(inputs)
@@ -2669,27 +2667,9 @@ def _calculation(inputs: PeerBenchmarkInputs) -> tuple[tuple[str, ...], _Compose
     return _bounded(dict.fromkeys(issues)), composed
 
 
-def calculation_issues(inputs: PeerBenchmarkInputs) -> tuple[str, ...]:
-    """Every content issue of the analyst payload against the peer source and the module's own
-    facts. An unreadable peer table returns alone (1C4). References in the analyst's text are
-    checked against the composed facts only when the assessment set is consistent (before that
-    there are no facts to bind them to, and the set issues already refuse the payload). A line
-    that quotes the payload is cut by `clipped` before it is built whole, and the list is bounded
-    (`_bounded`), so the issue text cannot outgrow the payload (protocol section 6)."""
-    return _calculation(inputs)[0]
-
-
 def _result(composed: _Composed, submission: PeerBenchmarkSubmission) -> PeerBenchmarkResult:
     claims = _claims(composed, submission)
     return PeerBenchmarkResult(composed.facts, composed.tables, claims, composed.limitations)
-
-
-def compute(inputs: PeerBenchmarkInputs) -> PeerBenchmarkResult:
-    """The module's facts, tables, claims and own limitations; ValueError on any issue."""
-    issues, composed = _calculation(inputs)
-    if issues or composed is None:
-        raise ValueError("; ".join(issues))
-    return _result(composed, inputs.submission)
 
 
 # =============================================================================================
@@ -3054,15 +3034,6 @@ def _checked(  # noqa: PLR0911 - pre-existing returns; this change reuses one co
             clipped((".".join(map(str, e["loc"])) or "(root)", ": ", e["msg"]))
             for e in error.errors(include_input=False, include_url=False, include_context=False)
         ), None
-
-
-def validate_peer_benchmark(
-    *, pack: PreparedPack, submission: PeerBenchmarkSubmission, upstream: Upstream
-) -> tuple[str, ...]:
-    """Every issue of one submission: the bound-input checks, the CP-1 selection, the Stage 1
-    content rules, the run-text type of each rationale and the product's own record checks.
-    Bounded to `MAX_ISSUES` lines of at most `MAX_ISSUE_CHARS`."""
-    return _checked(pack, submission, upstream)[0]
 
 
 def peer_benchmark(

@@ -2,19 +2,18 @@
 
 `docs/CP5-OWNER-LEASE.md` adds no CP-5 arithmetic and no new composer: the reused engine
 `deploy_vii.cp5_integrity` runs the Python checks, validates the analyst's review and composes the
-seventeen registers and the own limitations. This module binds the operands the engine reads into
-one typed object and calls the engine without a store: the `ReviewScope` is supplied, where the
-journal path builds it with `cp5_integrity.review_scope(store, attempt)`.
+seventeen registers and the own limitations. The journal path builds the engine's `ReviewScope`
+with `cp5_integrity.review_scope(store, attempt)`.
 
 The one new piece is the owner view body (lease, Owner view, construction steps 2 to 6): the
 engine's CONTEXT block over the bound heads, with every fact of each head except CP-1 (whose facts
 `live.context.integrity_projection` trims), no citation quote, and each Python finding reduced to
 its kind label and where.
 
-Stage 2 adds the G1-X plug-in parts (protocol section 2, all positional): `QUALIFICATION`, `view`
-(the owner view over the historical journal), `ENTRY_VALIDATOR` and `probe`. CP-5 is
-live-contract, so it has no `STEP_IDS`, `SCHEMAS`, `RULES` or `submit`; the core's own
-`submit_cp5_step` settles it. The core reads its operands from the journal through
+Stage 2 adds the G1-X plug-in parts (protocol section 2, all positional): `view` (the owner view
+over the historical journal), `ENTRY_VALIDATOR` and `probe`; the qualification is the engine's
+`PROMOTED`. CP-5 is live-contract, so it has no `STEP_IDS`, `SCHEMAS`, `RULES` or `submit`;
+the core's own `submit_cp5_step` settles it. The core reads its operands from the journal through
 `cp5_integrity.review_scope`, so the one store adapter is that function and `view`,
 `ENTRY_VALIDATOR` and `probe` all go through it.
 """
@@ -22,23 +21,19 @@ live-contract, so it has no `STEP_IDS`, `SCHEMAS`, `RULES` or `submit`; the core
 import hashlib
 import json
 from collections.abc import Sequence
-from dataclasses import dataclass
 from typing import Any, cast
 
 from deploy_vii.contracts import Fact, Module
 from deploy_vii.cp5_integrity import (
     KIND_LABEL,
-    PROMOTED,
     FactProjection,
     IntegrityReport,
-    IntegritySubmission,
     PythonChecks,
     ReviewScope,
     _validate_step,
     context_block,
     cp5_module,
     python_checks,
-    review_outcome,
     review_scope,
 )
 from deploy_vii.execution import Attempt, Execution, ExecutionSnapshot, StepValidation
@@ -47,46 +42,10 @@ from deploy_vii.preparation import PreparedPack
 from deploy_workflow.owners.cp1a import probe_one_step
 from deploy_workflow.workflow import WorkflowError
 
-QUALIFICATION = PROMOTED
-
 # The head whose facts the view trims (a promoted CP-1 holds tens of thousands of facts).
 PROJECTED_MODULE = "CP-1"
 # What a citation keeps in the view: its reference and its place, never its quote.
 CITATION_FIELDS = ("ref", "source_id", "locator")
-
-
-@dataclass(frozen=True)
-class CP5Inputs:
-    """Every operand the CP-5 Method reads.
-
-    `scope` holds the prepared pack, the attempt's bound inputs (with each producer's status), the
-    bound analyst heads, the blocked ancestors, the inherited limitations and any reason the scope
-    cannot be reviewed (`cp5_integrity.ReviewScope`). `submission` holds the analyst judgments."""
-
-    scope: ReviewScope
-    submission: IntegritySubmission
-
-
-@dataclass(frozen=True)
-class CP5Result:
-    """The engine's outcome: validator issues (a refused submission, `report` None) or the
-    composed review (`issues` empty)."""
-
-    issues: tuple[str, ...]
-    report: IntegrityReport | None
-
-
-def compute(inputs: CP5Inputs) -> CP5Result:
-    """Validate and compose one CP-5 review over the supplied scope (no I/O)."""
-    issues, report = review_outcome(inputs.scope, inputs.submission)
-    return CP5Result(issues=issues, report=report)
-
-
-def candidate(result: CP5Result, inputs: CP5Inputs, attempt: int) -> Module:
-    """The CP-5 candidate module of a composed review, bound to the attempt's inputs."""
-    if result.report is None:
-        raise ValueError("A refused CP-5 submission has no candidate: " + "; ".join(result.issues))
-    return cp5_module(result.report, inputs.scope.inputs, attempt)
 
 
 def owner_projection(scope: ReviewScope, checks: PythonChecks | None = None) -> FactProjection:
