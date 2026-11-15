@@ -4,6 +4,55 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-15 — Restructure, second part: removals, method provenance, CP-3C and CP-6A, review (branch `claude/busy-dijkstra-bgex9m`, PR #126)
+
+Scope is **offline only**. No provider or model was called. No model has written a CP-3C or CP-6A
+handoff for the full credit assessment under the new instructions: that needs the owner's paid run.
+This entry follows the one below and its checks supersede that entry's totals.
+
+- Removed, code that no used entry point, journal registry, rule list or test reaches (5,181 lines,
+  no test removed): the Deploy VII earnings owner runtime (`earnings_workflow.py` 4,604 to 689
+  lines; `compose_delta` and what it reaches stay for CP-1B), `owner_workflow`'s JSON-lines
+  transport and `python -m` entry, CP-OS's `navigation`/`verify_navigation`, and 85 uncalled reader
+  and compute definitions in 16 module files. Checked independently: no kept top-level definition
+  changed (AST, docstrings aside), no removed name is referenced, no undefined name in `src`,
+  `apps` or `tools`. Launcher offline preparation, 10 runs over 7 pathways on synthetic input:
+  identical before and after each stage. Kept for the owner's decision: the `OwnerWorkflow` journal
+  chain (`model_testing`, `run_pathway`, `model.loop`), which a 2026-11-13 ruling and `tests/model`
+  still rely on.
+- Method provenance: `manifest.json` gives `source_revision` with its basis for 15 more files; 19
+  files say "not recorded at import; bytes pinned by sha256" (cp-os was not reachable; two of them
+  had been attributed to cp-os `b57a344` wrongly); a `project_files` list registers the three
+  project method files; three unregistered CP-3B duplicates removed after a byte comparison. No
+  method file's sha256 changed. `tests/test_methodology_selection.py` has no known differences left.
+- Full credit assessment (ruling `docs/rulings/2026-11-15-full-assessment-cp3c-cp6a.md`):
+  `credit_snapshot` adds CP-2D and CP-3C. CP-6's scope section no longer cuts T6E.4, T6E.6, T6E.7
+  and T6E.11 (project file, sha256 `617c887c18dd`); CP-6's instructions gain `CP6A_BLOCK` on both
+  pathways that run CP-6; `posture_issues` refuses a non-blocked CP-6 handoff without
+  `### Portfolio posture` and the method's `Final Sizing Posture:` first sentence. Launcher prepared
+  offline for the 7 active pathways before and after: only `credit_snapshot` (two new modules, CP-6)
+  and `portfolio_decision` (CP-6) differ. Fidelity check, synthetic fixture only: default library
+  build identical apart from `built_at` and the workspace path; with two hand-made SYNTHETIC
+  handoffs, `tests/test_library_full_assessment_browser.py` checks CP-6's and CP-3C's pages against
+  the Markdown. Prompt-size ceiling for the pathway raised to 1,483,647 characters (the owner's
+  1,340,000 plus the measured addition): for the owner to confirm. Cost is estimated, not measured.
+- Review: eight reviewers, one per slice, no high-severity finding. Fixed: Signal imports without
+  `credit_os` and names missing brand files at start-up; three permission skips no longer call
+  `os.geteuid` where it is absent (Windows); a failed pack prune no longer blocks the pack commit;
+  the bundle test starts a Python on the bundle's two import roots and finds the library and engine
+  inside it (Linux; not the Windows package). Gate: lines moved verbatim count as moved only in a
+  file the change adds, and code that only moved is still checked with ruff's `F` rules.
+- Open after review: delivery's call item reads a section named `Final Sizing Posture`, not the new
+  `### Portfolio posture` (the library page shows it; settle after a paid run); `posture_issues`
+  checks the first sentence only; no test pins that `OwnerWorkflow.open` refuses a retained
+  JSON-lines run; no test runs `compose_delta`.
+- Checks on the merged branch: CI fast list 5,122 passed, 6 skipped, known failures deselected;
+  node page tests pass; quality gate 0 findings; `lint-imports` 3 contracts kept. GitHub Actions,
+  full weekly suite on `7cba8c6` (before the removals): 5,956 passed, 1 failed, a test that read
+  one packet of a two-write reply; the test now reads to the close.
+- Not verified: the full weekly suite on the final head (re-run requested); `Smoke-test.ps1` and
+  the Windows package on Windows; the pack workflow on GitHub Actions. Oldest two entries trimmed.
+
 ## 2026-11-15 — Restructure: packaging, shared HTTP base, import contracts, file splits (branch `claude/busy-dijkstra-bgex9m`)
 
 Scope is **offline only**: code layout, packaging, tooling and documents. No provider or model run,
@@ -900,61 +949,3 @@ that AGENTS.md requires for a presentation change: that needs a real new-format 
   key charts are selected per module from the catalogue (rows carry no chart identity);
   `src/deploy_workflow/run_start/service.py` still links finished runs to `library/reports/`, which this
   branch no longer writes (fixed on the engine branch).
-
-## 2026-11-11 — Reader standard and checks in CP-OS; delivered report retired (branch `claude/reader-engine-d46913`)
-
-Scope: instructions, checks and delivery changed; proven by synthetic passages and offline tests
-only. No provider was called and no run was started. No retained model response written under the
-new standard exists yet, and the reading check of one real run against the September VMO2
-reference (decision 11) is not done.
-- Changed: CP-OS instructions (`owners/cpos_launch.py`): every prose module is told to open
-  `## Findings` with `### Bottom line`, `### Key findings`, `### Contrary evidence and what would
-  change the view`, `### Limitations`; data modules (CP-0/CP-PARSE, CP-1, CP-1C) and blocked
-  modules only `### Bottom line`; the Basis line form of H3; figures with currency or unit; no
-  labels; persona kept with "Lead with the judgement; use data to support it, not to narrate it.";
-  CANON_SHARED's reader-facing layer and reading order sent to prose modules. `### Reader summary`,
-  the per-module opening H3, the CP-2-only reader standard and its front lines are removed.
-- Checks: the eight H6 prose checks (`prose_checks.py`) run in the CP-OS handoff check on the reader
-  passages; a failure is repair feedback naming check, line and text, inside the existing retry and
-  cap. Hand-written passing and failing passages per check (`tests/test_prose_checks.py`); check 7
-  across a run shown with the fake provider. Instructions and checks were cross-checked by a
-  whole-branch review: every instructed form passes all eight checks. The Reader-summary figure rule was restored
-  for the new passages as a fidelity check (`figure_issues`, labelled `Fidelity check:`, not a ninth
-  prose check): every reader-passage figure must appear outside the reader passages with the same
-  sign, unit and scale (owner, 2026-11-11). Review fixes in the same entry: the library build skips
-  a delivery with no `report.html` (`apps/issuer-library/update_library.py`, the cause of the 14
-  failures above); check 6 also takes the first-column letter+digit cells of `## Calculations`
-  tables (period labels excepted); a Basis line after a blank line is sentence text.
-- CP-8 requires an eighth dimension, Presentation (`tests/test_cp8_comparison.py`).
-- Delivery: new deliveries write no `report.html`; completion records carry `delivery_sha256`
-  (of `delivery.json`); HTML Model, charts, calculation JSON and forecast files unchanged. Earlier
-  runs with `report.html` are still listed and accepted as CP-8 bundles (tests on both formats).
-- Passed, exit 0: the affected fast tests (`test_cpos_launch`, `test_prose_checks`,
-  `test_reader_summary`, `test_handoff_loop`, `test_library_index`, `test_cp8_comparison`,
-  `test_credit_os_catalogue`, inbox tests, `test_run_start_page`, `test_update_library`,
-  `test_credit_os_store`; `-m "not live and not browser"`) on this branch merged with the library
-  branch (`claude/library-layout-637b87` at 3294c8d) in a scratch worktree: 899 passed;
-  `tools/quality_gate.py`: 0 findings. Before the `update_library.py` fix, 14 of those tests failed on
-  its `report.html` read.
-- Limitation (owner ruling: left as is): `owner_rendering.py:992`, `financial_rendering.py:167` and
-  `rendering.py:162` still write `report.html` outside CP-OS.
-- Not verified: any real model response to the new instructions; the reading check against VMO2;
-  the browser test of the library's Run activity link (library side); the full weekly suite.
-
-## 2026-11-11 — Reader and issuer report ruling, documents only (branch `claude/reader-ruling-docs-2d2c2a`)
-
-Scope: documents only. Changed: `docs/rulings/2026-11-11-reader-and-issuer-report.md` (new),
-`AGENTS.md`, `METHODOLOGY-REVIEW.md`, `README.md` and this entry. No code, test, prompt text or app
-changed; no provider was called. Nothing enforces the ruling yet: CP-OS still sends the reader
-standard to CP-2 only, delivery still publishes `report.html`, and the library is unchanged.
-- The two following sessions must prove, against the ruling's "Handoff contract":
-  module instructions, checks and delivery: every prose module is sent the four reader passages
-  and the Basis line form, data modules the bottom line; the eight prose checks block a handoff
-  and send a targeted repair request within the existing cap, each shown failing on a crafted
-  handoff and passing on a conforming one; CP-8 compares presentation; fidelity checks unchanged.
-  Library presentation: Report history, Overview selection (CP-6 then CP-2 lead), the flat
-  Modules navigator, Evidence's four lists and the Basis/inspector behaviour, each on a
-  conforming fixture and on an existing run labelled "Earlier format" with stored handoffs
-  byte-unchanged.
-- Judgement quality is proven only by reading one real run per change against the September
-  VMO2 reference; no paid run is allowed in these sessions, so that reading stays open.
