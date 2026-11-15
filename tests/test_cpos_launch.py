@@ -8721,9 +8721,11 @@ T2F4_T2F5 = """### T2F.4 - Unhedged Exposure Table
 
 ### T2F.5 - Rate Sensitivity Table
 
-| Sensitivity | Formula | Estimated Cash Impact | Status | Source Trace |
-|---|---|---|---|---|
-| +100 bps cash-interest impact | Unhedged x 1% | USD 5.0m | Calculated | S1 |
+| Sensitivity | Formula | Source Inputs | Estimated Cash Impact | FCF / Liquidity Implication \
+| Status | Source Trace |
+|---|---|---|---|---|---|---|
+| +100 bps cash-interest impact | Unhedged x 1% | T2F.4 | USD 5.0m | Synthetic. | Calculated \
+| S1 |
 
 """
 
@@ -8765,6 +8767,27 @@ def test_cp2e_is_checked_by_its_script_on_its_restored_registers(tmp_path, pathw
     assert "Missing registers: T2F.4, T2F.5." in missing
 
 
+def test_a_required_registers_missing_column_is_sent_back_by_the_launcher(tmp_path):
+    """`completeness_check.py` through the launcher's checker: T2F.4 written without the method's
+    `Credit Implication` column is sent back once, naming it; with it, nothing is added (SYNTHETIC,
+    ruling 2026-11-15-method-script-checks.md)."""
+    prepared, task, context = good_task(tmp_path, "CP-2E", "credit_snapshot")
+    raw = _without_placeholders(answer(context, list(prepared.plan.layout.routes)), ("T2F.4",))
+    check = checker(prepared.layout)
+    full = T2F4_T2F5.format(unhedged="500").split("### T2F.5")[0]
+    lacking = full.replace(" Credit Implication |", "").replace(" Synthetic. |", "")
+    lacking = lacking.replace("|---|---|---|---|---|---|", "|---|---|---|---|---|")
+    base = set(
+        _checked_handoff(
+            task, raw.replace("\n## Calculations", "\n" + full + "## Calculations").encode(), check
+        )
+    )
+    assert not any("lacks the method's" in i for i in base)
+    wrong = raw.replace("\n## Calculations", "\n" + lacking + "## Calculations")
+    (added,) = set(_checked_handoff(task, wrong.encode(), check)) - base
+    assert added.startswith("T2F.4 lacks the method's column `Credit Implication`")
+
+
 def _without_placeholders(raw: str, idents: tuple[str, ...]) -> str:
     """The synthetic answer less its `Not supplied` placeholder for each named register."""
     for ident in idents:
@@ -8780,22 +8803,25 @@ def _without_placeholders(raw: str, idents: tuple[str, ...]) -> str:
 # (worked in tests/test_method_scripts.py).
 T2H456 = """### T2H.4 - Operating forecast outputs
 
-| period | case | EBITDA (USD m) | FCF (USD m) | evidence/assumption IDs |
-|---|---|---|---|---|
-| FY2025 | Base | 1,000 | 300 | A1 |
+| period | case | revenue (USD m) | EBITDA (USD m) | margin | CFO (USD m) | capex (USD m) \
+| FCF (USD m) | evidence/assumption IDs |
+|---|---|---|---|---|---|---|---|---|
+| FY2025 | Base | Not supplied: synthetic | 1,000 | Not supplied: synthetic \
+| Not supplied: synthetic | Not supplied: synthetic | 300 | A1 |
 
 ### T2H.5 - Financing and liquidity outputs
 
 | period | case | opening debt/cash (USD m) | issuance (USD m) | repayment (USD m) \
-| interest (USD m) | closing debt/cash (USD m) |
-|---|---|---|---|---|---|---|
-| FY2025 | Base | 5,000 / 400 | 0 | 200 | 350 | 4,800 / 500 |
+| interest (USD m) | closing debt/cash (USD m) | accessible liquidity (USD m) |
+|---|---|---|---|---|---|---|---|
+| FY2025 | Base | 5,000 / 400 | 0 | 200 | 350 | 4,800 / 500 | Not supplied: synthetic |
 
 ### T2H.6 - Credit metrics outputs
 
-| period | case | gross/net leverage | coverage | FCF/debt | definition IDs |
-|---|---|---|---|---|---|
-| FY2025 | Base | {gross} / 4.3x | 2.9x | 6.25% | EBITDA / cash interest |
+| period | case | gross/net leverage | coverage | FCF/debt | liquidity runway | definition IDs |
+|---|---|---|---|---|---|---|
+| FY2025 | Base | {gross} / 4.3x | 2.9x | 6.25% | Not supplied: synthetic \
+| EBITDA / cash interest |
 
 """
 
@@ -8853,6 +8879,139 @@ def test_cp4_is_checked_by_its_script(tmp_path, pathway):
     assert set(_checked_handoff(task, right.encode(), check)) == base
     (added,) = set(_checked_handoff(task, wrong.encode(), check)) - base
     assert "T4C.4 row `Headroom: Net leverage` states 0.70 x" in added
+
+
+# SYNTHETIC, USD m: 900 available, TLB claim 600 -> allocation 600, residual 300 (worked in
+# tests/test_method_scripts_rest.py).
+T4E5_ONE = """### T4E.5 - Waterfall allocation
+
+| scenario | entity | available value | priority claim | allocation | residual \
+| currency and scale | legal evidence ID |
+|---|---|---|---|---|---|---|---|
+| Base | HoldCo | 900 | Senior secured TLB: 600 | {allocation} | 300 | USD m | L1 |
+
+"""
+
+
+def test_cp4c_is_checked_by_its_script(tmp_path):
+    (tmp_path / "texts").mkdir()
+    _, texts = all_instructions(tmp_path / "texts", "distressed_restructuring")
+    head = texts["CP-4C"].partition(cpos_launch.METHOD_MARK)[0]
+    assert head.count(method_scripts.NOTES["CP-4C"]) == 1
+    prepared, task, context = good_task(tmp_path, "CP-4C", "distressed_restructuring")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    check = checker(prepared.layout)
+    base = set(_checked_handoff(task, raw.encode(), check))
+    right, wrong = (
+        raw.replace("\n## Calculations", "\n" + T4E5_ONE.format(allocation=a) + "## Calculations")
+        for a in ("600", "550")
+    )
+    assert set(_checked_handoff(task, right.encode(), check)) == base
+    (added,) = set(_checked_handoff(task, wrong.encode(), check)) - base
+    assert "T4E.5 row `Allocation: Senior secured TLB (Base, HoldCo)` states 550" in added
+
+
+# SYNTHETIC: EV/EBITDA peers 9.0, 10.0, 12.0, 14.0x, N = 4: median (10 + 12) / 2 = 11.0x, min
+# 9.0x, max 14.0x, no average (gate 5); worked in tests/test_method_scripts_rest.py.
+T48_T46 = """### T4.8 - Trading comps
+
+| Entity | EV/EBITDA | Comp Status |
+|---|---|---|
+| Peer A | 9.0x | Comparable |
+| Peer B | 10.0x | Comparable |
+| Peer C | 12.0x | Comparable |
+| Peer D | 14.0x | Comparable |
+
+### T4.6 - Summary statistics
+
+| Metric | Borrower Value | Peer Avg | Median | Min | Max | Q1 | Q3 | N | Borrower Position |
+|---|---|---|---|---|---|---|---|---|---|
+| EV/EBITDA | 10.5x | Not calculable | {median} | 9.0x | 14.0x | 9.75x | 12.5x | 4 | Below |
+
+"""
+
+
+@pytest.mark.parametrize("pathway", ["relative_value", "distressed_restructuring"])
+def test_cp1c_is_checked_by_its_script(tmp_path, pathway):
+    (tmp_path / "texts").mkdir()
+    _, texts = all_instructions(tmp_path / "texts", pathway)
+    head = texts["CP-1C"].partition(cpos_launch.METHOD_MARK)[0]
+    assert head.count(method_scripts.NOTES["CP-1C"]) == 1
+    prepared, task, context = good_task(tmp_path, "CP-1C", pathway)
+    raw = answer(context, list(prepared.plan.layout.routes))
+    check = checker(prepared.layout)
+    base = set(_checked_handoff(task, raw.encode(), check))
+    right, wrong = (
+        raw.replace("\n## Calculations", "\n" + T48_T46.format(median=m) + "## Calculations")
+        for m in ("11.0x", "12.0x")
+    )
+    assert set(_checked_handoff(task, right.encode(), check)) == base
+    (added,) = set(_checked_handoff(task, wrong.encode(), check)) - base
+    assert "T4.6 row `Peer Median: EV/EBITDA` states 12.0 x" in added
+
+
+# SYNTHETIC: a maximum 6.0x trigger against 5.2x has headroom 6.0 - 5.2 = 0.8x, Compliant (worked
+# in tests/test_method_scripts_rest.py).
+T2R4_ONE = """### T2R.4 - Quantitative trigger matrix
+
+| agency | rating type | trigger direction | metric | threshold | case/period value | headroom \
+| status |
+|---|---|---|---|---|---|---|---|
+| Moody's | CFR | maximum | Debt/EBITDA | 6.0x | Base FY2025: 5.2x | {headroom} | Compliant |
+
+"""
+
+
+def test_cp2h_is_checked_by_its_script(tmp_path):
+    (tmp_path / "texts").mkdir()
+    _, texts = all_instructions(tmp_path / "texts", "distressed_restructuring")
+    head = texts["CP-2H"].partition(cpos_launch.METHOD_MARK)[0]
+    assert head.count(method_scripts.NOTES["CP-2H"]) == 1
+    prepared, task, context = good_task(tmp_path, "CP-2H", "distressed_restructuring")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    check = checker(prepared.layout)
+    base = set(_checked_handoff(task, raw.encode(), check))
+    right, wrong = (
+        raw.replace("\n## Calculations", "\n" + T2R4_ONE.format(headroom=h) + "## Calculations")
+        for h in ("0.8x", "1.8x")
+    )
+    assert set(_checked_handoff(task, right.encode(), check)) == base
+    (added,) = set(_checked_handoff(task, wrong.encode(), check)) - base
+    assert "T2R.4 row `Headroom: Debt/EBITDA` states 1.8 x" in added
+
+
+# SYNTHETIC: Revenue 2,100 -> 2,250 is 2,250 / 2,100 - 1 = 7.1% (worked in
+# tests/test_method_scripts_rest.py).
+T46_CP1B = """### T4.6 - Variance register
+
+| Metric | Comparison Basis | Prior Value | Current Value | Abs Change | % Change | Mgmt Driver \
+| Analyst Driver | Credit Implication |
+|---|---|---|---|---|---|---|---|---|
+| Revenue | YoY | 2,100 | 2,250 | 150 | {change} | Price | Volume | Positive |
+
+"""
+
+
+def test_cp1b_is_checked_by_its_script_without_a_note(tmp_path):
+    """`earnings_update` has 93 characters under its ceiling, so CP-1B is sent no note
+    (`method_scripts_cp1b.CP1B_NOTE_UNSENT` measures the need); its own T4.6 is still checked."""
+    from deploy_workflow import method_scripts_cp1b
+
+    assert "CP-1B" in method_scripts.CHECKS and "CP-1B" not in method_scripts.NOTES
+    (tmp_path / "texts").mkdir()
+    _, texts = all_instructions(tmp_path / "texts", "earnings_update")
+    assert method_scripts_cp1b.CP1B_NOTE_UNSENT not in texts["CP-1B"]
+    prepared, task, context = good_task(tmp_path, "CP-1B", "earnings_update")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    check = checker(prepared.layout)
+    base = set(_checked_handoff(task, raw.encode(), check))
+    right, wrong = (
+        raw.replace("\n## Calculations", "\n" + T46_CP1B.format(change=c) + "## Calculations")
+        for c in ("7.1%", "8.1%")
+    )
+    assert set(_checked_handoff(task, right.encode(), check)) == base
+    (added,) = set(_checked_handoff(task, wrong.encode(), check)) - base
+    assert "T4.6 row `% Change: Revenue` states 8.1" in added
 
 
 def test_cp1_free_name_rows_are_checked_by_its_script(tmp_path):
@@ -8939,6 +9098,8 @@ def test_each_attempt_keeps_its_method_script_checks_beside_its_review(tmp_path)
     _handoff(task, tmp_path / "run", lambda _task: next(answers), check, 2)
     (folder,) = (tmp_path / "run/requests/CP-2D").iterdir()
     records = [json.loads((folder / f"{n}.method-checks.json").read_text()) for n in (1, 2)]
+    for r in records:  # the module's own script; `completeness_check.py`'s outcomes follow
+        r["checks"] = [c for c in r["checks"] if c["script"].endswith("liquidity_bridge.py")]
     assert [r["response_sha256"] for r in records] == [
         hashlib.sha256(first).hexdigest(),
         hashlib.sha256(second).hexdigest(),
@@ -8947,9 +9108,9 @@ def test_each_attempt_keeps_its_method_script_checks_beside_its_review(tmp_path)
         ["disagreed", "not checked"],  # no T2E.6: Months to Empty is not checked
         ["agreed", "not checked"],
     ]
-    # A module without a method-script check keeps its review only (CP-0: CP-1 is checked since
-    # 2026-11-15, ruling 2026-11-15-method-script-checks.md).
+    # A module no check applies to keeps its review only (CP-L10: no script of its own and no
+    # SKILL.md for `completeness_check.py`; ruling 2026-11-15-method-script-checks.md).
     (tmp_path / "other").mkdir()
-    _, other, _ = good_task(tmp_path / "other", "CP-0", "credit_snapshot")
+    _, other, _ = good_task(tmp_path / "other", "CP-L10", "short_snapshot")
     _handoff(other, tmp_path / "run1", lambda _task: shell.format("").encode(), lambda *_: (), 1)
     assert not list((tmp_path / "run1").rglob("*.method-checks.json"))

@@ -918,7 +918,9 @@ EXPECTED = {
             "row 41",
             (
                 "no borrower matches Cedar by exact name, ticker or prefix (possible, not "
-                "compared: Aster Sample LLC (ticker CEDR begins with the same three letters)); "
+                "compared: Aster Sample LLC (ticker CEDR begins with the same three letters; "
+                # 10,000,000 par at mid (98.5 + 99.5) / 2 = 99.0, of 100,000,000 held
+                "the holdings give it 9,900,000, 9.90% in 1 position)); "
                 "listed among the largest holdings"
             ),
         ),
@@ -936,7 +938,9 @@ EXPECTED = {
             (
                 "no borrower matches Sanddune Health by exact name, ticker or prefix (possible, "
                 "not compared: Dune Sample Corp (Dune of the borrower's name occurs in the listed "
-                "name)); listed among the largest holdings"
+                # 25,000,000 par at mid 100.0, of 100,000,000 held
+                "name; the holdings give it 25,000,000, 25.00% in 1 position)); "
+                "listed among the largest holdings"
             ),
         ),
         (
@@ -946,7 +950,9 @@ EXPECTED = {
             (
                 "no borrower matches Brcknell Group by exact name, ticker or prefix (possible, "
                 "not compared: Birch Imaginary Inc (ticker BRCH begins with the same three "
-                "letters)); listed among the largest holdings"
+                # 15,000,000 par at mid 100.0, of 100,000,000 held
+                "letters; the holdings give it 15,000,000, 15.00% in 1 position)); "
+                "listed among the largest holdings"
             ),
         ),
         (

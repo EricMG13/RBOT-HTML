@@ -33,7 +33,11 @@ from pydantic import Field, TypeAdapter, model_validator
 from deploy_vii.contracts import Contract, Hash, Run, View
 from deploy_vii.registry import dependencies, plan
 from deploy_vii.render import render
-from deploy_workflow import method_scripts, platform_io
+from deploy_workflow import (
+    method_scripts,
+    method_scripts_completeness,  # noqa: F401 - registers the shared check
+    platform_io,
+)
 from deploy_workflow.changes import (
     DELIVERED_WHOLE,
     PACK_NAME,
