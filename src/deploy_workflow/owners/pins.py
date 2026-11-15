@@ -18,6 +18,7 @@ is reported as typed and never equals a pin.
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections.abc import Callable, Mapping, Sequence
 from decimal import Context, Decimal
 from typing import Any
@@ -510,3 +511,24 @@ def pinned_line(module_id: str, *, hedge_pinned: bool = False) -> str:
     if module_id == "CP-2E" and hedge_pinned:
         return _CP2E_WITH_HEDGE
     return _SUBJECT[module_id]
+
+
+PIN_LABEL_FORGED = "the user-supplied pin line is Python's; do not write it"
+
+
+def _normalised(text: str) -> str:
+    """NFKC, no format characters (category Cf), whitespace runs as one space, case folded, the
+    ends trimmed and one trailing full stop dropped: what a reader would take for the same text."""
+    kept = "".join(
+        c for c in unicodedata.normalize("NFKC", text) if unicodedata.category(c) != "Cf"
+    )
+    folded = " ".join(kept.split()).casefold()
+    return folded.removesuffix(".").strip()
+
+
+def pin_label_forged(module_id: str, text: str | None) -> bool:
+    """True when `text` holds `module_id`'s pinned-recovery sentence, or a near copy that differs
+    only as `_normalised` folds (case, spacing, format characters, compatibility forms, the full
+    stop; a homoglyph from another script is not folded). Shared by the modules whose own
+    limitations carry model prose beside Python's pinned line (P6-P13)."""
+    return bool(text) and _normalised(pinned_line(module_id)) in _normalised(text or "")
