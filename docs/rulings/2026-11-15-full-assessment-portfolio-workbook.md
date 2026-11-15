@@ -144,6 +144,14 @@ Decisions:
   figures, then dates, then cell defects. Obligors are counted by borrower name. The owner noted
   the same day: "no live run yet, and pathway will be restructured before live run"; nothing here
   changes a pathway's module list.
+- Corrected after the coordinating session ran the check on the owner's files and reported false
+  findings where the reader's reading of the layout differed from the real one: capital structure
+  amounts followed by a spread; constraint parameters mapped by what they say (top ten, named
+  sector, n-th largest; unmappable rows not checked); the named largest compared; `1L`/`2L` lien
+  tokens; `0% NAV`, `Info only` and em dashes; the second constraints layout, and two constraints
+  files compared; name-and-figure summary cells; the largest-holdings columns and total row; report
+  names matched to legal borrower names on a stated basis; sector totals where Other states no
+  count; figures shown to the stated places plus two. Each layout fact has a SYNTHETIC fixture.
 
 Open, for the owner: the export names one constraints sheet "CP-3C Portfolio Constraints". In this
 repository portfolio fit is CP-3B, inside CP-3; CP-3C is Refinancing & LME. The coordinating session

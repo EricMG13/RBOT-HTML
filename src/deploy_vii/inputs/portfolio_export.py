@@ -26,7 +26,7 @@ import csv
 import io
 import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 from decimal import ROUND_HALF_EVEN, Context, Decimal, InvalidOperation
 from pathlib import Path
@@ -88,6 +88,8 @@ FIX: Mapping[str, str] = {
     "future": "enter the date the figures were measured, on or before the run's as-of date",
     "unit": "enter the figure with its unit, e.g. 2.5% NAV, 313 bps or 4.8 yrs",
     "approximate": "enter the exact figure: an approximate value cannot be checked against a limit",
+    "differs": "correct the file that is wrong: the two constraints files state different figures",
+    "lien": "enter the lien position (1L, 2L) at the start of Ranking",
     "headroom": "enter the limit minus the current value (or the reverse for a minimum)",
     "status": "enter the status the figures give: Breach exactly when the limit is not met",
     "layout": "export the report with its sections A to E, each a title row, a header row and "
@@ -355,8 +357,14 @@ def is_mandate(rows: Sequence[Sequence[str]]) -> bool:
 
 
 def is_constraints(rows: Sequence[Sequence[str]]) -> bool:
+    """A header with Parameter, a Limit column (`Limit`, `Limit / Guideline`) and a current figure
+    (`Current Value`, `Current Exposure`)."""
     header = [folded(cell) for cell in _first_row(rows)]
-    return "parameter" in header and "limit" in header and any("current" in h for h in header)
+    return (
+        "parameter" in header
+        and any("limit" in h for h in header)
+        and any("current" in h or "exposure" in h for h in header)
+    )
 
 
 def section_key(title: str) -> str | None:
@@ -583,16 +591,17 @@ def read_export(files: Mapping[str, bytes]) -> Export:
 # --- Findings ------------------------------------------------------------------------------------
 
 
-# The order findings are reported in, most consequential first: a breach a wrong figure hides, a
-# total or balance that does not reconcile (or a file that cannot be read), a stated figure the
-# holdings contradict, a stale or future date, then cell defects.
+# The order findings are reported in, most consequential first: a limit breached on the holdings'
+# figures that the report passes; stated figures that do not reconcile to the holdings (or a file
+# that cannot be read); the report's own inconsistencies (totals, headroom, status, the capital
+# structure, two files that disagree); cell defects (3, the default); then staleness.
 PRIORITY: Mapping[str, int] = {
     "breach": 0,
-    **dict.fromkeys(("total", "capital", "missing", "layout", "column"), 1),
     **dict.fromkeys(
-        ("par", "nav", "count", "share", "absent", "metric", "plausible", "headroom", "status"), 2
+        ("par", "nav", "count", "share", "absent", "metric", "missing", "layout", "column"), 1
     ),
-    **dict.fromkeys(("stale", "future"), 3),
+    **dict.fromkeys(("total", "capital", "headroom", "status", "plausible", "differs"), 2),
+    **dict.fromkeys(("stale", "future"), 4),
 }
 
 
@@ -604,7 +613,7 @@ class Findings:
 
     def add(self, file: str, where: str, cell: str, problem: str, fix: str) -> None:
         issue = Issue(file=file, sheet=where, cell=cell, problem=problem, fix=FIX[fix])
-        self.issues.append((PRIORITY.get(fix, 4), issue))
+        self.issues.append((PRIORITY.get(fix, 3), issue))
 
     def ordered(self) -> tuple[Issue, ...]:
         return tuple(issue for _, issue in sorted(self.issues, key=lambda item: item[0]))
@@ -701,9 +710,22 @@ def mid(holding: Holding) -> Decimal | None:
     return None
 
 
-def is_second_lien(holding: Holding) -> bool:
-    text = folded(holding.text.get("ranking", ""))
-    return "2nd" in text or "second" in text
+_LIEN = re.compile(r"^\s*([12])\s*L\b", re.IGNORECASE)
+
+
+def lien(holding: Holding) -> str:
+    """first, second, unsecured or unclassified: the leading lien token of Ranking (`1L Sr.
+    Secd`, `2L Secd`), else the words first/second lien or unsecured. A Ranking with none of
+    these is unclassified and reported, never counted as first lien."""
+    text = holding.text.get("ranking", "")
+    if (token := _LIEN.match(text)) is not None:
+        return "first" if token[1] == "1" else "second"
+    words = folded(text)
+    if "2nd lien" in words or "second lien" in words:
+        return "second"
+    if "1st lien" in words or "first lien" in words:
+        return "first"
+    return "unsecured" if "unsec" in words else "unclassified"
 
 
 @dataclass
@@ -725,7 +747,9 @@ class Recomputed:
     ytm: Decimal | None = None
     ytm_all: Decimal | None = None
     names: dict[str, str] = field(default_factory=dict)  # folded borrower -> as written
+    tickers_of: dict[str, set[str]] = field(default_factory=dict)  # folded borrower -> tickers
     sheet: str = "Holdings"
+    left_out: int = 0  # holdings rows with no readable par
 
     def issuer_share(self, name: str) -> Decimal:
         return share(self.issuer_value.get(folded(name), Decimal(0)), self.value)
@@ -753,6 +777,7 @@ def recompute(rows: Sequence[Holding]) -> Recomputed:
     for holding in rows:
         par = holding.numbers.get("par")
         if par is None:
+            out.left_out += 1
             continue
         out.positions += 1
         out.par = EXACT.add(out.par, par)
@@ -761,6 +786,7 @@ def recompute(rows: Sequence[Holding]) -> Recomputed:
         out.borrowers.setdefault(key, []).append(holding)
         if holding.text.get("ticker"):
             out.tickers.add(holding.text["ticker"])
+            out.tickers_of.setdefault(key, set()).add(holding.text["ticker"].upper())
         sector = holding.text.get("sector", "")
         price = mid(holding)
         if price is None:
@@ -773,7 +799,7 @@ def recompute(rows: Sequence[Holding]) -> Recomputed:
         out.value = EXACT.add(out.value, value)
         out.sectors[sector] = EXACT.add(out.sectors.get(sector, Decimal(0)), value)
         out.issuer_value[key] = EXACT.add(out.issuer_value.get(key, Decimal(0)), value)
-        if is_second_lien(holding):
+        if lien(holding) == "second":
             out.second_lien = EXACT.add(out.second_lien, value)
     out.price = _weighted(priced)
     _averages(rows, out)
@@ -1015,6 +1041,17 @@ def rating_findings(file: str, rows: Sequence[Holding], findings: Findings) -> N
         )
 
 
+def lien_findings(file: str, rows: Sequence[Holding], findings: Findings) -> None:
+    """Positions whose Ranking states no lien: not classified, and left out of the lien split."""
+    lacking = [h.row for h in rows if lien(h) == "unclassified"]
+    if lacking:
+        problem = (
+            f"Ranking states no lien (1L, 2L, first, second, unsecured) on {rows_named(lacking)}; "
+            "not classified, and not counted as first lien"
+        )
+        findings.add(file, rows[0].sheet, "Ranking", problem, "lien")
+
+
 def par_findings(file: str, rows: Sequence[Holding], findings: Findings) -> None:
     lacking = [h.row for h in rows if "par" not in h.numbers]
     if lacking:
@@ -1042,6 +1079,7 @@ _METRICS = (
     ("wal", ("wal", "weighted average life", "average life")),
     ("top10", ("top 10", "top10", "top ten")),
     ("largest", ("largest issuer", "largest obligor", "largest borrower", "single issuer")),
+    ("largest_sector", ("single sector", "largest sector")),
     ("positions", ("position", "number of loans", "facilities")),
     ("obligors", ("obligor", "issuers", "borrowers")),
     ("sectors", ("sector",)),
@@ -1073,6 +1111,7 @@ _METRIC_UNITS: Mapping[str, frozenset[str]] = {
     "first_lien": _SHARE,
     "wal": frozenset({"yrs"}),
     "largest": _SHARE,
+    "largest_sector": _SHARE,
     "top10": _SHARE,
 }
 
@@ -1095,6 +1134,10 @@ class Claim:
     cell: str
     text: str
     value: Quantity
+    name: str = ""  # the issuer or sector a `<name> (2.37%)` cell names
+
+
+_NAME_AND_FIGURE = re.compile(r"^(?P<name>.*?\S)\s*\((?P<figure>[^()]+)\)\s*$")
 
 
 def summary_claims(export: Export, findings: Findings) -> tuple[dict[str, Claim], list[str]]:
@@ -1107,7 +1150,9 @@ def summary_claims(export: Export, findings: Findings) -> tuple[dict[str, Claim]
     for number, row in section.rows:
         name, text = row[0], row[1] if len(row) > 1 else ""
         key = metric_key(name)
-        found = quantity(text)
+        found, named = quantity(text), ""
+        if found is None and (pair := _NAME_AND_FIGURE.match(text)) is not None:
+            found, named = quantity(pair["figure"]), pair["name"].strip()
         if any(word in folded(name) for word in _AS_OF_FIELDS):
             continue
         if key is None or key in claims or (found is not None and not _fits(key, found)):
@@ -1115,7 +1160,7 @@ def summary_claims(export: Export, findings: Findings) -> tuple[dict[str, Claim]
         elif found is None or found.approximate:
             _unreadable((export.files["exposure"], where, f"row {number}"), name, text, findings)
         else:
-            claims[key] = Claim(where, f"row {number}", text, found)
+            claims[key] = Claim(where, f"row {number}", text, found, named)
     return claims, unchecked
 
 
@@ -1136,8 +1181,13 @@ def _claim_finding(
     """One stated figure against the holdings' figure; `how` holds `marked`, `fix`, `shown`
     (a formatter) and `note` (words after the figures)."""
     marked = bool(how.get("marked", False))
-    show = how.get("shown", figure)
-    assert callable(show)
+    shown = how.get("shown", figure)
+    assert callable(shown)
+    places = claim.value.places + 2
+
+    def show(value: Decimal) -> str:
+        return _to_places(shown, value, places)
+
     gap = EXACT.abs(EXACT.subtract(claim.value.value, exact))
     if how.get("table"):
         findings.table.append((str(how["table"]), claim.text, show(exact), show(gap)))
@@ -1148,6 +1198,19 @@ def _claim_finding(
         f"{show(gap)}{how.get('note', '')}"
     )
     findings.add(file, claim.where, claim.cell, problem, str(how.get("fix", "metric")))
+
+
+def _to_places(shown: Callable[[Decimal], str], value: Decimal, places: int) -> str:
+    """A recomputed figure (or a difference) to the stated figure's places plus two: a share,
+    a plain figure or years at `places`; amounts and counts as they are written."""
+    fixed = plain(
+        value.quantize(Decimal(1).scaleb(-places), rounding=ROUND_HALF_EVEN, context=EXACT)
+    )
+    if shown is pct:
+        return f"{fixed}%"
+    if shown is _years:
+        return f"{fixed} yrs"
+    return fixed if shown is figure else shown(value)
 
 
 def _count(value: Decimal) -> str:
@@ -1167,11 +1230,65 @@ def summary_findings(
             continue
         if key in claims:
             _claim_finding(file, claims[key], label, exact, findings, **how)
-        else:
-            show = how.get("shown", figure)
-            assert callable(show)
-            findings.table.append((str(how["table"]), "not stated", show(exact), ""))
+        elif "table" in how:
+            shown = how.get("shown", figure)
+            assert callable(shown)
+            findings.table.append(
+                (str(how["table"]), "not stated", _to_places(shown, exact, 2), "")
+            )
+    _sector_table(export, found, findings)
+    _named_largest(file, claims, found, findings)
     _internal_findings(file, claims, findings)
+
+
+def _sector_table(export: Export, found: Recomputed, findings: Findings) -> None:
+    """The three largest sectors in the holdings, each beside the share the report's sector
+    section states for it (or "not listed")."""
+    section = export.sections.get("sectors")
+    stated: dict[str, str] = {}
+    if section is not None:
+        columns = section_columns(section.header)
+        for _, row in section.rows:
+            stated[folded(label_of(row, columns))] = _cell_text(row, columns.pct)
+    for rank, name in enumerate(_sectors_ranked(found)[:3], 1):
+        exact = share(found.sectors[name], found.value)
+        text = stated.get(folded(name), "")
+        given = quantity(text) if text else None
+        places = given.places + 2 if given is not None else 2
+        gap = (
+            ""
+            if given is None
+            else _to_places(pct, EXACT.abs(EXACT.subtract(given.value, exact)), places)
+        )
+        findings.table.append(
+            (
+                f"{_ordinal(rank)}largest sector: {name}",
+                text or "not listed",
+                _to_places(pct, exact, places),
+                gap,
+            )
+        )
+
+
+def _named_largest(
+    file: str, claims: Mapping[str, Claim], found: Recomputed, findings: Findings
+) -> None:
+    """The issuer or sector a summary cell names as the largest (`<name> (2.37%)`) against the
+    holdings' largest."""
+    issuer = claims.get("largest")
+    if issuer is not None and issuer.name:
+        problem = _issuer_named(issuer.name, found)
+        if problem:
+            findings.add(file, issuer.where, issuer.cell, f"the summary {problem}", "share")
+    sector = claims.get("largest_sector")
+    ranked = _sectors_ranked(found)
+    if sector is not None and sector.name and ranked and folded(ranked[0]) != folded(sector.name):
+        top = ranked[0]
+        problem = (
+            f"the summary names {sector.name} as the largest sector; in the holdings it is "
+            f"{top} ({pct(share(found.sectors[top], found.value))})"
+        )
+        findings.add(file, sector.where, sector.cell, problem, "share")
 
 
 _COUNTED = ("par", "positions", "obligors", "sectors")
@@ -1219,7 +1336,12 @@ def _headline(
             "positions",
             "the number of positions",
             Decimal(found.positions),
-            {"fix": "count", "shown": _count, "table": "positions"},
+            {
+                "fix": "count",
+                "shown": _count,
+                "note": f" (rows with a readable par; {count(found.left_out, 'row')} left out)",
+                "table": "positions (rows with a readable par)",
+            },
         ),
         (
             "obligors",
@@ -1236,7 +1358,12 @@ def _headline(
             "sectors",
             "the number of sectors",
             Decimal(len(found.sectors)),
-            {"fix": "count", "shown": _count, "table": "sectors"},
+            {
+                "fix": "count",
+                "shown": _count,
+                "note": " (by the Index Sector column)",
+                "table": "sectors (by Index Sector)",
+            },
         ),
         (
             "largest",
@@ -1249,6 +1376,12 @@ def _headline(
                 "note": f" ({name})",
                 "table": "largest issuer",
             },
+        ),
+        (
+            "largest_sector",
+            "the largest sector's share",
+            share(max(found.sectors.values(), default=Decimal(0)), found.value),
+            {"fix": "share", "marked": True, "shown": pct},
         ),
         (
             "top10",
@@ -1329,6 +1462,7 @@ def _internal_findings(file: str, claims: Mapping[str, Claim], findings: Finding
 
 @dataclass
 class Columns:
+    name: int
     pct: int | None
     count: int | None
     value: int | None
@@ -1337,13 +1471,23 @@ class Columns:
     status: int | None
 
 
+_RANK = ("rank", "#", "no", "no.")
+_NAMES = ("issuer", "name", "obligor", "borrower", "sector", "bucket", "metric")
+
+
 def section_columns(header: Sequence[str]) -> Columns:
+    """A section's columns by their headers. The name column is the first, unless the first is a
+    rank (the largest-holdings layout: `Rank, Issuer, # Positions, ...`)."""
     names = [folded(cell) for cell in header]
+    name = 0
+    if names and names[0] in _RANK:
+        name = next((i for i, n in enumerate(names) if any(w in n for w in _NAMES)), 1)
 
     def first(test: Callable[[str], bool]) -> int | None:
-        return next((i for i, name in enumerate(names) if i and test(name)), None)
+        return next((i for i, n in enumerate(names) if i > 0 and i != name and test(n)), None)
 
     return Columns(
+        name=name,
         pct=first(lambda n: ("%" in n or "pct" in n) and "limit" not in n and "headroom" not in n),
         count=first(lambda n: any(w in n for w in ("issuer", "count", "#", "obligor", "position"))),
         value=first(lambda n: "mv" in n or "market value" in n or n.startswith("value")),
@@ -1351,6 +1495,10 @@ def section_columns(header: Sequence[str]) -> Columns:
         headroom=first(lambda n: "headroom" in n),
         status=first(lambda n: "status" in n),
     )
+
+
+def label_of(row: Sequence[str], columns: Columns) -> str:
+    return _cell_text(row, columns.name)
 
 
 def _cell_text(row: Sequence[str], index: int | None) -> str:
@@ -1378,30 +1526,52 @@ def total_findings(file: str, section: Section, findings: Findings) -> None:
 def _column_totals(
     file: str, section: Section, index: int, is_count: bool, findings: Findings
 ) -> None:
+    columns = section_columns(section.header)
     column = section.header[index] if index < len(section.header) else f"column {index + 1}"
-    plain_rows: list[Quantity] = []
-    other_rows: list[Quantity] = []
+    added: dict[str, list[Quantity]] = {"row": [], "other": []}
+    silent: dict[str, list[str]] = {"row": [], "other": []}  # rows stating nothing here
     for number, row in section.rows:
-        text, kind = _cell_text(row, index), _label_kind(row[0])
+        label = label_of(row, columns)
+        text, kind = _cell_text(row, index), _label_kind(label)
         stated = quantity(text) if text else None
+        if kind in added:
+            (added[kind].append(stated) if stated is not None else silent[kind].append(label))
+            continue
         if stated is None:
             continue
-        if kind in ("row", "other"):
-            (plain_rows if kind == "row" else other_rows).append(stated)
-            continue
-        added = plain_rows if kind == "subtotal" else [*plain_rows, *other_rows]
-        total = sum((q.value for q in added), Decimal(0))
-        allowed = (
-            Decimal(0) if is_count else sum((q.half_unit for q in (*added, stated)), Decimal(0))
-        )
-        gap = EXACT.abs(EXACT.subtract(stated.value, total))
-        if gap > allowed:
-            problem = (
-                f"{row[0]} states {column} {text}; its {len(added)} rows add to {plain(total)}, a "
-                f"difference of {plain(gap)}"
-                + ("" if is_count else f", more than their rounding ({plain(allowed)})")
+        parts = ("row",) if kind == "subtotal" else ("row", "other")
+        quiet = [name for part in parts for name in silent[part]]
+        if quiet:
+            findings.notes.append(
+                f"not checked: {section.title}, {label} {column}, because "
+                f"{', '.join(quiet)} states no {column}"
             )
-            findings.add(file, section.title, f"row {number}", problem, "total")
+            continue
+        rows = [q for part in parts for q in added[part]]
+        _one_total(file, section, (number, label, column, text), (stated, rows, is_count), findings)
+
+
+def _one_total(
+    file: str,
+    section: Section,
+    at: tuple[int, str, str, str],
+    values: tuple[Quantity, Sequence[Quantity], bool],
+    findings: Findings,
+) -> None:
+    """A Total or Subtotal row (`at`: row, label, column, text) against the rows it adds
+    (`values`: the stated total, the rows' figures, whether they are counts)."""
+    number, label, column, text = at
+    stated, added, is_count = values
+    total = sum((q.value for q in added), Decimal(0))
+    allowed = Decimal(0) if is_count else sum((q.half_unit for q in (*added, stated)), Decimal(0))
+    gap = EXACT.abs(EXACT.subtract(stated.value, total))
+    if gap > allowed:
+        problem = (
+            f"{label} states {column} {text}; its {len(added)} rows add to {plain(total)}, a "
+            f"difference of {plain(gap)}"
+            + ("" if is_count else f", more than their rounding ({plain(allowed)})")
+        )
+        findings.add(file, section.title, f"row {number}", problem, "total")
 
 
 def _stated(row: Sequence[str], index: int | None) -> tuple[str, Quantity | None]:
@@ -1409,68 +1579,125 @@ def _stated(row: Sequence[str], index: int | None) -> tuple[str, Quantity | None
     return text, (quantity(text) if text else None)
 
 
+_LEGAL = frozenset(
+    {
+        *("inc", "incorporated", "llc", "ltd", "limited", "corp", "corporation", "co"),
+        *("company", "sa", "plc", "lp", "llp", "bv", "gmbh", "ag", "nv", "sarl", "sas", "spa"),
+        "the",
+    }
+)
+
+
+def name_words(text: str) -> tuple[str, ...]:
+    """A name as its words, ignoring case, punctuation and legal suffixes (Inc, LLC, Ltd, ...)."""
+    words = re.findall(r"[a-z0-9]+", text.casefold())
+    return tuple(word for word in words if word not in _LEGAL) or tuple(words)
+
+
+def match_issuer(name: str, found: Recomputed) -> tuple[str, list[str]]:
+    """How a report's issuer name matches the holdings' borrowers: `exact` (the same words),
+    `ticker` (the name is a borrower's ticker) or `prefix` (the name's words begin the borrower's
+    words, e.g. a group name against a legal name), and the folded borrower keys it matches;
+    ("", []) when none does. More than one key is an ambiguous match."""
+    words = name_words(name)
+    tests: tuple[tuple[str, Callable[[str], bool]], ...] = (
+        ("exact", lambda key: name_words(found.names[key]) == words),
+        ("ticker", lambda key: name.strip().upper() in found.tickers_of.get(key, set())),
+        ("prefix", lambda key: name_words(found.names[key])[: len(words)] == words),
+    )
+    for how, test in tests:
+        keys = [key for key in found.borrowers if words and test(key)]
+        if keys:
+            return how, keys
+    return "", []
+
+
 def holding_section_findings(export: Export, found: Recomputed, findings: Findings) -> None:
-    """The report's largest holdings, by issuer: each must be among the holdings, with the stated
-    market value, share and number of positions."""
+    """The report's largest holdings, by issuer: each name is matched to the holdings' borrowers
+    (`match_issuer`); a matched issuer's market value, share and positions are compared; an
+    ambiguous match is a note and is not compared; a name no borrower matches is a finding."""
     section = export.sections.get("holdings")
     if section is None or not found.value:
         return
     file, columns = export.files["exposure"], section_columns(section.header)
+    matched: list[str] = []
     for number, row in section.rows:
-        if _label_kind(row[0]) != "row":
+        name = label_of(row, columns)
+        if _label_kind(name) != "row" or not name:
             continue
-        key, cell = folded(row[0]), f"row {number}"
-        if key not in found.borrowers:
-            problem = f"{row[0]} is listed among the largest holdings but is not in the holdings"
+        how, keys = match_issuer(name, found)
+        cell = f"row {number}"
+        if not keys:
+            problem = (
+                f"no borrower in the holdings matches {name}, listed among the largest holdings"
+            )
             findings.add(file, section.title, cell, problem, "absent")
             continue
-        for index, label, exact, how in (
-            (
-                columns.value,
-                "its market value",
-                found.issuer_value.get(key, Decimal(0)),
-                {"marked": True, "shown": money},
-            ),
-            (columns.pct, "its share", found.issuer_share(row[0]), {"marked": True, "shown": pct}),
-            (
-                columns.count,
-                "its number of positions",
-                Decimal(len(found.borrowers[key])),
-                {"shown": _count},
-            ),
-        ):
-            text, stated = _stated(row, index)
-            if stated is not None:
-                claim = Claim(section.title, cell, text, stated)
-                _claim_finding(
-                    file, claim, f"{row[0]}: {label}", exact, findings, fix="share", **how
-                )
+        if len(keys) > 1:
+            shown = "; ".join(found.names[key] for key in keys)
+            findings.notes.append(
+                f"{section.title}, {cell}: {name} matches {len(keys)} borrowers ({shown}); "
+                "ambiguous, not compared"
+            )
+            continue
+        (key,) = keys
+        matched.append(f"{name} = {found.names[key]} ({how})")
+        _holding_row(file, (section, cell, row, columns), key, found, findings)
+    if matched:
+        findings.notes.append(f"largest holdings matched by name: {'; '.join(matched)}")
+
+
+def _holding_row(
+    file: str,
+    at: tuple[Section, str, Sequence[str], Columns],
+    key: str,
+    found: Recomputed,
+    findings: Findings,
+) -> None:
+    section, cell, row, columns = at
+    name = label_of(row, columns)
+    value = found.issuer_value.get(key, Decimal(0))
+    for index, label, exact, how in (
+        (columns.value, "its market value", value, {"marked": True, "shown": money}),
+        (columns.pct, "its share", share(value, found.value), {"marked": True, "shown": pct}),
+        (
+            columns.count,
+            "its number of positions",
+            Decimal(len(found.borrowers[key])),
+            {"shown": _count},
+        ),
+    ):
+        text, stated = _stated(row, index)
+        if stated is not None:
+            claim = Claim(section.title, cell, text, stated)
+            _claim_finding(file, claim, f"{name}: {label}", exact, findings, fix="share", **how)
 
 
 def sector_section_findings(export: Export, found: Recomputed, findings: Findings) -> None:
-    """Each listed sector's share against the holdings', and its limit on both: a limit the stated
-    share meets but the holdings' share breaks is a breach the report hides."""
+    """Each listed sector's share against the holdings' (sectors by the Index Sector column), and
+    its limit on the holdings' share: a limit the stated share meets but the holdings' share
+    breaks is a breach the report hides."""
     section = export.sections.get("sectors")
     if section is None or not found.value:
         return
     file, columns = export.files["exposure"], section_columns(section.header)
     by_name = {folded(name): value for name, value in found.sectors.items()}
     for number, row in section.rows:
-        if _label_kind(row[0]) != "row":
+        name, cell = label_of(row, columns), f"row {number}"
+        if _label_kind(name) != "row":
             continue
-        cell = f"row {number}"
-        if folded(row[0]) not in by_name:
-            problem = f"sector {row[0]} is listed but no holding is in it"
+        if folded(name) not in by_name:
+            problem = f"sector {name} is listed but no holding is in it"
             findings.add(file, section.title, cell, problem, "absent")
             continue
-        exact = share(by_name[folded(row[0])], found.value)
+        exact = share(by_name[folded(name)], found.value)
         text, stated = _stated(row, columns.pct)
         if stated is not None:
             claim = Claim(section.title, cell, text, stated)
             _claim_finding(
                 file,
                 claim,
-                f"{row[0]}: its share",
+                f"{name}: its share",
                 exact,
                 findings,
                 fix="share",
@@ -1478,12 +1705,17 @@ def sector_section_findings(export: Export, found: Recomputed, findings: Finding
                 shown=pct,
             )
         limit = _stated(row, columns.limit)[1]
-        status = folded(_cell_text(row, columns.status))
-        if limit is not None and exact > limit.value and "breach" not in status:
+        status = _cell_text(row, columns.status)
+        if (
+            limit is not None
+            and limit.operator != ">="
+            and exact > limit.value
+            and ("breach" not in folded(status))
+        ):
             problem = (
-                f"{row[0]}: the holdings give {pct(exact)} against the limit "
+                f"{name}: the holdings give {pct(exact)} against the limit "
                 f"{_cell_text(row, columns.limit)}, a breach; the report states "
-                f"{text or 'no share'} and status {_cell_text(row, columns.status) or 'none'}"
+                f"{text or 'no share'} and status {status or 'none'}"
             )
             findings.add(file, section.title, cell, problem, "breach")
 
@@ -1495,16 +1727,19 @@ _CONSTRAINT_COLUMNS = {
     "category": ("constraint category", "category"),
     "parameter": ("parameter",),
     "limit": ("limit",),
-    "current": ("current",),
+    "current": ("current", "exposure"),
     "headroom": ("headroom",),
     "status": ("status",),
     "checked": ("last checked",),
 }
-_RECOMPUTED_BY = (
-    ("second", ("2nd lien", "second lien")),
-    ("issuer", ("issuer", "obligor", "single name", "borrower")),
-    ("sector", ("sector", "industry")),
+# A cell that says "not applicable" (an em or en dash, a hyphen, n/a): no figure, and no defect.
+NOT_APPLICABLE = frozenset({"—", "–", "-", "n/a", "na", "not applicable"})
+_MAXIMUM = re.compile(r"\b(?:max|maximum|at most|up to|no more than)\b")
+_MINIMUM = re.compile(r"\b(?:min|minimum|at least|no less than)\b")
+_NAMED = re.compile(
+    r"\(largest:\s*(?P<name>[^)]+)\)|largest (?:issuer|sector|obligor):\s*(?P<after>.+)$"
 )
+_ORDINAL = re.compile(r"\b(?P<n>\d+)(?:st|nd|rd|th) largest sector\b")
 
 
 def _same_family(a: Quantity, b: Quantity) -> bool:
@@ -1515,17 +1750,132 @@ def _breached(limit: Quantity, value: Decimal) -> bool:
     return value > limit.value if limit.operator == "<=" else value < limit.value
 
 
-def _recomputed_for(text: str, found: Recomputed) -> tuple[str, Decimal] | None:
-    key = next((k for k, words in _RECOMPUTED_BY if any(w in folded(text) for w in words)), None)
-    if key is None or not found.value:
+@dataclass(frozen=True)
+class Target:
+    """What a constraint's parameter says it measures, as the holdings give it."""
+
+    what: str
+    value: Decimal
+    unit: str  # "%", "yrs" or "" (a count)
+    named: tuple[str, str] | None = None  # ("issuer" or "sector", the name the row states)
+    rank: int = 1  # the n-th largest, for a sector row
+    note: str = ""  # words after the figures
+
+
+def named_in(text: str) -> str | None:
+    found = _NAMED.search(text)
+    return None if found is None else (found["name"] or found["after"]).strip()
+
+
+def _sectors_ranked(found: Recomputed) -> list[str]:
+    return sorted(found.sectors, key=lambda name: found.sectors[name], reverse=True)
+
+
+def _sector_target(text: str, found: Recomputed) -> Target | None:
+    ordinal = _ORDINAL.search(text)
+    rank = int(ordinal["n"]) if ordinal else 1
+    name = named_in(text) or (text.partition(":")[2].strip() if ordinal and ":" in text else None)
+    ranked = _sectors_ranked(found)
+    if name is not None:
+        key = next((s for s in found.sectors if folded(s) == folded(name)), None)
+        value = share(found.sectors[key], found.value) if key is not None else Decimal(0)
+        return Target(f"sector {name}", value, "%", ("sector", name), rank)
+    if rank > len(ranked):
         return None
-    if key == "issuer":
-        name, largest = found.largest_issuer()
-        return f"largest issuer ({name})", largest
-    if key == "sector":
-        name = max(found.sectors, key=lambda k: found.sectors[k])
-        return f"largest sector ({name})", share(found.sectors[name], found.value)
-    return "second lien", share(found.second_lien, found.value)
+    sector = ranked[rank - 1]
+    return Target(
+        f"{_ordinal(rank)}largest sector ({sector})",
+        share(found.sectors[sector], found.value),
+        "%",
+        rank=rank,
+    )
+
+
+def _ordinal(rank: int) -> str:
+    return "" if rank == 1 else f"{rank}{ {2: 'nd', 3: 'rd'}.get(rank, 'th') } "
+
+
+def _has(text: str, *words: str) -> bool:
+    return any(word in text for word in words)
+
+
+def _lien_share(found: Recomputed, shape: Profile, *keys: str) -> Decimal:
+    return share(sum((shape.liens.get(k, Decimal(0)) for k in keys), Decimal(0)), found.value)
+
+
+def _top_ten_target(parameter: str, found: Recomputed, shape: Profile) -> Target | None:
+    return Target("ten largest issuers", found.top_ten(), "%")
+
+
+def _sector_row_target(parameter: str, found: Recomputed, shape: Profile) -> Target | None:
+    return _sector_target(parameter, found)
+
+
+def _issuer_target(parameter: str, found: Recomputed, shape: Profile) -> Target | None:
+    name, largest = found.largest_issuer()
+    stated = named_in(parameter)
+    return Target(f"largest issuer ({name})", largest, "%", ("issuer", stated) if stated else None)
+
+
+def _second_lien_target(parameter: str, found: Recomputed, shape: Profile) -> Target | None:
+    keys = ("second", "unsecured") if "unsecured" in folded(parameter) else ("second",)
+    words = "second lien" + (" and unsecured" if len(keys) > 1 else "")
+    return Target(words, _lien_share(found, shape, *keys), "%")
+
+
+def _first_lien_target(parameter: str, found: Recomputed, shape: Profile) -> Target | None:
+    return Target("first lien", _lien_share(found, shape, "first"), "%")
+
+
+def _ccc_target(parameter: str, found: Recomputed, shape: Profile) -> Target | None:
+    buckets = ("CCC", "Unrated") if "unrated" in folded(parameter) else ("CCC",)
+    value = sum((shape.buckets.get(b, Decimal(0)) for b in buckets), Decimal(0))
+    return Target(" and ".join(buckets), share(value, found.value), "%")
+
+
+def _unrated_target(parameter: str, found: Recomputed, shape: Profile) -> Target | None:
+    return Target("unrated", share(shape.buckets.get("Unrated", Decimal(0)), found.value), "%")
+
+
+def _life_target(parameter: str, found: Recomputed, shape: Profile) -> Target | None:
+    if shape.life is None:
+        return None
+    return Target("weighted average life", shape.life, "yrs", note=_life_note(shape))
+
+
+def _obligor_target(parameter: str, found: Recomputed, shape: Profile) -> Target | None:
+    return Target("obligors by borrower name", Decimal(len(found.borrowers)), "")
+
+
+Builder = Callable[[str, "Recomputed", "Profile"], "Target | None"]
+# What a parameter's words say it measures, tested in this order (the specific before the general:
+# "Aggregate top 10 issuers" is the top ten, not the largest issuer). A CCC row that includes
+# Other is not recomputed: no rule says what Other holds.
+_TARGETS: tuple[tuple[Callable[[str], bool], Builder], ...] = (
+    (lambda t: _has(t, "top 10", "top ten", "ten largest"), _top_ten_target),
+    (lambda t: _has(t, "sector", "industry"), _sector_row_target),
+    (
+        lambda t: _has(t, "single issuer", "single name", "largest issuer", "single obligor"),
+        _issuer_target,
+    ),
+    (lambda t: _has(t, "2nd lien", "second lien"), _second_lien_target),
+    (lambda t: _has(t, "1st lien", "first lien"), _first_lien_target),
+    (lambda t: "ccc" in t and "other" not in t, _ccc_target),
+    (lambda t: "unrated" in t and "ccc" not in t, _unrated_target),
+    (lambda t: _has(t, "wal", "weighted avg life", "weighted average life"), _life_target),
+    (lambda t: "obligor" in t and "number" in t, _obligor_target),
+)
+
+
+def target(parameter: str, found: Recomputed, shape: Profile) -> Target | None:
+    """The holdings' figure for what a constraint's parameter says, or None when the parameter
+    names nothing the holdings give (it is then not checked, never matched to the nearest), or
+    when there are no priced holdings to compare with."""
+    if not found.value:
+        return None
+    text = folded(parameter)
+    build = next((build for test, build in _TARGETS if test(text)), None)
+    return None if build is None else build(parameter, found, shape)
 
 
 @dataclass
@@ -1538,49 +1888,88 @@ class ConstraintRow:
     def label(self) -> str:
         return self.cells.get("id") or self.cells.get("parameter") or f"row {self.number}"
 
+    def text(self, key: str) -> str:
+        """A cell's text; "" when empty or not applicable."""
+        value = self.cells.get(key, "")
+        return "" if folded(value) in NOT_APPLICABLE else value
 
-def constraint_findings(
-    export: Export, found: Recomputed, findings: Findings
-) -> list[tuple[str, date]]:
-    """Every constraints file's rows; returns the dates each was last checked, for staleness."""
-    checked: list[tuple[str, date]] = []
+
+def constraint_rows(export: Export) -> list[ConstraintRow]:
+    rows_out: list[ConstraintRow] = []
     for file, rows, header in export.constraints:
         columns = {
             key: index
             for key, words in _CONSTRAINT_COLUMNS.items()
-            if (index := column_index(header, words)) is not None
+            if key != "id" and (index := column_index(header, words)) is not None
         }
+        # The id column by its whole header: "id" is also inside "Limit / Guideline".
+        ident = next((i for i, cell in enumerate(header) if folded(cell) in ("id", "#")), None)
+        if ident is not None:
+            columns["id"] = ident
         start = next(number for number, row in rows if _cells(row))
-        for number, row in rows:
-            if number <= start or not _cells(row):
-                continue
-            item = ConstraintRow(file, number, {k: _cell_text(row, i) for k, i in columns.items()})
-            _constraint(item, found, findings)
-            when = text_date(item.cells.get("checked", ""))
-            if when is not None:
-                checked.append((file, when))
+        rows_out += [
+            ConstraintRow(file, number, {k: _cell_text(row, i) for k, i in columns.items()})
+            for number, row in rows
+            if number > start and _cells(row)
+        ]
+    return rows_out
+
+
+def constraint_findings(
+    export: Export, found: Recomputed, shape: Profile, findings: Findings
+) -> list[tuple[str, date]]:
+    """Every constraints row, then the files against each other; returns the dates each row was
+    last checked, for staleness."""
+    checked: list[tuple[str, date]] = []
+    unmapped: list[str] = []
+    items = constraint_rows(export)
+    for item in items:
+        if not _constraint(item, (found, shape), findings):
+            unmapped.append(f"{item.label} {item.cells.get('parameter', '')}".strip())
+        if (when := text_date(item.cells.get("checked", ""))) is not None:
+            checked.append((item.file, when))
+    if unmapped:
+        findings.notes.append(
+            "not checked against the holdings (the parameter names nothing they give): "
+            + "; ".join(dict.fromkeys(unmapped))
+        )
+    _between_files(items, findings)
     return checked
 
 
 def _read(item: ConstraintRow, key: str, findings: Findings) -> Quantity | None:
-    text = item.cells.get(key, "")
+    text = item.text(key)
     if not text:
         return None
     stated = quantity(text)
+    if stated is not None and key == "limit" and not stated.operator:
+        stated = _with_direction(stated, item.cells.get("parameter", ""))
     if stated is None or stated.approximate or (key == "limit" and not stated.operator):
-        _unreadable(
-            (item.file, "Constraints", f"row {item.number}"), f"{item.label} {key}", text, findings
-        )
+        place = (item.file, "Constraints", f"row {item.number}")
+        _unreadable(place, f"{item.label} {key}", text, findings)
         return None
     return stated
 
 
-def _constraint(item: ConstraintRow, found: Recomputed, findings: Findings) -> None:
+def _with_direction(limit: Quantity, parameter: str) -> Quantity:
+    """A limit stated without ≤ or ≥ (e.g. `0% NAV`) takes its direction from the parameter's
+    Max or Min; with neither it stays without one and is reported unread."""
+    text = folded(parameter)
+    if _MAXIMUM.search(text):
+        return replace(limit, operator="<=")
+    if _MINIMUM.search(text):
+        return replace(limit, operator=">=")
+    return limit
+
+
+def _constraint(item: ConstraintRow, facts: tuple[Recomputed, Profile], findings: Findings) -> bool:
+    """One row's own arithmetic, then against the holdings. False when the parameter names
+    nothing the holdings give."""
     if "info" in folded(item.cells.get("limit", "")):
-        return
+        return True
     limit, current = _read(item, "limit", findings), _read(item, "current", findings)
     if limit is None or current is None:
-        return
+        return True
     if not _same_family(limit, current):
         if not current.unit:
             problem = (
@@ -1588,13 +1977,24 @@ def _constraint(item: ConstraintRow, found: Recomputed, findings: Findings) -> N
                 f"'{item.cells['limit']}' is in {limit.unit}"
             )
             findings.add(item.file, "Constraints", f"row {item.number}", problem, "unit")
-        return
-    status = folded(item.cells.get("status", ""))
+        return True
+    _own_arithmetic(item, limit, current, findings)
+    goal = target(item.cells.get("parameter", ""), *facts)
+    if goal is None:
+        return False
+    _against_holdings(item, (limit, current), goal, facts[0], findings)
+    return True
+
+
+def _own_arithmetic(
+    item: ConstraintRow, limit: Quantity, current: Quantity, findings: Findings
+) -> None:
     where, cell = "Constraints", f"row {item.number}"
-    if _breached(limit, current.value) != ("breach" in status):
+    status = item.text("status")
+    if status and _breached(limit, current.value) != ("breach" in folded(status)):
         problem = (
-            f"{item.label}: status {item.cells.get('status') or 'none'} with current value "
-            f"{item.cells['current']} against the limit {item.cells['limit']}"
+            f"{item.label}: status {status} with current value {item.cells['current']} against "
+            f"the limit {item.cells['limit']}"
         )
         findings.add(item.file, where, cell, problem, "status")
     headroom = _read(item, "headroom", findings)
@@ -1608,39 +2008,144 @@ def _constraint(item: ConstraintRow, found: Recomputed, findings: Findings) -> N
                 f"({plain(expected)})"
             )
             findings.add(item.file, where, cell, problem, "headroom")
-    _against_holdings(item, limit, current, found, findings)
 
 
 def _against_holdings(
-    item: ConstraintRow, limit: Quantity, current: Quantity, found: Recomputed, findings: Findings
+    item: ConstraintRow,
+    stated: tuple[Quantity, Quantity],
+    goal: Target,
+    found: Recomputed,
+    findings: Findings,
 ) -> None:
-    mapped = _recomputed_for(
-        f"{item.cells.get('category', '')} {item.cells.get('parameter', '')}", found
-    )
-    if mapped is None or not current.percent:
+    limit, current = stated
+    family_ok = current.percent if goal.unit == "%" else current.unit == goal.unit
+    if goal.named is not None:
+        _named_finding(item, goal, found, findings)
+    if not family_ok:
         return
-    what, exact = mapped
     claim = Claim("Constraints", f"row {item.number}", item.cells["current"], current)
     _claim_finding(
         item.file,
         claim,
-        f"{item.label}: the current value ({what})",
-        exact,
+        f"{item.label}: the current value ({goal.what})",
+        goal.value,
         findings,
         fix="share",
-        marked=True,
-        shown=pct,
+        marked=goal.unit != "",
+        shown=pct if goal.unit == "%" else _years if goal.unit == "yrs" else _count,
+        note=goal.note,
     )
-    if _breached(limit, exact) and "breach" not in folded(item.cells.get("status", "")):
+    status = item.text("status")
+    if _breached(limit, goal.value) and "breach" not in folded(status):
         problem = (
-            f"{item.label}: on the holdings' {pct(exact)} ({what}) the limit "
-            f"{item.cells['limit']} is breached; the status says "
-            f"{item.cells.get('status') or 'none'}"
+            f"{item.label}: on the holdings' {_unit_text(goal)} ({goal.what}) the limit "
+            f"{item.cells['limit']} is breached; the status says {status or 'none'}"
         )
         findings.add(item.file, "Constraints", f"row {item.number}", problem, "breach")
 
 
-# --- The mandate ---------------------------------------------------------------------------------
+def _unit_text(goal: Target) -> str:
+    return (
+        pct(goal.value)
+        if goal.unit == "%"
+        else _years(goal.value)
+        if goal.unit == "yrs"
+        else _count(goal.value)
+    )
+
+
+def _named_finding(
+    item: ConstraintRow, goal: Target, found: Recomputed, findings: Findings
+) -> None:
+    """The issuer or sector a row names as the largest (or n-th largest) against the holdings'."""
+    assert goal.named is not None
+    kind, name = goal.named
+    cell = f"row {item.number}"
+    if kind == "issuer":
+        problem = _issuer_named(name, found)
+    else:
+        ranked = _sectors_ranked(found)
+        actual = ranked[goal.rank - 1] if goal.rank <= len(ranked) else None
+        if not any(folded(s) == folded(name) for s in found.sectors):
+            problem = f"names the sector {name}, which no holding is in"
+        elif actual is not None and folded(actual) != folded(name):
+            problem = (
+                f"names {name} as the {_ordinal(goal.rank)}largest sector; in the holdings it is "
+                f"{actual} ({pct(share(found.sectors[actual], found.value))})"
+            )
+        else:
+            problem = ""
+    if problem:
+        findings.add(item.file, "Constraints", cell, f"{item.label}: {problem}", "share")
+
+
+def _issuer_named(name: str, found: Recomputed) -> str:
+    how, keys = match_issuer(name, found)
+    largest, value = found.largest_issuer()
+    if not keys:
+        return f"names {name} as the largest issuer; no borrower in the holdings matches it"
+    if len(keys) > 1:
+        return ""  # ambiguous: reported where the largest holdings are matched
+    if found.names[keys[0]] != largest:
+        return (
+            f"names {name} ({found.names[keys[0]]}, by {how}) as the largest issuer; in the "
+            f"holdings it is {largest} ({pct(value)})"
+        )
+    return ""
+
+
+_COMPARED = ("limit", "current", "headroom", "status")
+
+
+def _between_files(items: Sequence[ConstraintRow], findings: Findings) -> None:
+    """Two constraints files stating the same parameter: each figure must agree."""
+    by_parameter: dict[str, list[ConstraintRow]] = {}
+    for item in items:
+        if item.cells.get("parameter"):
+            by_parameter.setdefault(folded(item.cells["parameter"]), []).append(item)
+    for rows in by_parameter.values():
+        files = {row.file for row in rows}
+        if len(files) < 2:
+            continue
+        first = rows[0]
+        for other in rows[1:]:
+            if other.file == first.file:
+                continue
+            for key in _COMPARED:
+                if not _same_cell(first.text(key), other.text(key)):
+                    problem = (
+                        f"{first.cells['parameter']}: {key} is {first.text(key) or 'empty'} in "
+                        f"{first.file} (row {first.number}) and {other.text(key) or 'empty'} here"
+                    )
+                    findings.add(
+                        other.file, "Constraints", f"row {other.number}", problem, "differs"
+                    )
+
+
+def _same_cell(a: str, b: str) -> bool:
+    if folded(a) == folded(b):
+        return True
+    one, two = quantity(a), quantity(b)
+    return one is not None and two is not None and one.value == two.value and _same_family(one, two)
+
+
+# --- The mandate ---
+
+_LEADING = re.compile(
+    r"^\s*(?:USD|EUR|GBP|\$|€|£)?\s*\d{1,3}(?:,\d{3})*(?:\.\d+)?\s*(?:bn|mm|mn|m|k)?(?=\s|$|[—–])",
+    re.IGNORECASE,
+)
+
+
+def leading_amount(text: str) -> Quantity | None:
+    """The amount a capital-structure cell starts with: `$280,000,000 — SOFR + 130bps` is
+    280,000,000; what follows (a spread, a rating) is a note, not part of the figure."""
+    whole = quantity(text)
+    if whole is not None:
+        return whole
+    found = _LEADING.match(text)
+    return quantity(found.group(0)) if found is not None else None
+
 
 _AS_OF_FIELDS = ("as of", "as_of", "report date", "valuation date", "reporting date")
 
@@ -1659,7 +2164,7 @@ def mandate_findings(
         section, name, value = (_cell_text(row, i) for i in (0, 1, 2))
         if any(word in folded(name) for word in _AS_OF_FIELDS) and (when := text_date(value)):
             dates.append((file, when))
-        amount = quantity(value) if "capital" in folded(section) else None
+        amount = leading_amount(value) if "capital" in folded(section) else None
         if amount is None or amount.percent:
             continue
         if "total" in folded(name):
@@ -1760,8 +2265,8 @@ def validate_export(files: Mapping[str, bytes], *, run_date: date | None = None)
     dated = mandate_findings(export, claims, findings) if "mandate" in export.files else []
     dated += report_dates(export)
     data_date = next((when for _, when in dated), None)
-    dated += constraint_findings(export, found, findings)
     shape = profile(export.holdings, data_date or run_date)
+    dated += constraint_findings(export, found, shape, findings)
     if "exposure" in export.files:
         _report_checks(export, (claims, found, shape), data_date or run_date, findings)
     date_findings(export.book, rows, run_date or data_date, findings)
@@ -1817,6 +2322,7 @@ def _holdings_checks(
         tally_findings(file, sheet, tally, findings, par_of if sheet == found.sheet else {})
     if export.holdings:
         par_findings(file, export.holdings, findings)
+        lien_findings(file, export.holdings, findings)
         tranche_findings(file, export.holdings, findings)
         borrower_ticker_findings(file, export.holdings, findings)
     range_findings(file, rows, found, findings)
@@ -1913,13 +2419,6 @@ def label_bucket(label: str) -> str | None:
         if any(re.search(rf"(?<![a-z]){re.escape(w)}(?![a-z])", text) for w in words):
             return bucket
     return None
-
-
-def lien(holding: Holding) -> str:
-    text = folded(holding.text.get("ranking", ""))
-    if "2nd" in text or "second" in text:
-        return "second"
-    return "first" if "1st" in text or "first" in text else "other"
 
 
 def corrected(when: date) -> date:
@@ -2089,7 +2588,8 @@ def rating_section_findings(
     file, columns = export.files["exposure"], section_columns(section.header)
     listed: set[str] = set()
     for number, row in section.rows:
-        bucket = label_bucket(row[0]) if _label_kind(row[0]) == "row" else None
+        name = label_of(row, columns)
+        bucket = label_bucket(name) if _label_kind(name) == "row" else None
         if bucket is None:
             continue
         listed.add(bucket)
@@ -2102,7 +2602,7 @@ def rating_section_findings(
             text, stated = _stated(row, index)
             if stated is not None:
                 claim = Claim(section.title, f"row {number}", text, stated)
-                words = f"rating bucket {row[0]} ({bucket}): {label}"
+                words = f"rating bucket {name} ({bucket}): {label}"
                 _claim_finding(file, claim, words, exact, findings, fix="share", **how)
     for bucket, value in shape.buckets.items():
         if bucket not in listed and value:
@@ -2124,7 +2624,8 @@ def maturity_section_findings(
         return
     file, columns = export.files["exposure"], section_columns(section.header)
     for number, row in section.rows:
-        bounds = maturity_bounds(row[0]) if _label_kind(row[0]) == "row" else None
+        name = label_of(row, columns)
+        bounds = maturity_bounds(name) if _label_kind(name) == "row" else None
         given = maturity_value(shape, bounds, as_of, False) if bounds is not None else None
         if bounds is None or given is None:
             continue
@@ -2152,7 +2653,7 @@ def maturity_section_findings(
             _claim_finding(
                 file,
                 claim,
-                f"maturity bucket {row[0]}: {label}",
+                f"maturity bucket {name}: {label}",
                 exact,
                 findings,
                 fix="share",
