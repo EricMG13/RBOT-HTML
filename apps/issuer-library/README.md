@@ -43,6 +43,21 @@ the portfolio debate: its Portfolio posture section and its cross-examination, s
 tables as findings; its gaps ledger is on Evidence (ruling
 `docs/rulings/2026-11-15-full-assessment-cp3c-cp6a.md`). No page code changed for this.
 
+**Portfolio workbook (full credit assessment and portfolio decision).** The start page asks for the
+fund's workbook (mandate, exposures and compliance limits, in the layout of
+`docs/templates/portfolio.template.xlsx`); it is not required. Before the run the launcher checks
+its sums and values (distributions adding to 100, holdings' shares against market value over NAV,
+top holdings against the holdings detail and top-10 figure, the sector-limit row against the
+sector, units, currencies, signs and dates against the run's as-of date) and tells CP-0, CP-3 and
+CP-6 each finding; no figure a finding names may be used as a live constraint or exposure. The
+library draws CP-6's Portfolio posture as before; a workbook that failed its checks is stated there
+in plain words (ruling `docs/rulings/2026-11-15-full-assessment-portfolio-workbook.md`). Check a
+workbook before uploading it (exit 0 when it passes; one line per finding otherwise):
+
+```
+uv run deploy-vii validate-input portfolio "<path to the workbook>.xlsx" --as-of <the run's as-of date, YYYY-MM-DD>
+```
+
 **Where audit material is drawn.** Source references, file names, hashes, ids, calculation ids,
 registers, gap ledgers and run codes are drawn only on the Evidence page and in the trace drawer.
 Every other page shows findings and one trace control per paragraph, row or figure; the control opens
