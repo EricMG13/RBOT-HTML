@@ -297,6 +297,36 @@ def table_row(text: str) -> str | None:
     return None if found is None else found[1]
 
 
+def table_cells(line: int, text: str) -> list[str]:
+    """The cells of one pipe-table row; a row without its closing pipe is refused."""
+    if not text.endswith("|"):
+        raise ValueError(f"Markdown table rows require both boundary pipes: line {line}")
+    return [c.strip().replace(r"\|", "|") for c in re.split(r"(?<!\\)\|", text[1:-1])]
+
+
+def header_fault(head_line: int, head_text: str, headers: list[str], separator: list[str]) -> str:
+    """The refusal for a header and separator row that do not make a table; "" when they do."""
+    dashes = all(re.fullmatch(r":?-{3,}:?", c) for c in separator)
+    if len(headers) >= 2 and len(separator) == len(headers) and dashes:
+        return ""
+    fault = (
+        f"the header has {len(headers)} cells and the separator row has {len(separator)}"
+        if dashes or len(separator) != len(headers)
+        else "the second row is not made of --- cells"
+    )
+    return f'Invalid Markdown table header at line {head_line}: {fault} ("{head_text[:80]}")'
+
+
+def row_fault(line: int, values: list[str], headers: list[str]) -> str:
+    """The refusal for a body row whose cell count differs from its header; "" when it fits."""
+    if len(values) == len(headers):
+        return ""
+    return (
+        f"Markdown table row does not match its header at line {line}: "
+        f"the row has {len(values)} cells and the header has {len(headers)}"
+    )
+
+
 def table(rows: list[tuple[int, str]]) -> tuple[list[str], list[tuple[int, str, list[str]]]]:
     """Read the first contiguous pipe table in a named section, preserving cells."""
     selected = []
@@ -307,44 +337,85 @@ def table(rows: list[tuple[int, str]]) -> tuple[list[str], list[tuple[int, str, 
         elif selected:
             break
 
-    def cells(line: int, text: str) -> list[str]:
-        if not text.endswith("|"):
-            raise ValueError(f"Markdown table rows require both boundary pipes: line {line}")
-        return [c.strip().replace(r"\|", "|") for c in re.split(r"(?<!\\)\|", text[1:-1])]
-
     if len(selected) < 3:
         where = f": the table starts at line {selected[0][0]}" if selected else ""
         raise ValueError(f"Expected a populated Markdown table{where}")
     head_line, head_text = selected[0]
-    headers = cells(head_line, head_text)
-    separator = cells(*selected[1])
-    if (
-        len(headers) < 2
-        or len(separator) != len(headers)
-        or not all(re.fullmatch(r":?-{3,}:?", c) for c in separator)
-    ):
-        dashes = all(re.fullmatch(r":?-{3,}:?", c) for c in separator)
-        fault = (
-            f"the header has {len(headers)} cells and the separator row has {len(separator)}"
-            if dashes or len(separator) != len(headers)
-            else "the second row is not made of --- cells"
-        )
-        raise ValueError(
-            f'Invalid Markdown table header at line {head_line}: {fault} ("{head_text[:80]}")'
-        )
-    result = [(line, raw, cells(line, raw)) for line, raw in selected[2:]]
+    headers = table_cells(head_line, head_text)
+    separator = table_cells(*selected[1])
+    if fault := header_fault(head_line, head_text, headers, separator):
+        raise ValueError(fault)
+    result = [(line, raw, table_cells(line, raw)) for line, raw in selected[2:]]
     for line, _, values in result:
-        if len(values) != len(headers):
-            raise ValueError(
-                f"Markdown table row does not match its header at line {line}: "
-                f"the row has {len(values)} cells and the header has {len(headers)}"
-            )
+        if fault := row_fault(line, values, headers):
+            raise ValueError(fault)
         if not values[0]:
             raise ValueError(
                 f"Markdown table row does not match its header at line {line}: "
                 "its first cell is empty"
             )
     return headers, result
+
+
+def table_faults(text: str) -> tuple[str, ...]:
+    """Every malformed pipe table in a handoff, each fault once, in the adapter's own wording:
+    a header whose cell count or dashes do not match its separator row, and each body row whose
+    cell count differs from its header. `table` stops at the first fault of one table; this
+    scans the whole text so one review can name them all. A table inside a fenced code block or
+    an HTML comment is not one, and a run of fewer than two pipe lines is not a table. Nothing
+    is repaired. An unclosed HTML comment gives no faults here: the adapter refuses it."""
+    try:
+        lines = hide_fenced(hide_comments(physical_lines(text), "handoff"))
+    except ValueError:
+        return ()
+    faults: list[str] = []
+    group: list[tuple[int, str]] = []
+    for number, line in enumerate([*lines, ""], 1):
+        row = table_row(line)
+        if row is not None:
+            group.append((number, row))
+            continue
+        if len(group) >= 2:
+            faults += _group_faults(group)
+        group = []
+    return tuple(faults)
+
+
+_SEPARATOR_LIKE = re.compile(r"\|[\s:|-]*-[\s:|-]*")
+_BLANK_SPLITS = (
+    " (a blank line splits a table: remove it, or give these rows their own header and separator)"
+)
+
+
+def _group_faults(group: list[tuple[int, str]]) -> list[str]:
+    """The faults of one run of pipe lines, in line order: its header and separator, then each
+    body row. A run whose second line is not separator-like and that has a line without its
+    closing pipe is prose (`|x| rose`), not a table: no fault. A header whose second line is
+    not made of --- cells says why that may be (rows split from their table by a blank line)."""
+    if _SEPARATOR_LIKE.fullmatch(group[1][1]) is None and not all(
+        row.endswith("|") for _, row in group
+    ):
+        return []
+    cells: list[list[str] | None] = []
+    faults: list[tuple[int, str]] = []
+    for line, row in group:
+        try:
+            cells.append(table_cells(line, row))
+        except ValueError as error:
+            cells.append(None)
+            faults.append((line, str(error)))
+    headers, separator = cells[0], cells[1]
+    if headers is None or separator is None:
+        return [fault for _, fault in faults]
+    if fault := header_fault(group[0][0], group[0][1], headers, separator):
+        hint = _BLANK_SPLITS if "not made of ---" in fault else ""
+        faults.append((group[0][0], fault + hint))
+    faults += [
+        (line, fault)
+        for (line, _), values in zip(group[2:], cells[2:], strict=True)
+        if values is not None and (fault := row_fault(line, values, headers))
+    ]
+    return [fault for _, fault in sorted(faults, key=lambda item: item[0])]
 
 
 def mapped_module(  # noqa: C901, PLR0915 - pre-existing size (C901 18, 62 statements at base)
