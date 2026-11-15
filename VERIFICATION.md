@@ -4,6 +4,55 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-15 — Restructure: packaging, shared HTTP base, import contracts, file splits (branch `claude/busy-dijkstra-bgex9m`)
+
+Scope is **offline only**: code layout, packaging, tooling and documents. No provider or model run,
+no analytical, method or presentation change. Evidence is deterministic tests plus before/after
+output comparisons on synthetic data and the retained TDG fixture of 2026-11-13 (labelled below).
+Each step was done on its own branch, reviewed, then merged here.
+
+- Packaging: a uv workspace; `apps/issuer-library` is the member `issuer-library` (`credit_os`,
+  `update_library`). No `sys.path` edit remains for engine/app discovery; Signal finds its brand
+  files with `importlib.resources`. The engine/library dependency is circular at run time and is
+  declared so. Synthetic fixture library built before and after: identical except `built_at` and
+  the workspace path in `data.js`.
+- HTTP: `deploy_workflow/http_base.py` holds the server, request checks, body rules and static
+  serving for run start and Signal; each passes its own policy. About 550 raw requests per service,
+  old code against new: byte-identical replies. Behaviour change, deliberate: run start now closes
+  an HTTP/0.9 request line with no reply (it answered a bare 500 and logged a traceback); the base
+  closes these for every service.
+- Import direction: `deploy_vii` no longer imports `deploy_workflow`. `platform_io`, `context`,
+  `financial_series`, `liquidity_series`, `restructuring_series` and `trailing_period` moved into
+  `deploy_vii`; each old name is an alias of the same module object. `.importlinter` (import-linter
+  2.16): engine contract with no exception; `deploy_workflow` layers, exhaustive, 5 ignored imports
+  each with what removes it. The gate runs it (`--checks imports`) and scopes a file git reports as
+  moved by its diff from the file it moved from.
+- Splits, pure moves (every top-level block verbatim, once, in order; checked by two independent
+  scripts): `owners/cpos_launch.py` 3,986 to about 1,830 lines plus `cpos_launch_methods`,
+  `_tables`, `_prompts`, `_review`; `credit_os/store.py` 3,976 to 1,639 plus `source`,
+  `handoff_fields`, `cashflow`, `evidence`. Launcher offline preparation, 10 runs on synthetic
+  input: output trees identical. Forecast grid from the retained TDG fixture
+  (`tdg_sol_high_2026_11_13`; dated evidence, one issuer) and the synthetic library: identical.
+  `pin_label_forged` and its normaliser moved from `cp3d` to `owners/pins` (1,849 inputs, same output).
+- Method selection: `METHODOLOGY-REVIEW.md` gains an appendix table of the 64 sent method files;
+  `tests/test_methodology_selection.py` fails when it drifts from `METHODS`, `manifest.json` or the
+  bytes on disk. Known differences are listed in the test; 8 deliberate drifts each failed it.
+- Documents and packs: 47 unread history files removed from `docs/` (in git before `3275ff7`).
+  Pack numbers follow the highest ever issued; the pack workflow prunes packs older than 14 days
+  (dry run on the real folder: 0 removed, 69 kept).
+- Not done, with reasons: no package merge or rename (direction was already nearly clean); no
+  module framework (measured: 401 lines of structural clones in 44,452); `earnings_workflow.py` and
+  `owner_workflow.py` not split (50 existing gate findings in code no test executes; branch
+  `-s5b-split-workflows` kept unmerged); `cp*.py` not split (no fixture drives their submit path).
+- Checks on the merged branch: CI fast list plus the new files, 5,101 passed, 6 skipped, with the
+  known failures deselected; node page tests 567 passed; quality gate 0 findings (61 files, 8,469
+  lines in scope); `lint-imports` 3 contracts kept. Two permission tests now skip under root, as
+  their neighbour already did.
+- Not verified: the full suite and browser tests on the merged branch (browser tests passed on the
+  packaging and store branches alone); `Smoke-test.ps1` and the Windows package on Windows; the
+  pack workflow and `checks.yml` on GitHub Actions; `test_financial_workflow.py` genuine-case tests
+  (over 300 s). Oldest two entries trimmed from this file; git history keeps them.
+
 ## 2026-11-14 — Synthetic pack follow-ups and the document-key test (branch `claude/synthetic-pack-followups`, PR #124)
 
 Scope is **offline and synthetic only**; nothing under `src/` changes. Closes the two Low items left
@@ -906,76 +955,3 @@ standard to CP-2 only, delivery still publishes `report.html`, and the library i
   byte-unchanged.
 - Judgement quality is proven only by reading one real run per change against the September
   VMO2 reference; no paid run is allowed in these sessions, so that reading stays open.
-
-## 2026-11-11 — Run start page: the inbox watcher and folder drop removed (branch `claude/no-nothing-6d5113`)
-
-Scope: offline, macOS, with stand-in launchers (the fake launcher `tests/fixtures/fake_launcher.py`
-and the canned-provider launcher `tests/fixtures/canned_provider_launcher.py`). No provider was
-called and nothing ran on Windows. This is not proof of a paid run.
-- Built: `inbox/watcher.py` is now `inbox/scheduler.py` (`Scheduler`; the folder scan, claim,
-  settle timer, rejection into `inbox/failed`, `_template` copies and the watcher's own command
-  line are gone); `Layout` and `ensure_layout` moved to `inbox/layout.py` and make no `inbox`;
-  `inbox/drops.py` and `Start watcher.cmd` are deleted; `Start run page.cmd <root> [address]`
-  runs `-m deploy_workflow.run_start`; the package ships the 2026-11-11 ruling; the issuer-ID
-  length limit moved from the drop check to the summary. Records the watcher wrote still load and
-  show; every run it queued (a record with no submission) is marked failed at start-up with a
-  reason and is never started.
-- Passed on this tree, exit 0 (final wave, after the whole-branch review): `uv run pytest` on
-  `tests/test_inbox_scheduler.py`, `test_inbox_runs.py`, `test_inbox_activity.py`,
-  `test_inbox_filing.py`, `test_inbox_layout.py`, `test_run_start_submissions.py`,
-  `test_run_start_scheduler.py`, `test_run_start_service.py`, `test_run_start_page.py`,
-  `test_context_form.py`, `test_context_module_options.py`, `test_cpos_launch.py`,
-  `test_issuer_library_packaging.py`, `test_library_page_browser.py` and `test_library_index.py`:
-  933 passed, 1 skipped (the paid test), in Chrome, so the 55 page tests ran;
-  `uv run python tools/quality_gate.py`: 0 findings; `node --test` on `static.test.cjs` and
-  `calendar.test.cjs`: 187 passed (the library's own JavaScript, which CI runs).
-- Final wave, what it changed: the summary joins the launcher's forecast with the page's own
-  rules and asks a tick for every gap, limited and will-refuse item and every check that has a
-  fix; the as-of and legal-disagreement rules are limited for the whole run; Run activity shows the
-  submitter and, when served, links the library's own copy of a finished run's report (the page's
-  finished view links the same copy); library files are opened with `platform_io.regular_open`
-  (binary, no wait on a FIFO); a timeout the service meets itself is a 500; a reload with a
-  saved submission the service no longer holds says so and offers a new submission as a
-  separate click; `runs.prepare` and `Scheduler.run_forever` are deleted.
-- Reviewer probes after the wave (`.superpowers/sdd/2026-11-11-staged-run-start/probes/`): the four
-  review gaps, the served library report, the FIFO and the issuer-ID wording pass. Three probes
-  still fail by ruling or scope and are explained in `final-wave-report.md`: the filed
-  `issuers/...` link (the ruling links the library's copy, no new route), the service's answer
-  for a submitted submission (the ruling makes the page, not the service, say it), and the refused
-  folder's file list (not in this wave). `t8r1_server_side_timeout.py` tests Python's own
-  exception classes and cannot pass; `tests/test_run_start_service.py` covers the behaviour.
-- CI deselects every page test (they need Chrome), so no CI run touches the approval or Submit.
-- The real launcher ran in one scheduler test (canned provider answers, the real library
-  rebuild); the others stand in a launcher.
-- Not verified: a paid run through Submit; whether CP-3 and CP-6 honour `module_options`; Windows
-  (`Start run page.cmd`, the file lock, paths); browsers other than Chrome; more than two
-  analysts submitting at once; `../runs/...` download links, which the service does not serve; the
-  full test suite (weekly job); the page tests in CI (CI deselects them); Windows file opening
-  (`O_BINARY` is requested through `platform_io`, not run there).
-
-## 2026-11-11 — Work-PC change packs (`tools/work_pc_delta.py`)
-
-Scope: offline tooling only; no analytical module, provider call or deliverable changed.
-The work PC takes ZIP downloads without git, so `generate` writes a numbered pack per sync
-(package/version tables from `pyproject.toml` and `uv.lock`, merged PR titles, every changed
-file with the new-version line ranges, the full patch) and `check` compares any folder with
-the git blob hashes in `manifest.json`.
-
-Confidence review: same-day packs sorted by hash, not order (confirmed, fixed with a
-sequence prefix); `\x1f` stripped as whitespace dropped PR titles (confirmed, fixed);
-a pack's own commit leaking into the next pack (tested: excluded); renames, deletions,
-names with spaces, transitive-only lock changes, CRLF re-saves, `.venv` noise (tested).
-`check` matched a `git archive` ZIP of `04e7221` exactly. Whole-history pack
-`472bdea..04e7221`: 5.9 MB. No symlinks in the tree (they would be reported as `extra`).
-
-Verification: `pytest tests/test_work_pc_delta.py tests/test_quality_gate.py` 5 passed;
-`tools/quality_gate.py` 0 findings. First pack `04e7221..6f5ac16` (PR #42); `check` on a
-`git archive` of the PR head: identical.
-
-Follow-up: `.github/workflows/work-pc-pack.yml` makes and commits a pack after each push to
-`main`; a range with only pack-folder changes makes none (tested), and the CI fast-test
-list now includes `tests/test_work_pc_delta.py`. The workflow itself first runs on merge;
-a protected `main` would refuse its push (the run fails visibly; hand generation remains).
-2026-11-12: packs 001–017 chain without gaps; every merged PR #42–#61 appears; `check` on
-`origin/main` identical. `plan` (copy/delete/merge/keep per file, 6 tests pass) on an archive
-of `04e7221` with two edits against `origin/main`: 2 merge, 140 copy, 7 delete, 1 keep.

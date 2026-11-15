@@ -147,6 +147,7 @@ def test_written_script_cannot_close_its_element(layout):
     assert not list(layout.engine.glob("*.tmp"))
 
 
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads any folder")
 def test_spend_of_an_unreadable_run_folder_is_unknown(tmp_path):
     run = tmp_path / "run"
     run.mkdir()

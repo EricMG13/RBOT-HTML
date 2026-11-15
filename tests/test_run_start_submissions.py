@@ -969,6 +969,7 @@ def test_a_summary_racing_the_removal_of_its_folder_is_refused_not_an_oserror(
         summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))
 
 
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads any folder")
 def test_an_oserror_while_the_summary_reads_is_logged_not_passed_off_as_a_change(
     layout, tmp_path, caplog
 ):

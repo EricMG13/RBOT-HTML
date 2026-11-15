@@ -108,11 +108,11 @@ The finished report appears in the issuer library. Analysts never handle a conte
 From a checkout:
 
 ```bash
-PYTHONPATH=src uv run python -m deploy_workflow.run_start --root /path/to/shared-folder --host <address> --port 8765
+uv run python -m deploy_workflow.run_start --root /path/to/shared-folder --host <address> --port 8765
 ```
 
-On Windows, put `set PYTHONPATH=src` on its own line before the command. The package is not
-installed in a checkout, so without `PYTHONPATH` the command fails with `ModuleNotFoundError`.
+`uv sync` installs the engine and the issuer library into the checkout's environment, so no
+`PYTHONPATH` is needed.
 
 From the Windows package: `Start run page.cmd <root> [address]`. Without a folder it uses
 `FINAL_WORKFLOW_WORKSPACE`; with neither it prints the usage and exits 1. Without an address it

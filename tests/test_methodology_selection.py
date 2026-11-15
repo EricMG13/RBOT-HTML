@@ -225,7 +225,8 @@ def test_archive_files_on_disk_are_registered_except_the_named_duplicates() -> N
     on_disk = {
         path.relative_to(ROOT).as_posix()
         for path in (ROOT / ARCHIVE).rglob("*")
-        if path.is_file() and path.name != "manifest.json"
+        # A test that imports an archived script leaves its bytecode cache beside it.
+        if path.is_file() and path.name != "manifest.json" and "__pycache__" not in path.parts
     }
     unregistered = on_disk - entries.keys()
     assert unregistered == {ARCHIVE + name for name in UNREGISTERED}

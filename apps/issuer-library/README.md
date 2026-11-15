@@ -78,7 +78,7 @@ policy. Its hashes are checked when it is built: update it after new runs.
 ## Automated: the run start page
 
 `Start run page.cmd <root> [address]` in the package (or
-`PYTHONPATH=src uv run python -m deploy_workflow.run_start --root <root> --host <address> --port 8765`
+`uv run python -m deploy_workflow.run_start --root <root> --host <address> --port 8765`
 from a checkout) serves the start page. Analysts open `http://<address>:8765/`, upload the issuer's
 documents, answer the staged questions, approve the summary and choose Submit; Submit starts a
 paid run. The root README (section 3) has the stages, the three levels and the steps.
