@@ -483,6 +483,50 @@ script is the same archived bytes CP-4's check runs.
   observation window, `sustained_periods`, which no column holds), qualitative triggers.
 - Evidence: none retained (no distressed run). Synthetic proof only.
 
+## CP-1B, `credit_metrics.py` `growth` (2026-11-15)
+
+Mapping `deploy_workflow.method_scripts_cp1b`. Restored: none (CP-1B has no scope section).
+
+- Where the script is: CP-1B's SKILL names `./scripts/credit_metrics.py`, and the archive has no
+  CP-1B scripts folder. cp-os b57a344's `skills/cp-1b-earnings-delta/scripts/credit_metrics.py`, in
+  the staged byte copy this repository's history keeps at 86b9466 (its SHA256SUMS checked), is
+  byte-identical to the registered CP-1 copy (sha256 `8f90ad05`), so that file runs and the
+  manifest is unchanged. (Attaching cp-os to this session was not permitted; the staged copy is the
+  evidence.)
+- What the method says: the script "owns the numeric columns of T4.4/T4.6 — absolute and
+  percentage change". T4.6: `Metric | Comparison Basis | Prior Value | Current Value | Abs Change |
+  % Change | ...`; T4.4: `Line Item | Period 1...N | YoY Change (Abs) | YoY Change (%) | ...` (the
+  SKILL's profile joins them as `YoY Abs/%`). The script's functions give the percentage change only
+  (`growth`: current / prior - 1, none on a zero prior); the absolute change is not one of them, so
+  it is not checked.
+- Checked: each T4.6 % Change against `growth(Current Value, Prior Value)`; each T4.4 YoY % against
+  the latest period's column and the column one year before it (`FY2024`/`FY2023`, `Q3 2024`/`Q3
+  2023`, `FY24`/`FY23`, columns in any order), only when the headers name both. A figure over a zero
+  prior disagrees (the script gives none); a null word there agrees.
+- Not checked: a metric whose values are percentages or multiples (a margin's change may be stated
+  in points or as a relative change, and the column does not say which), a change written in `pp`
+  or `bps`, a negative prior (more than one convention), values in different currencies or scales, a
+  bare figure of 1 or less in a % column (decimal or small percentage), a null word where the
+  script computes a change.
+- No note is sent. CP-1B runs only in `earnings_update`, which measures 546,407 of its 546,500
+  ceiling; the note it would need (`CP1B_NOTE_UNSENT`, 435 characters) would take it to 546,842, 342
+  over. The check reads the method's own columns, so it runs without one.
+- Evidence: none retained. Synthetic proof only.
+
+## Decisions for the owner from this second part
+
+1. CP-1C quartiles: the method names no quantile convention; the script's is inclusive (Excel
+   PERCENTILE.INC). Recommendation: adopt it, add about 60 characters to CP-1C's note, and check Q1
+   and Q3 (now recorded as not checked).
+2. CP-1B's note: raise the `earnings_update` ceiling by 435 characters (to 546,935) to send it, or
+   keep the check without a note. Recommendation: keep it without a note for now; the check reads
+   the method's own columns, and the note only helps a module that writes changes without `%` or
+   periods without years.
+3. `completeness_check.py` beyond the ten scoped modules: its missing-column finding is recorded,
+   not sent back, for CP-1, CP-1B, CP-1C, CP-1D, CP-2D, CP-2H, CP-3C, CP-3D, CP-4, CP-4C (no
+   presence check, no calibration). Recommendation: keep it recorded until a paid run shows their
+   real headers.
+
 ## Status
 
 Built and tested offline, module by module. Not accepted: no model has written a restored register

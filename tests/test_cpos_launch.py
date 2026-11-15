@@ -8980,6 +8980,40 @@ def test_cp2h_is_checked_by_its_script(tmp_path):
     assert "T2R.4 row `Headroom: Debt/EBITDA` states 1.8 x" in added
 
 
+# SYNTHETIC: Revenue 2,100 -> 2,250 is 2,250 / 2,100 - 1 = 7.1% (worked in
+# tests/test_method_scripts_rest.py).
+T46_CP1B = """### T4.6 - Variance register
+
+| Metric | Comparison Basis | Prior Value | Current Value | Abs Change | % Change | Mgmt Driver \
+| Analyst Driver | Credit Implication |
+|---|---|---|---|---|---|---|---|---|
+| Revenue | YoY | 2,100 | 2,250 | 150 | {change} | Price | Volume | Positive |
+
+"""
+
+
+def test_cp1b_is_checked_by_its_script_without_a_note(tmp_path):
+    """`earnings_update` has 93 characters under its ceiling, so CP-1B is sent no note
+    (`method_scripts_cp1b.CP1B_NOTE_UNSENT` measures the need); its own T4.6 is still checked."""
+    from deploy_workflow import method_scripts_cp1b
+
+    assert "CP-1B" in method_scripts.CHECKS and "CP-1B" not in method_scripts.NOTES
+    (tmp_path / "texts").mkdir()
+    _, texts = all_instructions(tmp_path / "texts", "earnings_update")
+    assert method_scripts_cp1b.CP1B_NOTE_UNSENT not in texts["CP-1B"]
+    prepared, task, context = good_task(tmp_path, "CP-1B", "earnings_update")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    check = checker(prepared.layout)
+    base = set(_checked_handoff(task, raw.encode(), check))
+    right, wrong = (
+        raw.replace("\n## Calculations", "\n" + T46_CP1B.format(change=c) + "## Calculations")
+        for c in ("7.1%", "8.1%")
+    )
+    assert set(_checked_handoff(task, right.encode(), check)) == base
+    (added,) = set(_checked_handoff(task, wrong.encode(), check)) - base
+    assert "T4.6 row `% Change: Revenue` states 8.1" in added
+
+
 def test_cp1_free_name_rows_are_checked_by_its_script(tmp_path):
     # CP-1 is sent its note (owner: "approved"), in every pathway; the method's own T4.9 is read.
     assert "CP-1" in method_scripts.CHECKS and "CP-1" in method_scripts.NOTES

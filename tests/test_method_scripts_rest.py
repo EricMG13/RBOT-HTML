@@ -717,3 +717,97 @@ def test_cp2h_a_range_compares_each_stated_bound():
     text = cp2h().replace("| -0.2x / 0.3x |", "| -0.2x / 0.7x |")
     (issue,) = ms.issues("CP-2H", text)
     assert "`Headroom: Net leverage`" in issue
+
+
+# --- CP-1B: credit_metrics.py (growth) on T4.6 and T4.4 ------------------------------------------
+
+# SYNTHETIC, USD m, worked by hand: Revenue 2,100 -> 2,250: 2,250 / 2,100 - 1 = 7.142857% (7.1%).
+# EBITDA 410 -> 380: 380 / 410 - 1 = -7.317% (-7.3%). FCF 0 -> 50: no percentage (zero prior).
+T46_1B = """### T4.6 - Variance register
+
+| Metric | Comparison Basis | Prior Value | Current Value | Abs Change | % Change | Mgmt Driver \
+| Analyst Driver | Credit Implication |
+|---|---|---|---|---|---|---|---|---|
+| Revenue | YoY | USD 2,100m | USD 2,250m | USD 150m | {revenue} | Price | Volume | Positive |
+| EBITDA | YoY | 410 | 380 | -30 | {ebitda} | Costs | Mix | Negative |
+| FCF | YoY | 0 | 50 | 50 | {fcf} | WC | WC | Neutral |
+| EBITDA margin | YoY | 19.5% | 16.9% | -2.6pp | {margin} | Costs | Mix | Negative |
+
+"""
+T44_1B = """### T4.4 - Performance table
+
+| Line Item | FY2022 | FY2023 | FY2024 | YoY Change (Abs) | YoY Change (%) | Analyst Note |
+|---|---|---|---|---|---|---|
+| Revenue | 1,900 | 2,100 | 2,250 | 150 | {yoy} | Growth. |
+| Net Income | 10 | -20 | 15 | 35 | n.m. | Swing. |
+
+"""
+
+
+def cp1b(t44: str | None = None, **cells: str) -> str:
+    stated = {"revenue": "7.1%", "ebitda": "-7.3%", "fcf": "n.m.", "margin": "-2.6pp"} | cells
+    t46 = T46_1B.format(**{k: v for k, v in stated.items() if k != "yoy"})
+    t44 = T44_1B.format(yoy=stated.get("yoy", "7.1%")) if t44 is None else t44
+    return f"## Findings\n\n{t46}{t44}## Gaps\n"
+
+
+def cp1b_by(text: str) -> dict[tuple[str, str], str]:
+    return {(o.register, o.figure): o.status for o in ms.run("CP-1B", text)}
+
+
+def test_cp1b_all_right():
+    found = cp1b_by(cp1b())
+    assert found[("T4.6", "% Change: Revenue")] == "agreed"
+    assert found[("T4.6", "% Change: EBITDA")] == "agreed"
+    assert found[("T4.6", "% Change: FCF")] == "agreed"  # n.m. on a zero prior
+    assert found[("T4.6", "% Change: EBITDA margin")] == "not checked"  # points
+    assert found[("T4.4", "% Change: Revenue")] == "agreed"  # FY2024 against FY2023
+    assert found[("T4.4", "% Change: Net Income")] == "not checked"  # negative prior
+    assert ms.issues("CP-1B", cp1b()) == ()
+    assert "CP-1B" not in ms.NOTES  # earnings_update has no room for the note
+
+
+@pytest.mark.parametrize(
+    ("cells", "why"),
+    [
+        ({"revenue": "7.14%"}, "more places"),
+        ({"revenue": "+7.1%"}, "a plus sign"),
+        ({"revenue": "7.1"}, "a bare figure above 1 in a % column"),
+        ({"ebitda": "(7.3%)"}, "brackets"),
+        ({"ebitda": "-0.073"}, "a decimal: not read"),
+        ({"margin": "-13.3%"}, "a margin's relative change: not compared"),
+        ({"fcf": "Not meaningful (zero base)"}, "a null word with its reason"),
+    ],
+)
+def test_cp1b_correct_but_unusual_cells_are_not_sent_back(cells, why):
+    assert ms.issues("CP-1B", cp1b(**cells)) == (), why
+
+
+def test_cp1b_t44_period_pairs():
+    # columns in descending order, and a quarter layout: the latest year against a year earlier
+    desc = (
+        "### T4.4 - Performance\n\n| Line Item | FY2024 | FY2023 | YoY Change (%) |\n"
+        "|---|---|---|---|\n| Revenue | 2,250 | 2,100 | 7.1% |\n\n"
+    )
+    quarters = (
+        "### T4.4 - Performance\n\n| Line Item | Q3 2023 | Q2 2024 | Q3 2024 | YoY Change (%) |\n"
+        "|---|---|---|---|---|\n| Revenue | 500 | 520 | 550 | 10.0% |\n\n"  # 550 / 500 - 1 = 10%
+    )
+    for t44 in (desc, quarters):
+        assert cp1b_by(cp1b(t44=t44))[("T4.4", "% Change: Revenue")] == "agreed"
+    lone = quarters.replace("Q3 2023", "Q1 2024")  # no Q3 2023: no pair
+    assert cp1b_by(cp1b(t44=lone))[("T4.4", "% Change: all")] == "not checked"
+
+
+@pytest.mark.parametrize(
+    ("cells", "figure"),
+    [
+        ({"revenue": "8.1%"}, "% Change: Revenue"),
+        ({"ebitda": "7.3%"}, "% Change: EBITDA"),  # the sign
+        ({"fcf": "100.0%"}, "% Change: FCF"),  # a figure over a zero prior
+        ({"yoy": "5.0%"}, "% Change: Revenue"),
+    ],
+)
+def test_cp1b_a_wrong_change_is_sent_back(cells, figure):
+    (issue,) = ms.issues("CP-1B", cp1b(**cells))
+    assert f"`{figure}`" in issue
