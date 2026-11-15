@@ -22,10 +22,13 @@ that scope are dropped, so a one-line
 edit in a 60-branch legacy function reports the function's complexity, while an edit
 elsewhere in the same file does not. Standard library only (`ast`, `subprocess`,
 `git diff -U0`); the checkers are the dev dependencies the repo already pins.
-Lines moved verbatim out of another file in the same change are not changed lines either: a run
-of at least three changed lines that stands, line for line and in order, among the consecutive
-lines another file lost. Splitting a file therefore brings only its new imports and any edited
-function into scope; an edit inside a moved function still brings that whole function in.
+Lines moved verbatim out of another file into a new file are not changed lines either: a run
+of at least three lines that stands, line for line and in order, among the consecutive lines
+another file lost. Splitting a file therefore brings only the new files' imports and any edited
+function into scope; an edit inside a moved function still brings that whole function in, and the
+same text pasted into a file that already existed is an edit of that file. Code that only moved
+(by either rule) is still checked for names that no longer resolve (ruff's `F` rules), because a
+move can break code without changing a line of it.
 
 ## Checks and thresholds
 

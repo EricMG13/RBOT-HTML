@@ -66,34 +66,59 @@ def test_lines_split_out_of_a_file_are_not_changed_lines(tmp_path):
     two = "def two():\n    third = 3\n    fourth = 4\n    return third + fourth\n"
     stays = "def stays():\n    return 0\n"
     (repo / "big.py").write_text(f"{one}\n\n{two}\n\n{stays}", encoding="utf-8")
+    (repo / "other.py").write_text("def other():\n    return 9\n", encoding="utf-8")
     _git(repo, "add", ".")
     _git(repo, "commit", "-q", "-m", "base")
     (repo / "big.py").write_text(f"from part import one, two\n\n\n{stays}", encoding="utf-8")
     edited = two.replace("fourth = 4", "fourth = 40")
     part = f'"""Moved."""\n\n\n{one}\n\n{edited}\n\ndef added():\n    return 5\n'
     (repo / "part.py").write_text(part, encoding="utf-8")
+    # The same moved function pasted into a file that already existed is an edit of that file.
+    (repo / "other.py").write_text(f"def other():\n    return 9\n\n\n{one}", encoding="utf-8")
     lost = quality_gate.removed_blocks(repo, "HEAD")
     assert sorted(lost) == ["big.py"]
     # big.py lost lines 1-10: one(), two blank lines, two(). The blank lines after two() stay.
     assert sorted(lost["big.py"]) == list(range(1, 11))
     every = set(range(1, part.count("\n") + 2))
-    changed = quality_gate.split_lines(part, every, lost["big.py"])
+    places = quality_gate.lost_places(lost["big.py"])
+    changed = quality_gate.split_lines(part, every, places)
     # part.py: 1 docstring, 4-7 one(), 10-13 two() with line 12 edited, 16-17 added().
     # Lines 4-11 stand in big.py's lost lines 1-8 and moved; 12 is the edit, which ends the run,
     # so 13 (one line after it) is not a block either.
     assert changed == {1, 2, 3, 12, 13, 14, 15, 16, 17, 18}
-    assert quality_gate.owned_lines(part, changed) == {1, 2, 3, *range(10, 19)}
-    # The same text in a file that lost nothing is new code: nothing is taken out.
+    # The same text against a file that lost nothing is new code: nothing is taken out.
     assert quality_gate.split_lines(part, every, {}) == every
+    assert quality_gate.added_files(repo, "HEAD") == {"part.py"}
+    owned, context = quality_gate.scopes(repo, "HEAD", ["big.py", "other.py", "part.py"])
+    assert owned["part.py"] == {1, 2, 3, *range(10, 19)}  # the edited two() whole; one() moved
+    assert context["part.py"] == every  # one() still answers for its names
+    # other.py gained lines 3-8: two blank lines and one()'s four.
+    assert owned["other.py"] == context["other.py"] == {3, 4, 5, 6, 7, 8}
+    assert owned["big.py"] == context["big.py"] == {1}  # its new import line
 
 
 def test_a_short_run_or_lines_out_of_order_are_not_a_moved_block():
-    lost = {1: "a = 1", 2: "b = 2", 3: "c = 3", 9: "d = 4"}
-    assert quality_gate.split_lines("a = 1\nb = 2\n", {1, 2}, lost) == {1, 2}  # two lines
-    assert quality_gate.split_lines("c = 3\nb = 2\na = 1\n", {1, 2, 3}, lost) == {1, 2, 3}
-    assert quality_gate.split_lines("b = 2\nc = 3\nd = 4\n", {1, 2, 3}, lost) == {1, 2, 3}  # a gap
-    assert quality_gate.split_lines("a = 1\nb = 2\nc = 3\n", {1, 2, 3}, lost) == set()
-    assert quality_gate.split_lines("a = 1\nb = 2\nc = 3\n", {1, 3}, lost) == {1, 3}  # 2 unchanged
+    places = quality_gate.lost_places({1: "a = 1", 2: "b = 2", 3: "c = 3", 9: "d = 4"})
+    assert quality_gate.split_lines("a = 1\nb = 2\n", {1, 2}, places) == {1, 2}  # two lines
+    assert quality_gate.split_lines("c = 3\nb = 2\na = 1\n", {1, 2, 3}, places) == {1, 2, 3}
+    assert quality_gate.split_lines("b = 2\nc = 3\nd = 4\n", {1, 2, 3}, places) == {1, 2, 3}  # gap
+    assert quality_gate.split_lines("a = 1\nb = 2\nc = 3\n", {1, 2, 3}, places) == set()
+    assert quality_gate.split_lines("a = 1\nb = 2\nc = 3\n", {1, 3}, places) == {1, 3}
+
+
+def test_code_that_only_moved_still_answers_for_names_that_do_not_resolve():
+    # A function moved without the import it needs has no changed line, and is still reported.
+    owned, context = {"part.py": {1}}, {"part.py": {1, 4, 5}}
+    finding = quality_gate.Finding
+    assert quality_gate.in_scope(finding("ruff", "part.py", 5, "F821", "undefined"), owned, context)
+    assert quality_gate.in_scope(finding("ruff", "part.py", 1, "C901", "complex"), owned, context)
+    assert not quality_gate.in_scope(
+        finding("ruff", "part.py", 5, "C901", "complex"), owned, context
+    )
+    assert not quality_gate.in_scope(finding("ruff", "part.py", 5, "E501", "long"), owned, context)
+    assert not quality_gate.in_scope(finding("mypy", "part.py", 5, "F821", "x"), owned, context)
+    assert not quality_gate.in_scope(finding("ruff", "part.py", 9, "F821", "x"), owned, context)
+    assert not quality_gate.in_scope(finding("ruff", "gone.py", 5, "F821", "x"), owned, context)
 
 
 SRC = Path(__file__).resolve().parents[1] / "src"

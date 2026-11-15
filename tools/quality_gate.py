@@ -5,7 +5,8 @@
 Compares the working tree with ``--base`` and checks only the code that changed:
 every changed line, plus the whole body of every function a changed line falls in.
 New files are checked whole; a moved file is compared with the file it was moved from, and
-lines moved verbatim out of another file in the same change are not changed lines.
+lines moved verbatim out of another file into a new file are not changed lines. Code that
+only moved is still checked for names that no longer resolve.
 The checks are ``ruff check`` with the rules in
 ``tools/ruff-gate.toml``, ``ruff format``, and strict ``mypy`` (tests excluded from
 mypy). A finding outside the changed code is not reported, so the gate holds new
@@ -132,7 +133,7 @@ def removed_blocks(root: Path, base: str) -> dict[str, dict[int, str]]:
     names = git(root, "diff", "--name-only", "-z", "--diff-filter=MD", base, "--", "*.py")
     blocks = {}
     for name in filter(None, names.split("\0")):
-        before = git(root, "show", f"{base}:{name}").splitlines()
+        before = git(root, "show", f"{base}:{name}").split("\n")  # git's lines, as ast counts
         lost: dict[int, str] = {}
         for header in git(root, "diff", "-U0", base, "--", name).splitlines():
             match = HUNK.match(header)
@@ -144,26 +145,79 @@ def removed_blocks(root: Path, base: str) -> dict[str, dict[int, str]]:
     return blocks
 
 
-def split_lines(source: str, changed: set[int], lost: dict[int, str]) -> set[int]:
-    """The changed lines of ``source`` that were not moved out of one other file.
-
-    A line is moved when it sits in a run of at least ``MOVED_RUN`` changed lines that stands,
-    line for line and in the same order, among consecutive lines ``lost`` by that file. Such a
-    run is existing code in a new place, as a renamed file is: an edit inside it is still a
-    changed line, and so brings the whole function it falls in into scope.
-    """
+def lost_places(lost: dict[int, str]) -> dict[str, list[int]]:
+    """``{line text: its line numbers}`` among the lines one file lost."""
     places: dict[str, list[int]] = {}
     for number, text in lost.items():
         places.setdefault(text, []).append(number)
+    return places
+
+
+def split_lines(source: str, changed: set[int], places: dict[str, list[int]]) -> set[int]:
+    """The changed lines of ``source`` that were not moved out of one other file.
+
+    A line is moved when it sits in a run of at least ``MOVED_RUN`` changed lines that stands,
+    line for line and in the same order, among consecutive lines lost by that file (``places``,
+    from ``lost_places``). Such a run is existing code in a new place, as a renamed file is: an
+    edit inside it is still a changed line, and so brings the whole function it falls in into
+    scope.
+    """
     moved: set[int] = set()
     runs: dict[int, int] = {}  # lost line number -> length of the run that ends on it
-    for number, text in enumerate(source.splitlines(), 1):
+    for number, text in enumerate(source.split("\n"), 1):
         found = places.get(text, []) if number in changed else []
         runs = {place: runs.get(place - 1, 0) + 1 for place in found}
         longest = max(runs.values(), default=0)
         if longest >= MOVED_RUN:
             moved.update(range(number - longest + 1, number + 1))
     return changed - moved
+
+
+def added_files(root: Path, base: str) -> set[str]:
+    """Python files that are not in ``base``: added since, or not yet tracked."""
+    tracked = git(root, "diff", "--name-only", "-z", "--diff-filter=A", base, "--", "*.py")
+    untracked = git(root, "ls-files", "--others", "--exclude-standard", "-z", "--", "*.py")
+    return set((tracked + untracked).split("\0")) - {""}
+
+
+def scopes(
+    root: Path, base: str, files: list[str]
+) -> tuple[dict[str, set[int]], dict[str, set[int]]]:
+    """``(owned, context)`` line numbers per file.
+
+    ``owned`` is the changed code every check applies to. ``context`` adds the code the two move
+    rules took out of it: a renamed file's unchanged lines, and the lines moved verbatim into a
+    new file. Moving code can break it without changing a line of it (an import left behind), so
+    the checks for names that do not resolve still apply there (``in_scope``).
+    """
+    moved = moved_sources(root, base)
+    added = added_files(root, base)
+    places = {name: lost_places(lost) for name, lost in removed_blocks(root, base).items()}
+    owned, context = {}, {}
+    for name in files:
+        source = (root / name).read_text(encoding="utf-8", errors="replace")
+        every = set(range(1, source.count("\n") + 2))
+        if name in moved:
+            changed, before = moved_lines(root, base, moved[name], name), every
+        elif name in added:  # a new file: every line, less what was moved into it
+            changed = before = every
+            for other in places.keys() - {name}:
+                changed = split_lines(source, changed, places[other])
+        else:
+            found = changed_lines(root, base, name)
+            changed = before = every if found is None else found
+        owned[name] = owned_lines(source, changed)
+        context[name] = owned[name] | owned_lines(source, before)
+    return owned, context
+
+
+def in_scope(finding: Finding, owned: dict[str, set[int]], context: dict[str, set[int]]) -> bool:
+    """A finding in the changed code, or an unresolved-name finding (ruff's F rules) in code that
+    only moved."""
+    if finding.line in owned.get(finding.path, set()):
+        return True
+    unresolved = finding.tool == "ruff" and finding.code.startswith("F")
+    return unresolved and finding.line in context.get(finding.path, set())
 
 
 def function_spans(source: str) -> list[tuple[int, int]]:
@@ -307,21 +361,7 @@ def run_gate(
 def code_gate(root: Path, base: str, python: str = sys.executable) -> GateResult:
     """Every finding of every code check that falls inside the changed code."""
     files = changed_files(root, base)
-    moved = moved_sources(root, base)
-    removed = removed_blocks(root, base)
-    owned = {}
-    for name in files:
-        source = (root / name).read_text(encoding="utf-8", errors="replace")
-        if name in moved:
-            changed: set[int] | None = moved_lines(root, base, moved[name], name)
-        else:
-            changed = changed_lines(root, base, name)
-        if changed is None:  # a new file: every line, less what was moved into it
-            changed = set(range(1, source.count("\n") + 2))
-        for other, lost in removed.items():
-            if other != name:
-                changed = split_lines(source, changed, lost)
-        owned[name] = owned_lines(source, changed)
+    owned, context = scopes(root, base, files)
     findings = []
     if files:
         findings += ruff_findings(root, python, files)
@@ -329,7 +369,7 @@ def code_gate(root: Path, base: str, python: str = sys.executable) -> GateResult
         for name in files:
             for line in sorted(format_lines(root, python, name)):
                 findings.append(Finding("format", name, line, "FMT", "ruff format would change"))
-    kept = [f for f in findings if f.line in owned.get(f.path, set())]
+    kept = [f for f in findings if in_scope(f, owned, context)]
     kept.sort(key=lambda f: (f.path, f.line, f.tool, f.code))
     return GateResult(files, sum(len(lines) for lines in owned.values()), kept)
 
