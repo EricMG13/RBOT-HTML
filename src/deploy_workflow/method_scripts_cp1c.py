@@ -24,9 +24,9 @@ stated in T4.6.
 T4.10, per row whose Method names a T4.6 multiple: Low, Median and High against T4.6's Min, Median
 and Max multiple times the row's one borrower-metric figure (the script's `implied_ev`).
 
-Not checked by design: Q1 and Q3 (the method names no quantile convention; the script's is
-inclusive, owner's decision), N itself (it selects the peer set), standard deviation and range
-(not T4.6 columns), Borrower Position (words).
+Q1 and Q3 are checked by the script's inclusive convention (the method names none; owner,
+2026-11-15: "Inclusive"). Not checked by design: N itself (it selects the peer set), standard
+deviation and range (not T4.6 columns), Borrower Position (words).
 """
 
 import re
@@ -60,6 +60,7 @@ from deploy_workflow.method_scripts import (
 PEER_STATISTICS = cp3_ev.PEER_STATISTICS
 BENCHMARKS = ("T4.3", "T4.4", "T4.5", "T4.8", "T4.9")
 STATS = {"Avg": "average", "Median": "median", "Min": "minimum", "Max": "maximum"}
+QUARTILE_STATS = {"Q1": "q1", "Q3": "q3"}
 EV_CASES = {"Low": "Min", "Base": "Median", "High": "Max"}  # T4.10 case -> T4.6 statistic
 ABBREVIATIONS = {
     "lev": "leverage",
@@ -81,16 +82,18 @@ EV_FORMULA = (
     "Implied EV Low / Median / High = T4.6's Min / Median / Max peer multiple x the borrower "
     "metric (REF_CP-1C_06C; peer_statistics.py implied_ev)"
 )
-QUARTILES = (
-    "the method names no quantile convention (the script's is inclusive, Excel PERCENTILE.INC): "
-    "the owner's decision"
+# Owner, 2026-11-15, asked which convention: "Inclusive" (the script's own).
+QUARTILE_FORMULA = (
+    "Peer Q1 and Q3 over the comparable peers by inclusive linear interpolation (Excel "
+    "PERCENTILE.INC), from 4 peers (peer_statistics.py)"
 )
 CP1C_NOTE = (
     "Python checks T4.6 and T4.10 after you answer, with the method's own `peer_statistics.py` "
     "(you cannot run it): each metric's Peer Avg, Median, Min and Max from the peer rows of T4.3 "
     "to T4.5, T4.8 and T4.9 (their Comp Status and Calc Status, T4.7's outliers) under the "
     "method's minimum-N gates, and each T4.10 Low, Median and High as T4.6's Min, Median and Max "
-    "multiple times the borrower metric. So name each T4.6 metric as its column is named, write "
+    "multiple times the borrower metric. Q1 and Q3 are inclusive (Excel PERCENTILE.INC). So "
+    "name each T4.6 metric as its column is named, write "
     "each value with its unit (`11.5x`, `24.0%`), mark the borrower's own row `(borrower)`, and "
     "state as N the peers the statistics use. A figure that disagrees is sent back for repair; "
     "one whose input is missing is not checked, never read as zero.\n\n"
@@ -199,6 +202,7 @@ class _Stated:
     metric: str
     borrower: str
     stats: dict[str, str]  # Avg, Median, Min, Max -> cell
+    quartiles: dict[str, str]  # Q1, Q3 -> cell; a quartile T4.6 gives no cell for is absent
     n: str
 
 
@@ -218,6 +222,8 @@ def _t46_rows(text: str) -> list[_Stated] | str:
     metric, borrower, n = at("metric"), at("borrower value"), at("n")
     if metric is None or n is None or (joined is None and None in own.values()):
         return "T4.6 has no Metric, N or peer statistic columns"
+    both = next((i for i, h in enumerate(header) if h.replace(" ", "") == "q1/q3"), None)
+    apart = {q: at(q.casefold(), f"peer {q.casefold()}") for q in QUARTILE_STATS}
     rows = []
     for row in table[1]:
         if joined is not None:
@@ -226,8 +232,23 @@ def _t46_rows(text: str) -> list[_Stated] | str:
         else:
             cells = {s: row[i] for s, i in own.items() if i is not None}
         cell = row[borrower] if borrower is not None else ""
-        rows.append(_Stated(_plain(row[metric]), cell, cells, row[n]))
+        rows.append(
+            _Stated(_plain(row[metric]), cell, cells, _quartile_cells(row, both, apart), row[n])
+        )
     return rows
+
+
+def _quartile_cells(
+    row: list[str], both: int | None, apart: dict[str, int | None]
+) -> dict[str, str]:
+    """A T4.6 row's Q1 and Q3 cells: its own columns, else the two parts of a joined `Q1/Q3`
+    cell (a cell that is not two parts states neither, unless it is one word for both)."""
+    if both is None:
+        return {q: row[i] for q, i in apart.items() if i is not None}
+    parts = [part.strip() for part in _plain(row[both]).split("/")]
+    if len(parts) == 2:
+        return dict(zip(QUARTILE_STATS, parts, strict=True))
+    return dict.fromkeys(QUARTILE_STATS, row[both]) if not _states_number(row[both]) else {}
 
 
 def _issuer(text: str) -> set[str]:
@@ -397,27 +418,49 @@ def _t46(stated: _Stated, text: str, loaded: Loaded) -> list[Outcome]:
     def where(stat: str) -> _Where:
         return _Where("CP-1C", PEER_STATISTICS, f"Peer {stat}: {stated.metric}", "T4.6")
 
-    quartiles = [where(q)("not checked", reason=QUARTILES) for q in ("Q1", "Q3")]
+    def unread(why: str) -> list[Outcome]:
+        return [
+            where(q)("not checked", stated=stated.quartiles.get(q, ""), reason=why)
+            for q in QUARTILE_STATS
+        ]
+
     if len(stated.stats) != 4:
         why = "the joined peer statistic cell is not four figures"
-        return [*(where(s)("not checked", reason=why) for s in STATS), *quartiles]
+        return [*(where(s)("not checked", reason=why) for s in STATS), *unread(why)]
     try:
         version, slack, unit = _statistics(stated, text, loaded)
     except _NotChecked as error:
         cause = str(error)
         return [
             *(where(s)("not checked", stated=stated.stats[s], reason=cause) for s in STATS),
-            *quartiles,
+            *unread(cause),
         ]
+    basis = ((unit, slack), loaded.tables)
     return [
         *(
-            _stat(
-                where(s), stated.stats[s], (version[k], version["n"]), (unit, slack), loaded.tables
-            )
+            _stat(where(s), stated.stats[s], (version[k], version["n"]), *basis)
             for s, k in STATS.items()
         ),
-        *quartiles,
+        *(
+            _quartile(where(q), stated.quartiles.get(q), (version[k], version["n"]), basis)
+            for q, k in QUARTILE_STATS.items()
+        ),
     ]
+
+
+def _quartile(
+    where: _Where,
+    cell: str | None,
+    found: tuple[float | None, int],
+    basis: tuple[tuple[str, float], types.ModuleType],
+) -> Outcome:
+    """A stated Q1 or Q3 against the script's inclusive quartile; a T4.6 with no cell for it is
+    not checked."""
+    if cell is None:
+        return where("not checked", reason="T4.6 gives no cell for this quartile")
+    outcome = _stat(where, cell, found, *basis)
+    swap = outcome.reason.replace(STATS_FORMULA, QUARTILE_FORMULA)
+    return replace(outcome, reason=swap)
 
 
 # --- T4.10 -------------------------------------------------------------------------------------

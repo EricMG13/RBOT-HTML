@@ -511,10 +511,14 @@ def cp1c_by(text: str) -> dict[str, ms.Outcome]:
 def test_cp1c_all_right():
     found = cp1c_by(cp1c())
     margin = {k: o.status for k, o in found.items() if k.endswith("EBITDA Margin")}
+    # Margins 18, 20, 24, 26, 30: inclusive Q1 sits at position (5 - 1) x 0.25 = 1, so 20.0, and
+    # Q3 at position 3, so 26.0 (owner, 2026-11-15: "Inclusive").
     assert margin == dict.fromkeys(
-        [f"Peer {s}: EBITDA Margin" for s in ("Avg", "Median", "Min", "Max")], "agreed"
-    ) | dict.fromkeys(["Peer Q1: EBITDA Margin", "Peer Q3: EBITDA Margin"], "not checked")
-    assert "quantile convention" in found["Peer Q1: EBITDA Margin"].reason
+        [f"Peer {s}: EBITDA Margin" for s in ("Avg", "Median", "Min", "Max", "Q1", "Q3")], "agreed"
+    )
+    # Multiples 9, 10, 12, 14: Q1 at position 0.75, 9 + 0.75 x 1 = 9.75; Q3 at 2.25,
+    # 12 + 0.25 x 2 = 12.5.
+    assert found["Peer Q1: EV/EBITDA"].status == found["Peer Q3: EV/EBITDA"].status == "agreed"
     assert found["Peer Avg: EV/EBITDA"].status == "agreed"  # Not calculable at N = 4
     assert found["Peer Median: EV/EBITDA"].status == "agreed"
     for case in ("Low", "Base", "High"):
@@ -1219,3 +1223,29 @@ def test_completeness_review_a_register_split_under_sub_headings_is_read_whole()
         "| Total debt | Context. | S1 |\n\n"
     )
     assert statuses("CP-2E", cp2e(split, T2F5))[("T2F.4", "columns")] == "agreed"
+
+
+def test_cp1c_quartiles_follow_the_scripts_inclusive_convention():
+    # The exclusive convention on 9, 10, 12, 14 gives Q1 9.25 and Q3 13.5; the script's inclusive
+    # one gives 9.75 and 12.5, so the exclusive figures are sent back.
+    exclusive = cp1c().replace("| 9.75x | 12.5x |", "| 9.25x | 13.5x |", 1)
+    found = cp1c_by(exclusive)
+    assert found["Peer Q1: EV/EBITDA"].status == found["Peer Q3: EV/EBITDA"].status == "disagreed"
+    assert "inclusive" in found["Peer Q1: EV/EBITDA"].reason
+    assert len(ms.issues("CP-1C", exclusive)) == 2
+    # A quartile the handoff words instead of stating is never a disagreement.
+    worded = cp1c().replace("| 9.75x | 12.5x |", "| Not calculable | n.m. |", 1)
+    assert cp1c_by(worded)["Peer Q1: EV/EBITDA"].status == "not checked"
+    assert ms.issues("CP-1C", worded) == ()
+
+
+def test_cp1c_a_table_without_quartile_columns_is_not_checked_for_them():
+    text = cp1c()
+    for cut in (" Q1 | Q3 |", "---|---|---|---|---|---|---|---|---|---|"):
+        assert cut in text
+    bare = text.replace("| Q1 | Q3 | N |", "| N |", 1)
+    bare = bare.replace("| 20.0% | 26.0% | ", "| ", 1).replace("| 9.75x | 12.5x | ", "| ", 1)
+    found = cp1c_by(bare)
+    assert found["Peer Q1: EBITDA Margin"].status == "not checked"
+    assert found["Peer Median: EBITDA Margin"].status == "agreed"
+    assert ms.issues("CP-1C", bare) == ()

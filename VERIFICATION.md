@@ -59,7 +59,7 @@ branch, reviewed and merged here; counts are from the CI fast list unless stated
   routing registers and columns, gap-only, row-written and blocked registers are never judged;
   placeholders, short registers and the other modules' findings are recorded as `noted`. CP-4C
   (`recovery_waterfall.py`, T4E.5 steps and T4E.6 fulcrum), CP-1C (`peer_statistics.py`, T4.6
-  under the N gates and T4.10; quartiles not checked, the convention is the owner's to choose),
+  under the N gates and T4.10; Q1 and Q3 by the script's inclusive convention, owner: "Inclusive"),
   CP-2H (`trigger_headroom`, T2R.4), CP-1B (`credit_metrics.growth`, T4.6 and T4.4; no note,
   `earnings_update` lacks 342 characters). No register restored. Real evidence: the two retained
   TransDigm CP-2E handoffs of 2026-11-13 send nothing back (7 placeholder cells noted, as the

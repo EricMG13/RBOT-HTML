@@ -589,3 +589,16 @@ paths. Each was reproduced, fixed and given a hand-worked test (`tests/test_meth
 
 Built and tested offline, module by module. Not accepted: no model has written a restored register
 under these instructions; that needs the owner's paid run.
+
+## Owner's answers on the second part (2026-11-15)
+
+Asked four questions with the options and a recommendation each, the owner chose:
+
+- CP-1C quartiles: "Inclusive (Recommended)". Q1 and Q3 are checked by the script's own
+  convention (inclusive linear interpolation, Excel PERCENTILE.INC), from 4 peers; CP-1C's note
+  says so. A T4.6 with no quartile cell, or one that words a quartile, is not checked for it.
+- CP-1B's note: "No, leave it (Recommended)". `earnings_update`'s ceiling stays 546,500; CP-1B
+  is checked without a note.
+- Completeness findings for the twelve modules outside the register scope: "Record-only
+  (Recommended)", until a real run shows the headers models write.
+- This batch to `main`: "Open and merge (Recommended)", when its checks are green.
