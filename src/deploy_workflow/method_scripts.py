@@ -216,7 +216,7 @@ def register_table(text: str, ident: str) -> Table | str:
 
 
 def heading_table(text: str, heading: str) -> Table | str:
-    """The table under the `###` heading named exactly ``heading``, or why it is not read."""
+    """The table under the `###` (or deeper) heading named exactly ``heading``, or why not."""
     lines = _unfenced(text)
     want = heading.casefold()
     found = [i for i, line in enumerate(lines) if _heading_name(line) == want]
@@ -227,7 +227,7 @@ def heading_table(text: str, heading: str) -> Table | str:
 
 
 def _heading_name(line: str) -> str | None:
-    match = re.match(r"^###\s+(.*?)\s*#*\s*$", line)
+    match = re.match(r"^#{3,6}\s+(.*?)\s*#*\s*$", line)
     return _plain(match[1]).casefold() if match else None
 
 
@@ -296,7 +296,7 @@ def scale_of(cell: str) -> str | None:
     it; None when it states none of them."""
     words = re.findall(r"[a-z]+", _plain(cell).casefold().replace("us$", " "))
     found = {_SCALES[w] for w in words if w in _SCALES}
-    glued = re.search(r"[$€£](m|mn|bn|k)$", _plain(cell).casefold().replace(" ", ""))
+    glued = re.search(r"(?:[$€£]|\b[a-z]{3})(m|mn|bn|k)$", _plain(cell).casefold().replace(" ", ""))
     found |= {_SCALES[glued[1]]} if glued else set()
     return found.pop() if len(found) == 1 else None
 
@@ -305,7 +305,7 @@ def currency_of(cell: str) -> str | None:
     """The ISO 4217 code a cell states (`USD`, or `US$`, `€`, `£`), or None when it states none or
     more than one. A bare `$` names no currency."""
     text = _plain(cell)
-    codes = {c for c in re.findall(r"\b[A-Z]{3}\b", text) if c in ISO_4217}
+    codes = {c for c in re.findall(r"(?<![A-Za-z])[A-Z]{3}(?![A-Z])", text) if c in ISO_4217}
     codes |= {code for symbol, code in _SYMBOLS.items() if symbol in text.casefold()}
     return codes.pop() if len(codes) == 1 else None
 
@@ -640,6 +640,10 @@ def _funding_rows(table: Table, line: int) -> dict[str, list[str]]:
         if key in rows:
             raise _NotChecked(f"`### {FUNDING_HEADING}` has two `{name}` rows")
         rows[key] = row
+    known = {_label(n) for n in ("Horizon", "Cash", "Forecast free cash flow", *FUNDING_RESULTS)}
+    others = [k for k in rows if k not in known and not k.startswith("facility:")]
+    if others:  # a row the script is not given would make a difference that is not the model's
+        raise _NotChecked(f"`### {FUNDING_HEADING}` has rows the check does not read: {others}")
     return rows
 
 
@@ -655,13 +659,13 @@ def _money_unit(rows: list[list[str]], cols: dict[str, int], name: str) -> tuple
 def _facility(
     name: str, row: list[str], cols: dict[str, int], tables: types.ModuleType
 ) -> dict[str, Any]:
-    committed = _label(row[cols["Committed"]])
+    committed = re.match(r"(yes|no)\b", _label(row[cols["Committed"]]))
     return {
         "facility": name,
         "commitment": _value(row[cols["Amount"]], tables),
         "drawn": _value(row[cols["Drawn"]], tables),
         "years_to_expiry": _value(row[cols["Years"]], tables, "year"),
-        "committed": {"yes": True, "no": False}.get(committed),  # anything else is not asserted
+        "committed": None if committed is None else committed[1] == "yes",  # else: not asserted
     }
 
 
@@ -777,7 +781,9 @@ def run(module: str, text: str) -> tuple[Outcome, ...]:
 def issue(outcome: Outcome) -> str:
     """The acceptance issue for a disagreement, in words the module can act on."""
     unit = "" if outcome.unit in (None, "months") else f" {outcome.unit}"
-    recomputed = "Not Calculable" if outcome.recomputed is None else f"{outcome.recomputed:g}{unit}"
+    value = outcome.recomputed
+    shown = "" if value is None else f"{value:.6f}".rstrip("0").rstrip(".")
+    recomputed = "Not Calculable" if value is None else f"{shown}{unit}"
     return (
         f"{outcome.register} row `{outcome.row}` states {outcome.stated}{unit}, but the method's "
         f"`{Path(outcome.script).name}` recomputes {recomputed} from the handoff's own rows. "

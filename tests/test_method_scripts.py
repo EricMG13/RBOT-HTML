@@ -212,7 +212,7 @@ def test_cp2d_two_currencies_are_not_compared():
 
 
 def test_cp2d_notation_variants_of_one_unit_agree():
-    units = {"Cash interest": "US$ millions", "Cash taxes": "USD mn", ENDING: "USD million"}
+    units = {"Cash interest": "US$ millions", "Cash taxes": "USD mn", ENDING: "USDm"}
     assert statuses(ms.run("CP-2D", cp2d(units=units))) == {ms.ENDING: "agreed", ms.MTE: "agreed"}
 
 
@@ -220,6 +220,20 @@ def test_cp2d_an_absent_register_is_not_checked():
     text = cp2d().replace("### T2E.5 — 12-Month Liquidity Bridge", "### Liquidity bridge")
     outcomes = ms.run("CP-2D", text)
     assert [o.reason for o in outcomes] == ["the handoff has no T2E.5 register"] * 2
+
+
+def test_cp2d_the_register_is_found_by_its_tag_or_a_bold_id_but_not_inside_a_code_fence():
+    heading = "### T2E.5 — 12-Month Liquidity Bridge"
+    tagged = cp2d().replace(heading, "<!-- table-id: cp2d.T2E.5 -->")
+    bold = cp2d().replace(heading, "#### **T2E.5** Liquidity bridge")
+    for text in (tagged, bold):
+        assert statuses(ms.run("CP-2D", text)) == {ms.ENDING: "agreed", ms.MTE: "agreed"}
+    start = cp2d().index(heading)
+    end = cp2d().index("### T2E.6")
+    fenced = cp2d()[:start] + "```\n" + cp2d()[start:end] + "```\n" + cp2d()[end:]
+    assert ms.run("CP-2D", fenced)[0].reason == "the handoff has no T2E.5 register"
+    twice = cp2d().replace("### T2E.6", cp2d()[start:end] + "### T2E.6")
+    assert ms.run("CP-2D", twice)[0].reason == "the handoff has 2 T2E.5 registers"
 
 
 def test_cp2d_a_malformed_table_is_not_checked():
@@ -435,6 +449,12 @@ def test_cp3c_an_absent_register_is_not_checked():
     assert {o.reason for o in ms.run("CP-3C", no_wall)} == {"the handoff has no T3D.2 register"}
 
 
+def test_cp3c_a_deeper_heading_is_read():
+    assert statuses(ms.run("CP-3C", cp3c(heading="#### Funding gap"))) == dict.fromkeys(
+        LINES, "agreed"
+    )
+
+
 def test_cp3c_a_malformed_table_is_not_checked():
     text = cp3c().replace(
         "| Line | Amount | Drawn | Years | Committed | Currency | Scale |\n|---|",
@@ -443,6 +463,32 @@ def test_cp3c_a_malformed_table_is_not_checked():
     outcomes = ms.run("CP-3C", text)
     assert {o.status for o in outcomes} == {"not checked"}
     assert "no separator row" in outcomes[0].reason
+
+
+def test_cp3c_a_row_the_check_does_not_read_is_not_compared():
+    # `Facility - Term deposit` is not a `Facility: <name>` row: the script would not count it,
+    # so a difference it makes is not the model's error.
+    funding = [*FUNDING[:5], ("Facility - Term deposit", "30", "0", "3.0", "Yes"), *FUNDING[5:]]
+    outcomes = ms.run("CP-3C", cp3c(funding=funding))
+    assert {o.status for o in outcomes} == {"not checked"}
+    assert "rows the check does not read" in outcomes[0].reason
+
+
+def test_cp3c_committed_is_read_from_its_first_word_only():
+    funding = replaced(FUNDING, "Facility: RCF", committed="Yes (committed revolver)")
+    assert statuses(ms.run("CP-3C", cp3c(funding=funding))) == dict.fromkeys(LINES, "agreed")
+    # `Committed` (neither Yes nor No) asserts nothing: the RCF is not counted, 220 and 530.
+    funding = replaced(FUNDING, "Facility: RCF", committed="Committed")
+    outcomes = ms.run("CP-3C", cp3c(funding=funding))
+    assert [o.recomputed for o in outcomes] == [750.0, 220.0, 450.0]
+
+
+def test_a_large_figure_is_written_in_full_in_the_issue():
+    rows = BRIDGE | {"Beginning accessible liquidity": "4000400", ENDING: "4000400"}
+    # 4,000,400 - 100 = 4,000,300 recomputed against 4,000,400 stated; Months to Empty
+    # 4,000,400 / (100 / 12) = 480,048, stated right.
+    (issue,) = ms.issues("CP-2D", cp2d(rows, months="480048"))
+    assert "recomputes 4000300 USD m" in issue
 
 
 def test_cp3c_no_horizon_is_refused_by_the_script():
