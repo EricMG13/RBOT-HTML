@@ -899,6 +899,17 @@ two modules' instructions gain a note before the method block. Limit: synthetic 
 model output has been checked by a script until a paid run. The order for the other modules is
 in `docs/sweeps/2026-11-15-method-scripts/scope.md`.
 
+**Method script checks, next modules, 2026-11-15 (owner, shown CP-2D and CP-3C: the new table
+"confirmed", the archive outside the gate's scope "ok", and on the modules whose inputs the
+2026-11-13 scope rule cut: "restore the cut tables"; ruling
+`docs/rulings/2026-11-15-method-script-checks.md`).** No method text is newly selected and no
+archived file changed; the scripts are the selection above (cp-os `b57a344`). Each module's mapping
+is its own module beside the harness (`deploy_workflow.method_scripts_<module>`). CP-2E:
+`rate_fx_sensitivity.py` on T2F.4 (Total debt, Gross, Hedged and Unhedged floating-rate debt,
+Unhedged debt percentage) and T2F.5 (the +100 bps cash-interest impact); the project-written
+`CPOS_REGISTER_SCOPE.md § CP-2E` no longer names T2F.4 and T2F.5, so CP-2E writes them and the
+presence check requires them; T2F.2, T2F.8 and T2F.9 stay cut. Limit: synthetic proof only.
+
 ## Appendix: selected method files
 
 One row per file CP-OS sends as a module's method (`METHODS` in
@@ -994,4 +1005,4 @@ on 2026-11-15 were fixed that day (owner: "fix"); a difference accepted later go
 | CP-DR | `docs/reuse/selected-methods/skills/cp-dr-deep-research/references/REF_CP-DR_STEPS.md` | cp-os | yes | b57a344, c746ad67 | `cab435618c7f` |
 | CP-DR | `docs/reuse/selected-methods/skills/cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md` | cp-os | no | b57a344 | `5028a6476cdf` |
 | shared | `docs/reuse/selected-methods/CANON_SHARED.md` | cp-os | no | b57a344 | `1ab484c5072a` |
-| shared | `docs/reuse/selected-methods/CPOS_REGISTER_SCOPE.md` | this repo | no | this repo | `617c887c18dd` |
+| shared | `docs/reuse/selected-methods/CPOS_REGISTER_SCOPE.md` | this repo | no | this repo | `3137dea04875` |

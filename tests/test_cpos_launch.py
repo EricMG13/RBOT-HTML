@@ -2903,6 +2903,9 @@ def test_every_module_is_told_what_stands_for_acceptance_scripts_and_questions(t
 # CP-6 pin recomputed on 2026-11-15 (owner: "module cp-6A within cp-6 should be fully functional"):
 # its scope section no longer names T6E.4, T6E.6, T6E.7 and T6E.11, so runs made before it are
 # correctly marked "Earlier methods" for CP-6; nothing else in its method block changed.
+# CP-2E pin recomputed on 2026-11-15 (owner: "restore the cut tables"): its scope section no longer
+# names T2F.4 and T2F.5, the inputs of its method script check (ruling
+# 2026-11-15-method-script-checks.md), so runs made before it are marked "Earlier methods" for it.
 METHOD_TEXT_SHA256_AT_1B41E65 = {
     "CP-0": "307017934f4e8e75fc432e8b7ef100bba82ce84f1bb6910f37c7e715fe701e72",
     "CP-1": "f047d555dd9ae1284a8fbf42feb3b63096b00077c021a303357fa16ce933d493",
@@ -2913,7 +2916,7 @@ METHOD_TEXT_SHA256_AT_1B41E65 = {
     "CP-2": "5cbdd1f22217b8bffcf9a276b2645a96f5eb40c05c6262d47473715eeee6cdcc",
     "CP-2A": "ab479e6fbfecb748bdda2767345f7945c01fa719d13a76e364a13b54fb63a8b1",
     "CP-2D": "fe39c49f842c99f6ffd390bd409cbb44adbbe397720d0a0d4d935b52a34a8fda",
-    "CP-2E": "b5ebefffbbf3792026e330d32320aeee9a472ff1d50bb3dfd2eae7465d8cfb08",
+    "CP-2E": "ecf16c44a9a8e982af71150f83938011185e163128ed1ddbf09aba0c5740db63",
     "CP-2G": "30f8bb12685ec883e4c824ea03a53fac4c4c3afc9bd2801a2019db77740523aa",
     "CP-2H": "f500af91511584f3dda4d0dd10180766dabe19d81de7df12a99b6da2d92e89b4",
     "CP-3": "2677edd0d0444fd83e02eea62bfa81464711467bf2c56ad59dd58ba544fade21",
@@ -8683,6 +8686,58 @@ def test_the_checker_runs_the_method_script_and_sends_back_only_a_disagreement(t
     (disagreed,) = [o for o in method_scripts.run(module, wrong) if o.status == "disagreed"]
     assert added == {method_scripts.issue(disagreed)}
     assert disagreed.stated == bad and f"recomputes {good} " in method_scripts.issue(disagreed)
+
+
+# SYNTHETIC, USD m: unhedged 800 - 300 = 500, 500 / 2,000 = 25.0%, 500 x 1% = 5.0 (worked in
+# tests/test_method_scripts.py). They replace the placeholder T2F.4 and T2F.5 the answer writes.
+T2F4_T2F5 = """### T2F.4 - Unhedged Exposure Table
+
+| Metric | Amount | Formula / Source | Status | Credit Implication | Source Trace |
+|---|---|---|---|---|---|
+| Total debt | USD 2,000m | T2F.2 | Reported | Synthetic. | S1 |
+| Gross floating-rate debt | USD 800m | T2F.2 | Reported | Synthetic. | S1 |
+| Hedged floating-rate debt | USD 300m | T2F.3 | Reported | Synthetic. | S1 |
+| Unhedged floating-rate debt | USD {unhedged}m | Gross - hedged | Calculated | Synthetic. | S1 |
+| Unhedged debt percentage | 25.0% | Unhedged / total | Calculated | Synthetic. | S1 |
+
+### T2F.5 - Rate Sensitivity Table
+
+| Sensitivity | Formula | Estimated Cash Impact | Status | Source Trace |
+|---|---|---|---|---|
+| +100 bps cash-interest impact | Unhedged x 1% | USD 5.0m | Calculated | S1 |
+
+"""
+
+
+@pytest.mark.parametrize("pathway", ["credit_snapshot", "earnings_update"])
+def test_cp2e_is_checked_by_its_script_on_its_restored_registers(tmp_path, pathway):
+    (tmp_path / "texts").mkdir()
+    _, texts = all_instructions(tmp_path / "texts", pathway)
+    head, _, method = texts["CP-2E"].partition(cpos_launch.METHOD_MARK)
+    assert head.count(method_scripts.NOTES["CP-2E"]) == 1
+    scope = method.rpartition("Register scope in this transport:")[2]
+    assert "T2F.4" not in scope and "T2F.5" not in scope and "T2F.2" in scope
+    prepared, task, context = good_task(tmp_path, "CP-2E", pathway)
+    raw = answer(context, list(prepared.plan.layout.routes))
+    check = checker(prepared.layout)
+    assert _checked_handoff(task, raw.encode(), check) == ()  # placeholders: not checked
+    for ident in ("T2F.4", "T2F.5"):
+        placeholder = f"### {ident} - Register\n\n| Item | Value |\n| --- | --- |\n"
+        placeholder += "| Observed | Not supplied: nothing to report |\n\n"
+        assert raw.count(placeholder) == 1
+        raw = raw.replace(placeholder, "")
+    right, wrong = (
+        raw.replace("\n## Calculations", "\n" + T2F4_T2F5.format(unhedged=u) + "## Calculations")
+        for u in ("500", "550")
+    )
+    assert [o.status for o in method_scripts.run("CP-2E", right)] == ["agreed"] * 3
+    assert _checked_handoff(task, right.encode(), check) == ()
+    (issue,) = _checked_handoff(task, wrong.encode(), check)
+    assert "T2F.4 row `Unhedged floating-rate debt` states 550 USD m" in issue
+    assert "recomputes 500 USD m" in issue
+    # Without its registers the handoff is refused for them, as for any in-scope register.
+    (missing,) = _checked_handoff(task, raw.encode(), check)
+    assert "Missing registers: T2F.4, T2F.5." in missing
 
 
 def test_each_attempt_keeps_its_method_script_checks_beside_its_review(tmp_path):

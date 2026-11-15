@@ -34,8 +34,10 @@ CUT = {
         *("T2DS.3", "T2DS.5", "T2DS.7", "T2B.3", "T2B.4", "T2B.5"),
         *("T5.1", "T5.2", "T5.3", "T5.4"),
     ],
+    # Owner, 2026-11-15 ("restore the cut tables"): T2F.4 and T2F.5 hold the inputs and figures
+    # of CP-2E's method script check (ruling 2026-11-15-method-script-checks.md).
     "CP-2E": [
-        *("T2F.2", "T2F.4", "T2F.5", "T2F.8", "T2F.9"),
+        *("T2F.2", "T2F.8", "T2F.9"),
     ],
     "CP-2G": ["T2H.1", "T2H.2", "T2H.9"],
     "CP-3": [
@@ -51,7 +53,10 @@ CUT = {
     # are written and checked again, although both runs' inventory rows still classify them CUT.
     "CP-6": ["T6A.6", "T6A.11"],
 }
-RESTORED = {"CP-6": ["T6E.4", "T6E.6", "T6E.7", "T6E.11"]}
+RESTORED = {
+    "CP-6": ["T6E.4", "T6E.6", "T6E.7", "T6E.11"],
+    "CP-2E": ["T2F.4", "T2F.5"],
+}
 # The medium run wrote four CP-1A registers under names, not ids (checked against that run's
 # `<!-- table-id: ... -->` tags: T2D.2, T2D.6, T2D.7, T2D.8).
 MEDIUM_NAMES = {
@@ -243,15 +248,17 @@ def test_every_scope_id_is_cut_in_every_inventory_row_of_both_runs(module):
         assert {cls for _, cls in mine} == {"CUT"}, (module, ident, mine)
 
 
-def test_the_restored_cp6a_registers_were_cut_by_rule_r1_and_are_now_required():
+@pytest.mark.parametrize("module", list(RESTORED))
+def test_the_restored_registers_were_cut_by_rule_r1_and_are_now_required(module):
     """Rule R1 would still cut them (every inventory row CUT); the owner restored them."""
-    rows = [r for r in inventory_rows() if r[1] == "CP-6"]
-    for ident in RESTORED["CP-6"]:
+    rows = [r for r in inventory_rows() if r[1] == module]
+    section = dict(cpos_launch.method_sections(module))[f"{SCOPE_FILE} § {module}"]
+    for ident in RESTORED[module]:
         mine = {r[3] for r in rows if row_id(r[0], r[1], r[2]) == ident}
         assert mine == {"CUT"}, ident
-        assert ident not in CUT["CP-6"]
-        assert ident in cpos_launch.required_registers("CP-6")
-    assert "T6E" not in dict(cpos_launch.method_sections("CP-6"))[f"{SCOPE_FILE} § CP-6"]
+        assert ident not in CUT[module]
+        assert ident in cpos_launch.required_registers(module)
+        assert not re.search(rf"\b{re.escape(ident)}\b", section), ident
 
 
 def test_a_cp6_handoff_without_a_cp6a_register_is_refused_naming_it():
@@ -288,6 +295,10 @@ def test_no_check_reader_or_library_names_a_cut_or_routing_register():
                 "cpos_launch_review.py",
                 "cpos_launch_tables.py",
             )
+        },
+        **{
+            path.name: path.read_text()
+            for path in sorted((ROOT / "src/deploy_workflow").glob("method_scripts*.py"))
         },
         **{
             name: (ROOT / "src/deploy_workflow" / name).read_text()
@@ -397,7 +408,7 @@ REQUIRED = {
     "CP-2": ["T2.1", "T2.10", "T2.12"],
     "CP-2A": ["T2B.1", "T2B.2", "T2B.6", "T2B.7", "T2B.9", "T5.5", "T5.7"],
     "CP-2E": [
-        *("T2F.1", "T2F.3", "T2F.6", "T2F.7"),
+        *("T2F.1", "T2F.3", "T2F.4", "T2F.5", "T2F.6", "T2F.7"),
         *("T2G.1", "T2G.2", "T2G.3", "T2G.4", "T2G.5", "T2G.6", "T2G.7", "T2G.8"),
     ],
     "CP-2G": ["T2H.3", "T2H.4", "T2H.5", "T2H.6", "T2H.7", "T2H.8"],

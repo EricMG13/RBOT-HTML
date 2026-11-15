@@ -764,6 +764,15 @@ CHECKS: dict[str, tuple[str, Callable[[str, Loaded], list[Outcome]]]] = {
 NOTES = {"CP-2D": CP2D_NOTE, "CP-3C": CP3C_NOTE}
 
 
+def register(
+    module: str, script: str, check: Callable[[str, Loaded], list[Outcome]], note: str
+) -> None:
+    """Add a module's check and its note: each later module's mapping is its own sibling module
+    (`method_scripts_<module>.py`), imported at the end of this one."""
+    CHECKS[module] = (script, check)
+    NOTES[module] = note
+
+
 def run(module: str, text: str) -> tuple[Outcome, ...]:
     """Every check the module's method scripts make on this handoff; none for a module without
     one. A script that cannot be loaded or that fails is one "not checked" outcome, never a
@@ -814,3 +823,7 @@ def record(module: str, raw: bytes) -> dict[str, Any] | None:
         "scripts": {path: hashes.get(path) for path in sorted({o.script for o in outcomes})},
         "checks": [asdict(o) for o in outcomes],
     }
+
+
+# The per-module mappings register themselves when imported; imported last, after all they use.
+from deploy_workflow import method_scripts_cp2e  # noqa: F401

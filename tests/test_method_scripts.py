@@ -497,6 +497,203 @@ def test_cp3c_no_horizon_is_refused_by_the_script():
     assert "horizon_years is required" in outcomes[0].reason
 
 
+# --- CP-2E --------------------------------------------------------------------------------------
+
+# SYNTHETIC, USD millions. Unhedged floating-rate debt = gross 800 - hedged 300 = 500; its share
+# of total debt 500 / 2,000 = 0.25, written 25.0%; +100 bps cash-interest impact 500 x 1% = 5.0.
+EXPOSURE = {
+    "Total debt": "USD 2,000m",
+    "Fixed-rate debt": "USD 1,200m",  # a row outside the formulas: read by nothing
+    "Gross floating-rate debt": "USD 800m",
+    "Hedged floating-rate debt": "USD 300m",
+    "Unhedged floating-rate debt": "USD 500m",
+    "Unhedged debt percentage": "25.0%",
+}
+SHOCK = ms.method_scripts_cp2e.SHOCK
+CP2E_FIGURES = ("Unhedged floating-rate debt", "Unhedged debt percentage", SHOCK)
+
+
+def cp2e(rows=None, impact="USD 5.0m", amount="Amount", sensitivities=None):
+    rows = dict(EXPOSURE) if rows is None else rows
+    sensitivities = sensitivities or {
+        SHOCK: impact,
+        "EUR/USD -10%": "USD 12.0m",  # FX: its inputs are free text, so it is not checked
+    }
+    return "\n".join(
+        [
+            "## Request",
+            "SYNTHETIC handoff.",
+            "## Findings",
+            "### Bottom line",
+            "Rate exposure is moderate.",
+            "### T2F.4 — Unhedged Exposure Table",
+            f"| Metric | {amount} | Formula / Source | Status | Credit Implication | Source |",
+            "|---|---|---|---|---|---|",
+            *(f"| {k} | {v} | T2F.2 | Calculated | Synthetic. | S1 |" for k, v in rows.items()),
+            "",
+            "### T2F.5 — Rate Sensitivity Table",
+            (
+                "| Sensitivity | Formula | Source Inputs | Estimated Cash Impact | "
+                "FCF / Liquidity Implication | Status | Source Trace |"
+            ),
+            "|---|---|---|---|---|---|---|",
+            *(
+                f"| {k} | x | T2F.4 | {v} | Lower FCF. | Calculated | S1 |"
+                for k, v in sensitivities.items()
+            ),
+            "## Gaps",
+            "None.",
+        ]
+    )
+
+
+def test_cp2e_all_figures_right():
+    outcomes = ms.run("CP-2E", cp2e())
+    assert statuses(outcomes) == dict.fromkeys(CP2E_FIGURES, "agreed")
+    assert [o.recomputed for o in outcomes] == [500.0, 25.0, 5.0]
+    assert [o.unit for o in outcomes] == ["USD m", "%", "USD m"]
+    assert [o.tolerance for o in outcomes] == pytest.approx([1.0, 0.1, 0.1])
+    assert ms.issues("CP-2E", cp2e()) == ()
+
+
+def test_cp2e_one_figure_wrong():
+    # Unhedged stated 550: the share and the shock are recomputed from gross and hedged, so agree.
+    text = cp2e(EXPOSURE | {"Unhedged floating-rate debt": "USD 550m"})
+    assert [o.status for o in ms.run("CP-2E", text)] == ["disagreed", "agreed", "agreed"]
+    (issue,) = ms.issues("CP-2E", text)
+    assert "T2F.4 row `Unhedged floating-rate debt` states 550 USD m" in issue
+    assert "recomputes 500 USD m" in issue and "rate_fx_sensitivity.py" in issue
+    assert "Gross floating-rate debt - Hedged floating-rate debt" in issue
+
+
+def test_cp2e_a_sign_error_is_a_disagreement():
+    # The impact is a cost of 5.0; written (5.0) it is -5.0 against the script's 5.0.
+    outcomes = ms.run("CP-2E", cp2e(impact="USD (5.0)m"))
+    assert [o.status for o in outcomes] == ["agreed", "agreed", "disagreed"]
+    assert outcomes[2].recomputed == 5.0
+
+
+def test_cp2e_a_wrong_share_and_its_unit():
+    # 20.0% against 25.0%: out by more than 0.1 point. As a decimal (rule 8) 0.25 agrees; a bare 25
+    # is above 1, so not the method's decimal share: not compared.
+    share = "Unhedged debt percentage"
+    assert ms.run("CP-2E", cp2e(EXPOSURE | {share: "20.0%"}))[1].status == "disagreed"
+    assert ms.run("CP-2E", cp2e(EXPOSURE | {share: "0.25"}))[1].status == "agreed"
+    bare = ms.run("CP-2E", cp2e(EXPOSURE | {share: "25"}))[1]
+    assert bare.status == "not checked" and "no `%`" in bare.reason
+
+
+def test_cp2e_a_missing_input_is_not_checked_and_never_zero():
+    rows = {k: v for k, v in EXPOSURE.items() if k != "Hedged floating-rate debt"}
+    outcomes = ms.run("CP-2E", cp2e(rows))
+    assert statuses(outcomes) == dict.fromkeys(CP2E_FIGURES, "not checked")
+    assert "no `Hedged floating-rate debt` row (absent, not zero)" in outcomes[0].reason
+    # Total debt missing: the share is not checked, the other two still are.
+    rows = {k: v for k, v in EXPOSURE.items() if k != "Total debt"}
+    assert [o.status for o in ms.run("CP-2E", cp2e(rows))] == ["agreed", "not checked", "agreed"]
+
+
+def test_cp2e_a_blank_is_missing_and_a_zero_is_a_figure():
+    unknown = {"Hedged floating-rate debt": "[Insufficient Information]"}
+    blank = ms.run("CP-2E", cp2e(EXPOSURE | unknown))
+    assert statuses(blank) == dict.fromkeys(CP2E_FIGURES, "not checked")
+    assert "states no amount for `Hedged floating-rate debt` (missing, not zero)" in blank[0].reason
+    # Hedged 0: unhedged 800 - 0 = 800, share 800 / 2,000 = 40.0%, impact 800 x 1% = 8.0.
+    rows = EXPOSURE | {
+        "Hedged floating-rate debt": "USD 0m",
+        "Unhedged floating-rate debt": "USD 800m",
+        "Unhedged debt percentage": "40.0%",
+    }
+    zero = ms.run("CP-2E", cp2e(rows, impact="USD 8.0m"))
+    assert statuses(zero) == dict.fromkeys(CP2E_FIGURES, "agreed")
+
+
+def test_cp2e_fully_hedged_is_zero_unhedged_and_agreed():
+    # Hedged 800 = gross 800: unhedged 0, share 0 / 2,000 = 0.0%, impact 0.
+    rows = EXPOSURE | {
+        "Hedged floating-rate debt": "USD 800m",
+        "Unhedged floating-rate debt": "USD 0m",
+        "Unhedged debt percentage": "0.0%",
+    }
+    outcomes = ms.run("CP-2E", cp2e(rows, impact="USD 0m"))
+    assert statuses(outcomes) == dict.fromkeys(CP2E_FIGURES, "agreed")
+
+
+def test_cp2e_hedged_above_gross_is_refused_by_the_script_not_clamped_to_zero():
+    # Hedged 900 against gross 800: the perimeters differ or a hedge is double-counted. The script
+    # refuses rather than report zero unhedged exposure; the stated 0 is neither passed nor sent
+    # back: it is recorded as not checked, with the script's reason.
+    rows = EXPOSURE | {
+        "Hedged floating-rate debt": "USD 900m",
+        "Unhedged floating-rate debt": "USD 0m",
+        "Unhedged debt percentage": "0.0%",
+    }
+    outcomes = ms.run("CP-2E", cp2e(rows, impact="USD 0m"))
+    assert statuses(outcomes) == dict.fromkeys(CP2E_FIGURES, "not checked")
+    assert "exceeds gross floating-rate debt" in outcomes[0].reason
+    assert ms.issues("CP-2E", cp2e(rows, impact="USD 0m")) == ()
+
+
+def test_cp2e_a_scale_mismatch_is_not_compared():
+    outcomes = ms.run("CP-2E", cp2e(EXPOSURE | {"Total debt": "USD 2.0bn"}))
+    assert statuses(outcomes) == dict.fromkeys(CP2E_FIGURES, "not checked")
+    assert "different currencies or scales" in outcomes[0].reason
+    shock = ms.run("CP-2E", cp2e(impact="USD 0.005bn"))
+    assert [o.status for o in shock] == ["agreed", "agreed", "not checked"]
+    assert "`USD bn`, T2F.4's amounts in `USD m`" in shock[2].reason
+
+
+def test_cp2e_two_currencies_are_not_compared():
+    outcomes = ms.run("CP-2E", cp2e(EXPOSURE | {"Hedged floating-rate debt": "EUR 300m"}))
+    assert statuses(outcomes) == dict.fromkeys(CP2E_FIGURES, "not checked")
+    assert "EUR 300m" in outcomes[0].reason
+
+
+def test_cp2e_the_unit_may_head_the_column_and_a_cell_without_one_is_unread():
+    bare = {k: v.removeprefix("USD ").removesuffix("m") for k, v in EXPOSURE.items()}
+    headed = ms.run("CP-2E", cp2e(bare, amount="Amount (USD m)"))
+    assert statuses(headed) == dict.fromkeys(CP2E_FIGURES, "agreed")
+    unread = ms.run("CP-2E", cp2e(bare))
+    assert statuses(unread) == dict.fromkeys(CP2E_FIGURES, "not checked")
+    assert "states no currency and scale, nor does its column" in unread[0].reason
+
+
+def test_cp2e_an_absent_register_is_not_checked():
+    no_exposure = cp2e().replace("### T2F.4 — Unhedged Exposure Table", "### Unhedged exposure")
+    reasons = {o.reason for o in ms.run("CP-2E", no_exposure)}
+    assert reasons == {"the handoff has no T2F.4 register"}
+    no_shock = cp2e().replace("### T2F.5 — Rate Sensitivity Table", "### Rate sensitivity")
+    outcomes = ms.run("CP-2E", no_shock)
+    assert [o.status for o in outcomes] == ["agreed", "agreed", "not checked"]
+    assert outcomes[2].reason == "the handoff has no T2F.5 register"
+
+
+def test_cp2e_a_malformed_table_is_not_checked():
+    text = cp2e().replace("| Total debt | USD 2,000m |", "| Total debt | USD 2,000m | extra |")
+    outcomes = ms.run("CP-2E", text)
+    assert statuses(outcomes) == dict.fromkeys(CP2E_FIGURES, "not checked")
+    assert "a row of 7 cells under 6 columns" in outcomes[0].reason
+
+
+def test_cp2e_a_repeated_or_unnamed_shock_row_is_not_checked():
+    twice = {SHOCK: "USD 5.0m", "+100 bps Cash-Interest Impact": "USD 8.0m"}
+    outcome = ms.run("CP-2E", cp2e(sensitivities=twice))[2]
+    assert outcome.status == "not checked" and "has 2 `+100 bps cash-interest impact` rows" in (
+        outcome.reason
+    )
+    other = ms.run("CP-2E", cp2e(sensitivities={"+100 bps on gross debt": "USD 8.0m"}))[2]
+    assert other.status == "not checked" and "has no `+100 bps" in other.reason
+
+
+def test_cp2e_a_repeated_input_row_is_not_checked():
+    text = cp2e().replace(
+        "| Total debt |", "| Hedged floating-rate debt | USD 100m | x | x | x | x |\n| Total debt |"
+    )
+    outcomes = ms.run("CP-2E", text)
+    assert statuses(outcomes) == dict.fromkeys(CP2E_FIGURES, "not checked")
+    assert "two `Hedged floating-rate debt` rows" in outcomes[0].reason
+
+
 # --- the policy -----------------------------------------------------------------------------------
 
 
