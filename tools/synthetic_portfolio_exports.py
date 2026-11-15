@@ -282,6 +282,8 @@ MONITOR_ROWS = (
     "C-12 | Diversification | Min number of obligors | ≥ 5 | Soft | 6 | 1 | Pass",
     "C-13 | Prohibited | Max equity exposure | 0% NAV | Hard | 0.00% | — | Pass",
     "C-14 | Spread | Weighted average spread | Info only | — | 361.25 bps | — | Info",
+    # An exclusion row: no Max or Min, so its 0% limit is a maximum.
+    "C-15 | Exclusions | Excluded sectors (Tobacco, Weapons) | 0% NAV | Hard | 0% | 0% | Pass",
 )
 # The second constraints export: other column names, no ID, source or checked columns.
 FIT_HEADER: Row = [
@@ -329,7 +331,7 @@ def clean(as_of: date = AS_OF) -> Spec:
             ["Positions", "7", ""],
             ["Obligors", "6", ""],
             ["Sectors", "3", ""],
-            ["WA Price", "100.00", ""],
+            ["Weighted Average Price", "100.000", ""],
             ["WA Margin", "361.25 bps", ""],
             ["WA YTM", "8.61%", ""],
             ["Max Single Issuer", "Aster (29.80%)", ""],
@@ -338,7 +340,7 @@ def clean(as_of: date = AS_OF) -> Spec:
             ["1st Lien", "89.90%", ""],
             ["2nd Lien", "10.10%", ""],
             ["Weighted Average Rating (WAR)", "B1 (14.3)", ""],
-            ["WAL", "4.52 yrs", ""],
+            ["Weighted Average Life (yrs)", "4.52", ""],
             [],
             ["B. Rating Distribution"],
             ["Bucket", "% NAV", "Issuers"],
@@ -503,7 +505,7 @@ def _subtotals(spec: Spec) -> None:  # class 4
 
 def _summary_metrics(spec: Spec) -> None:  # class 5
     for metric, value in (
-        ("WA Price", "101.00"),
+        ("Weighted Average Price", "101.00"),
         ("WA YTM", "3.20%"),
         ("WA Margin", "375 bps"),
         ("2nd Lien", "12.00%"),
@@ -608,6 +610,18 @@ def _ambiguous_name(spec: Spec) -> None:
     spec.holdings[3][1] = "Aster Sample LLC"
 
 
+def _brand_names(spec: Spec) -> None:
+    # Three listed names no borrower matches: "Brcknell Group" (Birch's ticker BRCH begins with
+    # its first three letters), "Sanddune Health" (Dune, the first word of Dune Sample Corp, is
+    # in it) and "Quill Holdings" (nothing points to a borrower).
+    for old, new in (
+        ("Birch", "Brcknell Group"),
+        ("Dune Sample", "Sanddune Health"),
+        ("Fern", "Quill Holdings"),
+    ):
+        next(row for row in spec.exposure if row[1:2] == [old])[1] = new
+
+
 def _unclassified_lien(spec: Spec) -> None:
     spec.holdings[2][6] = "Sr. Secd"  # row 4: Birch's ranking without a lien token
 
@@ -635,6 +649,7 @@ BROKEN: dict[str, Callable[[Spec], None]] = {
     "named-largest": _named_largest,
     "constraint-files-differ": _files_differ,
     "ambiguous-name": _ambiguous_name,
+    "brand-names": _brand_names,
     "unclassified-lien": _unclassified_lien,
 }
 

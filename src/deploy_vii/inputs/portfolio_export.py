@@ -1116,9 +1116,26 @@ _METRIC_UNITS: Mapping[str, frozenset[str]] = {
 }
 
 
+_COUNT_KEYS = frozenset({"positions", "obligors", "sectors"})
+
+
 def _fits(key: str, found: Quantity) -> bool:
+    """Whether a stated figure is in the unit its metric is stated in; counts are whole."""
     integral = found.value == found.value.to_integral_value(context=EXACT)
-    return found.unit in _METRIC_UNITS[key] and (_METRIC_UNITS[key] != _COUNT or integral)
+    return found.unit in _METRIC_UNITS[key] and (key not in _COUNT_KEYS or integral)
+
+
+_NAME_UNIT = (("(yrs)", "yrs"), ("(years)", "yrs"), ("(bps)", "bps"), ("(%)", "%"), ("%", "%"))
+
+
+def _unit_from_name(name: str, found: Quantity) -> Quantity:
+    """A bare figure takes the unit its metric's name states: `Weighted Average Life (yrs)` =
+    `4.82` is 4.82 yrs."""
+    if found.unit:
+        return found
+    text = folded(name)
+    unit = next((unit for mark, unit in _NAME_UNIT if mark in text), "")
+    return replace(found, unit=unit) if unit else found
 
 
 def metric_key(name: str) -> str | None:
@@ -1153,6 +1170,8 @@ def summary_claims(export: Export, findings: Findings) -> tuple[dict[str, Claim]
         found, named = quantity(text), ""
         if found is None and (pair := _NAME_AND_FIGURE.match(text)) is not None:
             found, named = quantity(pair["figure"]), pair["name"].strip()
+        if found is not None:
+            found = _unit_from_name(name, found)
         if any(word in folded(name) for word in _AS_OF_FIELDS):
             continue
         if key is None or key in claims or (found is not None and not _fits(key, found)):
@@ -1233,9 +1252,13 @@ def summary_findings(
         elif "table" in how:
             shown = how.get("shown", figure)
             assert callable(shown)
-            findings.table.append(
-                (str(how["table"]), "not stated", _to_places(shown, exact, 2), "")
+            row = stated_in_constraints(export, key, (found, shape)) or (
+                str(how["table"]),
+                "not stated",
+                _to_places(shown, exact, 2),
+                "",
             )
+            findings.table.append(row)
     _sector_table(export, found, findings)
     _named_largest(file, claims, found, findings)
     _internal_findings(file, claims, findings)
@@ -1298,6 +1321,17 @@ def _years(value: Decimal) -> str:
     return f"{plain(value.quantize(SHOWN, context=EXACT))} yrs"
 
 
+def _of_rows(found: Recomputed) -> str:
+    rows = f"{found.positions:,} of {count(found.positions + found.left_out, 'row')}"
+    return f"{rows}; {found.left_out:,} left out" if found.left_out else rows
+
+
+def _yield_note(found: Recomputed) -> str:
+    if found.ytm is None or found.ytm_all is None or found.ytm == found.ytm_all:
+        return ""
+    return f"; without the values outside -10% to 100% it would be {pct(found.ytm)} (not applied)"
+
+
 def _life_note(shape: Profile) -> str:
     if not shape.centuries or shape.life_corrected is None:
         return ""
@@ -1339,8 +1373,8 @@ def _headline(
             {
                 "fix": "count",
                 "shown": _count,
-                "note": f" (rows with a readable par; {count(found.left_out, 'row')} left out)",
-                "table": "positions (rows with a readable par)",
+                "note": f" (rows with a readable par: {_of_rows(found)})",
+                "table": f"positions (rows with a readable par: {_of_rows(found)})",
             },
         ),
         (
@@ -1415,9 +1449,9 @@ def _headline(
         ),
         (
             "ytm",
-            "the weighted average yield to maturity",
-            found.ytm,
-            {"table": "weighted average yield (%)"},
+            "the weighted average yield to maturity (all rows, as given)",
+            found.ytm_all,
+            {"shown": pct, "note": _yield_note(found), "table": "weighted average yield, all rows"},
         ),
         (
             "wal",
@@ -1612,6 +1646,48 @@ def match_issuer(name: str, found: Recomputed) -> tuple[str, list[str]]:
     return "", []
 
 
+def no_match(name: str, found: Recomputed) -> str:
+    """The words for a listed name no borrower matches, with the borrowers it may stand for
+    (`candidates`), which are not matched and not compared."""
+    possible = candidates(name, found)
+    listed = (
+        f"possible, not compared: {'; '.join(possible)}"
+        if possible
+        else "no possible borrower by ticker letters or name word"
+    )
+    return f"no borrower matches {name} by exact name, ticker or prefix ({listed})"
+
+
+def candidates(name: str, found: Recomputed) -> list[str]:
+    """Borrowers a listed name may stand for, though it matches none: one with a ticker that
+    begins with the name's first three letters (a brand held under its acquisition vehicle), or
+    whose first word (four letters or more) occurs in the name (`FooBarco` and `Barco
+    Communications Inc`). A candidate is never a match."""
+    letters = "".join(name_words(name))
+    out: list[str] = []
+    for key in sorted(found.borrowers, key=lambda key: found.names[key]):
+        borrower = found.names[key]
+        ticker = next(
+            (
+                t
+                for t in sorted(found.tickers_of.get(key, set()))
+                if len(letters) >= 3 and t[:3].isalpha() and t[:3].casefold() == letters[:3]
+            ),
+            None,
+        )
+        first = (name_words(borrower) or ("",))[0]
+        if ticker is not None:
+            out.append(f"{borrower} (ticker {ticker} begins with the same three letters)")
+        elif len(first) >= 4 and first in letters and (word := _as_written(first, borrower)):
+            out.append(f"{borrower} ({word} of the borrower's name occurs in the listed name)")
+    return out
+
+
+def _as_written(word: str, text: str) -> str:
+    found = re.search(re.escape(word), text, flags=re.IGNORECASE)
+    return "" if found is None else found.group(0)
+
+
 def holding_section_findings(export: Export, found: Recomputed, findings: Findings) -> None:
     """The report's largest holdings, by issuer: each name is matched to the holdings' borrowers
     (`match_issuer`); a matched issuer's market value, share and positions are compared; an
@@ -1628,9 +1704,7 @@ def holding_section_findings(export: Export, found: Recomputed, findings: Findin
         how, keys = match_issuer(name, found)
         cell = f"row {number}"
         if not keys:
-            problem = (
-                f"no borrower in the holdings matches {name}, listed among the largest holdings"
-            )
+            problem = f"{no_match(name, found)}; listed among the largest holdings"
             findings.add(file, section.title, cell, problem, "absent")
             continue
         if len(keys) > 1:
@@ -1735,6 +1809,7 @@ _CONSTRAINT_COLUMNS = {
 # A cell that says "not applicable" (an em or en dash, a hyphen, n/a): no figure, and no defect.
 NOT_APPLICABLE = frozenset({"—", "–", "-", "n/a", "na", "not applicable"})
 _MAXIMUM = re.compile(r"\b(?:max|maximum|at most|up to|no more than)\b")
+_EXCLUDED = re.compile(r"\b(?:exclu\w*|prohibit\w*|not permitted)")
 _MINIMUM = re.compile(r"\b(?:min|minimum|at least|no less than)\b")
 _NAMED = re.compile(
     r"\(largest:\s*(?P<name>[^)]+)\)|largest (?:issuer|sector|obligor):\s*(?P<after>.+)$"
@@ -1760,6 +1835,7 @@ class Target:
     named: tuple[str, str] | None = None  # ("issuer" or "sector", the name the row states)
     rank: int = 1  # the n-th largest, for a sector row
     note: str = ""  # words after the figures
+    key: str = ""  # the headline figure it is (`_headline`), when it is one
 
 
 def named_in(text: str) -> str | None:
@@ -1803,8 +1879,29 @@ def _lien_share(found: Recomputed, shape: Profile, *keys: str) -> Decimal:
     return share(sum((shape.liens.get(k, Decimal(0)) for k in keys), Decimal(0)), found.value)
 
 
+def _excludes(text: str) -> bool:
+    """An exclusion row: excluded, exclusion, prohibited or not permitted outside its brackets and
+    no Max or Min (`Max single sector (excluding cash)` is a sector limit)."""
+    outside = re.sub(r"\([^)]*\)", " ", text)
+    return bool(_EXCLUDED.search(outside)) and not (
+        _MAXIMUM.search(outside) or _MINIMUM.search(outside)
+    )
+
+
+def _exclusion_target(parameter: str, found: Recomputed, shape: Profile) -> Target | None:
+    """An exclusion row that lists its sectors in brackets (`Excluded sectors (Tobacco,
+    Weapons)`): their combined share, by the Index Sector column. Without a list, nothing."""
+    listed = re.search(r"\(([^)]+)\)", parameter)
+    if listed is None:
+        return None
+    names = [name.strip() for name in re.split(r"[,;]", listed[1]) if name.strip()]
+    held = {folded(sector): value for sector, value in found.sectors.items()}
+    value = sum((held.get(folded(name), Decimal(0)) for name in names), Decimal(0))
+    return Target(f"sectors {', '.join(names)}", share(value, found.value), "%")
+
+
 def _top_ten_target(parameter: str, found: Recomputed, shape: Profile) -> Target | None:
-    return Target("ten largest issuers", found.top_ten(), "%")
+    return Target("ten largest issuers", found.top_ten(), "%", key="top10")
 
 
 def _sector_row_target(parameter: str, found: Recomputed, shape: Profile) -> Target | None:
@@ -1814,17 +1911,18 @@ def _sector_row_target(parameter: str, found: Recomputed, shape: Profile) -> Tar
 def _issuer_target(parameter: str, found: Recomputed, shape: Profile) -> Target | None:
     name, largest = found.largest_issuer()
     stated = named_in(parameter)
-    return Target(f"largest issuer ({name})", largest, "%", ("issuer", stated) if stated else None)
+    named = ("issuer", stated) if stated else None
+    return Target(f"largest issuer ({name})", largest, "%", named, key="largest")
 
 
 def _second_lien_target(parameter: str, found: Recomputed, shape: Profile) -> Target | None:
     keys = ("second", "unsecured") if "unsecured" in folded(parameter) else ("second",)
     words = "second lien" + (" and unsecured" if len(keys) > 1 else "")
-    return Target(words, _lien_share(found, shape, *keys), "%")
+    return Target(words, _lien_share(found, shape, *keys), "%", key="second_lien")
 
 
 def _first_lien_target(parameter: str, found: Recomputed, shape: Profile) -> Target | None:
-    return Target("first lien", _lien_share(found, shape, "first"), "%")
+    return Target("first lien", _lien_share(found, shape, "first"), "%", key="first_lien")
 
 
 def _ccc_target(parameter: str, found: Recomputed, shape: Profile) -> Target | None:
@@ -1840,18 +1938,20 @@ def _unrated_target(parameter: str, found: Recomputed, shape: Profile) -> Target
 def _life_target(parameter: str, found: Recomputed, shape: Profile) -> Target | None:
     if shape.life is None:
         return None
-    return Target("weighted average life", shape.life, "yrs", note=_life_note(shape))
+    return Target("weighted average life", shape.life, "yrs", note=_life_note(shape), key="wal")
 
 
 def _obligor_target(parameter: str, found: Recomputed, shape: Profile) -> Target | None:
-    return Target("obligors by borrower name", Decimal(len(found.borrowers)), "")
+    return Target("obligors by borrower name", Decimal(len(found.borrowers)), "", key="obligors")
 
 
 Builder = Callable[[str, "Recomputed", "Profile"], "Target | None"]
 # What a parameter's words say it measures, tested in this order (the specific before the general:
-# "Aggregate top 10 issuers" is the top ten, not the largest issuer). A CCC row that includes
+# "Aggregate top 10 issuers" is the top ten, not the largest issuer; "Excluded sectors (...)" is
+# the listed sectors, not the largest sector). A CCC row that includes
 # Other is not recomputed: no rule says what Other holds.
 _TARGETS: tuple[tuple[Callable[[str], bool], Builder], ...] = (
+    (lambda t: _excludes(t) and _has(t, "sector", "industr"), _exclusion_target),
     (lambda t: _has(t, "top 10", "top ten", "ten largest"), _top_ten_target),
     (lambda t: _has(t, "sector", "industry"), _sector_row_target),
     (
@@ -1953,13 +2053,14 @@ def _read(item: ConstraintRow, key: str, findings: Findings) -> Quantity | None:
 
 def _with_direction(limit: Quantity, parameter: str) -> Quantity:
     """A limit stated without ≤ or ≥ (e.g. `0% NAV`) takes its direction from the parameter's
-    Max or Min; with neither it stays without one and is reported unread."""
+    Max or Min; with neither, an exclusion (`_excludes`) or a limit of zero is a maximum, "at most
+    0%". Otherwise it stays without one and is reported unread."""
     text = folded(parameter)
     if _MAXIMUM.search(text):
         return replace(limit, operator="<=")
     if _MINIMUM.search(text):
         return replace(limit, operator=">=")
-    return limit
+    return replace(limit, operator="<=") if _excludes(text) or not limit.value else limit
 
 
 def _constraint(item: ConstraintRow, facts: tuple[Recomputed, Profile], findings: Findings) -> bool:
@@ -2018,10 +2119,9 @@ def _against_holdings(
     findings: Findings,
 ) -> None:
     limit, current = stated
-    family_ok = current.percent if goal.unit == "%" else current.unit == goal.unit
     if goal.named is not None:
         _named_finding(item, goal, found, findings)
-    if not family_ok:
+    if not _in_family(current, goal):
         return
     claim = Claim("Constraints", f"row {item.number}", item.cells["current"], current)
     _claim_finding(
@@ -2032,7 +2132,7 @@ def _against_holdings(
         findings,
         fix="share",
         marked=goal.unit != "",
-        shown=pct if goal.unit == "%" else _years if goal.unit == "yrs" else _count,
+        shown=_shown(goal),
         note=goal.note,
     )
     status = item.text("status")
@@ -2042,6 +2142,37 @@ def _against_holdings(
             f"{item.cells['limit']} is breached; the status says {status or 'none'}"
         )
         findings.add(item.file, "Constraints", f"row {item.number}", problem, "breach")
+
+
+def _in_family(current: Quantity, goal: Target) -> bool:
+    return current.percent if goal.unit == "%" else current.unit == goal.unit
+
+
+def _shown(goal: Target) -> Callable[[Decimal], str]:
+    return pct if goal.unit == "%" else _years if goal.unit == "yrs" else _count
+
+
+def stated_in_constraints(
+    export: Export, key: str, facts: tuple[Recomputed, Profile]
+) -> tuple[str, str, str, str] | None:
+    """A reconciliation-table row for a headline figure the summary does not state, from the first
+    constraints row whose parameter gives it: (what, with the file and row; stated; holdings;
+    difference).
+    The row itself is checked with the constraints."""
+    for item in constraint_rows(export):
+        goal = target(item.cells.get("parameter", ""), *facts)
+        current = quantity(item.text("current"))
+        if goal is None or goal.key != key or current is None or not _in_family(current, goal):
+            continue
+        places = current.places + 2
+        gap = EXACT.abs(EXACT.subtract(current.value, goal.value))
+        return (
+            f"{goal.what} (constraints: {item.file}, row {item.number})",
+            item.cells["current"],
+            _to_places(_shown(goal), goal.value, places),
+            _to_places(_shown(goal), gap, places),
+        )
+    return None
 
 
 def _unit_text(goal: Target) -> str:
@@ -2083,7 +2214,7 @@ def _issuer_named(name: str, found: Recomputed) -> str:
     how, keys = match_issuer(name, found)
     largest, value = found.largest_issuer()
     if not keys:
-        return f"names {name} as the largest issuer; no borrower in the holdings matches it"
+        return f"names {name} as the largest issuer; {no_match(name, found)}"
     if len(keys) > 1:
         return ""  # ambiguous: reported where the largest holdings are matched
     if found.names[keys[0]] != largest:
