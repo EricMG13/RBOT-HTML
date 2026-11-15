@@ -188,31 +188,13 @@ def test_a_missing_brand_file_fails_at_start(tmp_path, monkeypatch):
         make_server(tmp_path, "127.0.0.1", 0)
 
 
-def _tree(base: Path, *parts: str) -> Path:
-    web = base.joinpath(*parts)
-    (web / "brand").mkdir(parents=True)
-    (web / "brand.css").write_text("x")
-    return web
+def test_brand_files_come_from_the_installed_credit_os_package():
+    import credit_os
 
-
-def test_brand_files_are_found_in_the_repository_layout(tmp_path):
-    web = _tree(tmp_path, "apps", "issuer-library", "credit_os", "web")
-    assert service.find_brand(tmp_path) == web
-
-
-def test_brand_files_are_found_in_the_packaged_layout(tmp_path):
-    web = _tree(tmp_path, "credit_os", "web")  # engine/credit_os/web beside engine/src
-    assert service.find_brand(tmp_path) == web
-
-
-def test_brand_lookup_with_no_candidate_names_the_first_so_start_fails_loudly(tmp_path):
-    assert service.find_brand(tmp_path) == (
-        tmp_path / "apps" / "issuer-library" / "credit_os" / "web"
-    )
-
-
-def test_the_real_layout_has_the_brand_files():
-    assert (service.find_brand(Path(service.__file__).resolve().parents[3]) / "brand.css").is_file()
+    brand = service.find_brand()
+    assert brand == Path(credit_os.__file__).resolve().parent / "web"
+    assert brand == Path(__file__).resolve().parents[1] / "apps/issuer-library/credit_os/web"
+    assert (brand / "brand.css").is_file() and (brand / "brand" / "symbol.svg").is_file()
 
 
 def test_name_then_feed(svc):

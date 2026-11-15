@@ -192,7 +192,7 @@ script, the Credit OS store and page parts; `Run workflow.cmd`, `Update library.
 `Start run page.cmd` and `Smoke-test.ps1`. It ships one ruling, the run page's standing one;
 any other paid run needs a ruling written in `engine\docs\rulings`. It ships no Copilot SDK or
 runtime either, so run the Copilot configurations from a checkout. The bundled Python's
-`python313._pth` lists `engine\src`, because the embeddable Python ignores `PYTHONPATH`.
+`python313._pth` lists `engine\src` and `engine`, because the embeddable Python ignores `PYTHONPATH`.
 
 The package is a pilot build, not a signed enterprise release, and it has not been run on Windows.
 Run `Smoke-test.ps1` on the target host as acceptance: it checks the bundled Python, an offline run

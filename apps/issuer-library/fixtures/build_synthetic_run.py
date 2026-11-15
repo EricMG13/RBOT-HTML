@@ -15,14 +15,11 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import sys
 from pathlib import Path
 from typing import Any
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-if str(ROOT / "src") not in sys.path:
-    sys.path.insert(0, str(ROOT / "src"))
 
 from deploy_workflow.owners.cpos import request_fingerprint
 from deploy_workflow.owners.cpos_launch import METHOD_MARK, method_text

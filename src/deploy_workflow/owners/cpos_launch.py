@@ -3823,19 +3823,17 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def update_library_at(workspace: Path) -> Any:
-    """Rebuild ``workspace/library`` with the library app's ``update_library``, loaded by file
-    location: the checkout keeps it in ``apps/issuer-library``, the Windows package beside the
-    engine's ``src``. Returns None, after a note, when neither exists."""
-    for path in (ROOT / "update_library.py", ROOT / "apps/issuer-library/update_library.py"):
-        if path.is_file():
-            spec = importlib.util.spec_from_file_location("update_library", path)
-            if spec is None or spec.loader is None:
-                raise ImportError(f"cannot load {path}")
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-            return module.update_library(workspace)
-    print(f"Library not updated: update_library.py not found. {_library_command(workspace)}")
-    return None
+    """Rebuild ``workspace/library`` with the library app's ``update_library`` module: a checkout
+    installs it (the issuer-library package), the Windows package lists its folder in the bundled
+    Python's path file. Returns None, after a note, when it is not installed."""
+    try:
+        module = importlib.import_module("update_library")
+    except ModuleNotFoundError as error:
+        if error.name != "update_library":
+            raise
+        print(f"Library not updated: update_library.py not found. {_library_command(workspace)}")
+        return None
+    return module.update_library(workspace)
 
 
 def _library_command(workspace: Path) -> str:

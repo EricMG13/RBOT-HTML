@@ -3,7 +3,6 @@ are written here from the fixture text, not read back from the code under test."
 
 import hashlib
 import json
-import sys
 from pathlib import Path
 
 from library_fixtures import make_run, method
@@ -12,7 +11,6 @@ from deploy_workflow.credit_os_catalogue import catalogue
 from deploy_workflow.library_index import Library, build_library
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "apps/issuer-library"))
 from credit_os import store
 
 LEVERAGE = "| FY2024 | 6.57 | 4.93 | x | Same basis; pre-dividend cash. D1, D3. |"

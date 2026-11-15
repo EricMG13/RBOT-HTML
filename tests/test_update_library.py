@@ -2,7 +2,6 @@
 
 import json
 import re
-import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -11,7 +10,6 @@ import test_changes as seam
 from library_fixtures import make_run, method, with_changes, without_report
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "apps/issuer-library"))
 import update_library
 
 from deploy_workflow.changes_check import cp8_issues

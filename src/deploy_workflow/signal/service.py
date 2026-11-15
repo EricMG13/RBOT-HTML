@@ -82,19 +82,16 @@ WILDCARD_MESSAGE = (
 _WEB = Path(__file__).resolve().parent / "web"
 
 
-def find_brand(base: Path) -> Path:
-    """The folder holding brand.css, fonts and brand/, under ``base`` (the folder that holds src/).
+def find_brand() -> Path:
+    """The folder holding brand.css, fonts and brand/: ``web`` in the installed ``credit_os``
+    package (the issuer library). Without that package the import fails by name; with it and a
+    missing file, start-up names the file."""
+    from importlib.resources import files  # Kept to this function: the only package-data lookup.
 
-    The repository keeps it in apps/issuer-library/credit_os/web; the package puts credit_os/web
-    beside src/. With neither, the repository path is returned and start-up names missing files."""
-    candidates = [
-        base / "apps" / "issuer-library" / "credit_os" / "web",
-        base / "credit_os" / "web",
-    ]
-    return next((path for path in candidates if (path / "brand.css").is_file()), candidates[0])
+    return Path(str(files("credit_os").joinpath("web")))
 
 
-_BRAND = find_brand(Path(__file__).resolve().parents[3])
+_BRAND = find_brand()
 PAGE = _WEB / "index.html"
 _HTML = "text/html; charset=utf-8"
 _CSS = "text/css; charset=utf-8"
