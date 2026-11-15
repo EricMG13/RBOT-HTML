@@ -38,6 +38,9 @@ IMPORT_CONTRACTS = ".importlinter"
 BROKEN = re.compile(r"^(?P<name>.+) BROKEN(?: \(\d+ ignored imports?\))?$", re.MULTILINE)
 LINT_IMPORTS = "import sys; from importlinter.cli import lint_imports_command as c; sys.exit(c())"
 MOVED_RUN = 3  # fewest consecutive lines, the same in both files, that count as a moved block
+# The method archive: byte copies of predecessor methods' scripts, each pinned by its sha256 in
+# the archive's manifest.json and never edited (AGENTS.md), so not code this gate can change.
+ARCHIVE = "docs/reuse/selected-methods/"
 
 
 @dataclass(frozen=True)
@@ -80,7 +83,7 @@ def changed_files(root: Path, base: str) -> list[str]:
     tracked = git(root, "diff", "--name-only", "-z", "--diff-filter=ACMR", base, "--", "*.py")
     untracked = git(root, "ls-files", "--others", "--exclude-standard", "-z", "--", "*.py")
     names = set((tracked + untracked).split("\0")) - {""}
-    return sorted(name for name in names if (root / name).is_file())
+    return sorted(n for n in names if (root / n).is_file() and not n.startswith(ARCHIVE))
 
 
 def hunk_lines(diff: str, side: int) -> set[int]:

@@ -33,7 +33,7 @@ from pydantic import Field, TypeAdapter, model_validator
 from deploy_vii.contracts import Contract, Hash, Run, View
 from deploy_vii.registry import dependencies, plan
 from deploy_vii.render import render
-from deploy_workflow import platform_io
+from deploy_workflow import method_scripts, platform_io
 from deploy_workflow.changes import (
     DELIVERED_WHOLE,
     PACK_NAME,
@@ -227,6 +227,15 @@ def _retain_review(path: Path, raw: bytes) -> None:
     _put(path, raw)
 
 
+def _retain_method_checks(path: Path, task: HandoffTask, response: bytes) -> None:
+    """Beside an attempt's review, every check the module's method scripts made on its response
+    (agreed, disagreed or not checked, with the reason), for the library's Evidence page; nothing
+    for a module without one. Kept like a review: a recheck that differs is kept beside it."""
+    record = method_scripts.record(task.module_id, response)
+    if record is not None:
+        _retain_review(path, json.dumps(record, sort_keys=True, indent=2).encode())
+
+
 def request_fingerprint(inputs: Mapping[str, object]) -> str:
     """The name of a module's request folder: the sha256 of everything the request was given,
     instructions included. Each ``<n>.request.json`` there holds these inputs plus its attempt and
@@ -285,6 +294,7 @@ def _handoff(  # noqa: PLR0913 - existing signature
         feedback = _checked_handoff(current, response, check)
         review = {"response_sha256": _sha(response), "issues": feedback}
         _retain_review(review_path, json.dumps(review, sort_keys=True, indent=2).encode())
+        _retain_method_checks(folder / f"{attempt}{method_scripts.RECORD_SUFFIX}", task, response)
         if not feedback:
             return response, str(response_path.relative_to(directory))
         if retained is not None:

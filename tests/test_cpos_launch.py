@@ -17,6 +17,7 @@ import pytest
 
 from deploy_vii.registry import plan
 from deploy_vii.report_view import ReportView
+from deploy_workflow import method_scripts
 from deploy_workflow.context import Cp3Mode
 from deploy_workflow.handoff_delivery import (
     HEADINGS,
@@ -8613,3 +8614,101 @@ def test_only_cp6_owes_the_posture_section():
     for module in METHODS:
         if module != "CP-6":
             assert cpos_launch.posture_issues(module, "## Findings\n") == (), module
+
+
+# SYNTHETIC registers in the transport layout; the expected values are worked by hand in
+# tests/test_method_scripts.py (USD m: 400 + 85 - 15 - 42 - 8 - 55 - 60 - 12 + 7 = 300).
+T2E5 = """### T2E.5 - 12-Month Liquidity Bridge
+
+| Bridge Item | Amount | Currency and Scale | Status | Source Trace |
+|---|---|---|---|---|
+| Beginning accessible liquidity | 400 | USD m | Calculated | S1 |
+| Operating cash inflow/outflow | 85 | USD m | Reported | S1 |
+| Working-capital impact | -15 | USD m | Reported | S1 |
+| Cash interest | 42 | USD m | Reported | S1 |
+| Cash taxes | 8 | USD m | Reported | S1 |
+| Mandatory capex | 55 | USD m | Reported | S1 |
+| Debt amortization/maturities | 60 | USD m | Reported | S1 |
+| Other cash uses | 12 | USD m | Reported | S1 |
+| Committed inflows | 7 | USD m | Reported | S1 |
+| Ending accessible liquidity | {ending} | USD m | Calculated | S1 |
+
+"""
+
+# SYNTHETIC, EUR m, horizon 2 years: due 300 + 450 = 750; liquidity 220 + (400 - 150) = 470;
+# gap 750 - (470 + 80) = 200 (worked in tests/test_method_scripts.py).
+FUNDING = """### T3D.2 - Maturity Wall and Refinancing Register
+
+| Instrument | Amount | Currency | Scale | Years to Maturity | Source Trace |
+|---|---|---|---|---|---|
+| Term Loan A | 300 | EUR | m | 1.5 | S1 |
+| Senior Notes | 450 | EUR | m | 2.0 | S1 |
+| Term Loan B | 900 | EUR | m | 5.0 | S1 |
+
+### Funding gap
+
+| Line | Amount | Drawn | Years | Committed | Currency | Scale |
+|---|---|---|---|---|---|---|
+| Horizon | — | — | 2 | — | — | — |
+| Cash | 220 | — | — | — | EUR | m |
+| Facility: RCF | 400 | 150 | 3.0 | Yes | EUR | m |
+| Forecast free cash flow | 80 | — | — | — | EUR | m |
+| Maturities due | 750 | — | — | — | EUR | m |
+| Available liquidity | 470 | — | — | — | EUR | m |
+| Funding gap | {ending} | — | — | — | EUR | m |
+
+"""
+SCRIPT_TABLES = {"CP-2D": (T2E5, "300", "310"), "CP-3C": (FUNDING, "200", "180")}
+
+
+@pytest.mark.parametrize("module", ["CP-2D", "CP-3C"])
+def test_the_checker_runs_the_method_script_and_sends_back_only_a_disagreement(tmp_path, module):
+    (tmp_path / "texts").mkdir()
+    assert method_scripts.NOTES[module] in all_texts(tmp_path / "texts")[module]
+    prepared, task, context = good_task(tmp_path, module, "credit_snapshot")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    check = checker(prepared.layout)
+    base = set(_checked_handoff(task, raw.encode(), check))
+    # Nothing stated: every figure is not checked and nothing is sent back for it.
+    assert not any("recomputes" in issue for issue in base)
+    tables, good, bad = SCRIPT_TABLES[module]
+    assert raw.count("\n## Calculations") == 1  # the registers go last in `## Findings`
+    right = raw.replace("\n## Calculations", "\n" + tables.format(ending=good) + "## Calculations")
+    wrong = raw.replace("\n## Calculations", "\n" + tables.format(ending=bad) + "## Calculations")
+    # CP-2D: Ending agreed, Months to Empty not checked (no T2E.6 here); CP-3C: all three agreed.
+    assert "agreed" in {o.status for o in method_scripts.run(module, right)}
+    assert "disagreed" not in {o.status for o in method_scripts.run(module, right)}
+    assert set(_checked_handoff(task, right.encode(), check)) - base == set()
+    added = set(_checked_handoff(task, wrong.encode(), check)) - base
+    (disagreed,) = [o for o in method_scripts.run(module, wrong) if o.status == "disagreed"]
+    assert added == {method_scripts.issue(disagreed)}
+    assert disagreed.stated == bad and f"recomputes {good} " in method_scripts.issue(disagreed)
+
+
+def test_each_attempt_keeps_its_method_script_checks_beside_its_review(tmp_path):
+    _, task, _ = good_task(tmp_path, "CP-2D", "credit_snapshot")
+    shell = "## Request\n\n## Sources\n\n## Findings\n\n{}## Calculations\n\n## Gaps\n\n"
+    shell += "## Next module\n"
+    first = shell.format(T2E5.format(ending="310")).encode()
+    second = shell.format(T2E5.format(ending="300")).encode()
+    answers = iter((first, second))
+
+    def check(_task, raw):
+        return method_scripts.issues("CP-2D", raw.decode())
+
+    _handoff(task, tmp_path / "run", lambda _task: next(answers), check, 2)
+    (folder,) = (tmp_path / "run/requests/CP-2D").iterdir()
+    records = [json.loads((folder / f"{n}.method-checks.json").read_text()) for n in (1, 2)]
+    assert [r["response_sha256"] for r in records] == [
+        hashlib.sha256(first).hexdigest(),
+        hashlib.sha256(second).hexdigest(),
+    ]
+    assert [[c["status"] for c in r["checks"]] for r in records] == [
+        ["disagreed", "not checked"],  # no T2E.6: Months to Empty is not checked
+        ["agreed", "not checked"],
+    ]
+    # A module without a method-script check keeps its review only.
+    (tmp_path / "other").mkdir()
+    _, other, _ = good_task(tmp_path / "other", "CP-1", "credit_snapshot")
+    _handoff(other, tmp_path / "run1", lambda _task: shell.format("").encode(), lambda *_: (), 1)
+    assert not list((tmp_path / "run1").rglob("*.method-checks.json"))

@@ -31,7 +31,7 @@ from typing import Any
 from deploy_vii.contracts import DEACTIVATED_MESSAGE, DEACTIVATED_PATHWAYS, PATHWAY_MODULES, Run
 from deploy_vii.registry import dependencies, modules, plan
 from deploy_vii.report_view import _spec_of, pathways
-from deploy_workflow import platform_io
+from deploy_workflow import method_scripts, platform_io
 from deploy_workflow.changes import (
     DELIVERED_WHOLE,
     PACK_NAME,
@@ -1076,6 +1076,7 @@ def _prepare(  # noqa: PLR0913, PLR0915 - `prepare`'s body: one keyword per sett
         ),
         ("CP-6", CP6A_BLOCK, True),
         ("CP-6", DEEP_DEBATE_BLOCK, options.cp6_deep_debate),
+        *((m, note, True) for m, note in method_scripts.NOTES.items()),
         (
             "CP-8",
             CP8_BLOCK.format(prior=describe_run(prior)) if prior is not None else "",
@@ -1265,6 +1266,7 @@ def checker(layout: MarkdownLayout) -> Check:
         issues += _owned_issues(task.module_id, routes, text)
         issues += register_issues(task.module_id, text)
         issues += posture_issues(task.module_id, text)
+        issues += method_scripts.issues(task.module_id, text)
         return (*issues, *_forecast_issues(task, text))
 
     return check
