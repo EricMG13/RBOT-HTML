@@ -539,7 +539,9 @@ def test_a_short_body_is_a_refusal_not_a_traceback(svc, monkeypatch, caplog):
     head = f"POST /api/me HTTP/1.1\r\nHost: {host}\r\nOrigin: http://{host}\r\n"
     sock = _raw(svc, (head + 'Content-Length: 50\r\n\r\n{"na').encode())
     sock.settimeout(10)
-    reply = sock.recv(4096)
+    reply = b""  # the head and the body are separate writes: read to the close, not one packet
+    while chunk := sock.recv(4096):
+        reply += chunk
     sock.close()
     time.sleep(0.2)
     assert reply.split(b"\r\n")[0].split()[1] == b"400"
