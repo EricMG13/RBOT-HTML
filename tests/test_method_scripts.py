@@ -1775,6 +1775,37 @@ def test_cp1_the_rows_formula_chooses_ratio_or_growth():
     assert cp1_by(cp1(pct))["EBITDA margin (FY2024)"].status == "disagreed"
 
 
+# Answer key (brief task-A, live defect 2026-11-15): a change over prior is a ratio unless the
+# Formula says - 1. (Formula, numerator, denominator, stated, status).
+CP1_CHANGE_KEY = [
+    ("Sales change / prior sales", "1355", "6585", "0.21", "agreed"),
+    ("EBITDA change / prior EBITDA", "665", "3148", "0.21", "agreed"),
+    ("Current sales / prior sales \u2212 1", "7940", "6585", "0.21", "agreed"),
+    ("Current EBITDA / prior EBITDA \u2212 1", "3813", "3148", "0.21", "agreed"),
+    ("Sales change / prior sales", "1355", "6585", "0.31", "disagreed"),
+    ("Current sales / prior sales \u2212 1", "7940", "6585", "1.21", "disagreed"),
+    ("Current sales / prior sales - 1", "7940", "6585", "20.6%", "agreed"),
+]
+
+
+@pytest.mark.parametrize(("formula", "n", "d", "stated", "status"), CP1_CHANGE_KEY)
+def test_cp1_a_change_over_prior_is_a_ratio_unless_the_formula_says_minus_one(
+    formula, n, d, stated, status
+):
+    row = {"Revenue growth": (formula, n, d, stated)}
+    assert cp1_by(cp1(row))["Revenue growth (FY2024)"].status == status
+
+
+def test_cp1_the_rejected_live_draft_has_no_disagreed_t49_row():
+    rows = {
+        "Revenue growth": ("Sales change / prior sales", "1355", "6585", "0.21"),
+        "EBITDA growth": ("EBITDA change / prior EBITDA", "665", "3148", "0.21"),
+    }
+    assert {o.status for o in cp1_by(cp1(rows)).values() if o.figure.endswith("(FY2024)")} == {
+        "agreed"
+    }
+
+
 def test_cp1_a_figure_wrong_by_more_than_the_rounding_bound_still_disagrees():
     # 25,068 / 3,813 = 6.5743; bound 0.01 + (0.5 + 6.574 x 0.5) / 3,813 = 0.01099: 6.58 agrees,
     # 6.59 (out by 0.0157) does not.
