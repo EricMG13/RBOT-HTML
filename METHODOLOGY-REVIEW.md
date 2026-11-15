@@ -191,12 +191,12 @@ An S classification does not mean the code is absent or that the model failed.
 | CP-2G | S. Three-year annual base/downside calculations and upstream bindings. | Explicitly disclose no new borrowing/refinancing and combined tax/working-capital assumptions; do not describe the slice as a full financing model. |
 | CP-2H | S. Current owner-core route exists and is imported; synthetic agency/forecast cases. | Retain implemented trigger checks. The old generic-registry failure is not a current missing-owner defect. |
 | CP-3 / CP-3A / CP-3B | S. Relative-value owner and report prose exist; synthetic one-instrument example. | Do not equate a trivial single-instrument fixture with validated security selection. Wider comparison remains unproved. |
-| CP-3C | S. Refinancing owner consumes CP-2D in scripted tests. | Preserve resource/funding calculations; optional stress/legal/market analysis is only partially consumed. |
+| CP-3C | S. Refinancing owner consumes CP-2D in scripted tests. CP-OS sends it the Deploy V skill in `relative_value`, `covenant_refinancing` and, from 2026-11-15, the full credit assessment (`credit_snapshot`, with its required CP-2D); offline proof only for that pathway. | Preserve resource/funding calculations; optional stress/legal/market analysis is only partially consumed. |
 | CP-3D | S. Market-risk owner and report mapping exist over invented dealer quotes. | Retain observed-versus-indicative distinctions; unsigned numeric inputs limit negative-rate/spread cases. |
 | CP-4 / CP-4A / CP-4B / CP-4D | S. Current legal owner has executed synthetic positive/gap/definition cases. | Keep clause/definition evidence checks; actual legal interpretation quality and onward use remain unverified. |
 | CP-4C | S. Scripted waterfall runs bind CP-2A, CP-2G and CP-4. | Preserve scenario and priority assumptions. Synthetic recoveries are not issuer recovery conclusions. |
 | CP-5 / CP-5A | S. Synthetic support judgments exercise settlement; targeted tests passed in this review. | Separate mechanical checks from model assessment of support/contradiction. That judgment quality is unmeasured. |
-| CP-6 / CP-6A | S. Committee owner, renderer and promotion-test path exist; authored Neutral/Medium and no-market-evidence examples. | Keep action bias separate from confidence. Do not claim full historical bull/bear/committee breadth from the shorter slice. |
+| CP-6 / CP-6A | S. Committee owner, renderer and promotion-test path exist; authored Neutral/Medium and no-market-evidence examples. From 2026-11-15 CP-OS asks CP-6 for CP-6A's registers (T6E.4, T6E.6, T6E.7, T6E.11) and its posture section and checks both; offline proof only. | Keep action bias separate from confidence. Do not claim full historical bull/bear/committee breadth from the shorter slice. CP-6A's sizing rests on mandate and exposure data no pathway but `portfolio_decision` asks for. |
 | CP-8 | S. Current code and targeted tests confirm the single-decision pathway. | Calibration needs three decisions, but this step accepts one; outcomes are always Interim. Narrow the capability description or extend inputs if full calibration is requested. |
 | CP-L10 / CP-L20 / CP-L23 / CP-L30 / CP-L40 | S. Executed synthetic change-screen owner; only TL10.1–TL10.5 produced. | Expose the bounded screen. The other aliases do not establish their full historical analytical coverage. |
 | CP-MODEL | D. HTML/calculation JSON and bounded synthetic Model/chart delivery evidence. | Reuse HTML Model, charts and calculation JSON. Workbook output is excluded; Excel is an analytical input format only. |
@@ -860,6 +860,24 @@ no longer asks for T7 and T8. This is a documented scope reduction of Deploy V's
 reader passage and check is as before. Selected source revision: the ruling above. Limit: offline
 proof only until a paid before and after run and the reader check.
 
+**Full credit assessment gains CP-3C and CP-6A (2026-11-15; owner: "module cp-6A within cp-6 should
+be fully functional and cp-3c. they are part of full credit assessment"; ruling
+`docs/rulings/2026-11-15-full-assessment-cp3c-cp6a.md`).** No method text is newly selected and no
+archived method file changed. CP-3C runs the selection of 2026-11-13 (Deploy V `c4d2e35` skill,
+runbook and step bundle, with the r17 `Scale` edit from caos `dfff264`) and its required CP-2D the
+caos `dfff264` texts, now in `credit_snapshot` too. CP-6A runs the method CP-6 was already sent: the
+SKILL (cp-os `a31f3f5` plus the caos `99069f83` ordering edits) and `REF_CP-6A_STEPS.md` (cp-os,
+revision not recorded, sha256 `9e36ee1bc5ed`). What changes is the 2026-11-13 scope reduction, partly
+reversed: the project-written `CPOS_REGISTER_SCOPE.md § CP-6` no longer names T6E.4, T6E.6, T6E.7
+and T6E.11, so CP-6 writes them and the presence check requires them; T6A.6 and T6A.11 stay cut. A
+CP-OS block tells CP-6 where its Final Sizing Posture, Exact Portfolio Constraint and CIO memo go
+(`### Portfolio posture`, the method's formulation first), and acceptance refuses a handoff without
+them. Not selected and still unavailable: `REF_CP-6A_Portfolio_Debate_Inputs.xlsx` (a deployment
+placeholder, never archived); the full assessment collects no portfolio workbook, so CP-6A runs with
+mandate and exposure data missing and its own rules then withhold a sized posture. CP-3's portfolio
+fit registers (CP-3B, T3C.1 to T3C.3 and T3C.5 to T3C.9), which CP-6A's gate names, stay cut.
+Selected source revision: the ruling above. Limit: offline proof only until a paid run.
+
 ## Appendix: selected method files
 
 One row per file CP-OS sends as a module's method (`METHODS` in
@@ -955,4 +973,4 @@ on 2026-11-15 were fixed that day (owner: "fix"); a difference accepted later go
 | CP-DR | `docs/reuse/selected-methods/skills/cp-dr-deep-research/references/REF_CP-DR_STEPS.md` | cp-os | yes | b57a344, c746ad67 | `cab435618c7f` |
 | CP-DR | `docs/reuse/selected-methods/skills/cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md` | cp-os | no | b57a344 | `5028a6476cdf` |
 | shared | `docs/reuse/selected-methods/CANON_SHARED.md` | cp-os | no | b57a344 | `1ab484c5072a` |
-| shared | `docs/reuse/selected-methods/CPOS_REGISTER_SCOPE.md` | this repo | no | this repo | `a37ec764e687` |
+| shared | `docs/reuse/selected-methods/CPOS_REGISTER_SCOPE.md` | this repo | no | this repo | `617c887c18dd` |

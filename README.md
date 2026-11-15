@@ -161,7 +161,10 @@ the run uses it, and a later step stays locked while an earlier one has an error
 2. **Purpose.** Pick one of `credit_snapshot`, `earnings_update`, `relative_value`,
    `covenant_refinancing`, `distressed_restructuring`, `portfolio_decision` or
    `lite_credit_assessment` (the Lite credit assessment: CP-0, CP-1, CP-1A, CP-2 and CP-2A; no
-   forecast is published). `credit_snapshot` is titled "Full credit assessment". The short credit
+   forecast is published). `credit_snapshot` is titled "Full credit assessment": CP-0, CP-1, CP-1A,
+   CP-DR, CP-2, CP-2A, CP-2D, CP-2E, CP-2G, CP-4, CP-3C, CP-3, CP-5 and CP-6 with the forecast;
+   CP-6 runs its portfolio debate (CP-6A) on every run (owner, 2026-11-15, ruling
+   `docs/rulings/2026-11-15-full-assessment-cp3c-cp6a.md`). The short credit
    snapshot (`short_snapshot`, CP-0, CP-1 and one CP-L10 page) is deactivated: it is not offered and
    a new run of it is refused; the lite credit assessment is the short option. Each row lists its
    modules. Pick Basic,

@@ -201,6 +201,15 @@ def _sentence_lines(body: list[tuple[int, str]]) -> list[_Line]:
     return out
 
 
+def findings_sentences(text: str, title: str) -> list[str] | None:
+    """The sentence text of the `## Findings` H3 section titled `title` (repeats pooled), one entry
+    per non-blank line, list markers and Basis lines removed; None when there is no such section."""
+    bodies = [s.body for s in _findings_sections(text) or [] if s.title == title]
+    if not bodies:
+        return None
+    return [line.text for body in bodies for line in _sentence_lines(body) if line.text.strip()]
+
+
 def _limitation_items(text: str) -> list[tuple[int, str]]:
     """(first line number, text) of every item of `### Limitations`, its Basis line dropped."""
     items: list[tuple[int, list[str]]] = []

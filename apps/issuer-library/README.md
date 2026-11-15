@@ -37,6 +37,12 @@ Issuer library, Run activity and Search. Routes are hash routes.
 | Evidence | `#W-Evidence` | Tabs: Summary, Trace, Sources, Calculations, Gaps, Registers, Run record; the handoffs, each downloadable |
 | Run activity | `#CP-OS/activity` | Runs by state, with labelled, connected steps |
 
+**Full credit assessment.** Since 2026-11-15 its runs hold Refinancing & LME (CP-3C) and Liquidity
+(CP-2D), each on its own module page and in Overview, and the Committee decision page (CP-6) holds
+the portfolio debate: its Portfolio posture section and its cross-examination, scoring and decision
+tables as findings; its gaps ledger is on Evidence (ruling
+`docs/rulings/2026-11-15-full-assessment-cp3c-cp6a.md`). No page code changed for this.
+
 **Where audit material is drawn.** Source references, file names, hashes, ids, calculation ids,
 registers, gap ledgers and run codes are drawn only on the Evidence page and in the trace drawer.
 Every other page shows findings and one trace control per paragraph, row or figure; the control opens

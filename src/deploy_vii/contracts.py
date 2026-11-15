@@ -50,9 +50,11 @@ PathwayId = Literal[
 # invariant: the lite credit assessment deliberately holds Model-owned blocks, routed to CP-1,
 # without CP-MODEL (ruling 2026-11-13).
 _PRESETS: dict[PathwayId, tuple[str, ...]] = {
+    # Owner, 2026-11-15: CP-3C is part of the full credit assessment; it requires CP-2D (ruling
+    # 2026-11-15-full-assessment-cp3c-cp6a).
     "credit_snapshot": (
-        *("CP-0", "CP-1", "CP-MODEL", "CP-1A", "CP-DR", "CP-2", "CP-2A", "CP-2E", "CP-2G"),
-        *("CP-4", "CP-3", "CP-5", "CP-6"),
+        *("CP-0", "CP-1", "CP-MODEL", "CP-1A", "CP-DR", "CP-2", "CP-2A", "CP-2D", "CP-2E"),
+        *("CP-2G", "CP-4", "CP-3C", "CP-3", "CP-5", "CP-6"),
     ),
     "earnings_update": ("CP-0", "CP-1", "CP-MODEL", "CP-1B", "CP-1D", "CP-DR", "CP-2E", "CP-5"),
     "relative_value": (
