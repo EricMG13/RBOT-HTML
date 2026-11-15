@@ -50,12 +50,8 @@ ignore_imports =
     ; Index reads the launcher's METHODS, METHOD_MARK and method texts: move the method definitions
     ; out of owners.cpos_launch into a module below delivery.
     deploy_workflow.library_index -> deploy_workflow.owners.cpos_launch
-    ; Handoff executor reads the test configurations: move CONFIGS below model_testing (into model).
-    deploy_workflow.model.handoff -> deploy_workflow.model_testing.configs
     ; Handoff executor calls CP-OS's _checked_handoff and types HandoffTask: pass the check in.
     deploy_workflow.model.handoff -> deploy_workflow.owners.cpos
-    ; Handoff executor takes the pathway's _single_writer lock: move the lock into model.
-    deploy_workflow.model.handoff -> deploy_workflow.run_pathway
 
 [importlinter:contract:owners-listed]
 ; Membership only: the contract above orders the owners modules. This one is exhaustive over the

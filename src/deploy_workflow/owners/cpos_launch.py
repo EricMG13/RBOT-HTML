@@ -69,6 +69,7 @@ from deploy_workflow.model.adapter import (
     check_ruling,
 )
 from deploy_workflow.model.budget import Budget
+from deploy_workflow.model.configs import CONFIGS
 from deploy_workflow.model.handoff import (
     BYTES_PER_TOKEN_BOUND,
     REQUEST_OVERHEAD,
@@ -89,7 +90,6 @@ from deploy_workflow.model.pricing import (
     web_search_usd,
 )
 from deploy_workflow.model.turn import MODEL_EFFORTS, dump_json
-from deploy_workflow.model_testing.configs import CONFIGS
 from deploy_workflow.owners import cpos_forecast
 from deploy_workflow.owners.cpos import (
     WEB_SEARCH_GRANT,

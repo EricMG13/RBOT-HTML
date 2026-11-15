@@ -18,7 +18,7 @@ from deploy_workflow.model.adapter import (
     LivePauseInForce,
     check_ruling,
 )
-from deploy_workflow.model_testing.configs import CONFIGS
+from deploy_workflow.model.configs import CONFIGS
 
 ROOT = Path(__file__).resolve().parents[3]
 # The start page the service serves.

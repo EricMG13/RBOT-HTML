@@ -44,6 +44,7 @@ from deploy_workflow.model.loop import (
 from deploy_workflow.model.pricing import money_text
 from deploy_workflow.model.record import CallLog
 from deploy_workflow.model.redact import Redactor
+from deploy_workflow.model.run_lock import RunDirBusy, _single_writer
 from deploy_workflow.model.turn import CONFIG_PROVIDERS, ModelSpec
 from deploy_workflow.owner_rendering import render_owner_slice, verify_owner_rendered_slice
 from deploy_workflow.owner_workflow import (
@@ -57,7 +58,6 @@ from deploy_workflow.owner_workflow import (
 )
 from deploy_workflow.owners import cpdr
 from deploy_workflow.platform_io import flags, fsync_directory
-from deploy_workflow.platform_io import locks as fcntl
 from deploy_workflow.prompts.compose import NoPrompt
 from deploy_workflow.prompts.factory import UntrustedFor, prompt_factory
 from deploy_workflow.prompts.tools import tools_for
@@ -122,12 +122,6 @@ BYTES_PER_TOKEN_LOWER_BOUND: Mapping[str, Decimal] = MappingProxyType(
 PromptFactory = Callable[[PreparedPack], PromptFor]
 
 
-class RunDirBusy(RunInputError):
-    """Another ``run_pathway`` holds this run directory's lock (single writer, R9a)."""
-
-    code = "run_dir_busy"
-
-
 class ResumeRefused(RunInputError):
     """A resume is refused before it writes: the directory is not a resumable run (N1, P3)."""
 
@@ -157,28 +151,6 @@ class UnknownThrough(RunInputError):
 CAP_FILE = "cap.json"
 _CP_DR_LINEAGE = "LOCAL"
 _EXACT_ADD = Context(prec=120, traps=[Inexact, InvalidOperation]).add
-
-
-@contextlib.contextmanager
-def _single_writer(run_dir: Path) -> Iterator[None]:
-    """Hold an exclusive, non-blocking ``flock`` on ``run_dir`` itself for the whole run, fresh or
-    resumed (R9a): no lock file is written, and the kernel drops the lock if the process dies.
-    A second ``run_pathway`` on the directory is refused (``RunDirBusy``) before it writes."""
-    # ponytail: ``flock`` is advisory; a network filesystem, or a process that never calls
-    # ``run_pathway``, is not excluded (the ceiling of ``CallLog``'s lock too). Upgrade path:
-    # ``OwnerWorkflow`` holds the lock for its own store, so every writer is excluded.
-    if os.name == "nt":
-        fd = os.open(run_dir / ".run.lock", os.O_RDWR | os.O_CREAT, 0o600)
-    else:
-        fd = os.open(run_dir, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
-    try:
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            raise RunDirBusy(f"{run_dir} is held by another run_pathway") from None
-        yield
-    finally:
-        os.close(fd)  # closing releases the lock
 
 
 def _create_cap(

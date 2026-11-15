@@ -14,7 +14,7 @@ import time
 from pathlib import Path
 
 from deploy_workflow.model.adapter import KEY_VARIABLES, LivePauseInForce, check_ruling
-from deploy_workflow.model_testing.configs import CONFIGS
+from deploy_workflow.model.configs import CONFIGS
 from deploy_workflow.run_events import append_event
 
 
