@@ -865,33 +865,39 @@ proof only until a paid before and after run and the reader check.
 One row per file CP-OS sends as a module's method (`METHODS` in
 `src/deploy_workflow/owners/cpos_launch.py`), with the selection the sections above state for it.
 `tests/test_methodology_selection.py` reads this table and fails when it disagrees with `METHODS`,
-with `docs/reuse/selected-methods/manifest.json` or with the files on disk; the differences known on
-2026-11-15 are listed in that test with their reasons. Change this table in the same commit as the
-selection. The prose above is unchanged and remains the account of why each method was selected.
+with `docs/reuse/selected-methods/manifest.json` or with the files on disk. The provenance gaps found
+on 2026-11-15 were fixed that day (owner: "fix"); a difference accepted later goes in that test's
+`KNOWN` list with its reason. Change this table in the same commit as the selection. The prose above is unchanged and remains the account of why each method was selected.
 
 - Source: where the archived bytes come from, per the file's manifest entry (`cp-os`,
   `caos-databricks` for its `vendor/deploy-v`, `Deploy V`, or `this repo` for a project-written
-  file). Edited: whether the manifest entry records a named edit (`n/a` for a file the manifest
-  does not register). Revision: the commits the sections above name for the file (`not recorded`
-  where they name none). sha256: the first 12 hex digits of the file as sent.
+  file); `cp-os (byte-identical to Deploy V)` where the entry's `deploy_v_check` records the cp-os
+  copy equal to Deploy V's file. Edited: whether the manifest entry records a named edit.
+  Revision: the commits the file's source revision rests on, as the sections above and its manifest
+  entry record them; `not recorded` where no commit was recorded when the file entered the archive
+  and none could be established, which the entry's `source_revision` states (19 files, all first
+  archived on 2026-11-04 from cp-os; `source_revision_note` in the manifest gives the evidence);
+  `this repo` for a project file, whose revision is this repository's history. sha256: the first
+  12 hex digits of the file as sent.
 - `shared` rows are sent by section: `CANON_SHARED.md § CP_CONFIDENCE_SCORE.md` to every module
   sent a skill, its reader-layer sections to every prose module, and `CPOS_REGISTER_SCOPE.md
   § <module>` to the ten modules it names.
 - Registered, not sent: `manifest.json` registers 91 further files that CP-OS does not send (schema
   and system references, unsent companions, the CP-L10 change-screen skill and others), kept on purpose (owner,
-  2026-11-10: keep a copy of the methodology in the repo).
-- Not registered, not sent: `CP-3B_RUNBOOK.md`, `CP-3B_SCHEMA_REFERENCE.md` and `REF_CP-3B_STEPS.md`
-  directly under `docs/reuse/selected-methods/`, byte-identical to the registered copies under
-  `skills/cp-3-relative-value-security-selection/references/`.
+  2026-11-10: keep a copy of the methodology in the repo). Its `project_files` list registers the three
+  sent method files that live outside the archive (`prompts/CP-1.md`, `cpl10.md`, `cp8.md`).
+- Not registered: none. The three unregistered top-level duplicates (`CP-3B_RUNBOOK.md`,
+  `CP-3B_SCHEMA_REFERENCE.md`, `REF_CP-3B_STEPS.md`) were removed on 2026-11-15; the registered copies
+  under `skills/cp-3-relative-value-security-selection/references/` are byte-identical and keep them.
 
 | Module | Method file | Source | Edited | Revision | sha256 |
 |---|---|---|---|---|---|
-| CP-0 | `docs/reuse/selected-methods/skills/cp-0-source-readiness/SKILL.md` | Deploy V | no | c4d2e35 | `20a363452664` |
-| CP-0 | `docs/reuse/selected-methods/skills/cp-0-source-readiness/references/REF_CP-0_STEPS.md` | Deploy V | no | c4d2e35 | `d367c334f529` |
+| CP-0 | `docs/reuse/selected-methods/skills/cp-0-source-readiness/SKILL.md` | cp-os (byte-identical to Deploy V) | no | c4d2e35 | `20a363452664` |
+| CP-0 | `docs/reuse/selected-methods/skills/cp-0-source-readiness/references/REF_CP-0_STEPS.md` | cp-os (byte-identical to Deploy V) | no | c4d2e35 | `d367c334f529` |
 | CP-1 | `docs/reuse/selected-methods/skills/cp-1-canonical-data-foundation/SKILL.md` | caos-databricks | yes | dfff264, a14f9051 | `59ce07e40ef4` |
 | CP-1 | `docs/reuse/selected-methods/skills/cp-1-canonical-data-foundation/references/CP-1_RUNBOOK.md` | caos-databricks | yes | dfff264, b283233c | `c8f0279d5ba0` |
 | CP-1 | `docs/reuse/selected-methods/skills/cp-1-canonical-data-foundation/references/REF_CP-1_STEPS.md` | caos-databricks | yes | dfff264, a14f9051 | `7dde89ed2520` |
-| CP-1 | `prompts/CP-1.md` | this repo | n/a | this repo | `f34798b2be15` |
+| CP-1 | `prompts/CP-1.md` | this repo | no | this repo | `f34798b2be15` |
 | CP-1A | `docs/reuse/selected-methods/skills/cp-1a-business-transaction-fact-pack/SKILL.md` | cp-os | no | b57a344 | `3885bc51b9fa` |
 | CP-1A | `docs/reuse/selected-methods/skills/cp-1a-business-transaction-fact-pack/references/REF_CP-1A_STEPS.md` | cp-os | no | b57a344 | `57a22436167d` |
 | CP-1A | `docs/reuse/selected-methods/skills/cp-1a-business-transaction-fact-pack/references/REF_CP-2C_STEPS.md` | cp-os | no | b57a344 | `8e738d434472` |
@@ -900,7 +906,7 @@ selection. The prose above is unchanged and remains the account of why each meth
 | CP-1C | `docs/reuse/selected-methods/skills/cp-1c-peer-benchmark/SKILL.md` | cp-os | no | not recorded | `4bd3b130ce0b` |
 | CP-1C | `docs/reuse/selected-methods/skills/cp-1c-peer-benchmark/references/REF_CP-1C_STEPS.md` | cp-os | no | not recorded | `fbbed9bac006` |
 | CP-1D | `docs/reuse/selected-methods/skills/cp-1d-earnings-quality/SKILL.md` | cp-os | yes | e67bf0c, 99069f83 | `56b74b7274a9` |
-| CP-L10 | `src/deploy_vii/methods/cpl10.md` | this repo | n/a | this repo | `8c1eac8940dd` |
+| CP-L10 | `src/deploy_vii/methods/cpl10.md` | this repo | no | this repo | `8c1eac8940dd` |
 | CP-2 | `docs/reuse/selected-methods/skills/cp-2-fundamental-credit-synthesizer/SKILL.md` | cp-os | yes | b57a344, 99069f83 | `0b419cb292a5` |
 | CP-2 | `docs/reuse/selected-methods/skills/cp-2-fundamental-credit-synthesizer/references/REF_CP-2_STEPS.md` | cp-os | yes | b57a344, 99069f83 | `9200f6b0ab97` |
 | CP-2A | `docs/reuse/selected-methods/skills/cp-2a-downside-pathway/SKILL.md` | cp-os | no | not recorded | `4c23c05eb697` |
@@ -919,7 +925,7 @@ selection. The prose above is unchanged and remains the account of why each meth
 | CP-3 | `docs/reuse/selected-methods/skills/cp-3-relative-value-security-selection/SKILL.md` | cp-os | yes | b57a344, 115f664 | `9e4ad1c1f383` |
 | CP-3 | `docs/reuse/selected-methods/skills/cp-3-relative-value-security-selection/references/REF_CP-3_STEPS.md` | cp-os | no | not recorded | `a142dd66006e` |
 | CP-3 | `docs/reuse/selected-methods/skills/cp-3-relative-value-security-selection/references/REF_CP-3A_STEPS.md` | cp-os | no | not recorded | `40ab91d6bd3b` |
-| CP-3 | `docs/reuse/selected-methods/skills/cp-3-relative-value-security-selection/references/CP-3A_RUNBOOK.md` | cp-os | no | b57a344 | `cbb19deed431` |
+| CP-3 | `docs/reuse/selected-methods/skills/cp-3-relative-value-security-selection/references/CP-3A_RUNBOOK.md` | cp-os | no | not recorded | `cbb19deed431` |
 | CP-3 | `docs/reuse/selected-methods/skills/cp-3-relative-value-security-selection/references/REF_CP-3B_STEPS.md` | cp-os | no | b57a344 | `9e134207ab85` |
 | CP-3 | `docs/reuse/selected-methods/skills/cp-3-relative-value-security-selection/references/CP-3B_RUNBOOK.md` | cp-os | no | b57a344 | `b506932e7abb` |
 | CP-3 | `docs/reuse/selected-methods/skills/cp-3-relative-value-security-selection/references/CP-3_SCHEMA_REFERENCE.md` | cp-os | no | b57a344 | `31e5ff3c2734` |
@@ -943,8 +949,8 @@ selection. The prose above is unchanged and remains the account of why each meth
 | CP-5 | `docs/reuse/selected-methods/skills/cp-5-evidence-trace-validator/references/REF_CP-5A_STEPS.md` | caos-databricks | no | dfff264, c746ad67 | `4940a15162bb` |
 | CP-6 | `docs/reuse/selected-methods/skills/cp-6-ic-debate-challenge/SKILL.md` | cp-os | yes | a31f3f5, 99069f83 | `31a9286b6fc2` |
 | CP-6 | `docs/reuse/selected-methods/skills/cp-6-ic-debate-challenge/references/REF_CP-6_STEPS.md` | cp-os | no | not recorded | `6141d27e800d` |
-| CP-6 | `docs/reuse/selected-methods/skills/cp-6-ic-debate-challenge/references/REF_CP-6A_STEPS.md` | cp-os | no | b57a344 | `9e36ee1bc5ed` |
-| CP-8 | `src/deploy_vii/methods/cp8.md` | this repo | n/a | this repo | `a13bab5ef754` |
+| CP-6 | `docs/reuse/selected-methods/skills/cp-6-ic-debate-challenge/references/REF_CP-6A_STEPS.md` | cp-os | no | not recorded | `9e36ee1bc5ed` |
+| CP-8 | `src/deploy_vii/methods/cp8.md` | this repo | no | this repo | `a13bab5ef754` |
 | CP-DR | `docs/reuse/selected-methods/skills/cp-dr-deep-research/SKILL.md` | cp-os | yes | b57a344, 5a78f93, c746ad67 | `23ceacf44aa2` |
 | CP-DR | `docs/reuse/selected-methods/skills/cp-dr-deep-research/references/REF_CP-DR_STEPS.md` | cp-os | yes | b57a344, c746ad67 | `cab435618c7f` |
 | CP-DR | `docs/reuse/selected-methods/skills/cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md` | cp-os | no | b57a344 | `5028a6476cdf` |
