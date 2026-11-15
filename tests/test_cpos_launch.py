@@ -2906,6 +2906,8 @@ def test_every_module_is_told_what_stands_for_acceptance_scripts_and_questions(t
 # CP-2E pin recomputed on 2026-11-15 (owner: "restore the cut tables"): its scope section no longer
 # names T2F.4 and T2F.5, the inputs of its method script check (ruling
 # 2026-11-15-method-script-checks.md), so runs made before it are marked "Earlier methods" for it.
+# CP-3 pin recomputed on 2026-11-15 (owner: "restore the CP-3 portfolio-fit tables"): its scope
+# section no longer names T3C.1 to T3C.3 and T3C.5 to T3C.9 (same ruling).
 METHOD_TEXT_SHA256_AT_1B41E65 = {
     "CP-0": "307017934f4e8e75fc432e8b7ef100bba82ce84f1bb6910f37c7e715fe701e72",
     "CP-1": "f047d555dd9ae1284a8fbf42feb3b63096b00077c021a303357fa16ce933d493",
@@ -2919,7 +2921,7 @@ METHOD_TEXT_SHA256_AT_1B41E65 = {
     "CP-2E": "ecf16c44a9a8e982af71150f83938011185e163128ed1ddbf09aba0c5740db63",
     "CP-2G": "30f8bb12685ec883e4c824ea03a53fac4c4c3afc9bd2801a2019db77740523aa",
     "CP-2H": "f500af91511584f3dda4d0dd10180766dabe19d81de7df12a99b6da2d92e89b4",
-    "CP-3": "2677edd0d0444fd83e02eea62bfa81464711467bf2c56ad59dd58ba544fade21",
+    "CP-3": "94d14d6c62f6c682744c9f94cb227f58af36883a73c0c16fa68dd674c524a34f",
     "CP-3C": "d1038d5097955d6bf47ccae01fee07bdc1db0b2e49eb7b77d0153c07b48768ac",
     "CP-3D": "a35a8a1d6f1b7aaecf7e98613e80a04c4c158f9163f315edbd004647463aa698",
     "CP-4": "a769b7456e5661d70cb25388fc4acb444cfd0aecd8f778554f98369ebadc7f7e",

@@ -920,6 +920,16 @@ fixed T4.9 rows stay with `owners/cpos_cp1_check.py`, which binds their operands
 (the `earnings_update` size ceiling). Limit: synthetic proof only, and the retained TDG excerpts
 of 2026-11-13 hold none of these registers.
 
+**CP-3's portfolio-fit registers restored (2026-11-15; owner: "restore the CP-3 portfolio-fit
+tables"; ruling `docs/rulings/2026-11-15-method-script-checks.md`).** No method text is newly
+selected and no archived method file changed. The project-written `CPOS_REGISTER_SCOPE.md § CP-3`
+no longer names CP-3B's T3C.1 to T3C.3 and T3C.5 to T3C.9, so CP-3 writes them in every pathway
+that runs it and the presence check requires them; CP-3B's own gate (`REF_CP-3B_01`: it "always
+executes", and with portfolio inputs missing gives generic portfolio-fit logic and withholds a
+numeric size) governs what they hold when no workbook is supplied. This answers the open CP-3B
+item of `2026-11-15-full-assessment-portfolio-workbook.md`. No script checks them. T3.1, T3.4,
+T3.5, T3.7, T3.9, T3.10 and the T3B registers other than T3B.1 stay cut. Limit: offline proof only.
+
 **Full credit assessment collects the portfolio workbook (owner, 2026-11-15: "yes, wire in the
 portfolio workbook." and "check data first likely incorrect sums and values"; ruling
 `docs/rulings/2026-11-15-full-assessment-portfolio-workbook.md`).** No method text is newly
@@ -1038,4 +1048,4 @@ on 2026-11-15 were fixed that day (owner: "fix"); a difference accepted later go
 | CP-DR | `docs/reuse/selected-methods/skills/cp-dr-deep-research/references/REF_CP-DR_STEPS.md` | cp-os | yes | b57a344, c746ad67 | `cab435618c7f` |
 | CP-DR | `docs/reuse/selected-methods/skills/cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md` | cp-os | no | b57a344 | `5028a6476cdf` |
 | shared | `docs/reuse/selected-methods/CANON_SHARED.md` | cp-os | no | b57a344 | `1ab484c5072a` |
-| shared | `docs/reuse/selected-methods/CPOS_REGISTER_SCOPE.md` | this repo | no | this repo | `3137dea04875` |
+| shared | `docs/reuse/selected-methods/CPOS_REGISTER_SCOPE.md` | this repo | no | this repo | `0f97542230b3` |

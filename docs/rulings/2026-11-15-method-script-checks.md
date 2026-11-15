@@ -175,6 +175,35 @@ file's manifest sha256 and note, the METHODOLOGY-REVIEW.md appendix row, the mod
   25,068 / EBITDA 3,813 (carrying value 24,880 gives 6.53): a basis difference from the method's
   carrying-value rule, in a layout that predates it, not an arithmetic error.
 
+## CP-3's portfolio-fit registers, restored on the owner's instruction (not for a script check)
+
+Owner, 2026-11-15, relayed by the coordinating session: "restore the CP-3 portfolio-fit tables".
+This answers the CP-3B item left open by `2026-11-15-full-assessment-portfolio-workbook.md` (not
+edited here).
+
+- Restored: T3C.1 Portfolio Input Gate + Module Status, T3C.2 Portfolio Fit Register, T3C.3
+  Position Sizing Posture Table, T3C.5 Concentration and Correlation Register, T3C.6 Liquidity and
+  Implementation Assessment, T3C.7 Downside Budget and Recovery Sensitivity, T3C.8 Monitoring
+  Triggers (portfolio), T3C.9 Gaps Ledger (portfolio): every T3C id the 2026-11-13 rule cut (T3C.4
+  was never cut). Both retained Sol runs wrote all eight before the cut; the inventory classes each
+  CUT (no consumer then), so rule R1 alone would still cut them.
+- Unconditional, per module, in every pathway that runs CP-3 (`credit_snapshot`, `relative_value`,
+  `portfolio_decision`), whether or not a workbook is supplied. The method agrees: CP-3B's gate
+  (`REF_CP-3B_01`) "Always executes", and with portfolio inputs missing it gives "generic
+  portfolio-fit logic, retain[s] the gaps and avoid[s] a numeric sizing recommendation"; its
+  discipline forbids inventing mandate limits or holdings. So without a workbook the registers hold
+  that generic logic and the gaps, not sizing.
+- What stays cut for CP-3: T3.1, T3.4, T3.5, T3.7, T3.9, T3.10 and T3B.2 to T3B.8, T3B.10, T3B.11
+  (none restored for a script check; see CP-3 above).
+- No script checks them; this is a restore only. The presence check now requires them (a CP-3
+  handoff without one is sent back once, naming it, unless CP-3 is blocked at its gate).
+- Instruction size: CP-3's scope section and CP-5's upstream note each shorten by 322 characters in
+  the three pathways (`credit_snapshot` 1,464,698 to 1,464,054 of 1,483,647; `relative_value`
+  1,059,626 to 1,058,982 of 1,071,000; `portfolio_decision` 940,825 to 940,181 of 955,500). Output
+  grows instead: the two retained Sol runs wrote these eight registers in 9,367 (medium) and 12,314
+  (high) characters, about 2,500 to 3,300 more output tokens for CP-3, and CP-5 and CP-6 (and CP-8
+  when listed) read that much more of CP-3's handoff. Not measured under these instructions.
+
 ## Decisions for the owner
 
 1. CP-3: ask CP-3 for the `### Recovery waterfall` table (a new model output), or leave CP-3

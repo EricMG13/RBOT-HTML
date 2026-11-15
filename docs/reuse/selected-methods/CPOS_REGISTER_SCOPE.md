@@ -16,6 +16,11 @@ CP-2E's list no longer names T2F.4 and T2F.5: they hold the inputs and figures t
 tables"; ruling `docs/rulings/2026-11-15-method-script-checks.md`), so CP-2E writes them and they
 are checked.
 
+CP-3's list no longer names its CP-3B portfolio-fit registers T3C.1 to T3C.3 and T3C.5 to T3C.9
+(owner, 2026-11-15: "restore the CP-3 portfolio-fit tables"; ruling
+`docs/rulings/2026-11-15-method-script-checks.md`): CP-6A's gate names them, so CP-3 writes them
+and they are checked for presence.
+
 ## CP-0
 
 Register scope in this transport: do not write P5 Parse jobs record; T3 Source hierarchy; T5 Gaps and conflicts. Any figure, limitation or conclusion you draw from that work goes in a register you do write, in `## Calculations` or in `## Gaps`. A register named here is not required by the method's `required_register_ids`, `appendix_contract`, lossless profile or completeness check, or by the canon's Analytical appendix rule, in this transport: when you run those checks or apply that rule yourself, do not restore it and do not block for want of it. The routing rule's registers for this module are T7 and T8: do not write them; no other required register is a routing register.
@@ -46,7 +51,7 @@ Register scope in this transport: do not write T2H.1 Source and identity gate; T
 
 ## CP-3
 
-Register scope in this transport: do not write T3.1 Source Register + Module Status + Execution Mode; T3.4 Override Log + revised composite; T3.5 RV Table; T3.7 Final Ranking Table; T3.9 Monitoring Triggers Table; T3.10 Gaps Ledger; T3B.2 Capital Structure Dashboard; T3B.3 Instrument Matrix; T3B.4 Structural Positioning Log; T3B.5 Legal/Covenant/LME Overlay; T3B.6 Recovery Sensitivity Table; T3B.7 Compensation Cross-Check; T3B.8 Preference Decision Table; T3B.10 Monitoring Triggers (instrument); T3B.11 Gaps Ledger (instrument); T3C.1 Portfolio Input Gate + Module Status; T3C.2 Portfolio Fit Register; T3C.3 Position Sizing Posture Table; T3C.5 Concentration and Correlation Register; T3C.6 Liquidity and Implementation Assessment; T3C.7 Downside Budget and Recovery Sensitivity; T3C.8 Monitoring Triggers (portfolio); T3C.9 Gaps Ledger (portfolio). Any figure, limitation or conclusion you draw from that work goes in a register you do write, in `## Calculations` or in `## Gaps`. A register named here is not required by the method's `required_register_ids`, `appendix_contract`, lossless profile or completeness check, or by the canon's Analytical appendix rule, in this transport: when you run those checks or apply that rule yourself, do not restore it and do not block for want of it. None of this module's required registers is a routing register.
+Register scope in this transport: do not write T3.1 Source Register + Module Status + Execution Mode; T3.4 Override Log + revised composite; T3.5 RV Table; T3.7 Final Ranking Table; T3.9 Monitoring Triggers Table; T3.10 Gaps Ledger; T3B.2 Capital Structure Dashboard; T3B.3 Instrument Matrix; T3B.4 Structural Positioning Log; T3B.5 Legal/Covenant/LME Overlay; T3B.6 Recovery Sensitivity Table; T3B.7 Compensation Cross-Check; T3B.8 Preference Decision Table; T3B.10 Monitoring Triggers (instrument); T3B.11 Gaps Ledger (instrument). Any figure, limitation or conclusion you draw from that work goes in a register you do write, in `## Calculations` or in `## Gaps`. A register named here is not required by the method's `required_register_ids`, `appendix_contract`, lossless profile or completeness check, or by the canon's Analytical appendix rule, in this transport: when you run those checks or apply that rule yourself, do not restore it and do not block for want of it. None of this module's required registers is a routing register.
 
 ## CP-5
 

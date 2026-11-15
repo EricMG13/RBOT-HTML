@@ -43,7 +43,6 @@ CUT = {
     "CP-3": [
         *("T3.1", "T3.4", "T3.5", "T3.7", "T3.9", "T3.10"),
         *("T3B.2", "T3B.3", "T3B.4", "T3B.5", "T3B.6", "T3B.7", "T3B.8", "T3B.10", "T3B.11"),
-        *("T3C.1", "T3C.2", "T3C.3", "T3C.5", "T3C.6", "T3C.7", "T3C.8", "T3C.9"),
     ],
     "CP-5": [
         *("T5B.4", "T5B.5", "T5B.6", "T5B.7", "T5B.8"),
@@ -56,6 +55,8 @@ CUT = {
 RESTORED = {
     "CP-6": ["T6E.4", "T6E.6", "T6E.7", "T6E.11"],
     "CP-2E": ["T2F.4", "T2F.5"],
+    # Owner, 2026-11-15: "restore the CP-3 portfolio-fit tables" (CP-6A's gate names them).
+    "CP-3": [*("T3C.1", "T3C.2", "T3C.3", "T3C.5", "T3C.6", "T3C.7", "T3C.8", "T3C.9")],
 }
 # The medium run wrote four CP-1A registers under names, not ids (checked against that run's
 # `<!-- table-id: ... -->` tags: T2D.2, T2D.6, T2D.7, T2D.8).
@@ -415,7 +416,11 @@ REQUIRED = {
         *("T2G.1", "T2G.2", "T2G.3", "T2G.4", "T2G.5", "T2G.6", "T2G.7", "T2G.8"),
     ],
     "CP-2G": ["T2H.3", "T2H.4", "T2H.5", "T2H.6", "T2H.7", "T2H.8"],
-    "CP-3": ["T3.3", "T3.6", "T3B.1", "T3C.4"],
+    # The SKILL's `required_register_ids` less the scope section's T3 and T3B ids.
+    "CP-3": [
+        *("T3.3", "T3.6", "T3B.1", "T3C.1", "T3C.2", "T3C.3", "T3C.4", "T3C.5", "T3C.6"),
+        *("T3C.7", "T3C.8", "T3C.9"),
+    ],
     "CP-5": ["T5B.1", "T5B.2", "T5B.3", "T5.3"],
     # The SKILL's `required_register_ids` (T6A.4; T6A.6; T6A.7; T6A.11; T6E.4; T6E.6; T6E.7;
     # T6E.11) less the scope section's T6A.6 and T6A.11.
