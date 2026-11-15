@@ -31,7 +31,7 @@ members = ["apps/issuer-library"]
 issuer-library = { workspace = true }
 
 [dependency-groups]
-dev = ["pytest==9.1.1", "ruff==0.17.1", "mypy==2.4.0", "hypothesis==6.170.5"]
+dev = ["pytest==9.1.1", "ruff==0.17.1", "mypy==2.4.0", "hypothesis==6.170.5", "import-linter==2.16"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
