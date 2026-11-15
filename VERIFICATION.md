@@ -48,10 +48,13 @@ Each step was done on its own branch, reviewed, then merged here.
   known failures deselected; node page tests 567 passed; quality gate 0 findings (61 files, 8,469
   lines in scope); `lint-imports` 3 contracts kept. Two permission tests now skip under root, as
   their neighbour already did.
-- Not verified: the full suite and browser tests on the merged branch (browser tests passed on the
-  packaging and store branches alone); `Smoke-test.ps1` and the Windows package on Windows; the
-  pack workflow and `checks.yml` on GitHub Actions; `test_financial_workflow.py` genuine-case tests
-  (over 300 s). Oldest two entries trimmed from this file; git history keeps them.
+- Browser tests on the merged branch: library page 104 passed, 1 skipped; library changes 8;
+  Signal page 13; model shell 7; launcher 10; changes 1. The run start page's browser tests could
+  not run in this container: Chrome times out on `--dump-dom`, identically on `main` (9d040f8).
+- Not verified: the full suite; the run start page in a browser; `Smoke-test.ps1` and the Windows
+  package on Windows; the pack workflow and `checks.yml` on GitHub Actions;
+  `test_financial_workflow.py` genuine-case tests (over 300 s). Oldest two entries trimmed from
+  this file; git history keeps them.
 
 ## 2026-11-14 — Synthetic pack follow-ups and the document-key test (branch `claude/synthetic-pack-followups`, PR #124)
 
