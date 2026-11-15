@@ -9,9 +9,14 @@ what it does not cover:
 
 - T4.9 rows with a free `Metric Name` whose `Formula` is a quotient: `Calculated Value` against the
   script's `ratio` of the row's own `Numerator Value` and `Denominator Value`, read as a ratio or a
-  percentage of it, or as the script's `growth` (n / d - 1) for a change, in either form. Only the
-  arithmetic is bound: which debt or EBITDA the operands are is the row's own statement (a free name
-  fixes no operand), so a ratio on principal where the method wants carrying value (the retained
+  percentage of it, or as the script's `growth` (n / d - 1) for a change, in either form. The
+  Formula decides which, in order: it ends in `- 1` (not a period tag like `t-1` or
+  `(t - 1)`): growth; its numerator names a change
+  (`Sales change / prior sales`): ratio;
+  growth or change words in the name or Formula: growth; otherwise ratio. Only the arithmetic is
+  bound: which debt or EBITDA the
+  operands are is the row's own statement (a free name fixes no operand), so a ratio on principal
+  where the method wants carrying value (the retained
   TDG figures: 25,068 / 3,813 = 6.57, carrying 24,880 gives 6.53) agrees when its own division is
   right. A row whose formula is not a quotient (a sum, a difference) is not checked.
 - T4.8 rows whose `Derived Period Type` is LTM: `Derived Value` against the script's
@@ -86,7 +91,19 @@ LTM_FORMULA = (
     "LTM = Full-Year Component + Current Stub - Prior-Year Stub (REF_CP-1_08; the script's "
     "derive_periods)"
 )
-_GROWTH = re.compile(r"-\s*1\b|−\s*1\b|\bgrowth\b|\bchange\b|\byoy\b|year on year")
+# Rule 1: the Formula ends in `- 1` (`* 100` may arrive as ` 100`: the table reader strips `*`).
+# A minus glued to a letter (`t-1`), or in brackets after a single token (`(t - 1)`, `(FY2024-1)`),
+# is a period tag.
+_ENDS_MINUS_ONE = re.compile(r"(?<![^\W\d_])[-−]\s*1\s*\)?\s*(?:$|[x×*]?\s*100|=|in percent)")
+# A minus one in brackets whose content so far is one token with no `/` (`(t - 1)`, `(FY2024-1)`).
+_PERIOD_TAG = re.compile(r"\(\s*[^\s/()]*\s*$")
+_NUMERATOR_END = re.compile(r"/|÷|\bdivided by\b")
+# Rule 2: a numerator that is already a change.
+_NUMERATOR_CHANGE = re.compile(
+    r"\bchange\b|\bincrease\b|\bdecrease\b|\bdifference\b|\bdelta\b|Δ|\bmovement\b"
+)
+# Rule 3: the words say growth.
+_GROWTH_WORDS = re.compile(r"\bgrowth\b|\bchange\b|\byoy\b|year on year")
 _PERCENT = re.compile(r"[x×*]\s*100\b|%|\bper ?cent\b")
 _POSITIVE_FAMILY = re.compile(r"leverage|cover|/[^|]*\b(?:ebitda|interest|debt)\b")
 _QUOTIENT = re.compile(r"/|÷|\bdivided by\b|\bover\b|\bratio\b|\bmargin\b|\bconversion\b")
@@ -108,11 +125,7 @@ class _Quotient:
     hn: float
     hd: float
     text: str  # the row's Metric Name and Formula, as labelled
-
-    @property
-    def growth(self) -> bool:
-        """A change (n / d - 1) rather than a ratio, by the row's own words."""
-        return bool(_GROWTH.search(self.text))
+    growth: bool  # the Formula's reading is n / d - 1 rather than n / d (`_reads_growth`)
 
     @property
     def positive_family(self) -> bool:
@@ -121,9 +134,23 @@ class _Quotient:
         return bool(_POSITIVE_FAMILY.search(self.text))
 
 
+def _reads_growth(formula: str, words: str) -> bool:
+    """Whether a free row's own words make it a growth (n / d - 1) rather than a ratio (n / d).
+    In order: a Formula ending in an explicit `- 1` is growth; a Formula whose numerator already
+    names a change (`Sales change / prior sales`) is a ratio; otherwise growth or change words in
+    the name or Formula make it growth; otherwise a ratio."""
+    text = formula.replace("`", "").strip().casefold()  # `*` kept: `x 100` may be written `* 100`
+    if any(not _PERIOD_TAG.search(text[: m.start()]) for m in _ENDS_MINUS_ONE.finditer(text)):
+        return True
+    if _NUMERATOR_CHANGE.search(_NUMERATOR_END.split(text, maxsplit=1)[0]):
+        return False
+    return bool(_GROWTH_WORDS.search(words))
+
+
 def _forms(q: _Quotient, stated: str, script: types.ModuleType) -> list[tuple[str, float, float]]:
-    """The readings the row's words allow: (form, the script's value, its rounding bound). The
-    Formula's own words choose ratio or growth and, where they say, percent or not."""
+    """The reading the row's words allow: (form, the script's value, its rounding bound), in
+    percent as well unless the row says it is not. The Formula's own words choose ratio or growth
+    (`_reads_growth`) and, where they say, percent or not."""
     name = "growth" if q.growth else "ratio"
     value = script.growth(q.n, q.d) if q.growth else script.ratio(q.n, q.d)
     if value is None:
@@ -164,7 +191,8 @@ def _free_row(row: list[str], cols: dict[str, int], loaded: Loaded) -> Outcome:
     except _NotChecked as why:
         return where("not checked", stated=stated, reason=str(why))
     words = _label(f"{row[cols['Metric Name']]} | {row[cols['Formula']]}")
-    return _judged_forms(where, stated, _Quotient(n, d, hn, hd, words), loaded)
+    growth = _reads_growth(row[cols["Formula"]], words)
+    return _judged_forms(where, stated, _Quotient(n, d, hn, hd, words, growth), loaded)
 
 
 def _not_positive(where: _Where, stated: str, q: _Quotient) -> Outcome:

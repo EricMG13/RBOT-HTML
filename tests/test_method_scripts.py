@@ -1775,6 +1775,51 @@ def test_cp1_the_rows_formula_chooses_ratio_or_growth():
     assert cp1_by(cp1(pct))["EBITDA margin (FY2024)"].status == "disagreed"
 
 
+# Answer key (brief task-A, live defect 2026-11-15): a change over prior is a ratio unless the
+# Formula says - 1. (Formula, numerator, denominator, stated, status).
+CP1_CHANGE_KEY = [
+    ("Sales change / prior sales", "1355", "6585", "0.21", "agreed"),
+    ("EBITDA change / prior EBITDA", "665", "3148", "0.21", "agreed"),
+    ("Current sales / prior sales \u2212 1", "7940", "6585", "0.21", "agreed"),
+    ("Current EBITDA / prior EBITDA \u2212 1", "3813", "3148", "0.21", "agreed"),
+    ("Sales change / prior sales", "1355", "6585", "0.31", "disagreed"),
+    ("Current sales / prior sales \u2212 1", "7940", "6585", "1.21", "disagreed"),
+    ("Current sales / prior sales - 1", "7940", "6585", "20.6%", "agreed"),
+]
+
+
+# Ruling after review (brief task-A): (Metric Name, Formula, N, D, stated, status).
+CP1_RULING_KEY = [
+    ("Revenue growth", "Current sales / prior sales", "7940", "6585", "1.21", "disagreed"),
+    ("Revenue growth", "Current sales / prior sales", "7940", "6585", "120.6%", "disagreed"),
+    ("Revenue growth", "Current sales / prior sales", "7940", "6585", "0.21", "agreed"),
+    ("Revenue growth", "Sales change / prior sales", "1355", "6585", "-0.79", "disagreed"),
+    ("Interest cover", "EBITDA / interest (t-1)", "3813", "1160", "3.29", "agreed"),
+    ("Ratio", "(a - 1) / b", "7940", "6585", "1.21", "agreed"),
+    ("Leverage change", "Current leverage / prior leverage - 1", "6", "5", "0.20", "agreed"),
+    ("Sales uplift", "(Current sales / prior sales - 1) * 100", "7940", "6585", "20.6", "agreed"),
+    ("Interest cover", "EBITDA / interest (t - 1)", "3813", "1160", "3.29", "agreed"),
+    ("Revenue growth", "Sales change / prior sales (t - 1)", "1355", "6585", "0.21", "agreed"),
+    ("Ratio", "EBITDA / interest (FY2024-1)", "3813", "1160", "3.29", "agreed"),
+]
+CP1_KEY = [("Revenue growth", *row) for row in CP1_CHANGE_KEY] + CP1_RULING_KEY
+
+
+@pytest.mark.parametrize(
+    ("name", "formula", "operands", "stated", "status"),
+    [(k[0], k[1], k[2:4], k[4], k[5]) for k in CP1_KEY],
+)
+def test_cp1_the_formula_decides_growth_or_ratio(name, formula, operands, stated, status):
+    row = {name: (formula, *operands, stated)}
+    assert cp1_by(cp1(row))[f"{name} (FY2024)"].status == status
+
+
+def test_cp1_the_rejected_live_draft_t49_table_has_no_disagreed_row():
+    table = (Path(__file__).parent / "fixtures" / "cp1_earnings_update_draft1_t49.md").read_text()
+    outcomes = [o for o in ms.run("CP-1", table) if o.register == "T4.9"]
+    assert outcomes and "disagreed" not in {o.status for o in outcomes}
+
+
 def test_cp1_a_figure_wrong_by_more_than_the_rounding_bound_still_disagrees():
     # 25,068 / 3,813 = 6.5743; bound 0.01 + (0.5 + 6.574 x 0.5) / 3,813 = 0.01099: 6.58 agrees,
     # 6.59 (out by 0.0157) does not.
