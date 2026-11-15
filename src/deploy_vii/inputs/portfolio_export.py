@@ -1662,7 +1662,7 @@ def candidates(name: str, found: Recomputed) -> list[str]:
     """Borrowers a listed name may stand for, though it matches none: one with a ticker that
     begins with the name's first three letters (a brand held under its acquisition vehicle), or
     whose first word (four letters or more) occurs in the name (`FooBarco` and `Barco
-    Communications Inc`). A candidate is never a match."""
+    Communications Inc`), each with what the holdings give it. A candidate is never a match."""
     letters = "".join(name_words(name))
     out: list[str] = []
     for key in sorted(found.borrowers, key=lambda key: found.names[key]):
@@ -1676,11 +1676,22 @@ def candidates(name: str, found: Recomputed) -> list[str]:
             None,
         )
         first = (name_words(borrower) or ("",))[0]
+        why = ""
         if ticker is not None:
-            out.append(f"{borrower} (ticker {ticker} begins with the same three letters)")
+            why = f"ticker {ticker} begins with the same three letters"
         elif len(first) >= 4 and first in letters and (word := _as_written(first, borrower)):
-            out.append(f"{borrower} ({word} of the borrower's name occurs in the listed name)")
+            why = f"{word} of the borrower's name occurs in the listed name"
+        if why:
+            out.append(f"{borrower} ({why}; {_held(key, found)})")
     return out
+
+
+def _held(key: str, found: Recomputed) -> str:
+    """What the holdings give a borrower, for the reader to set beside a listed name's figures."""
+    value = found.issuer_value.get(key, Decimal(0))
+    count = len(found.borrowers[key])
+    held = f"{money(value)}, {pct(share(value, found.value))}" if found.value else money(value)
+    return f"the holdings give it {held} in {count} position{'s' * (count != 1)}"
 
 
 def _as_written(word: str, text: str) -> str:
