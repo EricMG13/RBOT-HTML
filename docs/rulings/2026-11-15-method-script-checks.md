@@ -113,6 +113,29 @@ file's manifest sha256 and note, the METHODOLOGY-REVIEW.md appendix row, the mod
   records "not checked: the handoff has no T2H.4 register". The full CP-2G handoffs, which wrote
   T2H.4 to T2H.6, are not in this repository.
 
+### CP-4, `covenant_headroom.py`
+
+- Restored: none needed. CP-4 has no register-scope section; T4C.4 is required as the method
+  lists it.
+- Inputs: T4C.4 `Test`, `Test Type`, `Threshold`, `Current Basis`, `Headroom`, `Status`
+  (REF_CP-4A_04). The script is the CP-2H copy registered in the archive (the same bytes CP-4's
+  SKILL names).
+- Checked per test: Headroom (max-ratio: Threshold - Current Basis; min-ratio: Current Basis -
+  Threshold) and Status (Compliant, At threshold, Breached), by the script's own `headroom`.
+- Test Type: passed to the script's own `normalise_test_type` as written, or its first word
+  (`max-ratio (leverage ceiling)`); a row whose type is blank or that the script does not read is
+  not checked, never guessed. Two of the script's aliases are refused here: a bare `maintenance`
+  or `incurrence` says when a test applies, not whether it is a ceiling or a floor (a maintenance
+  interest-cover test is a floor; the script would read it as max-ratio).
+- Units: Threshold, Current Basis and Headroom must each be one figure in one unit, a ratio
+  (`5.00x` or a bare figure), a percentage or an amount with its currency and scale; otherwise not
+  checked. A comparator before the threshold (`≤ 5.00x`) is read. Status is compared only when it
+  states one of the script's three words.
+- Not checked by design: maximum additional debt and T4C.5 basket capacity (their inputs are free
+  text in `Formula` and `Current Input`), severity (the analyst's).
+- Retained evidence: none. CP-4 was blocked at its source gate in both Sol runs (no legal
+  documents); synthetic proof only.
+
 ## Status
 
 Built and tested offline, module by module. Not accepted: no model has written a restored register

@@ -907,4 +907,5 @@ from deploy_workflow import (  # noqa: F401
     method_scripts_cp2e,
     method_scripts_cp2g,
     method_scripts_cp3,
+    method_scripts_cp4,
 )

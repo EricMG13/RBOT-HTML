@@ -8799,6 +8799,37 @@ def test_cp2g_is_checked_by_its_script(tmp_path, pathway):
     assert "T2H.6 row `Gross leverage (FY2025, Base)` states 5.0 x" in added
 
 
+# SYNTHETIC: max-ratio headroom 5.00 - 4.20 = 0.80x, Compliant (worked in
+# tests/test_method_scripts.py).
+T4C4 = """### T4C.4 - Headroom Table
+
+| Test | Test Type | Threshold | Current Basis | Formula | Headroom | Status | Evidence ID |
+|---|---|---|---|---|---|---|---|
+| Net leverage | max-ratio | 5.00x | 4.20x | Threshold - current | {headroom} | Compliant | E1 |
+
+"""
+
+
+@pytest.mark.parametrize("pathway", ["credit_snapshot", "covenant_refinancing"])
+def test_cp4_is_checked_by_its_script(tmp_path, pathway):
+    (tmp_path / "texts").mkdir()
+    _, texts = all_instructions(tmp_path / "texts", pathway)
+    head = texts["CP-4"].partition(cpos_launch.METHOD_MARK)[0]
+    assert head.count(method_scripts.NOTES["CP-4"]) == 1
+    prepared, task, context = good_task(tmp_path, "CP-4", pathway)
+    raw = answer(context, list(prepared.plan.layout.routes))
+    check = checker(prepared.layout)
+    base = set(_checked_handoff(task, raw.encode(), check))
+    right, wrong = (
+        raw.replace("\n## Calculations", "\n" + T4C4.format(headroom=h) + "## Calculations")
+        for h in ("0.80x", "0.70x")
+    )
+    assert [o.status for o in method_scripts.run("CP-4", right)] == ["agreed", "agreed"]
+    assert set(_checked_handoff(task, right.encode(), check)) == base
+    (added,) = set(_checked_handoff(task, wrong.encode(), check)) - base
+    assert "T4C.4 row `Headroom: Net leverage` states 0.70 x" in added
+
+
 def test_each_attempt_keeps_its_method_script_checks_beside_its_review(tmp_path):
     _, task, _ = good_task(tmp_path, "CP-2D", "credit_snapshot")
     shell = "## Request\n\n## Sources\n\n## Findings\n\n{}## Calculations\n\n## Gaps\n\n"

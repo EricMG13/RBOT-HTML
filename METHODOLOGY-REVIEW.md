@@ -913,8 +913,9 @@ reads a `### Recovery waterfall` table only when a handoff has one; no CP-3 regi
 enterprise value or a stated recovery (T3B.2's Amount is carrying value, T3B.6 a label), so nothing
 is restored and CP-3 is not asked for the table until the owner decides. CP-2G:
 `credit_metrics.py` on T2H.4 to T2H.6 (never cut): leverage, coverage and FCF/debt per period and
-case, and the opening-to-prior-closing and debt roll-forward of T2H.5. Limit: synthetic proof
-only.
+case, and the opening-to-prior-closing and debt roll-forward of T2H.5. CP-4:
+`covenant_headroom.py` on T4C.4, signed headroom and status by the stated test type (never
+inferred). Limit: synthetic proof only.
 
 ## Appendix: selected method files
 

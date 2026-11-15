@@ -1107,6 +1107,145 @@ def test_cp2g_leverage_on_a_quarter_is_not_compared():
     assert status["Coverage (Q1 2025, Base)"] == "agreed"
 
 
+# --- CP-4 ---------------------------------------------------------------------------------------
+
+# SYNTHETIC. Headroom by the method's two formulas (REF_CP-4A_04):
+# Net leverage, max-ratio: 5.00 - 4.20 = 0.80x, Compliant.
+# Interest cover, min-ratio: 2.50 - 2.00 = 0.50x, Compliant.
+# Senior secured leverage, max-ratio: 3.50 - 3.50 = 0.00x, At threshold.
+# Minimum liquidity, min-ratio, USD m: 80 - 100 = -20, Breached.
+COVENANTS = {
+    "Net leverage": ("max-ratio", "5.00x", "4.20x", "0.80x", "Compliant"),
+    "Interest cover": ("min-ratio", "2.00x", "2.50x", "0.50x", "Compliant"),
+    "Senior secured leverage": ("max-ratio", "3.50x", "3.50x", "0.00x", "At threshold"),
+    "Minimum liquidity": ("min-ratio", "USD 100m", "USD 80m", "USD (20)m", "Breached"),
+}
+
+
+def cp4(rows=None):
+    rows = COVENANTS if rows is None else rows
+    return "\n".join(
+        [
+            "## Findings",
+            "### Bottom line",
+            "One covenant is breached.",
+            "### T4C.4 — Headroom Table",
+            (
+                "| Test | Test Type | Threshold | Current Basis | Formula | Headroom | Status | "
+                "Limitation | Risk Mechanic | Credit Implication | Evidence ID |"
+            ),
+            "|---|---|---|---|---|---|---|---|---|---|---|",
+            *(
+                f"| {t} | {v[0]} | {v[1]} | {v[2]} | x | {v[3]} | {v[4]} | — | x | x | E1 |"
+                for t, v in rows.items()
+            ),
+            "## Gaps",
+            "None.",
+        ]
+    )
+
+
+def covenant(name, **cells):
+    names = ("type", "threshold", "current", "headroom", "status")
+    row = COVENANTS[name]
+    return COVENANTS | {name: tuple(cells.get(n, row[i]) for i, n in enumerate(names))}
+
+
+def test_cp4_all_figures_right():
+    outcomes = ms.run("CP-4", cp4())
+    assert len(outcomes) == 8 and {o.status for o in outcomes} == {"agreed"}
+    by = {o.figure: o for o in outcomes}
+    assert by["Headroom: Net leverage"].recomputed == pytest.approx(0.8)
+    assert by["Headroom: Net leverage"].tolerance == pytest.approx(0.01)
+    assert by["Headroom: Minimum liquidity"].unit == "USD m"
+    assert by["Status: Minimum liquidity"].recomputed_label == "Breached"
+    assert ms.issues("CP-4", cp4()) == ()
+
+
+def test_cp4_one_figure_wrong():
+    (issue,) = ms.issues("CP-4", cp4(covenant("Net leverage", headroom="0.70x")))
+    assert "T4C.4 row `Headroom: Net leverage` states 0.70 x" in issue
+    assert "recomputes 0.8 x" in issue and "covenant_headroom.py" in issue
+
+
+def test_cp4_the_max_ratio_formula_on_a_min_ratio_test_is_a_sign_error():
+    # Interest cover is a floor: 2.50 - 2.00 = +0.50. Threshold - current (-0.50) is the ceiling's
+    # formula, and its "Breached" reads a cushion as a breach.
+    rows = covenant("Interest cover", headroom="(0.50x)", status="Breached")
+    by = {o.figure: o for o in ms.run("CP-4", cp4(rows))}
+    assert by["Headroom: Interest cover"].status == "disagreed"
+    assert by["Status: Interest cover"].status == "disagreed"
+    assert by["Status: Interest cover"].recomputed_label == "Compliant"
+
+
+def test_cp4_the_stated_test_type_drives_the_sign():
+    # Net leverage typed min-ratio: the script computes 4.20 - 5.00 = -0.80 and Breached.
+    by = {o.figure: o for o in ms.run("CP-4", cp4(covenant("Net leverage", type="min-ratio")))}
+    assert by["Headroom: Net leverage"].recomputed == pytest.approx(-0.8)
+    assert by["Headroom: Net leverage"].status == "disagreed"
+
+
+def test_cp4_a_test_type_not_stated_is_not_checked_never_inferred():
+    for written, words in (
+        ("—", "states no Test Type"),
+        ("Maintenance", "names when the test applies"),
+        ("Leverage", "does not read Test Type"),
+    ):
+        by = {o.figure: o for o in ms.run("CP-4", cp4(covenant("Net leverage", type=written)))}
+        assert by["Headroom: Net leverage"].status == "not checked", written
+        assert words in by["Headroom: Net leverage"].reason, written
+    # The script's own spellings, and a type followed by words, are read.
+    for written in ("max-ratio (leverage ceiling)", "Maximum", "ceiling"):
+        by = {o.figure: o for o in ms.run("CP-4", cp4(covenant("Net leverage", type=written)))}
+        assert by["Headroom: Net leverage"].status == "agreed", written
+
+
+def test_cp4_a_missing_input_is_not_checked_and_never_zero():
+    rows = covenant("Net leverage", current="[Insufficient Information]")
+    by = {o.figure: o for o in ms.run("CP-4", cp4(rows))}
+    assert by["Headroom: Net leverage"].status == by["Status: Net leverage"].status == "not checked"
+    assert "states no Current Basis (missing, not zero)" in by["Headroom: Net leverage"].reason
+
+
+def test_cp4_a_blank_headroom_is_missing_and_a_zero_is_a_figure():
+    rows = covenant("Senior secured leverage", headroom="Not supplied: no certificate")
+    by = {o.figure: o for o in ms.run("CP-4", cp4(rows))}
+    assert by["Headroom: Senior secured leverage"].status == "not checked"
+    assert by["Status: Senior secured leverage"].status == "agreed"
+    by = {o.figure: o for o in ms.run("CP-4", cp4())}
+    assert by["Headroom: Senior secured leverage"].status == "agreed"  # 0.00x
+
+
+def test_cp4_a_unit_or_currency_mismatch_is_not_compared():
+    for current in ("USD 0.08bn", "EUR 80m", "80"):
+        rows = covenant("Minimum liquidity", current=current)
+        by = {o.figure: o for o in ms.run("CP-4", cp4(rows))}
+        assert by["Headroom: Minimum liquidity"].status == "not checked", current
+        assert "different units" in by["Headroom: Minimum liquidity"].reason, current
+    rows = covenant("Minimum liquidity", headroom="(20)")  # a bare figure for an amount
+    by = {o.figure: o for o in ms.run("CP-4", cp4(rows))}
+    assert "the Headroom is in `x`, its test in `USD m`" in by["Headroom: Minimum liquidity"].reason
+
+
+def test_cp4_a_comparator_before_the_threshold_is_read():
+    by = {o.figure: o for o in ms.run("CP-4", cp4(covenant("Net leverage", threshold="≤ 5.00x")))}
+    assert by["Headroom: Net leverage"].status == "agreed"
+
+
+def test_cp4_a_status_in_other_words_is_not_compared():
+    by = {o.figure: o for o in ms.run("CP-4", cp4(covenant("Net leverage", status="Pass")))}
+    assert by["Status: Net leverage"].status == "not checked"
+    assert by["Headroom: Net leverage"].status == "agreed"
+
+
+def test_cp4_an_absent_or_malformed_register_is_not_checked():
+    (absent,) = ms.run("CP-4", cp4().replace("### T4C.4 — Headroom Table", "### Headroom"))
+    assert absent.reason == "the handoff has no T4C.4 register"
+    broken = cp4().replace("| Net leverage | max-ratio |", "| Net leverage | max-ratio | x |")
+    (outcome,) = ms.run("CP-4", broken)
+    assert "a row of 12 cells under 11 columns" in outcome.reason
+
+
 # --- the policy -----------------------------------------------------------------------------------
 
 
