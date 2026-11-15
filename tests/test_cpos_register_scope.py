@@ -255,10 +255,19 @@ def _without_constants(source: str, names: tuple[str, ...]) -> str:
 def test_no_check_reader_or_library_names_a_cut_or_routing_register():
     """A hit is a reader or a code-sent requirement of a register the transport stops writing."""
     sources = {
-        "cpos_launch.py": _without_constants(
-            (ROOT / "src/deploy_workflow/owners/cpos_launch.py").read_text(),
-            ("ROUTING_RULES", "CP0_BLOCK", "UPSTREAM_SCOPE_NOTE", "ROUTING_REGISTERS"),
-        ),
+        **{
+            name: _without_constants(
+                (ROOT / "src/deploy_workflow/owners" / name).read_text(),
+                ("ROUTING_RULES", "CP0_BLOCK", "UPSTREAM_SCOPE_NOTE", "ROUTING_REGISTERS"),
+            )
+            for name in (
+                "cpos_launch.py",
+                "cpos_launch_methods.py",
+                "cpos_launch_prompts.py",
+                "cpos_launch_review.py",
+                "cpos_launch_tables.py",
+            )
+        },
         **{
             name: (ROOT / "src/deploy_workflow" / name).read_text()
             for name in (
