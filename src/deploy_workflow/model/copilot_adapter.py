@@ -641,6 +641,26 @@ class CopilotAdapter:
             )
             return ()
 
+    def release(self, invocation_digest: str) -> None:
+        """The module under this digest has ended for good: stop its runtime now, not at
+        ``close()``. Callable from any thread (it only schedules ``_release`` on the loop thread,
+        where every ``_states`` access happens), idempotent, and a no-op for an unknown digest or
+        after ``close()``. It does not wait for the teardown: that runs in the background under the
+        usual bounds, and a failure goes to ``self._notes``, which ``close()`` raises. A later
+        ``complete`` under the digest is refused with ``ExchangeExists`` while the teardown runs and
+        ``SessionMissing`` after it (call_index > 0); a call_index 0 after it opens a fresh
+        exchange, as a first call does. Drain the compactions first: a released session gives
+        none. Do not call it while a call under the same digest is in flight: the executor
+        calls it only after the module's last call returns, and a release during the digest's own
+        open can leave a session created on a stopped client."""
+        loop = self._loop
+        if loop is None or self._closed:
+            return
+        try:
+            loop.call_soon_threadsafe(self._release, invocation_digest)
+        except RuntimeError:  # the loop closed between the check and here: close() released it
+            log.debug("release of an exchange after the loop closed: close() already did it")
+
     async def _drain(self, digest: str) -> tuple[Compaction, ...]:
         state = self._states.get(digest)
         if state is None or state.releasing is not None:

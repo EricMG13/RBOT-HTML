@@ -39,7 +39,7 @@ from deploy_vii.contracts import Span
 from deploy_vii.model._cells import CONTEXT, calc
 from deploy_vii.model.frame import Cell
 from deploy_vii.model.metrics import _ratio
-from deploy_vii.preparation import xlsx_content
+from deploy_vii.preparation import pdf_page_text, xlsx_content
 from deploy_vii.registry import modules
 from deploy_workflow.model.adapter import AdapterReply, ModelAdapter
 from deploy_workflow.model.budget import Budget, OverrunStop, exact_sum
@@ -463,9 +463,7 @@ def _pages(name: str, raw: bytes) -> list[str]:
     if raw.startswith(b"%PDF"):
         from pypdf import PdfReader
 
-        return [
-            p.extract_text(extraction_mode="layout") or "" for p in PdfReader(io.BytesIO(raw)).pages
-        ]
+        return [pdf_page_text(p)[0] for p in PdfReader(io.BytesIO(raw)).pages]
     if _is_workbook(raw):
         return _workbook_pages(raw)
     text = raw.decode("utf-8")
@@ -1016,6 +1014,7 @@ class _Session:
     starts: dict[str, tuple[int, int | None]]
     ended: set[str]
     reported: set[str]
+    released: bool = False  # the adapter was told this module's session is no longer needed
 
 
 def _with_id(c: Compaction, fields: dict[str, int]) -> dict[str, str | int]:
@@ -1528,13 +1527,17 @@ class HandoffExecutor:
         the launcher totals it beside ``Charged:``. A start never seen to complete is a
         ``compaction_uncharged`` event. The drain is advisory: a failure is logged, never raised
         over the module's own outcome. The session stays open until the adapter is closed, so
-        ``drain_late`` takes what arrives after this."""
+        ``drain_late`` takes what arrives after this. The module's runtime is released here, since
+        no call is made under its digest again (``_release_session``), unless a summary is still
+        running: that session stays open for ``drain_late``."""
         if self._digest is None:
             return
         self._settle(task)
-        self._sessions.append(
-            _Session(task, self._digest, self._last_call, self._starts, self._ended, self._reported)
+        session = _Session(
+            task, self._digest, self._last_call, self._starts, self._ended, self._reported
         )
+        self._sessions.append(session)
+        self._release_session(session)
 
     def drain_late(self) -> None:
         """Before the adapter is closed: drain each settled module's session once more, for a
@@ -1544,6 +1547,23 @@ class HandoffExecutor:
             self._digest, self._last_call = s.digest, s.last_call
             self._starts, self._ended, self._reported = s.starts, s.ended, s.reported
             self._settle(s.task)
+            self._release_session(s)
+
+    def _release_session(self, session: _Session) -> None:
+        """Tell the adapter (when it has ``release``, as for ``drain_compactions``) that the
+        session's module is over, once, unless a compaction start has no completion yet: that
+        session stays open for ``drain_late``, and the adapter's ``close`` releases what is left.
+        Advisory: a failure is logged and ``close`` still releases the runtime."""
+        release = getattr(self.adapter, "release", None)
+        if session.released or not callable(release):
+            return
+        if any(key not in session.ended for key in session.starts):
+            return
+        session.released = True
+        try:
+            release(session.digest)
+        except Exception as error:  # noqa: BLE001 -- advisory, see above
+            log.warning("could not release %s's session: %s", session.task.module_id, error)
 
     def _settle(self, task: HandoffTask) -> None:
         drain = getattr(self.adapter, "drain_compactions", None)

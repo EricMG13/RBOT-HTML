@@ -1403,3 +1403,131 @@ def test_a_late_completion_through_the_executor_is_disclosed_not_lost(
     assert Decimal(late["usd"]) == Decimal(CP8_USD) and late["module"] == "CP-2"
     assert not [e for e in events if e["event"] == "compaction_uncharged"]
     assert executor.budget.spent == Decimal("0.00000123456")  # the last call's marker is final
+
+
+# ---------------------------------------------------------------- release at the module's end
+
+
+def _wait_for_states(adapter: CopilotAdapter, want: int) -> None:
+    """Let the loop thread run its queued teardown; bounded, no sleeping on the caller's side."""
+    assert adapter._loop is not None
+
+    async def settle() -> None:
+        for _ in range(200):
+            if len(adapter._states) == want:
+                return
+            await asyncio.sleep(0.01)
+
+    asyncio.run_coroutine_threadsafe(settle(), adapter._loop).result(10)
+    assert len(adapter._states) == want
+
+
+def _two_clients(rig: Rig) -> tuple[list[FakeClient], Callable[[ClientOptions], FakeClient]]:
+    clients: list[FakeClient] = []
+
+    def factory(options: ClientOptions) -> FakeClient:
+        clients.append(FakeClient(tool_script()))
+        return clients[-1]
+
+    return clients, factory
+
+
+def test_released_modules_have_their_runtimes_stopped_before_close(rig: Rig) -> None:
+    clients, factory = _two_clients(rig)
+    adapter = rig.make(tool_script(), client_factory=factory)
+    for n in "12":
+        assert call(adapter, request(), digest=n * 64).kind == "ok"
+    assert len(adapter._states) == 2
+    adapter.release("1" * 64)
+    adapter.release("2" * 64)
+    _wait_for_states(adapter, 0)
+    assert [c.stopped for c in clients] == [1, 1]  # stop was awaited for both, close() not yet run
+    assert not adapter._closed
+    adapter.close()  # nothing left to release, nothing to raise
+    assert [c.stopped for c in clients] == [1, 1]
+
+
+def test_release_is_idempotent_and_a_no_op_for_unknown_or_closed(rig: Rig) -> None:
+    adapter = rig.make(tool_script())
+    adapter.release("9" * 64)  # before any loop exists
+    assert call(adapter, request()).kind == "ok"
+    adapter.release("9" * 64)  # unknown digest
+    adapter.release(DIGEST)
+    adapter.release(DIGEST)
+    _wait_for_states(adapter, 0)
+    adapter.release(DIGEST)  # already released
+    assert rig.client.stopped == 1
+    adapter.close()
+    adapter.release(DIGEST)  # after close
+    assert rig.client.stopped == 1
+
+
+def test_a_release_failure_is_raised_by_close(rig: Rig, small_bounds: None) -> None:
+    class StopFails(FakeClient):
+        async def stop(self) -> None:
+            raise RuntimeError("stop failed")
+
+    adapter = rig.make(tool_script(), client_factory=lambda options: StopFails(tool_script()))
+    assert call(adapter, request()).kind == "ok"
+    adapter.release(DIGEST)
+    _wait_for_states(adapter, 0)
+    with pytest.raises(RuntimeError, match="stop failed"):
+        adapter.close()
+
+
+def test_compactions_drained_before_the_release_are_what_the_caller_obtains(rig: Rig) -> None:
+    from tests.model._compaction import COMPLETE_CP8, CP8_USD, START_CP8
+
+    script: list[Step] = [
+        Emit(wire("session.compaction_start", START_CP8)),
+        said(""),
+        usage(finishReason="tool_calls", numToolCalls=1, copilotUsage={"totalNanoAiu": 123456}),
+        Invoke("c1", "read_pages", {"p": 1}),
+        Emit(wire("session.compaction_complete", COMPLETE_CP8)),
+        Await(),
+    ]
+    adapter = rig.make(script)
+    assert call(adapter, request()).kind == "ok"
+    late = adapter.drain_compactions(DIGEST)
+    adapter.release(DIGEST)
+    assert [(c.kind, c.usd) for c in late] == [("complete", Decimal(CP8_USD))]
+    _wait_for_states(adapter, 0)
+    assert adapter.drain_compactions(DIGEST) == ()  # a released session gives nothing more
+
+
+def test_a_late_call_under_a_released_digest_is_refused_not_hung(rig: Rig) -> None:
+    adapter = rig.make(tool_script())
+    assert call(adapter, request()).kind == "ok"
+    adapter.release(DIGEST)
+    _wait_for_states(adapter, 0)
+    late = call(adapter, request(SYSTEM, USER), index=1)
+    assert late.kind == "not_sent" and late.error_class == "SessionMissing"
+    assert rig.client.stopped == 1  # the stopped client was not reused
+    adapter.close()
+
+
+def test_a_first_call_after_a_release_opens_a_fresh_exchange(rig: Rig) -> None:
+    clients, factory = _two_clients(rig)
+    adapter = rig.make(tool_script(), client_factory=factory)
+    assert call(adapter, request()).kind == "ok"
+    adapter.release(DIGEST)
+    _wait_for_states(adapter, 0)
+    again = adapter.complete(request(), invocation_digest=DIGEST, call_index=0, reservation_id="s")
+    assert again.kind == "ok"
+    assert len(clients) == 2 and clients[0].stopped == 1 and clients[1].stopped == 0
+
+
+def test_a_release_leaves_another_modules_exchange_in_flight_alone(rig: Rig) -> None:
+    clients, factory = _two_clients(rig)
+    adapter = rig.make(tool_script(), client_factory=factory)
+    other = "3" * 64
+    assert call(adapter, request(), digest=other).kind == "ok"
+    assert call(adapter, request()).kind == "ok"
+    adapter.release(DIGEST)
+    _wait_for_states(adapter, 1)
+    assert list(adapter._states) == [other]
+    assert [c.stopped for c in clients] == [0, 1]
+    tool_result = Message("tool", "PAGE TEXT", tool_call_id="c1")
+    follow = call(adapter, request(*tool_turn_history(), tool_result), 1, digest=other)
+    assert follow.kind == "ok"  # the other module's kept exchange still answers
+    adapter.close()

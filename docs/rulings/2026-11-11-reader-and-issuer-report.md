@@ -197,6 +197,13 @@ run in that pathway: its `### Bottom line` and `### Key findings` lead the Overv
 in the bottom lines. Nothing else in H5 changes; CP-L10's `### Key figures` table is a report block, not
 Overview content.
 
+Amendment 2026-11-16 (controller ruling under the owner's "fix all" on the parked findings, 2026-11-16): on an
+Earnings Update run (pathway `earnings_update`: CP-0, CP-1, CP-MODEL, CP-1B, CP-1D, CP-DR, CP-2E and CP-5,
+none of which is CP-6, CP-2 or CP-L10) CP-1B is the lead, after CP-6, CP-2 and CP-L10: its `### Bottom line`
+and `### Key findings` lead the Overview and are not repeated in the bottom lines, and the lead section's
+kicker reads "Earnings view" in place of "Credit view". On every other pathway CP-1B never leads, even when
+no credit view module completed. Selection and ordering only; no text is rewritten. Nothing else in H5 changes.
+
 ### H6. Mechanical prose checks (decision 11)
 
 The checker runs these on the reader passages of every handoff. Excluded from "sentence text":

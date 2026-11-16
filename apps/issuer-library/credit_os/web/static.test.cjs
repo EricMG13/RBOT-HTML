@@ -1003,9 +1003,9 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules, more
   const win = { Components: require('./components.js'), Shapes: require('./shapes.js'), Evidence: require('./evidence.js'), location: more.location, CREDIT_OS_DATA: { chips: { [`${outId('CP-1')}:16`]: [{ kind: 'issuer_page', source: 'K', file: 'K.jsonl', page: 123, page_end: null }], ...more.chips } }, DESIGN_CATALOGUE: { real: more.catalogue || [{ id: RUN, checklist: null }] }, RUN_ACTIVITY: more.activity, DESIGN_WORKSPACE: { reports, models: [], visuals: more.visuals || [], models: more.models || [] } };
   Object.assign(data, more.data || {}); // outputs of other runs, which the run under test's module list must not hold
   const libraryState = { selected: '', sortKey: '', direction: 'asc', hidden: '' };
-  const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag', 'eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'eventTicks', 'eventAsOf', 'eventStack', 'eventRoom', 'earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes', 'matchesHeading', 'readerPassages', 'splitBasis', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml', 'passageControls', 'eventTimeline', '$', 'appDestinations', 'document', 'ChangesView'];
+  const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag', 'eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'eventTicks', 'eventAsOf', 'eventStack', 'eventRoom', 'earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes', 'leadModules', 'leadKicker', 'pickLead', 'matchesHeading', 'readerPassages', 'splitBasis', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml', 'passageControls', 'eventTimeline', '$', 'appDestinations', 'document', 'ChangesView'];
   const eventTimeline = realEventTimeline(esc, rich);
-  const args = [libraryDefaults(), libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), libraryDefaults(), win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head', sections: more.sections?.[id] || [] }])), contexts, more.store || {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => '', ...['eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'eventTicks', 'eventAsOf', 'eventStack', 'eventRoom'].map(name => require('./calendar.js')[name]), ...['earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes'].map(name => require('./reader.js')[name]), (heading, prefix) => (prefix.startsWith('=') ? heading === prefix.slice(1) : heading.startsWith(prefix)), ...['readerPassages', 'splitBasis', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml', 'passageControls'].map(name => require('./reader.js')[name]), eventTimeline, more.dom?.$, new Set(['W-Library', 'CP-OS']), more.dom?.document, require('./changes.js')];
+  const args = [libraryDefaults(), libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), libraryDefaults(), win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head', sections: more.sections?.[id] || [] }])), contexts, more.store || {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => '', ...['eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'eventTicks', 'eventAsOf', 'eventStack', 'eventRoom'].map(name => require('./calendar.js')[name]), ...['earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes', 'leadModules', 'leadKicker', 'pickLead'].map(name => require('./reader.js')[name]), (heading, prefix) => (prefix.startsWith('=') ? heading === prefix.slice(1) : heading.startsWith(prefix)), ...['readerPassages', 'splitBasis', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml', 'passageControls'].map(name => require('./reader.js')[name]), eventTimeline, more.dom?.$, new Set(['W-Library', 'CP-OS']), more.dom?.document, require('./changes.js')];
   return new Function(...names, `${src}; return {runTokens, runReport, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, libraryFilters, libraryChoices, LIBRARY_COLUMNS, libraryView, libraryRows, libraryCoverage, libraryFacets, libraryCard, libraryCards, libraryLive, libraryChipValue, libraryCount, sameNameWords, libraryRunName, libraryModules, libraryLead, libraryStrip, libraryFiltered, moduleHead, headerChipMarkup, traceHref, drawerFoot, runName, updateWorkspaceChrome, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, moduleReport, reportParts, outlineMarkup, navigatorView, issuerMeta, startRunHref, startRunLink, drawnAnchors, defaultOutput, firstSection, cashflowSection, modelOptionLabels, forecastView, forecastCharts, chartCard, evidenceInput, evidenceHit};`)(...args);
 }
 const countOf = (html, re) => (html.match(re) || []).length;
@@ -1187,6 +1187,33 @@ test('Overview lead: CP-2 still leads over CP-L10 when both ran, and a blocked C
   const blockedHtml = overviewPage({ 'CP-L10': passageSections({ bottom: 'Not assessable: CP-1 stated no figure.' }) }, { names: { ...FIXTURE_NAMES, 'CP-L10': 'Short credit snapshot' } }).runReport(RUN);
   assert.equal(readText(part(blockedHtml, 'overview-lead')), 'Credit viewNo credit view module completed in this run.');
   assert.deepEqual(partIds(blockedHtml), ['overview-lead', 'overview-modules']);
+});
+
+const EARNINGS = { 'CP-0': FIXTURE['CP-0'], 'CP-1': FIXTURE['CP-1'], 'CP-1B': passageSections({ bottom: 'Quarterly EBITDA rose 8% on volume.', key: ['- Margin held.'] }) };
+const earningsPage = (parts, pathway, more = {}) => overviewPage(parts, { names: { ...FIXTURE_NAMES, 'CP-1B': 'Earnings changes' }, runFields: { asOf: '2025-03-31', pathway }, ...more });
+
+test('Overview lead on an earnings update: CP-1B leads under "Earnings view" and is not repeated in the modules (amendment 2026-11-16 to H5)', () => {
+  const html = earningsPage(EARNINGS, 'earnings_update').runReport(RUN);
+  const lead = readText(part(html, 'overview-lead')), why = readText(part(html, 'overview-why'));
+  assert.ok(lead.startsWith('Earnings view') && lead.includes('Quarterly EBITDA rose 8% on volume.') && !lead.includes('Credit view'));
+  assert.ok(why.includes('Margin held.'));
+  assert.ok(!tileHrefs(html).includes('CP-1B'), 'the lead is not one of the bottom lines');
+  assert.deepEqual(tileHrefs(html).sort(), ['CP-0', 'CP-1']);
+});
+
+test('Overview lead: CP-6 still leads an earnings update that ran it, and CP-1B then has its tile; a blocked CP-1B leaves no lead', () => {
+  const both = earningsPage({ ...EARNINGS, 'CP-6': passageSections({ bottom: 'Committee view.', key: ['- One.'] }) }, 'earnings_update').runReport(RUN);
+  assert.ok(readText(part(both, 'overview-lead')).startsWith('Credit view') && tileHrefs(both).includes('CP-1B'));
+  const blockedHtml = earningsPage({ 'CP-1B': passageSections({ bottom: 'Not assessable: no quarter supplied.' }) }, 'earnings_update').runReport(RUN);
+  assert.equal(readText(part(blockedHtml, 'overview-lead')), 'Credit viewNo credit view module completed in this run.');
+});
+
+test('Overview lead: CP-1B never leads another pathway, even with no credit view module', () => {
+  for (const pathway of ['credit_snapshot', 'relative_value', null]) {
+    const html = earningsPage(EARNINGS, pathway).runReport(RUN);
+    assert.equal(readText(part(html, 'overview-lead')), 'Credit viewNo credit view module completed in this run.', String(pathway));
+    assert.ok(tileHrefs(html).includes('CP-1B'), String(pathway));
+  }
 });
 
 test('Overview lead: neither CP-6 nor CP-2 usable gives the one sentence; both blocked is the same, and every module keeps its tile', () => {

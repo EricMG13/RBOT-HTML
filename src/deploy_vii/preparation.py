@@ -35,6 +35,9 @@ OCR_PAGE_CAP = 20  # pages OCR'd per document; one subprocess pair each
 OCR_MAX_PIXELS = 3300  # longest rendered side: 11 in at 300 dpi
 OCR_MARK = "OCR text: the page has no text layer"
 EMPTY_PAGE = "No extractable text; inspect original, OCR may be required"
+PLAIN_ONLY = "Text read in reading order; layout extraction returned none"
+APPENDED = "Layout extraction omitted text; reading-order text appended"
+PLAIN_HEADER = "[Reading-order text: layout extraction omitted text on this page]"
 OCR_UNAVAILABLE = "No extractable text; OCR unavailable: pdftoppm or tesseract not found"
 OCR_CAP_REACHED = "No extractable text; OCR page cap reached"
 
@@ -200,6 +203,23 @@ class _Ocr:
         return text, f"{OCR_MARK} (tesseract {self.version}); verify against the original"
 
 
+def _alnum(text: str) -> int:
+    return sum(char.isalnum() for char in text)
+
+
+def pdf_page_text(page: PageObject) -> tuple[str, str | None]:
+    """Layout text, plus reading-order text where layout mode dropped text (Form XObjects)."""
+    layout = page.extract_text(extraction_mode="layout", layout_mode_strip_rotated=False)
+    plain = page.extract_text()
+    if not layout.strip():
+        # Only readable text replaces the page; anything else leaves it to OCR or "empty".
+        return (plain, PLAIN_ONLY) if _substantive(plain) else (layout, None)
+    # Plain mode may split a number layout reads whole, so compare the amount of text, not tokens.
+    if _alnum(plain) <= _alnum(layout):
+        return layout, None
+    return f"{layout}\n\n{PLAIN_HEADER}\n{plain}", APPENDED
+
+
 def pdf_content(raw: bytes) -> Extraction:
     try:
         reader = PdfReader(io.BytesIO(raw), strict=True)
@@ -231,7 +251,7 @@ def _pdf_pages(pages: list[PageObject], ocr: _Ocr) -> Extraction:
                     )
                 )
                 continue
-            text = page.extract_text(extraction_mode="layout", layout_mode_strip_rotated=False)
+            text, note = pdf_page_text(page)
         # A damaged page object (a loop of self references, a dictionary where a stream belongs)
         # makes pypdf raise PyPdfError or AttributeError; that page alone is unreadable.
         except (PyPdfError, AttributeError, ValueError, KeyError, TypeError) as error:
@@ -245,7 +265,7 @@ def _pdf_pages(pages: list[PageObject], ocr: _Ocr) -> Extraction:
             continue
         if text.strip():
             spans.append(Span(locator=locator, text=text))
-            coverage.append(Coverage(locator=locator, status="retained"))
+            coverage.append(Coverage(locator=locator, status="retained", limitation=note))
             continue
         kept, limitation = ocr.page(locator, index, page)
         if kept is None:
