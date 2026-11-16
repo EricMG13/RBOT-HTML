@@ -517,7 +517,7 @@
   "src/deploy_vii/narrative_projection.py": "e2d84bf4600da86920c4f438291ec083f214e5c5",
   "src/deploy_vii/period_reconciliation.py": "575c8a525654b651514c469e842b39aa943fb284",
   "src/deploy_vii/platform_io.py": "6bb90c558d055106ed4324f29b4bb111845f42d5",
-  "src/deploy_vii/preparation.py": "8b84ce7ca81f652f82494619a9f2fad1f82c2071",
+  "src/deploy_vii/preparation.py": "be94ff016fb575194fd3b962f518ed5621f6d4b5",
   "src/deploy_vii/prose.py": "e31387d54d687f4ebccfa9ff7ce9d5394caa2cbb",
   "src/deploy_vii/quality.py": "9611f1869d2011fea6d2ca86196939cace05d4fc",
   "src/deploy_vii/quotes.py": "2a24ac4509c50c564f954b7ba1ab7cd36010f522",
@@ -582,7 +582,7 @@
   "src/deploy_workflow/model/configs.py": "0e1d7e26bcbb5cba1cf092725c361ff8c67cb89d",
   "src/deploy_workflow/model/copilot.py": "3da697b8da92fbf55fb7c08cbabe59723838e7f1",
   "src/deploy_workflow/model/copilot_adapter.py": "8006d0922f7c8bde9e081af06fba7716c60f2132",
-  "src/deploy_workflow/model/handoff.py": "cd46577decaaa9df39d3b3eff2c161a23425e8e9",
+  "src/deploy_workflow/model/handoff.py": "98a136a9c220d35142c266e8f3309f0e17c73819",
   "src/deploy_workflow/model/loop.py": "ba391c55477cfc94668281bae6792db6ac051414",
   "src/deploy_workflow/model/pricing.py": "aa218b242bac21094511a20fe37c437d4ead2351",
   "src/deploy_workflow/model/providers.py": "8f5c3d5bbf5d8172a79c935dba73f39632f3953d",
@@ -854,6 +854,7 @@
   "tests/test_model_shell_browser.py": "0275f001bcb7360726dc07bb234991236c25a1cc",
   "tests/test_negative_cash_not_calculable.py": "8728db52393d4d4ffd38795af1d219bcb6dac048",
   "tests/test_pathway_tiers.py": "438994912ed60b412f6a2498226c6149e54fa61e",
+  "tests/test_pdf_form_text.py": "3dd5319849c4bc62222e67fa6846efc9a7d6fb34",
   "tests/test_portfolio_export.py": "8b967c45ff35e593beac9cb06823399af1f2b9f4",
   "tests/test_portfolio_workbook.py": "ad136257cad4d191236a987d019c8627018429a0",
   "tests/test_prose_checks.py": "a12fd0f0fe27b0f8ece678c842d4d92c1036cdfa",
@@ -890,7 +891,7 @@
   "tools/work_pc_delta.py": "57ad044649b8afeafc12566cee598a06124cf0cb",
   "uv.lock": "0b344d90b5896a6e76c5cc980e3ae89501ee795a"
  },
- "head": "1cf9738a709767760fb05edc1c3742c36f672a7f",
- "head_date": "2026-11-15T22:55:53Z",
- "last_pack": 73
+ "head": "37f891f008f26c46511185abea89bb6b88ed0b6d",
+ "head_date": "2026-11-16T03:53:21Z",
+ "last_pack": 74
 }
