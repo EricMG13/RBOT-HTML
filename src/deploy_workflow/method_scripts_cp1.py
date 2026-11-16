@@ -103,9 +103,9 @@ _CLOSING_MINUS_ONE = re.compile(
     r"(?![^\W_]|,\d|\.\d*[1-9]|-[^\W\d_]|\s*[/÷]|\s*\)\s*[/÷])"
 )
 # P-b: a closing `-1` written without spaces straight after a bare figure denominator
-# (`7940/6585-1`) is a minus one; with a letter before it (`FY2023-1`) it stays a tag. Only at the
-# end of the expression.
-_GLUED_MINUS_ONE = re.compile(r"[/÷]\s*\d[\d,]*(?:\.\d+)?\s*[-−–]\s*1(?:\.0+)?[\s)%]*$")
+# (`7940/6585-1`) is a minus one when that figure is the row's Denominator Value and the minus one
+# ends the expression; otherwise (`FY2023-1`, `2024/2023-1`) it stays a tag.
+_GLUED_MINUS_ONE = re.compile(r"[/÷]\s*(\d[\d,]*(?:\.\d+)?)\s*[-−–]\s*1(?:\.0+)?[\s)%]*$")
 # A leading label (`Net leverage = ...`, `Growth: ...`): no quotient, bracket or second `=` in it.
 _LABEL = re.compile(r"^[^=:/÷()]{1,60}?\s*[:=](?![=:])\s*")
 # A minus one in brackets whose content so far is one token with no `/` (`(t - 1)`, `(FY2024-1)`).
@@ -121,6 +121,8 @@ _NUMERATOR_CHANGE = re.compile(
 )
 # `less` and `minus` alone: with growth words in the row, the reading is either one.
 _SUBTRACTION_WORD = re.compile(r"\bless\b|\bminus\b")
+# A bare figure (not part of `FY2024`): the first in a bracketed difference is its minuend.
+_BARE_FIGURE = re.compile(r"(?<![\w.,])\d[\d,]*(?:\.\d+)?")
 # A bracket holding one bracket: `((7940 - 6585))`.
 _NESTED_BRACKET = re.compile(r"\(\s*(\([^()]*\))\s*\)")
 # Tested only on a numerator of at most this many characters: the pattern backtracks steeply on a
@@ -163,17 +165,28 @@ class _Quotient:
         return bool(_POSITIVE_FAMILY.search(self.text))
 
 
-def _reads_growth(formula: str, words: str) -> str:
+def _figure(token: str) -> float | None:
+    try:
+        return float(token.replace(",", "").rstrip("."))
+    except ValueError:
+        return None
+
+
+def _reads_growth(formula: str, words: str, n: float | None = None, d: float | None = None) -> str:
     """How a free row's own words read its quotient: `growth` (n / d - 1), `ratio` (n / d) or
-    `either` where they leave both open. A leading `label =` or `label:` is dropped first. In order:
-    a Formula with a closing explicit `- 1` is growth; a numerator that names a change
-    (`Sales change / prior sales`, `Δ Sales`, `(7940 - 6585)`) is a ratio; one whose only change
-    signal is `less` or `minus` is a ratio, or either where the row's words say growth; otherwise
-    growth or change words in the name or Formula make it growth (either, when the Formula is bare
-    figures: `7940 / 6585`); otherwise a ratio."""
-    text = formula.replace("`", "").strip().casefold()  # `Δ` arrives as `δ`
-    text = _LABEL.sub("", text, count=1)
-    if _GLUED_MINUS_ONE.search(text) or any(
+    `either` where they leave both open. A leading `label =` or `label:` is dropped for the
+    reading, but a change word in it counts as one in the numerator. In order: a Formula with a
+    closing explicit `- 1` (a spaceless one only on the row's denominator `d`) is growth; a
+    numerator that names a change (`Sales change / prior sales`, `Δ Sales`) is a ratio; a bracketed
+    difference of figures is growth when the row's `n` is its first figure (the minuend), else a
+    ratio; one whose only change signal is `less` or `minus` is a ratio, or either where the row's
+    words say growth; otherwise growth or change words in the name or Formula make it growth
+    (either, when the whole Formula cell is bare figures: `7940 / 6585`); otherwise a ratio."""
+    original = formula.replace("`", "").strip().casefold()  # `Δ` arrives as `δ`
+    label = _LABEL.match(original)
+    text = original[label.end() :] if label else original
+    glued = _GLUED_MINUS_ONE.search(text)
+    if (glued and d is not None and _figure(glued[1]) == d) or any(
         not _PERIOD_TAG.search(text[: m.start()]) for m in _CLOSING_MINUS_ONE.finditer(text)
     ):
         return "growth"
@@ -181,18 +194,21 @@ def _reads_growth(formula: str, words: str) -> str:
     if numerator == text:
         numerator = _OVER.split(text, maxsplit=1)[0]
     numerator = numerator.strip()
-    if len(numerator) <= _BRACKETED_DIFFERENCE_MAX:
-        numerator = _NESTED_BRACKET.sub(r"\1", numerator) if numerator[:1] == "(" else numerator
-    growth_words = bool(_GROWTH_WORDS.search(words))
-    if _NUMERATOR_CHANGE.search(numerator) or (
-        len(numerator) <= _BRACKETED_DIFFERENCE_MAX and _BRACKETED_DIFFERENCE.fullmatch(numerator)
-    ):
+    small = len(numerator) <= _BRACKETED_DIFFERENCE_MAX
+    if small and numerator[:1] == "(":
+        numerator = _NESTED_BRACKET.sub(r"\1", numerator)
+    if _NUMERATOR_CHANGE.search(f"{label[0] if label else ''} {numerator}"):
         return "ratio"
+    if small and _BRACKETED_DIFFERENCE.fullmatch(numerator):
+        first = _BARE_FIGURE.search(numerator)
+        minuend = _figure(first[0]) if first else None
+        return "growth" if n is not None and minuend == n else "ratio"
+    growth_words = bool(_GROWTH_WORDS.search(words))
     if _SUBTRACTION_WORD.search(numerator):
         return "either" if growth_words else "ratio"
     if not growth_words:
         return "ratio"
-    return "growth" if re.search(r"[^\W\d_]", text) else "either"
+    return "growth" if re.search(r"[^\W\d_]", original) else "either"
 
 
 def _forms(q: _Quotient, stated: str, script: types.ModuleType) -> list[tuple[str, float, float]]:
@@ -243,7 +259,7 @@ def _free_row(row: list[str], cols: dict[str, int], loaded: Loaded) -> Outcome:
     except _NotChecked as why:
         return where("not checked", stated=stated, reason=str(why))
     words = _label(f"{row[cols['Metric Name']]} | {row[cols['Formula']]}")
-    reading = _reads_growth(row[cols["Formula"]], words)
+    reading = _reads_growth(row[cols["Formula"]], words, n, d)
     return _judged_forms(where, stated, _Quotient(n, d, hn, hd, words, reading), loaded)
 
 

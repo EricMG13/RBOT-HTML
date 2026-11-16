@@ -2032,6 +2032,28 @@ CP1_PARKED_KEY = [
     ("Sales uplift", "(Sales: 7940 - 6585) / 6585", *_DIFF, "0.21", "agreed"),
     ("Sales uplift", "(current 7940 - prior 6585) / 6585", *_DIFF, "0.21", "agreed"),
     ("Sales uplift", "((7940 - 6585)) / 6585", *_DIFF, "0.50", "disagreed"),
+    # Either mapping of a bracketed difference: n the difference (ratio) or n the minuend (growth).
+    ("Sales uplift", "((7940 - 6585)) / 6585", *_SALES, "0.21", "agreed"),
+    ("Sales uplift", "((7940 - 6585)) / 6585", *_SALES, "1.21", "disagreed"),
+    ("Sales uplift", "(Sales: 7940 - 6585) / 6585", *_SALES, "0.21", "agreed"),
+    ("Sales uplift", "(Sales: 7940 - 6585) / 6585", *_SALES, "1.21", "disagreed"),
+    ("Sales change", "((7940 - 6585)) / 6585", *_SALES, "0.21", "agreed"),
+    ("Sales change", "(Sales: 7940 - 6585) / 6585", *_SALES, "0.21", "agreed"),
+    ("Sales uplift", "((7940 - 6585)) / 6585", *_DIFF, "1.21", "disagreed"),
+    ("Sales uplift", "(Sales: 7940 - 6585) / 6585", *_DIFF, "1.21", "disagreed"),
+    ("Sales uplift", "(7,940 - 6,585) / 6,585", *_SALES, "0.21", "agreed"),
+    # A label that names the change keeps its words; only a cell of bare figures reads either.
+    ("Sales growth", "Sales change: 1355 / 6585", *_DIFF, "0.21", "agreed"),
+    ("Sales growth", "Sales change: 1355 / 6585", *_DIFF, "-0.79", "disagreed"),
+    ("Sales growth", "\u0394 Sales = 1355 / 6585", *_DIFF, "-0.79", "disagreed"),
+    ("Sales change", "Change in sales: 1355 / 6585", *_DIFF, "-0.79", "disagreed"),
+    ("Sales growth", "Increase = 1355 / 6585", *_DIFF, "-0.79", "disagreed"),
+    ("Sales growth", "FY2024: 7940 / 6585", *_SALES, "0.21", "agreed"),
+    ("Sales growth", "FY2024: 7940 / 6585", *_SALES, "1.21", "disagreed"),
+    # A spaceless closing minus one counts only on the row's own denominator.
+    ("Sales ratio", "Sales 2024/2023-1", *_SALES, "1.21", "agreed"),
+    ("Sales ratio", "7940 / 6585-1", "7940", "6584", "1.21", "agreed"),
+    ("Sales ratio", "7940 / 6585-1", "7940", "6584", "0.21", "disagreed"),
     ("Sales uplift", "7940/6585-1", *_SALES, "0.21", "agreed"),
     ("Sales uplift", "7940 / 6585-1", *_SALES, "1.21", "disagreed"),
     ("Sales growth", _LESS, *_SALES, "0.21", "agreed"),
@@ -2074,6 +2096,7 @@ def test_cp1_a_nested_bracket_pattern_reads_a_2000_character_numerator_within_a_
         "(" * 1000 + "a - b" + ")" * 999 + " / y",
         "x" * 1990 + "/6585-1",
         "label " * 300 + "= a / b",
+        "((" + "a - " * 45 + "b)) / y",  # 190 characters: inside the guard, so it is scanned
     ):
         start = time.perf_counter()
         cp1_module._reads_growth(formula, formula)
