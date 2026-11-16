@@ -10,7 +10,6 @@ import shutil
 import subprocess
 import tempfile
 import zlib
-from collections import Counter
 from contextlib import closing
 from importlib.metadata import version
 from pathlib import Path
@@ -204,16 +203,19 @@ class _Ocr:
         return text, f"{OCR_MARK} (tesseract {self.version}); verify against the original"
 
 
-_NUMBER = re.compile(r"\d[\d,.]*\d|\d")
+def _alnum(text: str) -> int:
+    return sum(char.isalnum() for char in text)
 
 
 def pdf_page_text(page: PageObject) -> tuple[str, str | None]:
-    """Layout text, plus reading-order text where layout mode dropped numbers (Form XObjects)."""
+    """Layout text, plus reading-order text where layout mode dropped text (Form XObjects)."""
     layout = page.extract_text(extraction_mode="layout", layout_mode_strip_rotated=False)
     plain = page.extract_text()
     if not layout.strip():
-        return (plain, PLAIN_ONLY) if plain.strip() else (layout, None)
-    if not Counter(_NUMBER.findall(plain)) - Counter(_NUMBER.findall(layout)):
+        # Only readable text replaces the page; anything else leaves it to OCR or "empty".
+        return (plain, PLAIN_ONLY) if _substantive(plain) else (layout, None)
+    # Plain mode may split a number layout reads whole, so compare the amount of text, not tokens.
+    if _alnum(plain) <= _alnum(layout):
         return layout, None
     return f"{layout}\n\n{PLAIN_HEADER}\n{plain}", APPENDED
 
