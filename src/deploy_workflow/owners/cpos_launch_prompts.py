@@ -302,12 +302,16 @@ UNIT_RULE = (
     "exactly as printed; an amount printed in the other unit is stated as missing, with the "
     "reason, not converted. "
 )
-# One rule in CP-2G's and CP-1's drivers text, matching what `cpos_forecast.parse` accepts: every
-# driver three figures, or every driver `[null, null, null]` (the method declines).
+# What `cpos_forecast.parse` accepts: every driver three figures, or every driver
+# `[null, null, null]` (the method declines). CP-2G and CP-1 are both told the second rule; only
+# CP-1 is told the first (CP-2G's method says to use null, not zero, for an unsupported amount).
 DRIVER_NULL_RULE = (
-    "Never write null for one driver or year: if one has no anchor, every driver's `values` "
-    "is `[null, null, null]`. A `dividends`/`debt_repayment` year with no declared or "
-    'scheduled payment is `"0"` and `limitation` says so; carry no one-off payment forward.'
+    "Never write null for one driver or year: if a driver has no anchor, every driver's "
+    "`values` is `[null, null, null]`."
+)
+ZERO_YEAR_RULE = (
+    'A `dividends`/`debt_repayment` year with no declared or scheduled payment is `"0"` and '
+    "`limitation` says so; repeat no one-off payment."
 )
 FORECAST_BLOCK = (
     f"Forecast inputs: write `{cpos_forecast.HEADING}` inside `## Findings`, holding exactly "
@@ -558,7 +562,11 @@ LAYER1_FORECAST_BLOCK = (
     'amounts in the block\'s unit (with `"scale": 1000`, 20 million is `"20000"`, at '
     "most one decimal place) and every other driver is a ratio and is never scaled; `category` "
     "is exactly one of "
-    f"{', '.join(f'`{c}`' for c in get_args(Category))}. " + DRIVER_NULL_RULE + " "
+    f"{', '.join(f'`{c}`' for c in get_args(Category))}. "
+    + ZERO_YEAR_RULE
+    + " "
+    + DRIVER_NULL_RULE
+    + " "
     "Set `downside_shock`, `upside_drivers` and "
     "`downside_drivers` to null: there are no cases and no shock in this forecast. `years` is "
     'three consecutive fiscal years after the base period, each `{"year": <int>, "start": '

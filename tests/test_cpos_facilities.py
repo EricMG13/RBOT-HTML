@@ -518,16 +518,26 @@ def _driver_texts() -> dict[str, str]:
     }
 
 
+_ZERO = 'no declared or scheduled payment is `"0"`'
+_DECLINE = "if a driver has no anchor, every driver's `values` is `[null, null, null]`"
+
+
 @pytest.mark.parametrize("module", ["CP-2G", "CP-1"])
 def test_the_driver_instruction_allows_no_single_null_driver(module):
     text = " ".join(_driver_texts()[module].split())
     assert "Leave a driver's values null" not in text  # the sentence that read as permission
     assert "Never write null for one driver or year" in text
-    assert "if one has no anchor, every driver's `values` is `[null, null, null]`" in text
-    assert (
-        'no declared or scheduled payment is `"0"` and' in text and "`limitation` says so" in text
-    )
-    assert "carry no one-off payment forward" in text
+    assert _DECLINE in text
+
+
+def test_cp1_states_the_zero_year_before_the_decline_rule_and_cp2g_has_no_zero_rule():
+    cp1 = " ".join(_driver_texts()["CP-1"].split())
+    assert _ZERO in cp1 and "`limitation` says so" in cp1
+    assert "repeat no one-off payment" in cp1
+    assert cp1.index(_ZERO) < cp1.index(_DECLINE)  # a no-payment year is not "no anchor"
+    # CP-2G's method says to use null, not zero, for an unsupported amount.
+    cp2g_text = " ".join(_driver_texts()["CP-2G"].split())
+    assert _ZERO not in cp2g_text and "one-off payment" not in cp2g_text
 
 
 def test_the_parser_takes_three_figures_or_a_declined_block_and_no_part_null_driver():

@@ -80,15 +80,6 @@ CP1B_NOTE = (
     "table's stated unit (`6585 / 7940`) and `Abs/%` as the change then the percentage "
     "(`1355; 20.6%`). A row written another way is not checked.\n\n"
 )
-# What CP-1B would need to be told for this check (not sent: `earnings_update` has 93 characters
-# under its ceiling, and the owner raises a ceiling, not this module). Kept to measure the need.
-CP1B_NOTE_UNSENT = (
-    "Python checks your T4.6 % Change and T4.4 YoY % after you answer, with the method's own "
-    "`credit_metrics.py` (you cannot run it): Current / Prior - 1, from the row's own values. "
-    "So write % Change with `%`, Prior and Current in one unit, and name T4.4's periods so the "
-    "year-earlier one is recognisable (`FY2023`, `FY2024`). A figure that disagrees is sent back "
-    "for repair; one whose input is missing is not checked, never read as zero.\n\n"
-)
 
 
 # `20.6% reported`, `22.9% calculated`: the figure with only the method's source qualifier after it.

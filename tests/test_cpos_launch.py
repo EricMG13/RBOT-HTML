@@ -9006,7 +9006,6 @@ def test_cp1b_is_sent_its_cell_format_note_and_checked_by_its_script(tmp_path):
     (tmp_path / "texts").mkdir()
     _, texts = all_instructions(tmp_path / "texts", "earnings_update")
     assert method_scripts_cp1b.CP1B_NOTE in texts["CP-1B"]
-    assert method_scripts_cp1b.CP1B_NOTE_UNSENT not in texts["CP-1B"]
     prepared, task, context = good_task(tmp_path, "CP-1B", "earnings_update")
     raw = answer(context, list(prepared.plan.layout.routes))
     check = checker(prepared.layout)
