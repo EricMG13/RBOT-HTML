@@ -4,6 +4,40 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-16 — Browser-marked tests run on `main` after the pathway change; three stale or machine-dependent tests fixed (branch `claude/busy-dijkstra-bgex9m`)
+
+Scope: every test marked `browser` (300 tests in 8 files), offline, on `main` at `1cf9738` plus this
+change. No provider was called. A correction first: earlier entries and PR #129's text said the
+run start page's browser tests are checked by GitHub's weekly suite. They are not. Both workflows
+select `-m "not live and not browser"`; `docs/QUALITY-GATE.md` says the browser checks are run by
+hand. So PRs #126 to #129 merged without those tests having run on a real browser.
+
+- Browser used: the build container's full Chrome for Testing 153.0.8010.12 never acts on
+  `--dump-dom` when given `--user-data-dir`, on any commit. The tests were therefore run through
+  the headless-shell build of the same Chromium (Playwright build 1243) with overlay scrollbars,
+  by a pytest plugin kept outside the repository that swaps only the binary; the tests' commands
+  and assertions are their own. This is that engine, not the analysts' Chrome.
+- Result before the fixes: 285 passed, 15 failed. Compared on the same browser with `main` before
+  this session's first PR (`9d040f8`) and before PR #129 (`250aa05`): 11 failed at both, 2 more
+  since PRs #126 to #128, 1 more since PR #129, plus the new Deep case of an already failing test.
+- Causes and fixes, all in tests; no page or service defect was found:
+  - 9 tests pick Claude Opus, which the service refuses unless its environment holds the
+    Anthropic key (`require_provider_key`, presence only). They passed only on a machine that has
+    one. The `page` fixture now sets a placeholder key; the launcher in these tests is the fake.
+  - 2 tests expected the full credit assessment to launch 12 modules; it launches 14 since CP-2D
+    and CP-3C joined it (ruling `2026-11-15-full-assessment-cp3c-cp6a`).
+  - 1 library test expected seven pathways offered; there are eight with Deep.
+  - 3 tests at 375 px measured 360 because the headless shell draws a 15 px classic scrollbar;
+    with overlay scrollbars they pass unchanged. Not a repository change.
+- Result after: 300 passed, 1 skipped (a screenshot test that needs a path), 0 failed. Quality
+  gate 0 findings.
+- Left for the owner's machines (owner, 2026-11-16: "Close the plan here"): the browser-marked
+  tests on full Chrome and on Windows; `Smoke-test.ps1`; the first Full credit assessment from the
+  run start page on the work PC (apply change packs 071 to 074, start the service with the OpenAI
+  key in its environment, open a fresh tab, Full, GPT Sol, Balanced; the summary must show USD 25),
+  whose `.method-checks.json` records are the first evidence for the script checks on a run at the
+  new caps; and the data defects in the fund's portfolio export, which the check reports and does
+  not repair.
 ## 2026-11-16 — The parked findings of the live validation, fixed (branch `claude/module-validation-testing-31a837`)
 
 Scope is **deterministic and synthetic, plus the five retained live run folders read again**; no
@@ -166,10 +200,9 @@ per pathway").
   5.73). Claude Opus at the one measured run's ratio (2.26, `tdg-proof-snapshot-opus-002`): Full
   about 23 to 25 against 25, Deep about 34 to 44 against 40; either can stop at the cap.
 - Checks on the merge: targeted suites 2,212 passed, 4 skipped; quality gate 0 findings; the
-  sub-branch's CI fast list 5,369 passed. Browser page tests on real Chrome in the build container:
-  library, changes, model shell and full assessment pass (50 passed, 1 skipped);
-  `tests/test_run_start_page.py` cannot run there (Chrome hangs when given a fresh profile, on
-  `main` too) and is left to GitHub's weekly suite on the PR head. Not run: any paid run.
+  sub-branch's CI fast list 5,369 passed. Not run: any paid run. The browser-marked tests were
+  not run on that merge: see the next entry up, which also corrects what this line first said
+  (that GitHub's weekly suite runs `tests/test_run_start_page.py`; it does not).
 
 ## 2026-11-15 — After the restructure: journal harness retired, method scripts as acceptance checks, portfolio inputs (branch `claude/busy-dijkstra-bgex9m`, after PR #126)
 
@@ -944,30 +977,3 @@ Not verified: that a Key figures figure is the right measure or period in CP-1 (
 ## 2026-11-12 — Changes tab in the issuer library (branch `claude/changes-section`, stacked on PR #55, decision M8)
 Scope: `changes.js` renders the pack and CP-8's handoff; the store carries `run.changes`; offline. CI fast list 2,265 passed; node 268; browser gate 147 passed; quality gate 0; answer keys are literals; fix round 1: same-period differences are not issuer moves, no inferred first run, periods must match to join (probes exit 0).
 Not verified: a real CP-8 run in the tab; a CP-8 refusal's pack (the delivery omits it); dark mode (none); a reader check against the VMO2 reference.
-
-## 2026-11-12 — CP-8 fixes, rounds 1-3 (branches `claude/cp8-changes-r1`, `-r3`)
-
-Scope: engine, method and run start service, offline, no provider call. Round 1: pack schema `cpos-changes/2` (difference
-for equal units; `comparable` yes/no/judge; refs `E1`/`C1`); the checker reads each row and every printed difference; a CP-8
-not accepted, an unbuildable pack or a hold over the cap delivers without CP-8; the approval names the earlier run and the
-digest binds it (`--prior`); display name "Changes since the last run". Round 2: `same_period`, `definition_resolved`. Round 3:
-the sentence word lists are deleted; the check is mechanical (K1-K12): `changes.same_period` (same date, else same fiscal
-year), a withheld difference in no checked line, every figure of a checked line held in the pack, its definition texts or a
-handoff of either run (the launch caller passes this run's handoffs and `prior/*.md`), fact rows carry held amounts but no
-pack value or difference (Q-1). Answer keys are hand-written in `tests/test_changes.py`. Changed expectations (by the rulings):
-`test_a_cp8_that_is_not_accepted_loses_only_itself...` (exit 0); the summary digest is `bound(digest, prior)`; 500 US$m not
-held; "debt was 333"; two movement-in-words cases and one trend assertion dropped; a test renamed. Real pair (cpos-tdg-sol-medium-all-001
-then tdg-reader-format-001): five measures, all `judge`; 20 `E`, 11 `C` refs; CP-8's first request 318,153 bytes, hold 5.73.
-Results before the merge with main: fast set 1,439 passed, browser 138 passed, quality gate 0; reviewer probes `t4r3_same_period_rows`,
-`t4r4_fact_row_leak`, `t4r4_sentences`, `t4r4_same_period`, `t4r2_prior` pass. After merging main (99afe9e; tests adapted to its model-choice API): CI fast list plus test_changes 2,433 passed; whole fast suite without tests/model 1,787 passed; browser 144 passed; node 257 passed; quality gate 0.
-Not verified: a real model writing the ledger or judging a definition; whether the estimate matches a live first request; the
-library's Changes section; a real CP-8 handoff against the new figure rule (hand-written mini pack and probes only).
-## 2026-11-12 — CP-8 in the run: prior run, pins, comparison pack, check (branch `claude/cp8-changes`, decisions M5, M7, M8)
-
-Scope: engine and method, offline, no provider call. Built: `changes.py` (prior-run rule, `prior/*` pins, `changes.json`),
-`changes_check.py`, registry fan-in, `cp8.md`, `changes.json` in the delivery, the summary's `changes` line. Answer keys are
-hand-written in `tests/test_changes.py`; isolation is checked on the requests sent. Changed: `test_cpos_launch.py` no longer
-passes every method to `--modules`; `test_run_start_page.py` asserts `changes`. Results then: fast set plus `test_changes.py`
-1,063 passed; all non-live, non-browser, non-slow less `tests/model` and `tests/test_financial_workflow.py` 1,477 passed;
-browser 100 passed; quality gate 0. Not verified: any real model writing CP-8's registers; whether CP-8's request fits a long
-run's context; real earlier runs on the lean-copy deliveries; the library's Changes section.

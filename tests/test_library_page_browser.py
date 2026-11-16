@@ -1147,8 +1147,9 @@ def test_a_copy_of_the_page_marked_with_a_pathway_no_longer_fixes_it(tmp_path):
     probe = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
     # The page is served by the start service, not opened from a folder: the copy's
     # data-pathway mark is ignored, every pathway is offered and none is disabled.
-    # the six and the lite credit assessment
-    assert len(probe["shown"]) == 7 and probe["disabled"] == 0
+    # the six, the lite credit assessment and the deep one
+    # (ruling 2026-11-15-pathway-tiers-and-caps)
+    assert len(probe["shown"]) == 8 and probe["disabled"] == 0
     assert probe["built"]["run"]["pathway"] == "credit_snapshot"  # The probe's own choice held ...
     # The probe's event targets the form, not the radio, so the run type stays at the
     # pathway's default (research for the Full credit assessment).

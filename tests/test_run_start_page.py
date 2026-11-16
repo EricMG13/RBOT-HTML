@@ -28,6 +28,7 @@ from test_library_page_browser import chrome
 from deploy_workflow import run_expectations as RE
 from deploy_workflow.inbox import runs, startup
 from deploy_workflow.inbox.scheduler import Scheduler
+from deploy_workflow.model.adapter import KEY_VARIABLES
 from deploy_workflow.owners.cpos_launch import (
     update_library_at,
 )  # the real one, before any test patches it
@@ -209,6 +210,10 @@ def page(
     chrome()  # skips here when there is no browser
     monkeypatch.setattr(startup, "FORM", FORM)
     fake_env({"sleep": 30})
+    # A Claude Opus choice is refused unless the service's environment holds the Anthropic key
+    # (`submissions.require_provider_key`, presence only). The tests that pick it must not depend
+    # on the machine they run on; the launcher is the fake one, so no provider is called.
+    monkeypatch.setenv(KEY_VARIABLES["anthropic"], "test-key-not-real")
     with _serving(root, tmp_path) as (served, _watcher):
         yield served
 
@@ -3410,7 +3415,10 @@ def test_approve_and_submit_stay_in_view_while_the_card_is_taller_than_main(page
     """,
         size=size,
     )
-    assert seen["modules"] == 12 and seen["taller"] is True
+    # The full credit assessment launches 14 modules since CP-2D and CP-3C joined it (ruling
+    # 2026-11-15-full-assessment-cp3c-cp6a): CP-0, CP-1, CP-1A, CP-DR, CP-2, CP-2A, CP-2D, CP-2E,
+    # CP-2G, CP-4, CP-3C, CP-3, CP-5, CP-6.
+    assert seen["modules"] == 14 and seen["taller"] is True
     assert all(visible and top > 0 for top, visible in seen["mid"]), seen["mid"]
     assert seen["focus"] == [["approve", True]] * 2, seen["focus"]
     assert seen["top"] is True
