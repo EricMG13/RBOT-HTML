@@ -12,7 +12,9 @@ what it does not cover:
   percentage of it, or as the script's `growth` (n / d - 1) for a change, in either form. The
   Formula decides which, in order: it has a closing `- 1` (not a period tag like `t-1` or
   `(t - 1)`, nothing arithmetic after it): growth; its numerator names a change (`Sales change /
-  prior sales`, `Δ Sales`, or a bracketed difference of two operands): ratio;
+  prior sales`, `Sales less returns`, `Δ Sales`, or a bracketed difference of two
+  operands; change words include change, increase, decrease, difference, delta, movement, less and
+  minus): ratio;
   growth or change words in the name or Formula: growth; otherwise ratio. Only the arithmetic is
   bound: which debt or EBITDA the
   operands are is the row's own statement (a free name fixes no operand), so a ratio on principal
@@ -112,6 +114,9 @@ _NUMERATOR_CHANGE = re.compile(
     r"\bchange\b|\bincrease\b|\bdecrease\b|\bdifference\b|\bdelta\b|[δ∆]|\bmovement\b"
     r"|\bless\b|\bminus\b"
 )
+# Tested only on a numerator of at most this many characters: the pattern backtracks steeply on a
+# long run of minus terms that fails to match (the longest retained Formula cell is 55).
+_BRACKETED_DIFFERENCE_MAX = 200
 _BRACKETED_DIFFERENCE = re.compile(
     r"\(\s*[^()]*[^()\s][^()]*?(?:\s+-\s*|\s*[−–]\s*|(?<=\d)-(?=\d))[^()]*[^()\s][^()]*\)"
 )
@@ -159,7 +164,10 @@ def _reads_growth(formula: str, words: str) -> bool:
     numerator = _NUMERATOR_END.split(text, maxsplit=1)[0]
     if numerator == text:
         numerator = _OVER.split(text, maxsplit=1)[0]
-    if _NUMERATOR_CHANGE.search(numerator) or _BRACKETED_DIFFERENCE.fullmatch(numerator.strip()):
+    numerator = numerator.strip()
+    if _NUMERATOR_CHANGE.search(numerator) or (
+        len(numerator) <= _BRACKETED_DIFFERENCE_MAX and _BRACKETED_DIFFERENCE.fullmatch(numerator)
+    ):
         return False
     return bool(_GROWTH_WORDS.search(words))
 

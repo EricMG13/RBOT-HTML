@@ -10,6 +10,7 @@ import hashlib
 import json
 import shutil
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -2132,3 +2133,12 @@ def test_the_record_holds_every_outcome_and_the_script_hash():
 
 ENDING = ms.ENDING
 COMPLETE = "completeness_check.py"
+
+
+def test_cp1_a_2000_character_numerator_of_minus_terms_reads_within_a_second():
+    from deploy_workflow import method_scripts_cp1 as cp1_module
+
+    formula = "(" + "a - " * 500 + "b x / y"  # never closed: the bracket pattern cannot match
+    start = time.perf_counter()
+    cp1_module._reads_growth(formula, formula)
+    assert time.perf_counter() - start < 1.0
