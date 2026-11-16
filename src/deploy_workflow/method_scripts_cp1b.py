@@ -93,6 +93,23 @@ _PAIR = re.compile(
 # (`%`, `x`, `times`), a change in points, or the two scales or currencies of a mixed pair.
 _UNIT_NOT_MONEY = re.compile(r"%|×|\b(?:x|times|bps?|pp|ppt|points?)\b", re.IGNORECASE)
 _QUALIFIER = r"(?:\s+(?:reported|calculated))?\s*$"
+# `20 –21%`, `20-21%`, `20 to 21%`, `20–21 %`: two percentages, the first unsigned, the cell holding
+# nothing before it and the low bound first (`_is_range`). `1355 -20.6%` (a change, then a negative
+# percentage), a signed first figure and a first figure ending on a comma are read as before.
+_RANGE = re.compile(
+    r"^\s*(?P<low>\d+(?:,\d{3})*(?:\.\d+)?)\s*%?\s*(?:[-–−]|\bto\b|\s[-–−])\s*"
+    r"(?P<high>\d+(?:,\d{3})*(?:\.\d+)?)\s*%",
+    re.IGNORECASE,
+)
+
+
+def _is_range(cell: str) -> bool:
+    read = _RANGE.match(cell)
+    if read is None:
+        return False
+    return float(read["low"].replace(",", "")) < float(read["high"].replace(",", ""))
+
+
 # T4.6's joined `Abs/%`, read only when the percentage ends it: at most one absolute figure and a
 # separator before it, `reported` or `calculated` alone after it. `+608 (20.8%)` annotates the
 # absolute figure (its sign); a lone `(5.0%)` is the accounting negative.
@@ -241,6 +258,13 @@ def _two_units(unit: str) -> bool:
     return len(scales) > 1 or len(codes) > 1
 
 
+def _not_one_percentage(cell: str) -> str:
+    """Why an Abs/% cell is not one percentage (points, or a range), or ``""``."""
+    if re.search(r"\b(?:pp|bps?|ppt|points?)\b", cell, re.IGNORECASE):
+        return "states a change in points, not only a percentage"
+    return f"`{cell}` states a range, not one percentage" if _is_range(cell) else ""
+
+
 def _joined(name: str, pair_cell: str, change_cell: str) -> _Pair:
     """A T4.6 row of the method's `Prior/Current` and `Abs/%` cells, read only when each holds one
     pair and one percentage; otherwise the row carries why it is not (never a guess)."""
@@ -264,9 +288,9 @@ def _joined(name: str, pair_cell: str, change_cell: str) -> _Pair:
         return replace(
             row, skip=f"the Prior/Current cell's unit words `{unit.strip()}` name two units"
         )
-    if re.search(r"\b(?:pp|bps?|ppt|points?)\b", _plain(change_cell), re.IGNORECASE):
-        return replace(row, skip="the Abs/% cell states a change in points, not only a percentage")
     cell = _plain(change_cell)
+    if not_one := _not_one_percentage(cell):
+        return replace(row, skip=f"the Abs/% cell {not_one}")
     annotated, ending = _ANNOTATED.match(cell), _ENDING.match(cell)
     if annotated:
         own = annotated["pct"]  # a sign written inside the brackets is kept, else the figure's
