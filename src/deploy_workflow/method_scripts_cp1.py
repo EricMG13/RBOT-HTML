@@ -102,6 +102,12 @@ _CLOSING_MINUS_ONE = re.compile(
     r"(?<![^\W_])[-−–]\s*1(?:\.0+)?+"
     r"(?![^\W_]|,\d|\.\d*[1-9]|-[^\W\d_]|\s*[/÷]|\s*\)\s*[/÷])"
 )
+# P-b: a closing `-1` written without spaces straight after a bare figure denominator
+# (`7940/6585-1`) is a minus one when that figure is the row's Denominator Value and the minus one
+# ends the expression; otherwise (`FY2023-1`, `2024/2023-1`) it stays a tag.
+_GLUED_MINUS_ONE = re.compile(r"[/÷]\s*(\d[\d,]*(?:\.\d+)?)\s*[-−–]\s*1(?:\.0+)?[\s)%]*$")
+# A leading label (`Net leverage = ...`, `Growth: ...`): no quotient, bracket or second `=` in it.
+_LABEL = re.compile(r"^[^=:/÷()]{1,60}?\s*[:=](?![=:])\s*")
 # A minus one in brackets whose content so far is one token with no `/` (`(t - 1)`, `(FY2024-1)`).
 _PERIOD_TAG = re.compile(r"\(\s*[^\s/()]*\s*$")
 # The numerator ends at the first of these; only when the Formula has none is `over` the divider
@@ -112,8 +118,13 @@ _OVER = re.compile(r"(?<![-\w])(?<!year )over(?![-\w])(?! year)")
 # of two operands of any kind (`(7940 − 6585)`, `(FY2024 sales - FY2023 sales)`).
 _NUMERATOR_CHANGE = re.compile(
     r"\bchange\b|\bincrease\b|\bdecrease\b|\bdifference\b|\bdelta\b|[δ∆]|\bmovement\b"
-    r"|\bless\b|\bminus\b"
 )
+# `less` and `minus` alone: with growth words in the row, the reading is either one.
+_SUBTRACTION_WORD = re.compile(r"\bless\b|\bminus\b")
+# A bare figure (not part of `FY2024`): the first in a bracketed difference is its minuend.
+_BARE_FIGURE = re.compile(r"(?<![\w.,])\d[\d,]*(?:\.\d+)?")
+# A bracket holding one bracket: `((7940 - 6585))`.
+_NESTED_BRACKET = re.compile(r"\(\s*(\([^()]*\))\s*\)")
 # Tested only on a numerator of at most this many characters: the pattern backtracks steeply on a
 # long run of minus terms that fails to match (the longest retained Formula cell is 55).
 _BRACKETED_DIFFERENCE_MAX = 200
@@ -122,7 +133,9 @@ _BRACKETED_DIFFERENCE = re.compile(
 )
 # Rule 3: the words say growth.
 _GROWTH_WORDS = re.compile(r"\bgrowth\b|\bchange\b|\byoy\b|year on year")
-_PERCENT = re.compile(r"[x×*]\s*100\b|%|\bper ?cent\b")
+# The Formula multiplies by 100: percent only. A `%` or `per cent` in the words (`EBITDA margin %`)
+# does not say which: the value is then a fraction or a percentage.
+_PERCENT = re.compile(r"[x×*]\s*100\b")
 _POSITIVE_FAMILY = re.compile(r"leverage|cover|/[^|]*\b(?:ebitda|interest|debt)\b")
 _QUOTIENT = re.compile(r"/|÷|\bdivided by\b|\bover\b|\bratio\b|\bmargin\b|\bconversion\b")
 
@@ -143,7 +156,7 @@ class _Quotient:
     hn: float
     hd: float
     text: str  # the row's Metric Name and Formula, as labelled
-    growth: bool  # the Formula's reading is n / d - 1 rather than n / d (`_reads_growth`)
+    reading: str  # `ratio` (n / d), `growth` (n / d - 1) or `either` (`_reads_growth`)
 
     @property
     def positive_family(self) -> bool:
@@ -152,39 +165,69 @@ class _Quotient:
         return bool(_POSITIVE_FAMILY.search(self.text))
 
 
-def _reads_growth(formula: str, words: str) -> bool:
-    """Whether a free row's own words make it a growth (n / d - 1) rather than a ratio (n / d).
-    In order: a Formula with a closing explicit `- 1` is growth; a Formula whose numerator already
-    names a change (`Sales change / prior sales`, `Δ Sales`, `(7940 - 6585)`) is a
-    ratio; otherwise growth or change words in the name or Formula make it growth; otherwise a
-    ratio."""
-    text = formula.replace("`", "").strip().casefold()  # `Δ` arrives as `δ`
-    if any(not _PERIOD_TAG.search(text[: m.start()]) for m in _CLOSING_MINUS_ONE.finditer(text)):
-        return True
+def _figure(token: str) -> float | None:
+    try:
+        return float(token.replace(",", "").rstrip("."))
+    except ValueError:
+        return None
+
+
+def _reads_growth(formula: str, words: str, n: float | None = None, d: float | None = None) -> str:
+    """How a free row's own words read its quotient: `growth` (n / d - 1), `ratio` (n / d) or
+    `either` where they leave both open. A leading `label =` or `label:` is dropped for the
+    reading, but a change word in it counts as one in the numerator. In order: a Formula with a
+    closing explicit `- 1` (a spaceless one only on the row's denominator `d`) is growth; a
+    numerator that names a change (`Sales change / prior sales`, `Δ Sales`) is a ratio; a bracketed
+    difference of figures is growth when the row's `n` is its first figure (the minuend), else a
+    ratio; one whose only change signal is `less` or `minus` is a ratio, or either where the row's
+    words say growth; otherwise growth or change words in the name or Formula make it growth
+    (either, when the whole Formula cell is bare figures: `7940 / 6585`); otherwise a ratio."""
+    original = formula.replace("`", "").strip().casefold()  # `Δ` arrives as `δ`
+    label = _LABEL.match(original)
+    text = original[label.end() :] if label else original
+    glued = _GLUED_MINUS_ONE.search(text)
+    if (glued and d is not None and _figure(glued[1]) == d) or any(
+        not _PERIOD_TAG.search(text[: m.start()]) for m in _CLOSING_MINUS_ONE.finditer(text)
+    ):
+        return "growth"
     numerator = _NUMERATOR_END.split(text, maxsplit=1)[0]
     if numerator == text:
         numerator = _OVER.split(text, maxsplit=1)[0]
     numerator = numerator.strip()
-    if _NUMERATOR_CHANGE.search(numerator) or (
-        len(numerator) <= _BRACKETED_DIFFERENCE_MAX and _BRACKETED_DIFFERENCE.fullmatch(numerator)
-    ):
-        return False
-    return bool(_GROWTH_WORDS.search(words))
+    small = len(numerator) <= _BRACKETED_DIFFERENCE_MAX
+    if small and numerator[:1] == "(":
+        numerator = _NESTED_BRACKET.sub(r"\1", numerator)
+    if _NUMERATOR_CHANGE.search(f"{label[0] if label else ''} {numerator}"):
+        return "ratio"
+    if small and _BRACKETED_DIFFERENCE.fullmatch(numerator):
+        first = _BARE_FIGURE.search(numerator)
+        minuend = _figure(first[0]) if first else None
+        return "growth" if n is not None and minuend == n else "ratio"
+    growth_words = bool(_GROWTH_WORDS.search(words))
+    if _SUBTRACTION_WORD.search(numerator):
+        return "either" if growth_words else "ratio"
+    if not growth_words:
+        return "ratio"
+    return "growth" if re.search(r"[^\W\d_]", original) else "either"
 
 
 def _forms(q: _Quotient, stated: str, script: types.ModuleType) -> list[tuple[str, float, float]]:
-    """The reading the row's words allow: (form, the script's value, its rounding bound), in
-    percent as well unless the row says it is not. The Formula's own words choose ratio or growth
-    (`_reads_growth`) and, where they say, percent or not."""
-    name = "growth" if q.growth else "ratio"
-    value = script.growth(q.n, q.d) if q.growth else script.ratio(q.n, q.d)
-    if value is None:
-        return []
+    """The readings the row's words allow: (form, the script's value, its rounding bound), in
+    percent as well unless the row says it is not. The Formula's own words choose ratio, growth or
+    either (`_reads_growth`) and, where they say, percent or not."""
     slack = quotient_slack(q.n, q.hn, q.d, q.hd)
     percent = bool(_PERCENT.search(q.text)) or _plain(stated).rstrip(") ").endswith("%")
     multiple = _plain(stated).rstrip(") ").lower().endswith("x")
-    out = [] if percent else [(name, value, slack)]
-    return out + ([] if multiple else [(f"{name} in percent", value * 100, slack * 100)])
+    out: list[tuple[str, float, float]] = []
+    for name in ("ratio", "growth"):
+        if q.reading not in (name, "either"):
+            continue
+        value = script.growth(q.n, q.d) if name == "growth" else script.ratio(q.n, q.d)
+        if value is None:
+            continue
+        out += [] if percent else [(name, value, slack)]
+        out += [] if multiple else [(f"{name} in percent", value * 100, slack * 100)]
+    return out
 
 
 def _operands(
@@ -216,8 +259,8 @@ def _free_row(row: list[str], cols: dict[str, int], loaded: Loaded) -> Outcome:
     except _NotChecked as why:
         return where("not checked", stated=stated, reason=str(why))
     words = _label(f"{row[cols['Metric Name']]} | {row[cols['Formula']]}")
-    growth = _reads_growth(row[cols["Formula"]], words)
-    return _judged_forms(where, stated, _Quotient(n, d, hn, hd, words, growth), loaded)
+    reading = _reads_growth(row[cols["Formula"]], words, n, d)
+    return _judged_forms(where, stated, _Quotient(n, d, hn, hd, words, reading), loaded)
 
 
 def _not_positive(where: _Where, stated: str, q: _Quotient) -> Outcome:
@@ -264,6 +307,9 @@ def _judged_forms(where: _Where, stated: str, q: _Quotient, loaded: Loaded) -> O
             )
     form, nearest, (_, tolerance) = min(judged, key=lambda j: abs(j[1] - read[0]))
     reason = f"{RATIO_FORMULA}; nearest as the {form}"
+    if q.reading == "either":
+        both = "; ".join(f"{f} {v:g}" for f, v, _ in judged)
+        reason += f" (its words leave the ratio and the growth both open, and neither fits: {both})"
     return where("disagreed", stated=stated, recomputed=nearest, tolerance=tolerance, reason=reason)
 
 
