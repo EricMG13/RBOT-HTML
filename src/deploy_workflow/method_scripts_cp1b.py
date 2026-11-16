@@ -96,11 +96,23 @@ _PAIR = re.compile(
 # (`%`, `x`, `times`), a change in points, or the two scales or currencies of a mixed pair.
 _UNIT_NOT_MONEY = re.compile(r"%|×|\b(?:x|times|bps?|pp|ppt|points?)\b", re.IGNORECASE)
 _QUALIFIER = r"(?:\s+(?:reported|calculated))?\s*$"
-# `20 –21%`, `20-21%`, `20 to 21%`, `20–21 %`: two figures, a range, not one signed figure. A sign
-# after a `;`, `,` or `/` (`1355; -21.0%`) or in front of the cell (`-21%`) is not a range.
+# `20 –21%`, `20-21%`, `20 to 21%`, `20–21 %`: two percentages, the first unsigned, the cell holding
+# nothing before it and the low bound first (`_is_range`). `1355 -20.6%` (a change, then a negative
+# percentage), a signed first figure and a first figure ending on a comma are read as before.
 _RANGE = re.compile(
-    rf"^\s*{_NUMBER}\s*%?\s*(?:[-–−]|\bto\b|\s[-–−])\s*\d[\d,]*(?:\.\d+)?\s*%", re.IGNORECASE
+    r"^\s*(?P<low>\d+(?:,\d{3})*(?:\.\d+)?)\s*%?\s*(?:[-–−]|\bto\b|\s[-–−])\s*"
+    r"(?P<high>\d+(?:,\d{3})*(?:\.\d+)?)\s*%",
+    re.IGNORECASE,
 )
+
+
+def _is_range(cell: str) -> bool:
+    read = _RANGE.match(cell)
+    if read is None:
+        return False
+    return float(read["low"].replace(",", "")) < float(read["high"].replace(",", ""))
+
+
 # T4.6's joined `Abs/%`, read only when the percentage ends it: at most one absolute figure and a
 # separator before it, `reported` or `calculated` alone after it. `+608 (20.8%)` annotates the
 # absolute figure (its sign); a lone `(5.0%)` is the accounting negative.
@@ -253,7 +265,7 @@ def _not_one_percentage(cell: str) -> str:
     """Why an Abs/% cell is not one percentage (points, or a range), or ``""``."""
     if re.search(r"\b(?:pp|bps?|ppt|points?)\b", cell, re.IGNORECASE):
         return "states a change in points, not only a percentage"
-    return f"`{cell}` states a range, not one percentage" if _RANGE.match(cell) else ""
+    return f"`{cell}` states a range, not one percentage" if _is_range(cell) else ""
 
 
 def _joined(name: str, pair_cell: str, change_cell: str) -> _Pair:

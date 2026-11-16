@@ -113,10 +113,11 @@ def _kind(line: str) -> tuple[str, str]:
 
 def _states_gap(cell: str) -> bool:
     """A unit cell that states a gap in the module's own wording (`Not supplied: <reason>`,
-    `Not calculable: <reason>`), as the T3.3 every-row-states-a-gap check reads it."""
+    `Not calculable: <reason>`), as the T3.3 every-row-states-a-gap check reads it. Twin of
+    `_GAP_FORM` in method_scripts_completeness.py (not importable here: the layers forbid it)."""
     text = _plain(cell).casefold()
     return text.startswith(core.GAP_WORDS) or bool(
-        re.match(r"not (?:calculable|assessable)\s*:", text)
+        re.match(r"(?:not calculable|not assessable|unavailable|not applicable)\s*:", text)
     )
 
 

@@ -1357,10 +1357,10 @@ def test_cp1b_joined_unit_words_after_the_comma_decide_whether_the_row_is_read(
 # --- parked finding h: a range in Abs/%; a stated gap in the CP-3 unit cells ----------------------
 
 
-def _joined_t46(change: str) -> ms.Outcome:
+def _joined_t46(change: str, pair: str = "6585 / 7940") -> ms.Outcome:
     text = (
         "### T4.6 - Comparison\n\n| Metric | Basis | Prior/Current | Abs/% | Driver | Source |\n"
-        f"|---|---|---|---|---|---|\n| Revenue | Annual YoY | 6585 / 7940 | {change} | d | s |\n"
+        f"|---|---|---|---|---|---|\n| Revenue | Annual YoY | {pair} | {change} | d | s |\n"
     )
     (outcome,) = [o for o in ms.run("CP-1B", text) if o.register == "T4.6"]
     return outcome
@@ -1416,3 +1416,31 @@ def test_cp3_a_real_unit_mix_keeps_its_reason(currency, scale):
     (outcome,) = _waterfall([_EV_GAP, _CLAIM, other])
     assert outcome.status == "not checked"
     assert "different or unread currencies or scales" in outcome.reason
+
+
+@pytest.mark.parametrize(
+    ("pair", "cell", "status"),
+    [
+        ("7940 / 6585", "-1355 -17.1%", "agreed"),
+        ("7940 / 6585", "−1355 −17.1%", "agreed"),
+        ("7940 / 6585", "-1,355 -17.1%", "agreed"),
+        ("7940 / 6585", "1355 -17.1%", "agreed"),
+        ("6585 / 7940", "1355 -20.6%", "disagreed"),
+        ("6585 / 7940", "1355, -20.6%", "disagreed"),
+        ("6585 / 7940", "1355 –20.6%", "disagreed"),
+        ("6585 / 7940", "1355 −20.6%", "disagreed"),
+        ("6585 / 7940", "1355 -25.0%", "disagreed"),
+        ("6585 / 7940", "-1355 -25.0%", "disagreed"),
+    ],
+)
+def test_cp1b_a_signed_percentage_after_a_change_is_not_a_range(pair, cell, status):
+    outcome = _joined_t46(cell, pair)
+    assert outcome.status == status, outcome
+
+
+@pytest.mark.parametrize(
+    ("pair", "cell"), [("6585 / 7940", "1,355 - 20.6%"), ("7940 / 6585", "-1355 - 17.1%")]
+)
+def test_cp1b_a_spaced_dash_after_a_change_keeps_its_base_reason(pair, cell):
+    outcome = _joined_t46(cell, pair)
+    assert outcome.status == "not checked" and "range" not in outcome.reason
