@@ -4,6 +4,35 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-16 — Browser-marked tests run on `main` after the pathway change; three stale or machine-dependent tests fixed (branch `claude/busy-dijkstra-bgex9m`)
+
+Scope: every test marked `browser` (300 tests in 8 files), offline, on `main` at `1cf9738` plus this
+change. No provider was called. A correction first: earlier entries and PR #129's text said the
+run start page's browser tests are checked by GitHub's weekly suite. They are not. Both workflows
+select `-m "not live and not browser"`; `docs/QUALITY-GATE.md` says the browser checks are run by
+hand. So PRs #126 to #129 merged without those tests having run on a real browser.
+
+- Browser used: the build container's full Chrome for Testing 153.0.8010.12 never acts on
+  `--dump-dom` when given `--user-data-dir`, on any commit. The tests were therefore run through
+  the headless-shell build of the same Chromium (Playwright build 1243) with overlay scrollbars,
+  by a pytest plugin kept outside the repository that swaps only the binary; the tests' commands
+  and assertions are their own. This is that engine, not the analysts' Chrome.
+- Result before the fixes: 285 passed, 15 failed. Compared on the same browser with `main` before
+  this session's first PR (`9d040f8`) and before PR #129 (`250aa05`): 11 failed at both, 2 more
+  since PRs #126 to #128, 1 more since PR #129, plus the new Deep case of an already failing test.
+- Causes and fixes, all in tests; no page or service defect was found:
+  - 9 tests pick Claude Opus, which the service refuses unless its environment holds the
+    Anthropic key (`require_provider_key`, presence only). They passed only on a machine that has
+    one. The `page` fixture now sets a placeholder key; the launcher in these tests is the fake.
+  - 2 tests expected the full credit assessment to launch 12 modules; it launches 14 since CP-2D
+    and CP-3C joined it (ruling `2026-11-15-full-assessment-cp3c-cp6a`).
+  - 1 library test expected seven pathways offered; there are eight with Deep.
+  - 3 tests at 375 px measured 360 because the headless shell draws a 15 px classic scrollbar;
+    with overlay scrollbars they pass unchanged. Not a repository change.
+- Result after: 300 passed, 1 skipped (a screenshot test that needs a path), 0 failed. Quality
+  gate 0 findings.
+- Not verified: the same tests on full Chrome or on Windows; `Smoke-test.ps1`.
+
 ## 2026-11-15 — Lite, Full and Deep credit assessments; a cap per pathway (branch `claude/busy-dijkstra-bgex9m`)
 
 Scope is **offline only**. No provider or model was called and no run was made; no model has run
@@ -38,10 +67,9 @@ per pathway").
   5.73). Claude Opus at the one measured run's ratio (2.26, `tdg-proof-snapshot-opus-002`): Full
   about 23 to 25 against 25, Deep about 34 to 44 against 40; either can stop at the cap.
 - Checks on the merge: targeted suites 2,212 passed, 4 skipped; quality gate 0 findings; the
-  sub-branch's CI fast list 5,369 passed. Browser page tests on real Chrome in the build container:
-  library, changes, model shell and full assessment pass (50 passed, 1 skipped);
-  `tests/test_run_start_page.py` cannot run there (Chrome hangs when given a fresh profile, on
-  `main` too) and is left to GitHub's weekly suite on the PR head. Not run: any paid run.
+  sub-branch's CI fast list 5,369 passed. Not run: any paid run. The browser-marked tests were
+  not run on that merge: see the next entry up, which also corrects what this line first said
+  (that GitHub's weekly suite runs `tests/test_run_start_page.py`; it does not).
 
 ## 2026-11-15 — After the restructure: journal harness retired, method scripts as acceptance checks, portfolio inputs (branch `claude/busy-dijkstra-bgex9m`, after PR #126)
 
@@ -952,33 +980,3 @@ page's link to the library's Report history for the run is checked by the next t
 assertion already matched the final copy. After: that file 56 passed; `-m browser -k "run_start or context_form
 or library or inbox"` 100 passed, exit 0; the fast set 756 passed, exit 0; quality gate 0 findings, exit 0.
 Not verified: a forecast run with a blank current period through a live provider.
-
-## 2026-11-12 — Web search from the run page; leaked citation markers (branch `claude/web-search-run-page`, decisions M1, M4)
-
-(a) Paid test, this dated case only (TDG FY2024, ruling `2026-11-11-cpdr-web-search-live-test.md`, run `tdg-cpdr-web-001`): CP-0, CP-1, CP-DR and CP-1C accepted, charged USD 3.39131650. CP-DR located HEICO and
-Howmet figures and CP-1C read them. Defect: the delivered CP-DR handoff held 54 provider citation markers
-(U+E200 `cite` U+E202 `turn..view..` U+E201) in reader prose, which the eight prose checks did not catch.
-Fix: markers are removed from a searching module's answer before the check (count in `<n>.markers.json` and a
-`citation_markers_removed` event; provider response unchanged), plus prose check 9 for any other shape
-(reader-ruling amendment). On that handoff the removal leaves 0 markers and adds no double space or
-space before a comma or full stop. Not verified: `store:false` behaviour was not separately inspected, peer
-figures were not checked against the cited pages, analytical accuracy.
-(b) This change, offline (no provider call): the standing run-start ruling lists `web-search`; `prepare`'s
-cap check holds the CP-DR search fee (USD 0.16) as the live loop does; the summary passes it; the page's
-approval summary says what goes to OpenAI; READMEs updated. Tests: `test_citation_markers.py`, the
-`prepare` and ruling tests in `test_cpos_launch.py`, `test_context_form.py`, `test_run_start_submissions.py`.
-`test_inbox_scheduler.py::test_a_submission_is_run_by_the_real_launcher_and_listed` failed identically on the base
-`claude/forecast-layer1` (canned answers; stopped at the checker); commit ebd4c13 fixed it (the canned launcher
-answers CP-2G with a forecast block).
-(c) Fix round 1 (security review, offline, no provider call): the page and ruling no longer say queries "use
-public names only" as a fact: the module is told to, the queries it sent are kept in `<n>.response.json`, and
-`flag_search_queries` flags afterwards any query with a supplied file name or a source figure of 4+ digits (years
-1900-2100 excepted) as a `search_query_flagged` event and `<n>.queries.json` (detection, not prevention; the
-library's Run record does not show the count: its store has no field). Owner ruling 2026-11-12: web search for
-`public` and `private` cases, off for `synthetic` (one rule, `web_search_offered`; offline hold, live hold and
-the `Web:` line agree; the page says before Submit whether the run searches). Source guidance and a `Source type`
-cell on web rows (METHODOLOGY-REVIEW.md): no paid run has exercised the new source guidance. Markers: a marker
-never spans lines, stripping is linear, the tool result tells the model how many were removed and an edit may quote
-marked text, check 9 covers `cite\s*turn\d+[a-z]+\d+` anywhere in the handoff and only U+E200-U+E202.
-Forecast riders: `~~~` fences are code, `\|` stays in its cell, working capital is the cell sign-reversed as CP-2G
-reads it (the base's test fixtures now print wc as `(10)`).
