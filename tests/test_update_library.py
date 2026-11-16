@@ -1,5 +1,6 @@
 """The update script: the static Credit OS library, written only to library/, from fixtures."""
 
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -660,3 +661,101 @@ def test_a_cp8_output_that_is_not_utf8_is_a_stated_problem_not_a_silent_null(tmp
     assert "CP-8" in got["problem"] and "not valid UTF-8" in got["problem"]
     issues = data_of(tmp_path)["workspace"]["issues"]
     assert any(i.startswith("later: ") and "not valid UTF-8" in i for i in issues)
+
+
+# ---- the script-check records on Evidence (parked finding c) ------------------------------------
+REASON = "every row of T3.3 states a gap, so its columns are not judged"
+SCRIPT = "docs/reuse/selected-methods/scripts/completeness_check.py"
+
+
+def outcome(status: str, reason: str = "", **rest) -> dict:
+    return {
+        "figure": rest.pop("figure", "columns"),
+        "module": "CP-1",
+        "reason": reason,
+        "recomputed": None,
+        "recomputed_label": None,
+        "register": "T3.3",
+        "row": "columns",
+        "script": SCRIPT,
+        "stated": None,
+        "status": status,
+        "tolerance": None,
+        "unit": None,
+    } | rest
+
+
+def write_record(run_dir: Path, module: str, fingerprint: str, attempt: int, outcomes, **rest):
+    folder = run_dir / "requests" / module / fingerprint
+    folder.mkdir(parents=True, exist_ok=True)
+    record = {
+        "kind": "method-script-checks/1",
+        "module": module,
+        "response_sha256": "0" * 64,
+        "scripts": {SCRIPT: "ab" * 32},
+        "checks": outcomes,
+    } | rest
+    (folder / f"{attempt}.method-checks.json").write_text(json.dumps(record), encoding="utf-8")
+
+
+def script_checks(workspace: Path, folder: str = "run-a") -> list[dict]:
+    update_library.update_library(workspace)
+    return data_of(workspace)["workspace"]["runs"][folder]["evidence"]["scriptChecks"]
+
+
+def test_the_script_check_record_of_a_module_reaches_the_evidence_data(tmp_path):
+    run_dir = make_run(tmp_path, "run-a")
+    write_record(
+        run_dir,
+        "CP-1",
+        "f" * 64,
+        1,
+        [
+            outcome("not checked", REASON),
+            outcome("agreed", "Net debt = Gross debt - Cash", figure="Net debt", stated="5,789"),
+            outcome(
+                "not checked", "not required in this transport (register scope or routing rule)"
+            ),
+        ],
+    )
+    (found,) = script_checks(tmp_path)
+    assert found["module"] == "CP-1" and found["attempt"] == 1
+    assert {c["status"]: c["n"] for c in found["counts"]} == {"agreed": 1, "not checked": 2}
+    assert found["outcomes"][0]["reason"] == REASON
+    assert found["scripts"] == [{"name": SCRIPT, "sha256": "ab" * 32}]
+
+
+def test_a_run_with_no_script_check_record_builds_and_carries_none(tmp_path):
+    make_run(tmp_path, "run-a")
+    assert script_checks(tmp_path) == []
+
+
+def test_the_last_attempts_record_is_the_one_carried(tmp_path):
+    run_dir = make_run(tmp_path, "run-a")
+    write_record(run_dir, "CP-1", "f" * 64, 1, [outcome("disagreed", "first write")])
+    write_record(run_dir, "CP-1", "f" * 64, 2, [outcome("agreed", "second write")])
+    (found,) = script_checks(tmp_path)
+    assert found["attempt"] == 2
+    assert [c["status"] for c in found["counts"]] == ["agreed"]
+
+
+def test_an_unreadable_script_check_record_is_named_and_does_not_stop_the_build(tmp_path):
+    run_dir = make_run(tmp_path, "run-a")
+    folder = run_dir / "requests" / "CP-1" / ("f" * 64)
+    folder.mkdir(parents=True)
+    (folder / "1.method-checks.json").write_text("{not json", encoding="utf-8")
+    assert script_checks(tmp_path) == []
+    issues = data_of(tmp_path)["workspace"]["issues"]
+    assert any("method-checks.json" in issue for issue in issues)
+
+
+def test_a_record_whose_response_is_the_delivered_handoff_wins_over_a_later_one(tmp_path):
+    run_dir = make_run(tmp_path, "run-a")
+    delivered = next((run_dir / "deliveries").iterdir()) / "CP-1.md"
+    digest = hashlib.sha256(delivered.read_bytes()).hexdigest()
+    write_record(
+        run_dir, "CP-1", "a" * 64, 1, [outcome("agreed", "accepted")], response_sha256=digest
+    )
+    write_record(run_dir, "CP-1", "b" * 64, 2, [outcome("disagreed", "a rejected try")])
+    (found,) = script_checks(tmp_path)
+    assert found["attempt"] == 1 and found["outcomes"][0]["reason"] == "accepted"

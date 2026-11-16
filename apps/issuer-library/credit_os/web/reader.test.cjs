@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const {readerPassages, isNewFormat, earlierFormatRun, blocked, splitBasis, basisItem, inspectorItems, uniqueChips, figureSpans, earlierBasis, historyRows, pathwayTitle, runModuleCodes, inspectorBasisBlock} = require('./reader.js');
+const {readerPassages, isNewFormat, earlierFormatRun, blocked, splitBasis, basisItem, inspectorItems, uniqueChips, figureSpans, earlierBasis, historyRows, pathwayTitle, runModuleCodes, inspectorBasisBlock, leadModules, leadKicker, pickLead} = require('./reader.js');
 
 // Shapes are store.py's: section {heading, level, line, blocks[]}, text block {type, line, end, text}. Expected values are literals.
 const text = (body, line = 1) => ({type: 'text', line, end: line, text: body});
@@ -571,4 +571,25 @@ test('passageControls: a paragraph with Basis items has a trace button and figur
   assert.equal(c.trace(12), '');
   assert.equal(c.figure(12, 0, '5.5x'), '');
   assert.ok(c.trace(14).includes('data-paragraph="o:14"') && c.trace(14).includes('data-basis="[]"') && c.figure(14, 0, '6.5x').includes('data-figure="0"'));
+});
+
+// H5 lead (amendments 2026-11-12 and 2026-11-16): CP-1B leads only an earnings update, after CP-6, CP-2 and CP-L10.
+test('leadModules adds CP-1B for the earnings_update pathway and for no other', () => {
+  assert.deepEqual(leadModules('earnings_update'), ['CP-6', 'CP-2', 'CP-L10', 'CP-1B']);
+  for (const pathway of ['credit_snapshot', 'short_snapshot', 'relative_value', 'distressed_restructuring', null, undefined, '']) assert.deepEqual(leadModules(pathway), ['CP-6', 'CP-2', 'CP-L10'], String(pathway));
+});
+test('leadKicker is Earnings view only when CP-1B leads', () => {
+  assert.equal(leadKicker('CP-1B'), 'Earnings view');
+  for (const module of ['CP-6', 'CP-2', 'CP-L10']) assert.equal(leadKicker(module), 'Credit view');
+  assert.equal(leadKicker(null), 'Credit view', 'no lead keeps the word of a run with no credit view');
+});
+test('pickLead takes the first of the pathway\'s lead modules that has a Bottom line and is usable', () => {
+  const entry = (module, bottom = true) => ({module, passages: bottom ? {bottom: ['x']} : {bottom: null}});
+  const usable = () => true;
+  const earnings = [entry('CP-1'), entry('CP-1B'), entry('CP-5')];
+  assert.equal(pickLead(earnings, 'earnings_update', usable).module, 'CP-1B');
+  assert.equal(pickLead(earnings, 'credit_snapshot', usable), undefined, 'CP-1B never leads another pathway, even with no credit view');
+  assert.equal(pickLead([entry('CP-6'), entry('CP-1B')], 'earnings_update', usable).module, 'CP-6', 'CP-6 stays first');
+  assert.equal(pickLead([entry('CP-1B', false)], 'earnings_update', usable), undefined, 'no Bottom line, no lead');
+  assert.equal(pickLead(earnings, 'earnings_update', e => e.module !== 'CP-1B'), undefined, 'a blocked CP-1B does not lead');
 });

@@ -1026,6 +1026,13 @@ td .basis-link{margin-left:4px}
 .ev-call+.ev-call{margin-top:6px}
 .ev-call>summary{padding:10px 14px}
 .ev-call>.ev-tbl{margin:0 14px 14px}
+.ev-call>.ev-hlist,.ev-call>.ev-chk-list{margin:0 14px 14px}
+.ev-chk-chips{display:flex;flex-wrap:wrap;gap:6px;margin-left:auto}
+.ev-chk-chips+.ev-ch{margin-left:0}
+.ev-chk .ev-gap-t{flex-wrap:wrap;align-items:center}
+.ev-chk .ev-gap-t .badge{margin-left:auto}
+.ev-chk .ev-v code{font:500 11px 'Red Hat Mono',ui-monospace,Menlo,monospace;color:var(--text-secondary)}
+.ev-chk .badge .i{width:13px;height:13px}
 .ev-c{margin-left:auto;font-weight:500;color:var(--muted);font-size:12px}
 .ev-call>summary .ev-c+.ev-ch{margin-left:0}
 .ev-cols2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px}
