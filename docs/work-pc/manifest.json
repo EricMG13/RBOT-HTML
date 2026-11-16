@@ -11,7 +11,7 @@
   "AGENTS.md": "f5b89a510e8499ec9d568f79a0d9e14e84a9a1df",
   "METHODOLOGY-REVIEW.md": "1de1aa8a99c00bae03b988f13ca9a376baac8a21",
   "README.md": "fa9e335b4e75ee1a50326244f7d2e5cc6a942c70",
-  "VERIFICATION.md": "465d0e33b5196cbd78ba1fe72ff19d1ecc38c41c",
+  "VERIFICATION.md": "1fb5ebcf44343a255d886d86aa6ff453fa9a1342",
   "apps/issuer-library/README.md": "eb67be45995f1f0b8aaaffa1cf9bb6009cee1a10",
   "apps/issuer-library/credit_os/SOURCE.md": "a88ec9a069c4e0b38946ab497a97873ca1a81e88",
   "apps/issuer-library/credit_os/__init__.py": "b48626cedd380d26f16d6daa998ebf0f81a79ec1",
@@ -853,7 +853,7 @@
   "tests/test_library_changes_browser.py": "f69a80510d801ce92ad67d566450a24d7639c12b",
   "tests/test_library_full_assessment_browser.py": "621d14e3578e0c91153565b3fecf7877f64ff2ad",
   "tests/test_library_index.py": "6cb1743fe998e4e1b37de085f027b28f790aec5e",
-  "tests/test_library_page_browser.py": "f4ec1644f608d8ea06810ba810462f5ccc7a6864",
+  "tests/test_library_page_browser.py": "5260261faeaefea220ea47d97860112031edc915",
   "tests/test_library_reader_refs.py": "356fd5c90cc915ff90a9747a522e4306e2695a4d",
   "tests/test_method_scripts.py": "cbd502d3876303c3da9f06df5479195c0bf36256",
   "tests/test_method_scripts_rest.py": "f4f63b7d6381c7434fee974f048106a29f4c4194",
@@ -867,7 +867,7 @@
   "tests/test_prose_checks.py": "a12fd0f0fe27b0f8ece678c842d4d92c1036cdfa",
   "tests/test_quality_gate.py": "6d1631990112746d63397a0721e384aff895e742",
   "tests/test_reader_summary.py": "3493332edebaff0a57a0055cd84e00170b979039",
-  "tests/test_run_start_page.py": "49e262f4d5b37dbcb79d50f6f10dc77f1dff3988",
+  "tests/test_run_start_page.py": "d601e458e7818685e64e8f0abf8b8092bbaa3d8e",
   "tests/test_run_start_prior.py": "61b41ef9fd66ae639e8f7f196bc2fcfd6c3b4f07",
   "tests/test_run_start_scheduler.py": "c9c636c7eaad0d1a160ad35048bb906a9f46eebb",
   "tests/test_run_start_service.py": "d74ad35b8aeaee6fda11c77d48aaa748105148e3",
@@ -898,7 +898,7 @@
   "tools/work_pc_delta.py": "57ad044649b8afeafc12566cee598a06124cf0cb",
   "uv.lock": "0b344d90b5896a6e76c5cc980e3ae89501ee795a"
  },
- "head": "395bf380f0921325872fbc5715947097c68d23ac",
- "head_date": "2026-11-16T04:10:05Z",
- "last_pack": 75
+ "head": "ad574bdba9ce005da2273b2cf18505cde85be877",
+ "head_date": "2026-11-16T05:07:21Z",
+ "last_pack": 76
 }
