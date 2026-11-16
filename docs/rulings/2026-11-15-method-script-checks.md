@@ -378,6 +378,8 @@ on every module's handoff after the module's own script check. Its outcomes go i
   checked" outcome); CP-L10 and CP-8 are sent no SKILL.md (no record unless another check applies).
 - No note is sent: TRANSPORT_RULES already tells every module to do the completeness check itself,
   and `earnings_update` has 93 characters left under its ceiling.
+  Amended 2026-11-16: CP-1B is now sent a note (`CP1B_NOTE`) and the `earnings_update` ceiling rose
+  by its 229 characters (owner, "fix all"); the line above records the 2026-11-15 position.
 - The launcher's synthetic integration answers for CP-2E (T2F.5) and CP-2G (T2H.4 to T2H.6) were
   partial tables; they now carry every declared column (`Not supplied` where synthetic), since a
   handoff without them would be sent back.
@@ -511,6 +513,8 @@ Mapping `deploy_workflow.method_scripts_cp1b`. Restored: none (CP-1B has no scop
 - No note is sent. CP-1B runs only in `earnings_update`, which measures 546,407 of its 546,500
   ceiling; the note it would need (`CP1B_NOTE_UNSENT`, 435 characters) would take it to 546,842, 342
   over. The check reads the method's own columns, so it runs without one.
+  Amended 2026-11-16: the note is now sent (`CP1B_NOTE`, 229 characters) and the `earnings_update`
+  ceiling rose by those 229 characters; the sizes above are the 2026-11-15 position.
 - Evidence: none retained. Synthetic proof only.
 
 ## Review fixes for the second part (2026-11-15)

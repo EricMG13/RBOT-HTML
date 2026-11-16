@@ -2072,6 +2072,10 @@ CP1_PARKED_KEY = [
     ("Sales ratio", "Sales FY2024 / sales FY2023-1", *_SALES, "0.21", "disagreed"),
     ("Sales ratio", "7940-1 / 6585", "7939", "6585", "1.21", "agreed"),
     ("EBITDA margin", "EBITDA / Sales x 100", *_EBITDA, "0.526", "disagreed"),
+    # A bracketed difference is growth only as `n - d` on the row's own operands (review).
+    ("Net leverage", "(25068 - 2000) / 3813", "25068", "3813", "5.57", "disagreed"),
+    ("Net leverage", "(25068 - 2000) / 3813", "25068", "3813", "6.57", "agreed"),
+    ("Sales uplift", "(7,940 - 6,585) / 6,585", "7940", "6585", "0.21", "agreed"),
 ]
 
 
@@ -2232,3 +2236,10 @@ def test_cp1_a_2000_character_numerator_of_minus_terms_reads_within_a_second():
     start = time.perf_counter()
     cp1_module._reads_growth(formula, formula)
     assert time.perf_counter() - start < 1.0
+
+
+def test_cp1_the_minuend_rule_reads_the_subtrahend_as_the_rows_denominator():
+    from deploy_workflow import method_scripts_cp1 as cp1_module
+
+    assert cp1_module._reads_growth("(25068 - 2000) / 3813", "", 25068, 3813) == "ratio"
+    assert cp1_module._reads_growth("(7940 - 6585) / 6585", "", 7940, 6585) == "growth"

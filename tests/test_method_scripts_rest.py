@@ -1374,7 +1374,8 @@ def _joined_t46(change: str, pair: str = "6585 / 7940") -> ms.Outcome:
 
 
 @pytest.mark.parametrize(
-    "cell", ["20 –21%", "20-21%", "20 to 21%", "20–21 %", "20% to 21%", "20 - 21%"]
+    "cell",
+    ["20 –21%", "20-21%", "20 to 21%", "20–21 %", "20% to 21%", "20% - 21%", "20%-21%", "20 −21%"],
 )
 def test_cp1b_a_range_in_abs_pct_is_not_one_figure(cell):
     outcome = _joined_t46(cell)
@@ -1438,6 +1439,12 @@ def test_cp3_a_real_unit_mix_keeps_its_reason(currency, scale):
         ("6585 / 7940", "1355 −20.6%", "disagreed"),
         ("6585 / 7940", "1355 -25.0%", "disagreed"),
         ("6585 / 7940", "-1355 -25.0%", "disagreed"),
+        # A change smaller than the percentage's figure (a prior under 100) is no range either.
+        ("50 / 40", "10 -20.0%", "agreed"),
+        ("50 / 40", "10 -25.0%", "disagreed"),
+        ("50 / 40", "10 –20.0%", "agreed"),
+        ("5.2 / 4.1", "1.1 -21.2%", "agreed"),
+        ("6585 / 7940", "20 -21%", "disagreed"),
     ],
 )
 def test_cp1b_a_signed_percentage_after_a_change_is_not_a_range(pair, cell, status):
@@ -1446,8 +1453,24 @@ def test_cp1b_a_signed_percentage_after_a_change_is_not_a_range(pair, cell, stat
 
 
 @pytest.mark.parametrize(
-    ("pair", "cell"), [("6585 / 7940", "1,355 - 20.6%"), ("7940 / 6585", "-1355 - 17.1%")]
+    ("pair", "cell"),
+    [
+        ("6585 / 7940", "1,355 - 20.6%"),
+        ("7940 / 6585", "-1355 - 17.1%"),
+        ("6585 / 7940", "20 - 21%"),
+    ],
 )
 def test_cp1b_a_spaced_dash_after_a_change_keeps_its_base_reason(pair, cell):
     outcome = _joined_t46(cell, pair)
     assert outcome.status == "not checked" and "range" not in outcome.reason
+
+
+@pytest.mark.parametrize("pad", [20_000])
+def test_cp1b_a_long_whitespace_cell_is_read_within_a_second(pad):
+    import time
+
+    for cell in ("1" + " " * pad + "x", "1%" + " " * pad + "x", "1" + ",111" * (pad // 4) + "x"):
+        start = time.perf_counter()
+        outcome = _joined_t46(cell)
+        assert time.perf_counter() - start < 1.0
+        assert outcome.status == "not checked"
