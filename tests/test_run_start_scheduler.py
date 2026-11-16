@@ -10,7 +10,6 @@ import json
 import os
 import threading
 from dataclasses import replace
-from decimal import Decimal
 from pathlib import Path
 from typing import Any, cast
 
@@ -57,7 +56,7 @@ def upload(root: Path, payload: bytes = b"Net sales were 100.") -> str:
 
 def approved(root: Path, sid: str, answers: Answers) -> str:
     """The digest the service issues for these answers: only ``summary`` can make one."""
-    got = submissions.summary(layout(root), sid, answers, cap=settings(root).cap)
+    got = submissions.summary(layout(root), sid, answers)
     assert got["error"] == "", got["error"]
     return str(got["digest"])
 
@@ -94,7 +93,7 @@ def short_answers() -> Answers:
 
 def test_a_short_snapshot_summary_is_refused_with_the_deactivation_message(root):
     sid = upload(root)
-    got = submissions.summary(layout(root), sid, short_answers(), cap=settings(root).cap)
+    got = submissions.summary(layout(root), sid, short_answers())
     assert got["error"] == SHORT_DEACTIVATED
     assert "digest" not in got or got["digest"] == ""
 
@@ -128,7 +127,7 @@ def test_a_lite_credit_assessment_summary_is_accepted(root):
     answers = answers_for()
     answers["context"]["run"]["pathway"] = "lite_credit_assessment"
     sid = upload(root)
-    got = submissions.summary(layout(root), sid, answers, cap=settings(root).cap)
+    got = submissions.summary(layout(root), sid, answers)
     assert got["error"] == "", got["error"]
     assert got["modules"] == ["CP-0", "CP-1", "CP-1A", "CP-2", "CP-2A"]
 
@@ -229,7 +228,6 @@ def test_modules_and_turns_reach_the_launcher_command(root):
         record,
         Path("c.json"),
         launcher=("L",),
-        cap=Decimal(20),
         ruling=None,
     )
     at = argv.index("--modules")
@@ -241,7 +239,6 @@ def test_modules_and_turns_reach_the_launcher_command(root):
         Record("r2", PATHWAY, "Acme", "queued", "t"),
         Path("c.json"),
         launcher=("L",),
-        cap=Decimal(20),
         ruling=None,
     )
     assert "--modules" not in plain
@@ -276,7 +273,6 @@ def test_the_run_the_approval_named_is_kept_and_reaches_the_launcher(root, fake_
             record,
             Path("c.json"),
             launcher=("L",),
-            cap=Decimal(20),
             ruling=None,
         )
         assert argv[argv.index("--prior") : argv.index("--prior") + 2] == ["--prior", named]

@@ -132,6 +132,45 @@ structure and the figures the method scripts recompute, not analytical judgement
 - Not verified: other issuers; the gated modules' script checks on live output; the full weekly suite;
   Windows.
 
+## 2026-11-15 — Lite, Full and Deep credit assessments; a cap per pathway (branch `claude/busy-dijkstra-bgex9m`)
+
+Scope is **offline only**. No provider or model was called and no run was made; no model has run
+Deep. Ruling `docs/rulings/2026-11-15-pathway-tiers-and-caps.md` (owner: "restructure the pathways:
+Deep max $40, Full $25 and Lite $15"; "Lite/Full as now, Deep = all"; "Keep alongside"; "Hard cap
+per pathway").
+
+- Deep (`deep_credit_assessment`): Full plus CP-1B, CP-1C, CP-1D, CP-2H, CP-3D, CP-4C in the
+  registry's planned order; CP-DR and CP-1C precede CP-3, which is sent CP-1C's handoff. Lite and
+  Full ids, modules and sections unchanged. Deep's 24 report sections are a build choice, not the
+  owner's.
+- Caps: one table (`PATHWAY_CAP_USD`): Lite 15, Full 25, Deep 40, the five purpose pathways 20.
+  Read by the run start page and summary, the service's launches, run activity and the launcher's
+  default. A record queued earlier launches at the lower of USD 20 and its pathway's cap; a summary
+  issued earlier is refused at Submit. The launcher refuses a `--cap` above the pathway's (a
+  tightening: the CLI took any cap before); summary and submit require the cap the page shows, so
+  a page left open from before is refused; start-up checks the table against a second, independent
+  copy of the ruled figures. An independent review found those three and no route to a run above
+  its pathway's cap through the service.
+- Preparation before and after (launcher CLI, no `--live`, one synthetic input): the six prepared
+  existing pathways' instruction files byte-identical; only `provider_cap_usd` differs (Full 25,
+  Lite 15). Deep measured 1,805,013 characters, ceiling 1,900,500; no other ceiling moved.
+- Synthetic proofs (fake provider, hand-written handoffs; wiring, not analysis): a Deep run
+  delivered and verified in the hand-written order; CP-3 checked against the T4.10 CP-1C wrote in
+  the same run (agreed copy accepted, mis-copy sent back and the run stopped at CP-3); the library
+  lists the run with all 20 handoffs and a forecast; a Full run is no CP-8 base for a Deep run.
+- Fidelity check, run start page (presentation change): at 1440 and 1000 px the eight pathway rows
+  keep the three-column and stacked layouts with no overflow and no console message; each row's
+  third column leads "Cap: USD n a run."; Lite, Full and Deep summaries show 15, 25 and 40 from the
+  service. Measured with Playwright's Chromium, not the suite's headless Chrome.
+- Estimate, not measured, GPT Sol Balanced with CP-8: Lite 3.1, Full 11.3, Deep 16.5 (a call holds
+  5.73). Claude Opus at the one measured run's ratio (2.26, `tdg-proof-snapshot-opus-002`): Full
+  about 23 to 25 against 25, Deep about 34 to 44 against 40; either can stop at the cap.
+- Checks on the merge: targeted suites 2,212 passed, 4 skipped; quality gate 0 findings; the
+  sub-branch's CI fast list 5,369 passed. Browser page tests on real Chrome in the build container:
+  library, changes, model shell and full assessment pass (50 passed, 1 skipped);
+  `tests/test_run_start_page.py` cannot run there (Chrome hangs when given a fresh profile, on
+  `main` too) and is left to GitHub's weekly suite on the PR head. Not run: any paid run.
+
 ## 2026-11-15 — After the restructure: journal harness retired, method scripts as acceptance checks, portfolio inputs (branch `claude/busy-dijkstra-bgex9m`, after PR #126)
 
 Scope is **offline only**. No provider or model was called; the owner has said no live run yet and
@@ -932,53 +971,3 @@ passes every method to `--modules`; `test_run_start_page.py` asserts `changes`. 
 1,063 passed; all non-live, non-browser, non-slow less `tests/model` and `tests/test_financial_workflow.py` 1,477 passed;
 browser 100 passed; quality gate 0. Not verified: any real model writing CP-8's registers; whether CP-8's request fits a long
 run's context; real earlier runs on the lean-copy deliveries; the library's Changes section.
-
-## 2026-11-12 — Run start page: effort (Fast / Balanced / High) and model (GPT Sol / Claude Opus)
-
-Scope: offline, macOS; no provider was called and no run was started. Owner instruction recorded as
-the 2026-11-12 amendment in `docs/rulings/2026-11-11-run-start-submit.md` (configs sol-medium,
-sol-high, opus-medium, opus-high; USD 20 cap unchanged).
-- Effort map: `BALANCED_HIGH_MODULES` (CP-1A, CP-1D, CP-2, CP-2A, CP-3, CP-3C, CP-4, CP-4C, CP-6);
-  basis per module in `runs/tdg-mixed-effort-comparison.md`. Twelve of twenty assignments are
-  inferred from module type, not measured.
-- Engine: config `opus-high` (claude-opus-5-5, effort high, opus-medium price object);
-  `cpos_launch --balanced`. Service: answers carry `model` and `effort`, defaults gpt/balanced,
-  other values only at Advanced; six (model, effort) pairs map to the four configs; start-up
-  requires the ruling to name all four; Claude refused without the Anthropic key. Page:
-  two Advanced-only radio groups and a "Model and effort" summary row.
-- Passed: quality gate 0 findings (42 files); 1,787 tests across the page, launcher, handoff loop,
-  run start, inbox, packaging and `tests/model` files. Four failures, none from this change: the
-  three in `tests/known-failures.txt`, and `test_upload_to_filed_report_with_the_real_launcher`,
-  which fails identically on a clean `38d23de` checkout (empty `record.report`) and is not listed.
-- Reviews: task reviews of engine, service and page, and a security review of the paid-launch
-  gating (five invariants, seven saved probes), no High. One Medium fixed with a failing test
-  first (the Claude-unavailable refusal now links to Pathway); Low test gaps closed in the same round.
-- Page seen in a browser at desktop and 375 px (no horizontal overflow); controls appear only at
-  Advanced with Balanced and GPT Sol selected. Not a reader check: no report page changed.
-- Open, not fixed: a queued Claude run started after a restart without the Anthropic key fails
-  as "launcher exited 2" and counts toward the daily limit (nothing is spent); a pre-change
-  sealed-but-unmoved submission fails with a misleading reason; on the CLI a ruling naming
-  sol-medium also admits `--balanced` / `--high-modules`; AGENTS.md names
-  `tests/nightly-known-failures.txt` but the file is `tests/known-failures.txt`.
-- Not verified: any live call (Opus at high effort, Balanced on either model, Claude from the
-  page); the summary and Submit against a running service by hand; Windows; the full suite;
-  confidence-review and rewrite-tournament on this change.
-
-## 2026-11-12 — Per-module effort (`--high-modules`) and one mixed-effort TDG live run
-
-Scope: historical TDG FY2024 (as of 2024-09-30), ruling `docs/rulings/2026-11-12-tdg-mixed-effort-to-cp2.md`;
-one paid run on gpt-6.1-sol. Not a current credit view; one run per setting.
-- Code: `HandoffExecutor(effort_by_module=...)`, passed by `run_live_handoffs` and `cpos_launch
-  --high-modules`. `tests/test_handoff_loop.py` and `tests/test_cpos_launch.py` passed (472, 1 skipped);
-  quality gate 0 findings; task review passed with three Low test gaps open (pass-through to
-  `run_live_handoffs`, seed digest, multi-turn). confidence-review and rewrite-tournament not run.
-- Live: `runs/cpos-tdg-sol-mixed-cp2-001` (main checkout), high on CP-0, CP-1A, CP-1D, CP-2, CP-2A.
-  `live/calls.jsonl` records high on CP-0, CP-1A, CP-1D and medium on CP-1, CP-1B, CP-DR, CP-1C.
-  Six modules accepted; stopped at CP-1D (three drafts refused: "Invalid Markdown table header",
-  which names no table; the fault was a 7-column header over an 8-column separator). USD 3.46.
-  CP-2, CP-2A, CP-2E did not run; no report was published.
-- Comparison with the saved all-medium runs: `runs/tdg-mixed-effort-comparison.md` (handoffs read
-  by a separate reviewer, tabled figures checked against the 10-K). High: clear gain on CP-1D
-  (unaccepted draft), none on CP-0, inconclusive on CP-1A; the medium modules needed no more.
-- Not verified: CP-2 onward under mixed effort; a same-code all-medium control (instructions
-  changed after both baselines); the full test suite.

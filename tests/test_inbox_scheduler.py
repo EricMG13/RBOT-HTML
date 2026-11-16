@@ -6,6 +6,7 @@ spend nothing. Every wait has a limit, and the ``root`` fixture kills any run st
 
 from __future__ import annotations
 
+import dataclasses
 import gc
 import json
 import re
@@ -19,7 +20,6 @@ import tempfile
 import threading
 import time
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -134,7 +134,7 @@ def test_a_submission_is_run_by_the_real_launcher_and_listed(root, tmp_path, mon
             "submitted_by": "analyst",
         }
     )
-    got = submissions.summary(lay, sid, answers, cap=w.settings.cap)
+    got = submissions.summary(lay, sid, answers)
     assert got["error"] == "", got["error"]
     w.submit(sid, answers, str(got["digest"]))
     pump(w, lambda: status(root) not in ([], ["queued"], ["running"]), limit=120)
@@ -459,7 +459,7 @@ def _submit_advanced(w: Scheduler, root: Path, model: str, effort: str) -> Recor
     lay = Layout(root)
     sid = submissions.new(lay)
     (submissions.files_folder(lay, sid) / "a.txt").write_bytes(b"Net sales were 100.")
-    got = submissions.summary(lay, sid, answers, cap=w.settings.cap)
+    got = submissions.summary(lay, sid, answers)
     assert got["error"] == "", got["error"]
     return w.submit(sid, answers, str(got["digest"]))
 
@@ -532,7 +532,7 @@ def test_submit_refuses_claude_without_the_anthropic_key(root, monkeypatch):
         lay = Layout(root)
         sid = submissions.new(lay)
         (submissions.files_folder(lay, sid) / "a.txt").write_bytes(b"Net sales were 100.")
-        got = submissions.summary(lay, sid, answers, cap=w.settings.cap)
+        got = submissions.summary(lay, sid, answers)
         monkeypatch.delenv("ANTHROPIC_API_KEY")
         with pytest.raises(submissions.Refused, match="Claude Opus is not available"):
             w.submit(sid, answers, str(got["digest"]))
@@ -1035,15 +1035,11 @@ def test_l9_a_run_is_filed_and_listed_through_the_real_library_rebuild(root, mon
     assert f'"report": "{record.report}"' in activity_js(root)
 
 
-def test_a_cap_above_the_standing_rulings_usd_20_is_refused_at_start_up(root):
-    refusal = r"cap 500 .*above USD 20.*2026-11-11-run-start-submit"
-    with pytest.raises(StartupRefused, match=refusal):
-        Scheduler(settings(root, cap=Decimal(500)))
-    with pytest.raises(StartupRefused, match="above USD 20"):
-        Scheduler(settings(root, cap=Decimal("20.01")))
-    Scheduler(settings(root, cap=Decimal(20))).close()
-    with pytest.raises(StartupRefused, match="above USD 20"):
-        Scheduler(settings(root, cap=Decimal("NaN")))
+def test_the_service_has_no_cap_of_its_own_each_run_launches_at_its_pathways(root):
+    """Ruling 2026-11-15-pathway-tiers-and-caps: the cap is the pathway's (`runs.cap_of`), so the
+    service takes none and start-up checks none."""
+    assert "cap" not in {f.name for f in dataclasses.fields(Settings)}
+    Scheduler(settings(root)).close()
 
 
 # -- a run started just before a hard kill: its own PID file --------------------------------

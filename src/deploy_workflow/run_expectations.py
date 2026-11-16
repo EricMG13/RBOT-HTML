@@ -620,7 +620,7 @@ RULES: tuple[Rule, ...] = (
         "CP-6",
         lambda f: (
             f.portfolio.collected
-            and f.context.run.pathway == "credit_snapshot"
+            and f.context.run.pathway in ("credit_snapshot", "deep_credit_assessment")
             and not f.context.attachments.portfolio_workbook
             and not f.portfolio.workbooks
         ),

@@ -12,7 +12,6 @@ import unicodedata
 import threading
 import time
 from collections.abc import Iterator
-from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -240,7 +239,7 @@ def test_a_file_can_be_removed_and_a_bad_name_is_refused(layout):
 def test_the_summary_is_the_launchers_forecast(layout, tmp_path):
     sid, source = upload_issuer(layout, tmp_path)
     answers = answers_for(tmp_path)
-    s = summary(layout, sid, answers, cap=Decimal(20))
+    s = summary(layout, sid, answers)
     ref = tmp_path / "ref"
     ref.mkdir()
     expected = prepare(context_file(tmp_path), source, ref / "out", config="sol-medium", cap="20")
@@ -261,7 +260,7 @@ def full_assessment_summary(layout, tmp_path, workbook: bytes | None) -> dict[st
     if workbook is not None:
         put(layout, sid, "SYNTHETIC-portfolio.xlsx", workbook)
         answers["context"]["attachments"]["portfolio_workbook"] = True  # type: ignore[index]
-    return summary(layout, sid, answers, cap=Decimal(20))
+    return summary(layout, sid, answers)
 
 
 def test_a_full_assessment_summary_without_the_workbook_adds_no_tick(layout, tmp_path):
@@ -308,7 +307,7 @@ def lookup_of(layout, tmp_path, kind, monkeypatch, agent=None):
     sid, source = upload_issuer(layout, tmp_path)
     answers = answers_for(tmp_path)
     answers["context"]["run"]["case_kind"] = kind  # type: ignore[index]
-    result = summary(layout, sid, answers, cap=Decimal(20))
+    result = summary(layout, sid, answers)
     ref = tmp_path / "ref"
     ref.mkdir()
     context = tmp_path / "ref-context.json"
@@ -347,21 +346,21 @@ def test_the_summary_names_a_missing_sec_contact_but_never_its_value(layout, tmp
 def test_a_summary_with_no_research_module_states_no_lookup(layout, tmp_path, monkeypatch):
     monkeypatch.delenv(SEC_AGENT, raising=False)
     sid, _ = upload_issuer(layout, tmp_path)
-    result = summary(layout, sid, answers_for(tmp_path, modules=["CP-0", "CP-1"]), cap=Decimal(20))
+    result = summary(layout, sid, answers_for(tmp_path, modules=["CP-0", "CP-1"]))
     assert result["error"] == "" and "CP-DR" not in result["modules"]
     assert result["lookup"] == []
 
 
 def test_the_summary_says_whether_cp8_will_run_and_against_which_earlier_run(layout, tmp_path):
     sid, _ = upload_issuer(layout, tmp_path)
-    first = summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))
+    first = summary(layout, sid, answers_for(tmp_path))
     assert first["error"] == ""
     assert first["changes"] == "first run of this pathway"
     assert first["prior"] is None
     assert "CP-8" not in first["modules"]
     # An earlier listed run of the same issuer and pathway, in the launcher's own runs folder.
     make_run(layout.engine, "prior-1", as_of="2024-12-31", pathway="covenant_refinancing")
-    second = summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))
+    second = summary(layout, sid, answers_for(tmp_path))
     assert second["error"] == ""
     assert second["modules"][-1] == "CP-8"
     assert second["modules"][:-1] == first["modules"]
@@ -387,10 +386,8 @@ def test_the_summary_says_whether_cp8_will_run_and_against_which_earlier_run(lay
 
 def test_the_summary_carries_the_model_and_effort_it_was_made_for(layout, tmp_path):
     sid, _ = upload_issuer(layout, tmp_path)
-    default = summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))
-    high = summary(
-        layout, sid, answers_for(tmp_path, level="advanced", effort="high"), cap=Decimal(20)
-    )
+    default = summary(layout, sid, answers_for(tmp_path))
+    high = summary(layout, sid, answers_for(tmp_path, level="advanced", effort="high"))
     assert default["error"] == "" and high["error"] == "", (default.get("error"), high.get("error"))
     assert (default["model"], default["effort"]) == ("gpt", "balanced")
     assert (high["model"], high["effort"]) == ("gpt", "high")
@@ -407,7 +404,7 @@ def test_the_summary_checks_the_cap_as_the_standing_ruling_will_run_it(
         return prepare(*args, **kwargs)
 
     monkeypatch.setattr(submissions, "prepare", watching)
-    assert summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))["error"] == ""
+    assert summary(layout, sid, answers_for(tmp_path))["error"] == ""
     assert seen == [True]  # the standing ruling lists web-search and GPT Sol is OpenAI
 
 
@@ -423,7 +420,7 @@ def test_a_claude_summary_checks_the_cap_with_web_search_off(layout, tmp_path, m
 
     monkeypatch.setattr(submissions, "prepare", watching)
     answers = answers_for(tmp_path, level="advanced", model="claude")
-    assert summary(layout, sid, answers, cap=Decimal(20))["error"] == ""
+    assert summary(layout, sid, answers)["error"] == ""
     assert seen == [("opus-medium", False)]
 
 
@@ -433,7 +430,6 @@ def test_the_summary_is_for_the_module_list_the_digest_covers(layout, tmp_path):
         layout,
         sid,
         answers_for(tmp_path, modules=["CP-0", "CP-1"]),
-        cap=Decimal(20),
     )
     assert s["error"] == ""
     assert "CP-5" not in s["modules"] and "CP-1" in s["modules"]
@@ -443,10 +439,10 @@ def test_a_refused_context_or_folder_comes_back_as_the_error_with_no_digest(layo
     sid, _ = upload_issuer(layout, tmp_path)
     bad = answers_for(tmp_path)
     bad["context"] = {"schema": "nonsense"}
-    s = summary(layout, sid, bad, cap=Decimal(20))
+    s = summary(layout, sid, bad)
     assert s["error"] and "digest" not in s
     empty = new(layout)
-    s = summary(layout, empty, answers_for(tmp_path), cap=Decimal(20))
+    s = summary(layout, empty, answers_for(tmp_path))
     assert s["error"] and "digest" not in s
 
 
@@ -478,10 +474,10 @@ def test_the_digest_changes_with_a_file_the_context_the_modules_or_the_turns_onl
 def test_the_summary_leaves_no_run_folder_and_no_temporary_file(layout, tmp_path):
     sid, _ = upload_issuer(layout, tmp_path)
     before = sorted(p.relative_to(layout.root).as_posix() for p in layout.root.rglob("*"))
-    assert summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))["error"] == ""
+    assert summary(layout, sid, answers_for(tmp_path))["error"] == ""
     bad = answers_for(tmp_path)
     bad["context"] = {}
-    assert summary(layout, sid, bad, cap=Decimal(20))["error"]
+    assert summary(layout, sid, bad)["error"]
     after = sorted(p.relative_to(layout.root).as_posix() for p in layout.root.rglob("*"))
     assert after == before
 
@@ -512,7 +508,7 @@ def test_a_file_landing_while_the_summary_is_made_gives_no_digest(layout, tmp_pa
         return out
 
     monkeypatch.setattr(submissions, "prepare", racing)
-    got = summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))
+    got = summary(layout, sid, answers_for(tmp_path))
     assert "digest" not in got
     assert got["error"] == (
         "the documents changed while the summary was being made; open the summary again"
@@ -540,7 +536,7 @@ def test_a_file_landing_while_the_summary_is_made_gives_no_digest(layout, tmp_pa
 def test_hostile_answers_are_refusals_not_exceptions(layout, tmp_path, change):
     sid, _ = upload_issuer(layout, tmp_path)
     answers = answers_for(tmp_path, **change)
-    got = summary(layout, sid, answers, cap=Decimal(20))
+    got = summary(layout, sid, answers)
     assert got["error"] and "digest" not in got
     if change != {"modules": ["NOPE"]}:  # a well-formed name the launcher refuses, not the shape
         with pytest.raises(Refused):
@@ -566,7 +562,7 @@ def test_a_lone_surrogate_in_the_context_is_a_refusal(layout, tmp_path):
     answers["context"]["identity"]["issuer_name"] = "\ud800"
     with pytest.raises(Refused):
         submissions.context_bytes(answers)
-    got = summary(layout, sid, answers, cap=Decimal(20))
+    got = summary(layout, sid, answers)
     assert got["error"] and "digest" not in got
     with pytest.raises(Refused):
         digest(layout, sid, answers)
@@ -629,7 +625,6 @@ def test_summaries_run_one_at_a_time(layout, tmp_path, monkeypatch):
         threading.Thread(
             target=summary,
             args=(layout, sid, answers),
-            kwargs={"cap": Decimal(20)},
         )
         for _ in range(4)
     ]
@@ -650,7 +645,7 @@ def test_a_failed_summary_cleanup_is_logged_and_the_result_stands(
     sid, _ = upload_issuer(layout, tmp_path)
     monkeypatch.setattr(submissions.shutil, "rmtree", _failing_rmtree)
     with caplog.at_level(logging.WARNING, logger=submissions.log.name):
-        got = summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))
+        got = summary(layout, sid, answers_for(tmp_path))
     assert got["error"] == "" and got["digest"]
     left = [p for p in layout.state.iterdir() if p.name.startswith("summary-")]
     assert len(left) == 1
@@ -687,7 +682,7 @@ def test_seal_freezes_the_uploads_and_unseal_restores_them(layout, tmp_path):
     assert submissions.seal(layout, sid) == sealed  # again: the same folder
     assert digest(layout, sid, answers) == before
     assert reading(layout, sid)["documents"]
-    got = summary(layout, sid, answers, cap=Decimal(20))
+    got = summary(layout, sid, answers)
     assert got["error"] == "" and got["digest"] == submissions.bound(before, "none")
     for call in (
         lambda: put(layout, sid, "new.txt"),
@@ -869,22 +864,22 @@ def test_the_sweep_leaves_a_submission_with_an_upload_in_flight(layout):
 def test_a_summary_records_the_digest_it_returns_and_an_error_clears_it(layout, tmp_path):
     sid, _ = upload_issuer(layout, tmp_path)
     assert submissions.issued(layout, sid) == ""
-    first = summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))
+    first = summary(layout, sid, answers_for(tmp_path))
     assert first["error"] == ""
     assert submissions.issued(layout, sid) == first["digest"]
-    second = summary(layout, sid, answers_for(tmp_path, max_turns=8), cap=Decimal(20))
+    second = summary(layout, sid, answers_for(tmp_path, max_turns=8))
     assert second["digest"] != first["digest"]
     assert submissions.issued(layout, sid) == second["digest"]  # replaced, not appended
     bad = answers_for(tmp_path)
     bad["context"] = {"schema": "nonsense"}
-    assert summary(layout, sid, bad, cap=Decimal(20))["error"]
+    assert summary(layout, sid, bad)["error"]
     assert submissions.issued(layout, sid) == ""
     assert not (layout.uploads / sid / "issued").exists()
 
 
 def test_an_issued_digest_is_not_part_of_the_files_and_survives_the_seal(layout, tmp_path):
     sid, _ = upload_issuer(layout, tmp_path)
-    got = summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))
+    got = summary(layout, sid, answers_for(tmp_path))
     assert "issued" not in os.listdir(files_folder(layout, sid))
     submissions.seal(layout, sid)
     assert submissions.issued(layout, sid) == got["digest"]
@@ -943,7 +938,7 @@ def test_a_sealed_or_files_link_is_an_unknown_submission(layout, tmp_path):
         lambda: submissions.seal(layout, sid),
         lambda: digest(layout, sid, answers_for(tmp_path)),
         lambda: reading(layout, sid),
-        lambda: summary(layout, sid, answers_for(tmp_path), cap=Decimal(20)),
+        lambda: summary(layout, sid, answers_for(tmp_path)),
     ):
         with pytest.raises(Refused, match="unknown submission"):
             call()
@@ -983,7 +978,7 @@ def test_a_file_that_vanishes_while_the_summary_reads_it_is_the_changed_error(
         raise FileNotFoundError(2, "gone")
 
     monkeypatch.setattr(submissions, "prepare", vanishing)
-    got = summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))
+    got = summary(layout, sid, answers_for(tmp_path))
     assert got == {"error": submissions._CHANGED}
     assert submissions.issued(layout, sid) == ""
 
@@ -1011,7 +1006,7 @@ def test_a_summary_racing_the_removal_of_its_folder_is_refused_not_an_oserror(
     monkeypatch.setattr(submissions, "_summarise", summarise)
     monkeypatch.setattr(submissions, "_folder", folder)
     with pytest.raises(Refused, match="unknown submission"):
-        summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))
+        summary(layout, sid, answers_for(tmp_path))
 
 
 @pytest.mark.skipif(AS_ROOT, reason="root reads any folder")
@@ -1024,7 +1019,7 @@ def test_an_oserror_while_the_summary_reads_is_logged_not_passed_off_as_a_change
     victim.chmod(0)
     try:
         with caplog.at_level(logging.WARNING, logger=submissions.__name__):
-            got = summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))
+            got = summary(layout, sid, answers_for(tmp_path))
     finally:
         victim.chmod(0o600)
     assert got == {"error": submissions._CHANGED}
@@ -1056,7 +1051,7 @@ def test_the_servers_path_is_not_in_a_reading_or_summary_error(layout, tmp_path)
     put(layout, sid, "a.bin", b"\x00\x01 not a document")
     root = str(files_folder(layout, sid))
     seen = [reading(layout, sid)["error"]]
-    seen.append(summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))["error"])
+    seen.append(summary(layout, sid, answers_for(tmp_path))["error"])
     assert all(seen), seen
     for text in seen:
         assert root not in text and str(layout.uploads) not in text
@@ -1089,11 +1084,11 @@ def test_an_issuer_id_over_the_limit_is_refused_by_the_summary(layout, tmp_path)
     sid, _ = upload_issuer(layout, tmp_path)
     answers = answers_for(tmp_path)
     answers["context"]["identity"]["issuer_id"] = "a" * 41
-    got = summary(layout, sid, answers, cap=Decimal(20))
+    got = summary(layout, sid, answers)
     assert got["error"] == "issuer_id is 41 characters; use at most 40"
     assert "digest" not in got
     answers["context"]["identity"]["issuer_id"] = "a" * 40
-    assert summary(layout, sid, answers, cap=Decimal(20))["error"] == ""
+    assert summary(layout, sid, answers)["error"] == ""
 
 
 @pytest.mark.parametrize("model", ["gpt", "claude"])
@@ -1147,7 +1142,7 @@ def test_a_claude_submission_is_refused_without_an_anthropic_key(layout, tmp_pat
     sid, _ = upload_issuer(layout, tmp_path)
     answers = answers_for(tmp_path, level="advanced", model="claude", effort="high")
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    got = summary(layout, sid, answers, cap=Decimal(20))
+    got = summary(layout, sid, answers)
     assert got["error"] == "Claude Opus is not available on this service"
     assert "digest" not in got
     with pytest.raises(Refused, match="Claude Opus is not available on this service"):
@@ -1163,7 +1158,7 @@ def test_a_claude_submission_is_accepted_with_an_anthropic_key_and_no_key_is_sho
     sid, _ = upload_issuer(layout, tmp_path)
     answers = answers_for(tmp_path, level="advanced", model="claude", effort="fast")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key-not-real")
-    got = summary(layout, sid, answers, cap=Decimal(20))
+    got = summary(layout, sid, answers)
     assert got["error"] == "" and got["digest"]
     assert "test-key-not-real" not in json.dumps(got)
     submissions.require_provider_key(answers)

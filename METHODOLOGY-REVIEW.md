@@ -957,6 +957,20 @@ classes of defect, and never converted into the template (the method surfaces co
 of choosing). Selected source revision: the ruling above. Limit: offline proof only; no model has
 read a workbook or export under these instructions and the owner's own files have not been read.
 
+**Lite, Full and Deep credit assessments; a cap per pathway (owner, 2026-11-15: "restructure the
+pathways: Deep max $40, Full $25 and Lite $15"; ruling
+`docs/rulings/2026-11-15-pathway-tiers-and-caps.md`).** No method text is newly selected and no
+method file changed. Lite (`lite_credit_assessment`) and Full (`credit_snapshot`) keep their ids,
+modules and sections. A new pathway, `deep_credit_assessment` ("Deep credit assessment"), runs Full's
+modules plus every specialist (CP-1B, CP-1C, CP-1D, CP-2H, CP-3D, CP-4C) in the registry's planned
+order, so CP-DR and CP-1C precede CP-2 and CP-3 and CP-3 reads CP-1C's T4.10 (the enterprise-value
+route the owner asked for in `2026-11-15-method-script-checks.md`). Each added module runs its own
+selected method as in its purpose pathway, with its own source gate: without ratings, quotes, the
+management bridge or executed documents CP-2H, CP-3D, CP-1D and CP-4 (and CP-4C behind it) state the
+gap or stop at that gate; nothing is skipped. The five purpose pathways stay offered. Caps per run:
+Lite USD 15, Full 25, Deep 40, the purpose pathways 20 (`PATHWAY_CAP_USD`). Limit: offline proof
+only; no model has run Deep.
+
 ## Appendix: selected method files
 
 One row per file CP-OS sends as a module's method (`METHODS` in

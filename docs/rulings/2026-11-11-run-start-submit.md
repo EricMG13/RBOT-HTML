@@ -43,3 +43,8 @@ before Submit, that the research module will search the web and that the issuer'
 questions it researches go to OpenAI's search. The same answer set the source guidance: CP-DR's
 search instruction tells it to rely primarily on reputable, relevant sources and to state a weaker
 source as a limitation (`model/handoff.py` `WEB_SEARCH_RULES`).
+
+Amendment 2026-11-15 (caps per pathway): the owner said "restructure the pathways: Deep max $40, Full
+$25 and Lite $15" and chose a hard cap per pathway. The USD 20 per run folder above is now the run's
+pathway cap: Lite 15, Full 25, Deep 40, the five purpose pathways 20
+(`docs/rulings/2026-11-15-pathway-tiers-and-caps.md`). Nothing else in this ruling changes.

@@ -53,7 +53,7 @@ def ensure_layout(root: Path) -> Layout:
     if str(root).startswith(("\\\\", "//")):
         raise ValueError(
             f"root {root} is a network path; use a folder on this machine's own disk "
-            "(shared to analysts), because the USD 20 cap depends on marker files that must "
+            "(shared to analysts), because each run's cap depends on marker files that must "
             "not sit on a network or synced path"
         )
     resolved = root.resolve()

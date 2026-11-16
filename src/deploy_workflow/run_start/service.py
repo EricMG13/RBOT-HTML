@@ -1,10 +1,10 @@
 """The start page's HTTP service: the upload store and the scheduler behind one local address.
 
-The process holds the provider key and can start paid runs (USD 20 cap each), has no login and is
-reachable from other machines, so every request is hostile input. Plain ``http.server``; no
-framework. The rules below that are not about one route are implemented once, in
-``deploy_workflow.http_base``, which Signal's service shares; this docstring is their
-specification. Every request is checked before any body byte is read:
+The process holds the provider key and can start paid runs (each at its pathway's cap,
+``PATHWAY_CAP_USD``), has no login and is reachable from other machines, so every request is
+hostile input. Plain ``http.server``; no framework. The rules below that are not about one route
+are implemented once, in ``deploy_workflow.http_base``, which Signal's service shares; this
+docstring is their specification. Every request is checked before any body byte is read:
 
 * ``Host`` must be exactly ``<host>:<port>`` as started (and ``localhost:<port>`` when the host is
   ``127.0.0.1``); otherwise 403. On port 80 the port may be left out of ``Host`` and ``Origin``.
@@ -44,6 +44,8 @@ failure is 500 ``{"error": "the service failed; see its log"}`` (its cause goes 
     200 ``{"documents": [...], "ignored": [...], "error": ""}``: what the launcher makes of each
     uploaded file offline. ``error`` is a sentence when the files cannot be read.
 ``POST /api/submissions/<id>/summary``
+    Header ``X-Shown-Cap: <USD>``: the cap the page displays for the answers' pathway; 400 "this
+    page is out of date" when it is absent or not the pathway's cap (also on submit).
     Body: the answers object ``{"context", "modules", "max_turns", "level", "submitted_by",
     "model", "effort"}``. ``model`` is "gpt" or "claude", ``effort`` "fast", "balanced" or "high";
     other than "gpt" and "balanced" only at the "advanced" level.
@@ -108,6 +110,7 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, BinaryIO, cast
 
+from deploy_vii.contracts import DEACTIVATED_PATHWAYS, PATHWAY_CAP_USD
 from deploy_workflow import http_base
 from deploy_workflow.http_base import Body, Reply, refuse
 from deploy_workflow.inbox import activity, runs, startup
@@ -147,11 +150,13 @@ _RUN_FIELDS = (
     "ended_at",
     "issuer_name",
     "pathway",
+    "cap",
     "report",
     "modules",
     "stalled",
 )
 _LIBRARY = "/library/"
+SHOWN_CAP_HEADER = "X-Shown-Cap"  # the cap the page displays, sent with summary and submit
 _RAIL_MARKER = b"<!--rail-signal-->"  # in the start page, right after the activity link
 _HOSTNAME = re.compile(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?")
 
@@ -201,6 +206,26 @@ class Handler(http_base.Handler):
             raise refuse(400, "the request needs exactly one name")
         return names[0]
 
+    def _require_shown_cap(self, answers: Any) -> None:
+        """Refuse a summary or submit whose page did not show the pathway's cap.
+
+        The page sends the cap it displays in the ``X-Shown-Cap`` header (ruling
+        2026-11-15-pathway-tiers-and-caps): the approved summary is the paid action, so what the
+        analyst saw must be what is enforced. A page loaded before a cap changed sends none or
+        another figure. Answers with no known pathway, or a deactivated one, are left to the
+        summary's and Submit's own refusals."""
+        try:
+            pathway = answers["context"]["run"]["pathway"]
+            cap = None if pathway in DEACTIVATED_PATHWAYS else PATHWAY_CAP_USD.get(pathway)
+        except (KeyError, TypeError):
+            return
+        if cap is not None and self.headers.get_all(SHOWN_CAP_HEADER) != [str(cap)]:
+            raise refuse(
+                400,
+                f"this page is out of date: it does not show this pathway's cap of USD {cap}. "
+                "Reload the page.",
+            )
+
     # -- routes -----------------------------------------------------------------------------
 
     def _get(self, url: urllib.parse.SplitResult) -> None:
@@ -246,9 +271,12 @@ class Handler(http_base.Handler):
             self._upload(sid, self._name(url.query))
         if action == "summary":
             answers = self._json_body()
+            self._require_shown_cap(answers)
             raise Reply(200, self._guarded(lambda: self._summary(sid, answers)))
         if action == "submit":
-            self._submit(sid, self._json_body())
+            body = self._json_body()
+            self._require_shown_cap(body.get("answers") if isinstance(body, dict) else None)
+            self._submit(sid, body)
         if action == "carry":
             self._carry(sid, self._json_body())
 
@@ -290,8 +318,7 @@ class Handler(http_base.Handler):
         raise Reply(200, self._guarded(copy))
 
     def _summary(self, sid: str, answers: Any) -> dict[str, Any]:
-        settings = self._service.scheduler.settings
-        return submissions.summary(self._layout, sid, answers, cap=settings.cap)
+        return submissions.summary(self._layout, sid, answers)
 
     def _submit(self, sid: str, body: Any) -> None:
         if not isinstance(body, dict) or not isinstance(body.get("digest"), str):
@@ -309,10 +336,7 @@ class Handler(http_base.Handler):
         record = next((r for r in runs.load_all(self._layout) if r.id == run_id), None)
         if record is None:
             raise refuse(404, "unknown run")
-        settings = self._service.scheduler.settings
-        shown = activity.snapshot(self._layout, [record], cap=settings.cap, now=datetime.now(UTC))[
-            "runs"
-        ][0]
+        shown = activity.snapshot(self._layout, [record], now=datetime.now(UTC))["runs"][0]
         # A run with no folder yet has no events: every module waits.
         shown.setdefault("modules", activity.module_states(record.pathway, []))
         answer = {key: shown[key] for key in _RUN_FIELDS if key in shown}
