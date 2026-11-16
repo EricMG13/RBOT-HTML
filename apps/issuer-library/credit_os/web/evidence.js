@@ -24,6 +24,7 @@
     ['gaps', 'Gaps', 'triangle-alert', 'The gaps each module records, with severity where it gives one.'],
     ['registers', 'Registers', 'folder-open', 'Tables and notes as the handoffs wrote them. Pick a module.'],
     ['record', 'Run record', 'settings-2', 'Steps, input hashes, instructions sent and model calls.'],
+    ['checks', 'Script checks', 'circle-check', 'What each module\'s method script found when it recomputed the figures the handoff states.'],
   ];
   const TAB_IDS = TABS.map(tab => tab[0]);
 
@@ -338,6 +339,46 @@
       `</section>`;
   }
 
+  // ---- script checks: the record of each module's accepted write (the build's `evidence.scriptChecks`), shown here and nowhere else ----
+  // The tab exists only for a run that holds a record; a run without one shows no section, no tab and no card.
+  const CHECK_TONES = {agreed: ['blue', 'circle-check'], disagreed: ['attention', 'triangle-alert'], contradicted: ['attention', 'triangle-alert'], missing: ['attention', 'triangle-alert'], noted: ['gray', 'info'], 'not checked': ['gray', 'info']};
+  const checkTone = status => (Object.hasOwn(CHECK_TONES, status) ? CHECK_TONES[status] : ['gray', 'info']);
+  const allChecks = input => input.run.evidence.scriptChecks || [];
+  const checksOf = (input, module) => allChecks(input).filter(record => !module || record.module === module);
+  const checkRows = records => records.reduce((n, record) => n + record.outcomes.length, 0);
+  const statusChip = (status, n = null) => { const [tone, name] = checkTone(status); return `<span class="badge badge-${tone}">${icon(name)}${n === null ? '' : `<span data-count>${n}</span> `}${esc(status)}</span>`; };
+  const checkField = (label, value) => (value === null || value === undefined || value === '' ? '' : `<div><div class="ev-l">${esc(label)}</div><div class="ev-v">${esc(value)}</div></div>`);
+  // Outcomes of one module that share status, reason, script and every other field but the register are drawn as one card whose registers are chips (a flat run of near-identical cards is a defect); anything that differs keeps its own card, so nothing is reworded or dropped.
+  const meaningful = value => (value === null || value === undefined || value === '' || value === 'all' ? null : value);
+  const groupKey = outcome => JSON.stringify([outcome.status, outcome.reason, outcome.script, meaningful(outcome.figure), meaningful(outcome.row), outcome.stated, outcome.recomputed, outcome.recomputedLabel, outcome.tolerance, outcome.unit]);
+  function groupOutcomes(outcomes) {
+    const groups = new Map();
+    for (const outcome of outcomes) { const key = groupKey(outcome); groups.set(key, [...(groups.get(key) || []), outcome]); }
+    return [...groups.values()];
+  }
+  function checkCard(group, record, deps) {
+    const outcome = group[0], scripts = new Map(record.scripts.map(script => [script.name, script.sha256])), digest = scripts.get(outcome.script) ?? null;
+    const registers = group.map(item => item.register).filter(register => register !== null && register !== undefined && register !== '');
+    const named = meaningful(outcome.figure) ?? meaningful(outcome.row), result = [outcome.recomputed, outcome.recomputedLabel].filter(value => value !== null && value !== undefined).join(' ');
+    // The check name leads when it is one; otherwise the register (or, grouped, the count of registers) does.
+    const title = named ?? (group.length > 1 ? count(registers.length, 'register', 'registers') : registers[0] ?? 'Check');
+    const chips = group.length > 1 && registers.length ? `<div><div class="ev-l">${esc(named ? count(registers.length, 'register', 'registers') : 'Registers')}</div><div class="ev-v ev-regchips">${registers.map(register => `<span class="ev-regchip" data-register>${esc(register)}</span>`).join('')}</div></div>` : '';
+    const script = outcome.script ? `${esc(outcome.script)}${digest ? ` <code title="${esc(digest)}">${esc(digest.slice(0, 12))}</code>` : ''}` : '';
+    const fields = checkField('Reason', outcome.reason) + (group.length > 1 ? chips : (named && registers[0] ? checkField('Register', registers[0]) : '')) + checkField('Row', meaningful(outcome.row) !== named ? meaningful(outcome.row) : null) + checkField('Stated', outcome.stated) + checkField('Recomputed', result === '' ? null : `${result}${outcome.unit ? ` ${outcome.unit}` : ''}`) + checkField('Tolerance', outcome.tolerance) + (script ? `<div><div class="ev-l">Script</div><div class="ev-v mono">${script}</div></div>` : '');
+    return `<div class="ev-gap ev-chk" role="group" aria-label="${esc(`${title}: ${outcome.status}`)}" data-hay="${hay(deps.moduleTitle(record.module), named, registers.join(' '), outcome.status, outcome.reason, outcome.script)}"><div class="ev-gap-t"><span>${esc(title)}</span>${statusChip(outcome.status)}</div><div class="ev-gap-f">${fields}</div></div>`;
+  }
+  function checksPanel(input, module) {
+    const records = checksOf(input, module), {deps} = input;
+    if (!records.length) return empty('Script checks', module ? `No script-check record is held for ${deps.moduleTitle(module)}.` : 'No script-check record is held for this run.');
+    return records.map(record => {
+      const chips = record.counts.map(count => `<span class="ev-chk-n" data-status="${esc(count.status)}">${statusChip(count.status, count.n)}</span>`).join('');
+      const scripts = record.scripts.length ? `<ul class="ev-hlist ev-card" data-group aria-label="Scripts run on ${esc(deps.moduleTitle(record.module))}">${record.scripts.map(script => `<li data-hay="${hay(script.name, script.sha256)}"><div><div class="ev-nm">${esc(script.name)}</div><code>${esc(shownOrNot(script.sha256))}</code></div>${script.sha256 ? copyButton(script.sha256, `hash of ${script.name}`) : ''}</li>`).join('')}</ul>` : '';
+      return `<details class="ev-call ev-chk-mod" data-group${module ? ' open' : ''}><summary>${esc(deps.moduleTitle(record.module))}<span class="ev-cd">${esc(record.module)}</span><span class="ev-chk-chips">${chips}</span><span class="ev-ch">${icon('chevron-down')}</span></summary>${scripts}<div class="ev-chk-list" data-group>${groupOutcomes(record.outcomes).map(group => checkCard(group, record, deps)).join('')}</div></details>`;
+    }).join('');
+  }
+  // The tabs this run shows: Script checks only when the run holds a record.
+  const shownTabs = input => TABS.filter(tab => tab[0] !== 'checks' || allChecks(input).length > 0);
+
   // ---- tabs, filter bar, the guide, the foot ----
   function tabCounts(all, input, module) {
     const ev = input.run.evidence;
@@ -348,9 +389,10 @@
       gaps: gapRows(all),
       registers: all.reduce((n, c) => n + tableTotal(c) + c.regNotes.length, 0),
       record: input.run.steps.filter(s => !module || s.module === module).length + inputRows(input, module),
+      checks: checkRows(checksOf(input, module)),
     };
     // A module whose handoff could not be read has no count of its own to give.
-    if (module && all.some(c => c.unread)) for (const tab of ['trace', 'sources', 'calculations', 'gaps', 'registers']) counts[tab] = 'Not read';
+    if (module && all.some(c => c.unread)) for (const tab of ['trace', 'sources', 'calculations', 'gaps', 'registers']) counts[tab] = 'Not read'; // the script checks are the build's own record, not the handoff's
     return counts;
   }
   function filterBar(input, route) {
@@ -361,10 +403,10 @@
   }
   function tabs(input, route, counts) {
     const {context} = input.run;
-    return `<nav class="ev-tabs" aria-label="Evidence kinds">${TABS.map(([id, label]) => `<a class="ev-tab" id="ev-tab-${id}" href="${esc(href(id, route.module, context))}"${id === route.tab ? ' aria-current="page"' : ''}><span>${esc(label)}</span>${counts[id] === undefined ? '' : countSpan(counts[id])}</a>`).join('')}</nav>`;
+    return `<nav class="ev-tabs" aria-label="Evidence kinds">${shownTabs(input).map(([id, label]) => `<a class="ev-tab" id="ev-tab-${id}" href="${esc(href(id, route.module, context))}"${id === route.tab ? ' aria-current="page"' : ''}><span>${esc(label)}</span>${counts[id] === undefined ? '' : countSpan(counts[id])}</a>`).join('')}</nav>`;
   }
   function guide(input, route, counts) {
-    return `<div class="ev-guide">${TABS.slice(1).map(([id, label, name, blurb]) => `<a class="ev-card ev-guide-card" href="${esc(href(id, route.module, input.run.context))}"><span class="ev-gi">${icon(name)}</span><span class="ev-gt">${esc(label)}${countSpan(counts[id])}</span><span class="ev-gb-text">${esc(blurb)}</span></a>`).join('')}</div>`;
+    return `<div class="ev-guide">${shownTabs(input).slice(1).map(([id, label, name, blurb]) => `<a class="ev-card ev-guide-card" href="${esc(href(id, route.module, input.run.context))}"><span class="ev-gi">${icon(name)}</span><span class="ev-gt">${esc(label)}${countSpan(counts[id])}</span><span class="ev-gb-text">${esc(blurb)}</span></a>`).join('')}</div>`;
   }
   const downloadLink = (label, url, named = label) => (url ? `<a class="ev-dl" href="${esc(url)}" download aria-label="Download ${esc(named)}">${icon('download')}<span>${esc(label)}</span></a>` : `<span class="ev-dl off"><span>${esc(label)}</span><span class="ev-muted">No link</span></span>`);
   function foot(input) {
@@ -379,7 +421,7 @@
   function view(input, route) {
     const ev = input.run.evidence;
     if (!ev) return '<div class="missing-state"><h2>No evidence record was read for this run</h2><p>Rebuild the library and open this page again.</p></div>';
-    const tab = TAB_IDS.includes(route.tab) ? route.tab : 'summary', module = route.module || null, here = {tab, module};
+    const tab = shownTabs(input).some(shown => shown[0] === route.tab) ? route.tab : 'summary', module = route.module || null, here = {tab, module};
     const everyone = contents(input), all = selected(everyone, module);
     const counts = tabCounts(all, input, module);
     const panels = {
@@ -390,6 +432,7 @@
       gaps: () => gapsPanel(all, input, module),
       registers: () => registersPanel(input, module, all),
       record: () => recordPanel(input, module),
+      checks: () => checksPanel(input, module),
     };
     current = {rows: all.flatMap(c => c.trace), chips: input.chips, limit: PAGE};
     const label = TABS.find(t => t[0] === tab)[1];

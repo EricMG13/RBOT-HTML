@@ -629,3 +629,69 @@ test('a Sources card names its handoff lines as module:line pairs; two modules n
   assert.deepEqual(cards, [[FILE_A, ['CP-2A:10', 'CP-6:11']], [FILE_B, ['CP-2A:11', 'CP-6:10']]]);
   for (const pair of ['CP-2A:10', 'CP-2A:11', 'CP-6:10', 'CP-6:11']) assert.equal(cards.filter(([, pairs]) => pairs.includes(pair)).length, 1, pair);
 });
+
+// ---- script-check records (parked finding c): Evidence only, one section per module, nothing for a run with none ----
+const REASON = 'every row of T3.3 states a gap, so its columns are not judged';
+const HASH = 'ab'.repeat(32), SCRIPT = 'docs/reuse/selected-methods/scripts/completeness_check.py';
+const outcome = (status, reason, over = {}) => ({figure: 'columns', register: 'T3.3', row: 'columns', status, reason, script: SCRIPT, stated: null, recomputed: null, recomputedLabel: null, tolerance: null, unit: null, ...over});
+const CHECKS = [{module: 'CP-2A', attempt: 1, response: null, counts: [{status: 'agreed', n: 1}, {status: 'not checked', n: 2}], scripts: [{name: SCRIPT, sha256: HASH}],
+  outcomes: [outcome('not checked', REASON), outcome('agreed', 'Net debt = Gross debt - Cash', {figure: 'Net debt', stated: '9,100', recomputed: 9100}), outcome('not checked', 'not required in this transport (register scope or routing rule)')]}];
+const withChecks = (checks = CHECKS) => ({run: {...input().run, evidence: {...EV, scriptChecks: checks}}});
+
+test('a run with no script-check record has no Script checks tab, card or route text', () => {
+  for (const html of [view('summary'), view('record'), view('gaps', 'CP-2A'), view('summary', null, {run: {...input().run, evidence: {...EV, scriptChecks: []}}})]) {
+    assert.ok(!html.includes('ev-tab-checks') && !/Script checks/.test(html));
+  }
+  assert.equal(Evidence.parseHash(`#W-Evidence/checks?c=${RUN}`, ['CP-2A']).tab, 'checks', 'the route parses either way');
+});
+test('the Script checks tab counts the outcomes and lists each module with a count per status', () => {
+  const html = view('checks', null, withChecks());
+  assert.ok(new RegExp('id="ev-tab-checks"[^>]*aria-current="page"><span>Script checks</span><span class="ev-cnt" data-count>3<').test(html), 'the badge counts outcomes');
+  const head = /<summary[^>]*>(.*?)<\/summary>/s.exec(html)[1];
+  assert.ok(head.includes('Downside') && head.includes('CP-2A'));
+  assert.deepEqual([...head.matchAll(/<span class="badge badge-(\w+)">.*?<span data-count>(\d+)<\/span> ([a-z ]+)<\/span>/gs)].map(m => [m[1], m[2], m[3]]), [['blue', '1', 'agreed'], ['gray', '2', 'not checked']]);
+});
+test('an opened module shows each outcome\'s check name, status chip, exact reason, script name and hash', () => {
+  const html = view('checks', null, withChecks());
+  assert.ok(html.includes(`>${REASON}<`) || html.includes(REASON), 'the reason is verbatim');
+  assert.ok(html.includes('Net debt = Gross debt - Cash') && html.includes('9,100') && html.includes(SCRIPT) && html.includes(HASH));
+  assert.equal([...html.matchAll(/class="ev-gap ev-chk"/g)].length, 3);
+  assert.ok(html.includes(`data-copy="${HASH}"`), 'the script hash can be copied');
+  assert.ok(!/<table/.test(html), 'a card list, not a text grid');
+});
+test('the module filter keeps one module\'s section; a module without a record has none', () => {
+  assert.ok(view('checks', 'CP-2A', withChecks()).includes('class="ev-gap ev-chk"'));
+  assert.ok(!view('checks', 'CP-6', withChecks()).includes('class="ev-gap ev-chk"'));
+  assert.ok(view('checks', 'CP-6', withChecks()).includes('ev-empty'), 'the panel says so');
+});
+test('hostile text in a record is escaped', () => {
+  const html = view('checks', null, withChecks([{...CHECKS[0], outcomes: [outcome('agreed', '<img src=x onerror=alert(1)>', {figure: '<b>x</b>'})], counts: [{status: 'agreed', n: 1}]}]));
+  assert.ok(!html.includes('<img src=x') && !html.includes('<b>x</b>'));
+});
+test('a Script checks route on a run that holds no record opens the summary', () => {
+  const html = view('checks');
+  assert.ok(html.includes('id="ev-tab-summary"') && /id="ev-tab-summary"[^>]*aria-current="page"/.test(html) && !html.includes('ev-chk'));
+});
+
+// ---- repeated outcomes are one card with the registers as chips (review D1) ----
+const NOT_REQUIRED = 'not required in this transport (register scope or routing rule)';
+const MANY = () => {
+  const registers = Array.from({length: 19}, (_, k) => `T3.${k + 1}`);
+  const outcomes = [...registers.map(register => outcome('not checked', NOT_REQUIRED, {figure: 'all', row: 'all', register})), outcome('not checked', REASON, {register: 'T3.3'}),
+    outcome('agreed', 'Net debt = Gross debt - Cash', {figure: 'Net debt', stated: '9,100', recomputed: 9100, register: 'T2.1'}), outcome('agreed', 'Net debt = Gross debt - Cash', {figure: 'Net debt', stated: '8,000', recomputed: 8000, register: 'T2.2'})];
+  return [{...CHECKS[0], counts: [{status: 'agreed', n: 2}, {status: 'not checked', n: 20}], outcomes}];
+};
+test('outcomes that share status, reason and script are one card whose registers are chips; any difference keeps its own card', () => {
+  const html = view('checks', null, withChecks(MANY()));
+  const cards = html.split('class="ev-gap ev-chk"').length - 1;
+  assert.equal(cards, 4, 'one grouped card, the differing reason, and the two outcomes with their own stated values');
+  const chips = [...html.matchAll(/<span class="ev-regchip"[^>]*>([^<]*)<\/span>/g)].map(m => m[1]);
+  const fields = [...html.matchAll(/<div class="ev-l">Register<\/div><div class="ev-v">([^<]*)<\/div>/g)].map(m => m[1]);
+  assert.deepEqual(chips, Array.from({length: 19}, (_, k) => `T3.${k + 1}`), 'every register of the 19 repeated outcomes is a chip, text exact');
+  assert.deepEqual(fields.sort(), ['T2.1', 'T2.2', 'T3.3'], 'an outcome of its own card keeps its register as a field');
+  assert.equal(chips.length + fields.length, 22, 'the sum of registers drawn equals the raw outcome count');
+  assert.ok(html.includes('19 registers'), 'the count is shown');
+  assert.equal([...html.matchAll(/<div class="ev-gap-t"><span>all<\/span>/g)].length, 0, 'a check name of "all" is not drawn as a title');
+  assert.ok(html.includes(NOT_REQUIRED) && html.includes('9,100') && html.includes('8,000'));
+  assert.ok(html.includes('>20</span> not checked'), 'the header counts are the raw counts');
+});

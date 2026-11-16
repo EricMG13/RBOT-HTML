@@ -482,4 +482,11 @@ function runModuleCodes(run) {
   return [...new Set([...ordered, ...held])];
 }
 
-if (typeof module !== 'undefined') module.exports = {escapeHtml, plainText, richText, chartNumber, numericColumn, cellView, basisButton, writtenCell, paragraphBody, figuredHtml, figureButton, paragraphLabel, passageControls, paragraphView, tableView, sectionBodyHtml, calculationRow, readerPassages, isNewFormat, earlierFormatRun, blocked, splitBasis, basisItem, inspectorItem, inspectorItems, inspectorItemHtml, inspectorBasisBlock, uniqueChips, figureSpans, earlierBasis, historyRows, pathwayTitle, runModuleCodes};
+// The modules that may lead a run's Overview (ruling H5), in order. CP-L10 leads a short snapshot (amendment 2026-11-12); CP-1B leads an earnings update (amendment 2026-11-16) and no other pathway.
+const LEAD_ORDER = ['CP-6', 'CP-2', 'CP-L10'];
+const leadModules = pathway => (pathway === 'earnings_update' ? [...LEAD_ORDER, 'CP-1B'] : LEAD_ORDER);
+// The lead is the first of those that ran, has a Bottom line and `usable` accepts (not blocked); undefined when none.
+const pickLead = (entries, pathway, usable) => leadModules(pathway).map(code => entries.find(entry => entry.module === code)).find(entry => entry?.passages?.bottom && usable(entry));
+const leadKicker = module => (module === 'CP-1B' ? 'Earnings view' : 'Credit view');
+
+if (typeof module !== 'undefined') module.exports = {escapeHtml, plainText, richText, chartNumber, numericColumn, cellView, basisButton, writtenCell, paragraphBody, figuredHtml, figureButton, paragraphLabel, passageControls, paragraphView, tableView, sectionBodyHtml, calculationRow, readerPassages, isNewFormat, earlierFormatRun, blocked, splitBasis, basisItem, inspectorItem, inspectorItems, inspectorItemHtml, inspectorBasisBlock, uniqueChips, figureSpans, earlierBasis, historyRows, pathwayTitle, runModuleCodes, leadModules, leadKicker, pickLead};

@@ -5,6 +5,7 @@ Part of the library's store (`credit_os.store`, which re-exports every name here
 
 import json
 import re
+from collections import Counter
 from pathlib import Path, PurePosixPath
 from typing import Any, NamedTuple
 from urllib.parse import quote
@@ -218,6 +219,121 @@ def run_downloads(
     return rows
 
 
+# A write's script-check record sits beside its `<attempt>.review.json` (the writer's own suffix is
+# deploy_workflow.method_scripts.RECORD_SUFFIX).
+CHECK_STATUS_ORDER = ("agreed", "disagreed", "contradicted", "missing", "noted", "not checked")
+CHECK_TEXT_FIELDS = ("figure", "register", "row", "status", "reason", "script", "stated", "unit")
+
+
+def check_outcome(entry: Any) -> dict[str, Any] | None:
+    """One outcome as the record stores it (text exact, numbers as written, a missing field None);
+    an entry that is not an object with a text status is not an outcome."""
+    if not isinstance(entry, dict) or not isinstance(entry.get("status"), str):
+        return None
+    row: dict[str, Any] = {name: stored_text(entry.get(name)) for name in CHECK_TEXT_FIELDS}
+    for name in ("recomputed", "tolerance"):
+        value = entry.get(name)
+        row[name] = (
+            value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+        )
+    row["recomputedLabel"] = stored_text(entry.get("recomputed_label"))
+    return row
+
+
+def check_record(path: Path, folder: str, issues: list[str]) -> dict[str, Any] | None:
+    """A write's script-check record as data, or None (with an issue when the file is damaged: a
+    documented fail-open, the Evidence page then lacks that module's section)."""
+    name = f"{folder}: {path.relative_to(path.parents[3]).as_posix()}"
+    found = run_json(path, issues, name)
+    if found is None:
+        return None
+    outcomes = (
+        [check_outcome(entry) for entry in found.get("checks", [])]
+        if isinstance(found, dict) and isinstance(found.get("checks"), list)
+        else None
+    )
+    if outcomes is None or None in outcomes:
+        issues.append(f"{name} is not a script-check record; nothing is shown from it")
+        return None
+    scripts = found.get("scripts")
+    scripts = scripts if isinstance(scripts, dict) else {}
+    seen = Counter(o["status"] for o in outcomes if o)
+    order = [*CHECK_STATUS_ORDER, *sorted(set(seen) - set(CHECK_STATUS_ORDER))]
+    return {
+        "response": stored_text(found.get("response_sha256")),
+        "counts": [{"status": status, "n": seen[status]} for status in order if seen[status]],
+        "scripts": [
+            {"name": script, "sha256": stored_text(digest)} for script, digest in scripts.items()
+        ],
+        "outcomes": outcomes,
+    }
+
+
+CHECK_FILE = re.compile(r"(\d+)\.method-checks(?:-[0-9a-f]{64})?\.json")
+
+
+def check_files(folder: Path) -> dict[tuple[int, str], list[Path]]:
+    """Every record file of the module's request folders, by (attempt, request folder name). The
+    writer keeps a differing recheck as `<n>.method-checks-<sha>.json` beside
+    `<n>.method-checks.json` (cpos._retain_review), and the files do not say which was acted on, so
+    no file time or name decides anything here."""
+    found: dict[tuple[int, str], list[Path]] = {}
+    for path in sorted(folder.glob("*/*.json")):
+        named = CHECK_FILE.fullmatch(path.name)
+        if named and not path.parent.is_symlink() and not path.is_symlink():
+            found.setdefault((int(named[1]), path.parent.name), []).append(path)
+    return found
+
+
+def attempt_records(paths: list[Path], run_folder: str, issues: list[str]) -> list[dict[str, Any]]:
+    """The distinct records of one attempt: files with identical bytes count as one."""
+    distinct: dict[bytes, Path] = {}
+    for path in paths:
+        try:
+            distinct.setdefault(path.read_bytes(), path)
+        except OSError:
+            distinct.setdefault(b"", path)  # unreadable: check_record names it in the issues
+    return [r for path in distinct.values() if (r := check_record(path, run_folder, issues))]
+
+
+def run_script_checks(
+    run_dir: Path, run: dict[str, Any], outputs: dict[str, Any], issues: list[str]
+) -> list[dict[str, Any]]:
+    """Each module's script-check record of its accepted write, in the run's module order: the
+    last attempt's record among those whose response is the delivered handoff. A module whose
+    records match none (a rejected attempt's record is never shown for the accepted one) shows
+    nothing and is named in the issues, as does one whose delivered attempt was rechecked with a
+    differing record (the files do not say which was acted on); a module with no record, and a
+    run with none, give nothing."""
+    found: list[dict[str, Any]] = []
+    for module, entry in run["modules"].items():
+        delivered = {outputs[name]["sha256"] for name in entry["outputs"] if name in outputs}
+        accepted: list[tuple[int, dict[str, Any]]] = []
+        seen = rechecked = False
+        for (attempt, _), paths in sorted(check_files(run_dir / "requests" / module).items()):
+            records = attempt_records(paths, run["folder"], issues)
+            seen = seen or bool(records)
+            mine = [r for r in records if r["response"] in delivered]
+            if len(mine) == 1:
+                accepted.append((attempt, mine[0]))
+            elif mine:
+                rechecked = True
+        if rechecked:
+            issues.append(
+                f"{run['folder']}: {module}'s delivered write was rechecked and the files do not "
+                "say which record was acted on; none is shown"
+            )
+        elif seen and not accepted:
+            issues.append(
+                f"{run['folder']}: {module} has script-check records but none is of the delivered"
+                " handoff; none is shown"
+            )
+        if accepted and not rechecked:
+            attempt, record = accepted[-1]
+            found.append({"module": module, "attempt": attempt} | record)
+    return found
+
+
 class EvidenceReads(NamedTuple):
     """What the store holds when Evidence is built: the workspace root, the outputs, the parsed
     handoffs by hash and the models."""
@@ -291,6 +407,7 @@ def run_evidence(
         "handoffs": handoffs,
         "zip": f"downloads/{quote(folder)}/handoffs.zip" if handoffs else None,
         "downloads": run_downloads(run, key, held.models),
+        "scriptChecks": run_script_checks(run_dir, run, held.outputs, issues),
         "record": {
             "hashes": run_hashes(run_dir, workflow, issues),
             "instructions": instruction_rows(workflow, folder, issues),
