@@ -4,6 +4,134 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-16 — The parked findings of the live validation, fixed (branch `claude/module-validation-testing-31a837`)
+
+Scope is **deterministic and synthetic, plus the five retained live run folders read again**; no
+provider was called, so nothing here is live proof of the new instruction wording. Owner: "fix all"
+on findings (a) to (h) of the entry below. Rulings are the controller's, recorded here.
+
+- (a) CP-1's forecast block wrote `dividends ["4348", null, null]`, which the parser refuses, so no
+  Model. The parser and the fail-open path are unchanged; the instruction now says: a `dividends` or
+  `debt_repayment` year with no declared or scheduled payment is `"0"` with a limitation, no one-off
+  payment is repeated, and null is never written for one driver or year (a driver with no anchor
+  declines the whole block). CP-2G gets only the all-or-nothing sentence: its method says null, not
+  zero, for an unsupported amount. No ceiling raised for this.
+- (e) CP-1B is sent a 229-character cell-format note (`6585 / 7940`, `1355; 20.6%`); the
+  `earnings_update` ceiling rose by exactly that. The note's own cells read as agreed.
+- (f), (g) CP-1 T4.9: a spaceless `-1` attached to the row's own denominator is a minus one; a
+  bracketed difference of figures is read nested once or labelled, as growth when the numerator
+  value is the bracket's first figure, else as a ratio; `%` in a fraction row's words accepts the
+  fraction or the percentage; a leading label is stripped but its change words still count;
+  `less`/`minus` beside growth words, and a Formula of figures only, accept either reading and
+  nothing else. Over 112 retained rows no agreed row changed.
+- (h) CP-1B: a range (`20 –21%`) is not checked; a signed percentage after a change keeps its old
+  reading. CP-3: a waterfall whose rows state a gap says so instead of "different or unread
+  currencies"; both live handoffs now give that reason, still not checked.
+- (d) The Copilot adapter releases a module's runtime when the module ends (accepted, failed or
+  blocked), after its compactions are drained; `close()` still releases the rest. Fake client only.
+- (b) On `earnings_update`, CP-1B leads the Overview under "Earnings view" (H5 amended in
+  `docs/rulings/2026-11-11-reader-and-issuer-report.md`); no other pathway changes.
+- (c) Evidence has a Script checks tab: per module, counts per status and each outcome with its
+  reason, register and script hash; repeated outcomes are one card with register chips. The built
+  data equals the raw records for all 53 modules of the five runs. A rechecked write shows no record
+  and a workspace issue, because the files do not say which record was acted on.
+- Browser, in-app, library rebuilt from the merged branch: both earnings runs lead with CP-1B under
+  "Earnings view"; `credit_snapshot` still leads with CP-6; CP-3's script checks show 9 agreed and 19
+  not checked, 15 of them one card; no raw Markdown, `undefined` or `NaN`.
+- Gates on the merged branch (`b29eb67`): ten affected test files 1,115 passed; `tests/test_cpos_launch.py`
+  alone 894 passed, 1 skipped (paid); library web tests 813 passed; `tools/quality_gate.py` 0 findings;
+  all exit 0. Run with other worktrees testing, the headless-Chrome library tests failed on base too.
+- Review: one per task (the adapter adversarially), fix rounds E 1, F 1, G 1, I 2, H 0; whole-branch
+  review (adversarial-reviewer, report in the session scratchpad, not retained): pass, no High or
+  Medium. Its Lows fixed in one batch: a CP-1B range needs an explicit range form (a plain hyphen
+  after a space is a signed percentage again; an en dash is a range unless the first figure is the
+  pair's own change) and an `Abs/%` cell over 200 characters is not checked; CP-1's bracket reads as
+  growth only when its first figure is the numerator value and its second the denominator value.
+- For the owner: the library's Latest list still needs a published Model (left as designed); the run
+  writer does not record which recheck record it acted on; `release()` must not race a call in flight
+  under the same module (the one caller never does); a module ending mid-summary keeps its runtime to
+  the run's end; CP-2G's method text and the block rule now agree only because CP-2G is not told the
+  zero-year rule; CP-1B reads `20/21%` as 21% (older); T4.9 rows refused before and still (for
+  example `7.94/6.585-1`, `Change = 7940 / 6585`); one delivered response under two request folders
+  with differing records shows one without an issue; `CP1B_NOTE` says another form is not checked
+  though a lone `-21%` is.
+- Live re-test, same ruling and route (GPT Sol medium through GitHub Copilot, TDG FY2024,
+  `earnings_update`, code `b29eb67`, CP-8 against the earlier re-run): 8 of 8 accepted, USD 3.51
+  (USD 28.26 of 60 in all). CP-1 wrote `dividends ["4348", "0", "0"]`; the block parsed and the Model
+  was published (Forecast page shows FY2025 to FY2029). CP-1B wrote T4.6 as the note asks
+  (`6585 / 7940`, `1355; 20.58%`): 19 figures agreed against 0 checked in the earlier re-run, none
+  sent back. CP-1: 30 agreed, 2 not checked, none sent back. Two drafts sent back and corrected on
+  the next write: CP-DR (source list) and CP-1D (one table, separator a cell longer than its
+  header). Library with the run, in the in-app browser: Overview leads with CP-1B under "Earnings
+  view"; Changes draws CP-8; Evidence's Script checks show CP-1B 19 agreed, 26 not checked; built
+  data equals the raw records for 60 modules of six runs. One case, one route; runtime release was
+  not measured.
+- Not verified: other pathways or issuers on the new wording; CP-2G's all-or-nothing sentence on a
+  live answer; a real Copilot runtime's stop and its memory saving; keyboard and
+  narrow-width use of the Script checks tab; `/sweep` discover was not run; the full weekly suite;
+  Windows.
+
+## 2026-11-15 — Live module validation on GPT Sol medium through GitHub Copilot: four pathways, repairs, one re-run (branch `claude/module-validation-testing-31a837`)
+
+Scope is **live, one dated case and route**: the retained historical TDG FY2024 public files (as of
+2024-09-30, legal documents `none`), `copilot-sol-medium` (gpt-6.1-sol, medium, Copilot SDK runtime
+1.0.105, the gh CLI's account), ruling `docs/rulings/2026-11-15-module-validation-live-test.md`
+(user: "4 pathways, every module", "USD 15 per run, USD 60 total"). Run folders are in the launching
+session's scratchpad, not retained here. Outputs are candidates until reviewed; the checks cover
+structure and the figures the method scripts recompute, not analytical judgement.
+
+- Runs, code at `256101a`: `credit_snapshot` 14 of 14 accepted, USD 6.75; `distressed_restructuring`
+  13 of 13, USD 5.36; `relative_value` 12 of 12, USD 5.57; `earnings_update` 7 of 7, USD 3.37. Re-run
+  on the repaired code (`54ff5e7`): `earnings_update` 8 of 8 with CP-8 against the first, USD 3.70.
+  Total USD 24.75. No module failed; every draft sent back was corrected within the module's writes.
+  Every Copilot runtime was released at each run's end.
+- Not exercised by this case: CP-4 stopped at its source gate (no legal documents); CP-1C at its gate
+  (no peer data: no web search on this route, SEC lookups refused without
+  `DEPLOY_WORKFLOW_SEC_USER_AGENT`); CP-3D blocked (no quotes); CP-4C `Not Applicable` (TDG is not
+  distressed); CP-3's recovery waterfall therefore states no enterprise value. Their script checks were
+  not tried on live output.
+- Repaired, each with a failing test first, a per-task review and the whole-branch review:
+  1. CP-1's T4.9 script check sent back a correct `Sales change / prior sales | 1355 | 6585 | 0.21` row,
+     reading it as n / d - 1 (one paid write lost). The Formula now decides, in order: an
+     expression-closing minus one is growth; a numerator (up to the first `/`, `÷` or "divided by";
+     `over` only without those and never in "year-over-year") naming a change (change words, `less`,
+     `minus`, `Δ`, a bracketed difference of figures) is a ratio; growth words mean growth; else a
+     ratio. Operand tags such as `1L` or `1Q` are not a minus one. Re-run: CP-1 wrote
+     `Increase in sales / prior sales ... 0.21`, agreed.
+  2. GPT Sol wrote a separator row one cell longer than its header in 3 of 4 runs; the acceptance check
+     named only the first such table per write, so CP-1 spent two of its three writes each time (the
+     2026-11-13 CP-5 stop was the same). Every malformed table is now listed in one review (code fences,
+     comments and prose pipe lines excluded; exact dedup with the adapter's own error). Re-run: CP-1
+     (three tables) and CP-1D (two) were each accepted on the next write.
+  3. CP-1B's check could not read the method's own joined T4.6 columns (`Prior/Current`, `Abs/%`) or
+     `20.6% reported`, so it checked no T4.6 row of the live handoff. Both are now read (an `Abs/%` cell
+     only when its percentage ends it); on that handoff 9 figures agree, none sent back. The re-run
+     wrote `USD 6585m / USD 7940m` and a fraction: recorded not checked.
+- Markdown rendering, in the in-app browser from a library built of all five runs: every module
+  page, Overview, Changes, Forecast and Evidence populated; no raw Markdown marker, `undefined` or
+  `NaN`; every number on a module page is in that module's own handoff except list counts; the
+  Forecast's other figures are the published model's projections, Evidence's are hash fragments.
+  The re-run's Changes page draws CP-8's comparison.
+- Gates on the merged branch (`6c89bb5`): the nine affected test files, 1,754 passed, 1 skipped (the
+  paid live test), exit 0; `tools/quality_gate.py` 0 findings in 8 changed files, exit 0. The review
+  found T4.9's bracket pattern backtracking steeply on long cells; it now reads a numerator of at most
+  200 characters (the longest retained is 55), 0.05 s at the bound, a 2,000-character cell in 0.0 s.
+- Found and not repaired in this entry (fixed on 2026-11-16, entry above): (a) no Model in 2 of 5 runs (`relative_value`, the re-run):
+  CP-1's forecast block wrote dividends `["4348", null, null]`; its instructions allow a null driver
+  but the parser needs three figures, and CP-1's block never blocks (owner, 2026-11-11), so those runs
+  have no report and the library's Latest-run list omits them. (b) `earnings_update`'s Overview has no
+  credit view: H5 leads only with CP-6, CP-2 or CP-L10. (c) Script-check records are kept per attempt
+  but no library page shows them. (d) The Copilot adapter keeps each module's runtime until the run
+  ends: 31 runtimes, 3.9 GB and 932 threads at the peak with three runs. (e) CP-1B's check coverage
+  depends on the model's cell format; a format note needs `earnings_update`'s instruction ceiling
+  raised. (f) T4.9 rows still sent back, predating this branch: `%` in a fraction row's words, a label
+  before the quotient, bare figures under a growth name. (g) Review notes on the T4.9 reading:
+  `less`/`minus` in a numerator outranks a growth name; `7940/6585-1` without spaces reads as an
+  operand tag, not a closing minus one; nested or labelled bracketed differences are not read.
+  (h) CP-3's recovery reason wording; CP-1B reads a range `20 –21%` as -21% and sends it back.
+- Not verified: other issuers; the gated modules' script checks on live output; the full weekly suite;
+  Windows.
+
 ## 2026-11-15 — After the restructure: journal harness retired, method scripts as acceptance checks, portfolio inputs (branch `claude/busy-dijkstra-bgex9m`, after PR #126)
 
 Scope is **offline only**. No provider or model was called; the owner has said no live run yet and
@@ -854,145 +982,3 @@ one paid run on gpt-6.1-sol. Not a current credit view; one run per setting.
   (unaccepted draft), none on CP-0, inconclusive on CP-1A; the medium modules needed no more.
 - Not verified: CP-2 onward under mixed effort; a same-code all-medium control (instructions
   changed after both baselines); the full test suite.
-## 2026-11-12 — CP-2G facility schedule (branch `claude/cash-flow-model-comparison-498459`)
-
-Owner waiver 2026-11-12: the 800-line PR limit is waived for this branch's pull request (about 1,290
-changed lines: plan document about 340, tests about 520; the whole-branch review found no sensible split).
-
-Scope: CP-2G facility schedule: offline synthetic tests only; no provider called, no model response
-retained; a live CP-2G run that states `facilities` has not been done; the Forecast page was not
-exercised with the new `forecast_exact.json` keys.
-- `uv run pytest tests/test_cpos_facilities.py -q`: exit 0, 55 passed (the answer key puts the debt outside the stated facilities at the analyst's rate: 37.5, 34.8, 30.6).
-- `uv run pytest tests/test_cpos_launch.py -q -k "forecast or told_how"`: exit 0, 24 passed; the whole
-  file: 507 passed, 1 skipped (the paid live test).
-- `uv run python tools/quality_gate.py`: exit 0, 0 findings.
-- Independent checks: the output for a block without facilities is byte-identical to origin/main 36b6d8f
-  (sha256 e5017389abc2c878a0b0bae323a50bcbadf35c3a08f676f277c1505b9d047089 over the five model files);
-  the arithmetic matched an independent Fraction calculation over 74 accepted seeded random blocks
-  (11 with debt outside the stated facilities, per-case rates included; reviewer's probe, not in the suite); the
-  adversarial review found and fixed two Medium defects (negative total debt from repayments above
-  base debt; unbounded floating all-in rate). Three boundary tests each kill their mutant (`0 <= rate`
-  to `0 < rate`; `unallocated < 0` to `<= 0`; `due < start` to `<=`).
-- Known limits: debt outside the stated facilities bears interest at the analyst's assumed rate, not a sourced one; with base debt
-  missing no unit check runs on facility balances; the printed-in-CP-1 check for rate terms accepts
-  any matching percent anywhere in CP-1.
-
-## 2026-11-11 — Starting a run from an earlier run: the whole branch (branch `claude/initiating-runs-existing-issuers-4a8739`)
-
-Owner waiver 2026-11-12: the 800-line PR limit is waived for #52 (2,784 changed lines).
-
-Scope: offline, macOS, headless Chrome against the run start service over a fake launcher (no provider
-called, no paid run). The whole branch after its whole-branch review: carry from an earlier run (locked
-ID, documents, answers, pathway, module subset, turns), the existing-issuer notice, "Start again from
-this run", and "Start a run" on the library's Report history. This wave fixed the review's seam findings
-(`?from=` with a submitted run still held, carried-file marks against uploads, the carried pathway and
-subset/turns marks, `open_regular` through `platform_io.regular_open`, hidden names, refused listings).
-- `uv run pytest tests/test_run_start_prior.py tests/test_run_start_submissions.py tests/test_run_start_service.py -q`: exit 0, 170 passed.
-- `uv run pytest tests/test_run_start_page.py tests/test_library_page_browser.py -q --deselect tests/test_run_start_page.py::test_upload_to_filed_report_with_the_real_launcher`: exit 0, 131 passed (91 page, 40 library), none skipped (Chrome ran).
-  `test_upload_to_filed_report_with_the_real_launcher` fails on the base already and is not part of this change.
-- Review probes (`wb_seams.py`: 10 passed; the earlier probes exit as before, `probe_carry_races.py`'s
-  seal-between-copies case still fails: ruled out of this wave).
-- `uv run python tools/quality_gate.py`: exit 0.
-- Fidelity: the notice text, marks, load messages and the progress note are asserted in the DOM Chrome builds.
-- Reader check: not done; pending. No real run was read against the September VMO2 reference.
-- CP-8 summary lines (the "changes section" and the two-prior-runs lines) are not built: the CP-8 redesign has not merged.
-- Windows not run: the `O_BINARY` open of a carried file is from reading `platform_io.regular_open` only.
-
-## 2026-11-12 — Run start page browser tests after the preset change (branch `claude/web-search-run-page`)
-
-The browser tests (`-m browser`) were not run for the commits from 73b499b (presets) to d185d83. Run then:
-`tests/test_run_start_page.py` 14 failed, 42 passed (at 0e2c564: 1 failed, 55 passed). Causes: (a) real page
-defect, `build()` required "Current period" whenever CP-2G was in the run; CP-2G joined credit_snapshot and
-covenant_refinancing, so a Basic submission that the launcher accepts (`cpos_launch.prepare` takes a blank period)
-was blocked. The page now requires it for an earnings update only, labels it recommended, and adds a "Note" row
-for CP-2G when it is blank (10 tests). (b) stale expectations: Standard now shows the research-questions stage
-for credit_snapshot and covenant_refinancing (CP-DR is in every pathway); the services-forecast and limit-tick
-tests now count the page's own CP-DR note, CP-2A no-legal-documents limit and CP-2G reading it. (c) pre-existing
-since PR #46: a delivery files no report page, so `record.report` is `""`; the assertion now says so (the run
-page's link to the library's Report history for the run is checked by the next test). The research-text
-assertion already matched the final copy. After: that file 56 passed; `-m browser -k "run_start or context_form
-or library or inbox"` 100 passed, exit 0; the fast set 756 passed, exit 0; quality gate 0 findings, exit 0.
-Not verified: a forecast run with a blank current period through a live provider.
-
-## 2026-11-12 — Web search from the run page; leaked citation markers (branch `claude/web-search-run-page`, decisions M1, M4)
-
-(a) Paid test, this dated case only (TDG FY2024, ruling `2026-11-11-cpdr-web-search-live-test.md`, run `tdg-cpdr-web-001`): CP-0, CP-1, CP-DR and CP-1C accepted, charged USD 3.39131650. CP-DR located HEICO and
-Howmet figures and CP-1C read them. Defect: the delivered CP-DR handoff held 54 provider citation markers
-(U+E200 `cite` U+E202 `turn..view..` U+E201) in reader prose, which the eight prose checks did not catch.
-Fix: markers are removed from a searching module's answer before the check (count in `<n>.markers.json` and a
-`citation_markers_removed` event; provider response unchanged), plus prose check 9 for any other shape
-(reader-ruling amendment). On that handoff the removal leaves 0 markers and adds no double space or
-space before a comma or full stop. Not verified: `store:false` behaviour was not separately inspected, peer
-figures were not checked against the cited pages, analytical accuracy.
-(b) This change, offline (no provider call): the standing run-start ruling lists `web-search`; `prepare`'s
-cap check holds the CP-DR search fee (USD 0.16) as the live loop does; the summary passes it; the page's
-approval summary says what goes to OpenAI; READMEs updated. Tests: `test_citation_markers.py`, the
-`prepare` and ruling tests in `test_cpos_launch.py`, `test_context_form.py`, `test_run_start_submissions.py`.
-`test_inbox_scheduler.py::test_a_submission_is_run_by_the_real_launcher_and_listed` failed identically on the base
-`claude/forecast-layer1` (canned answers; stopped at the checker); commit ebd4c13 fixed it (the canned launcher
-answers CP-2G with a forecast block).
-(c) Fix round 1 (security review, offline, no provider call): the page and ruling no longer say queries "use
-public names only" as a fact: the module is told to, the queries it sent are kept in `<n>.response.json`, and
-`flag_search_queries` flags afterwards any query with a supplied file name or a source figure of 4+ digits (years
-1900-2100 excepted) as a `search_query_flagged` event and `<n>.queries.json` (detection, not prevention; the
-library's Run record does not show the count: its store has no field). Owner ruling 2026-11-12: web search for
-`public` and `private` cases, off for `synthetic` (one rule, `web_search_offered`; offline hold, live hold and
-the `Web:` line agree; the page says before Submit whether the run searches). Source guidance and a `Source type`
-cell on web rows (METHODOLOGY-REVIEW.md): no paid run has exercised the new source guidance. Markers: a marker
-never spans lines, stripping is linear, the tool result tells the model how many were removed and an edit may quote
-marked text, check 9 covers `cite\s*turn\d+[a-z]+\d+` anywhere in the handoff and only U+E200-U+E202.
-Forecast riders: `~~~` fences are code, `\|` stays in its cell, working capital is the cell sign-reversed as CP-2G
-reads it (the base's test fixtures now print wc as `(10)`).
-
-## 2026-11-11 — Forecast from layer 1 (branch `claude/forecast-layer1`, decision M3)
-
-CP-MODEL (preset or `--modules`) means "publish the forecast"; it makes no model call. Without CP-2G,
-CP-1 gets a layer-1 variant of the forecast block (base operands as CP-1 prints them, run-rate drivers,
-no cases, no shock) and the forecast comes from it; with CP-2G the block, checks and files are unchanged.
-A bad or absent CP-1 block is not a CP-1 check: the model is withheld through the existing fail-open
-(stderr, `model_not_published` event, `forecast_failure` in the completion record). Published limits
-say "run-rate inputs the CP-1 handoff stated"; the library shows them under Model limitations, unchanged.
-Offline, synthetic handoffs only (no provider call, no run folder touched): new tests fail on the base
-and pass now. `uv run pytest tests/test_cpos_launch.py tests/test_handoff_loop.py tests/test_update_library.py
-tests/test_credit_os_store.py -q -m "not live and not browser"` 666 passed, exit 0; `uv run python
-tools/quality_gate.py` 0 findings, exit 0. Changed expectations: `--modules CP-MODEL` is no longer refused;
-earnings_update's report scope now names the run-rate forecast; the publish-failure stub takes a source
-argument.
-Fix round 1 (the operand-key row rule) was replaced in round 2 after re-review: CP-1 keeps its natural
-tables; each layer-1 base operand states `{"amount","reason":null,"row","period"}`, the exact first-cell
-label and period header it was read from, and Python reads that one cell (tables outside fences, `## Sources`,
-the block and the reader passages; trimmed and emphasis-stripped, case-sensitive; `1,000`, `-1,000`, `(1,000)`,
-U+2212 parse as signed; `1,000k`, `12%`, `n.a.` do not). Outflows (cp2g.OUTFLOWS) compare by magnitude, all
-others signed; zero, or several differing, cells refuse the operand by name (fail-open unchanged). CP-2G
-refuses a `row`/`period` and keeps its check byte for byte. The block still does not vouch for a reader
-figure in `figure_issues`. Probes `r2_m1_row_defeats.py`, `m3_layer1_operand.py`, `m3_block_vouches_reader.py`,
-`r2_m2_block_edges.py` exit 0 (the first two pass partly because the old-shape blocks they build carry no
-row/period and are refused; the accept/refuse cases are in the new tests). `uv run pytest tests/test_cpos_launch.py
-tests/test_prose_checks.py tests/test_handoff_loop.py tests/test_update_library.py -q -m "not live and not browser"`
-690 passed, exit 0; `uv run python tools/quality_gate.py` 0 findings, exit 0.
-Known limits: driver values are not checked against their anchors (the rationale is free text); runs
-interrupted before this change refuse to resume. Not verified: a real model writing the layer-1 block; the library on a layer-1 model beyond the
-store tests; `tests/test_financial_workflow.py`.
-
-## 2026-11-11 — Pathway presets: CP-DR and CP-2E everywhere (branch `claude/module-presets`)
-
-Decisions M1-M7 are recorded in `docs/rulings/2026-11-11-module-presets-and-changes.md` (a decision
-record; it does not lift the pause).
-
-(a) Live run facts, this dated case only (ruling `docs/rulings/2026-11-11-reader-format-live-test.md`): TDG
-FY2024 public files, context `runs/tdg-context-2024-09-30.json`, `credit_snapshot`, sol-medium, cap USD 15;
-run folder outside the repository. CP-0, CP-1, CP-1A, CP-2, CP-4, CP-3, CP-5 and CP-6 were all accepted and
-delivered; charged USD 3.20906590; two drafts were rejected and repaired within the retry limit (CP-1, CP-3).
-Reader check so far: only CP-6's reader passages were read by the controller: judgement first, sources on
-Basis lines, no codes in sentences. Remaining weakness: pipeline wording in reader text ("producer-owned
-corrections remain open", "canonical financial amount", "open producer QA findings") and dense prose.
-Not verified: the other seven modules' prose; a side-by-side against the VMO2 reference; analytical accuracy.
-
-(b) This change, offline only (no provider call, no run folder read or written): M1 and M2 presets, CP-2G
-added to credit_snapshot and covenant_refinancing, CP-8 removed from portfolio_decision, context-form
-copy. Gate results: `uv run pytest tests/test_cpos_launch.py
-tests/test_context_form.py tests/test_inbox_activity.py -q -m "not live and not browser"` 509 passed, exit 0;
-`tests/test_cp8_comparison.py tests/test_handoff_loop.py` 44 passed, exit 0; `uv run python
-tools/quality_gate.py` 0 findings, exit 0. Plans per pathway were prepared offline by the parametrised
-test (every pathway, four peer sources); `tests/test_financial_workflow.py` was not run (over the
-fast-test limit). M3-M7 are decided and not built here.
