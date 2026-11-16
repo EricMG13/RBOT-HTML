@@ -1900,6 +1900,118 @@ def test_cp1_the_formula_reading_after_branch_review(key):
     assert cp1_by(cp1({name: tuple(row)}))[f"{name} (FY2024)"].status == status
 
 
+# Round 2 ruling (brief task-D part 1, after the re-review of dd7420f).
+CP1_ROUND2_KEY = [
+    (
+        "Revenue growth",
+        "Year-over-year increase in sales / prior sales",
+        "1355",
+        "6585",
+        "0.21",
+        "agreed",
+    ),
+    (
+        "Revenue growth",
+        "Year over year sales change / prior-year sales",
+        "1355",
+        "6585",
+        "0.21",
+        "agreed",
+    ),
+    (
+        "EBITDA growth",
+        "Year-over-year change in EBITDA / prior EBITDA",
+        "665",
+        "3148",
+        "0.21",
+        "agreed",
+    ),
+    ("Junior leverage", "(Total debt \u2212 1L debt) / EBITDA", "5000", "3813", "1.31", "agreed"),
+    (
+        "LTM interest cover",
+        "(FY2024 EBITDA + 1Q25 EBITDA \u2212 1Q24 EBITDA) / LTM cash interest",
+        "3900",
+        "1160",
+        "3.36",
+        "agreed",
+    ),
+    (
+        "LTM leverage",
+        "Carrying debt / (FY2024 EBITDA + 1H25 EBITDA - 1H24 EBITDA)",
+        "24880",
+        "3900",
+        "6.38",
+        "agreed",
+    ),
+    (
+        "Net leverage",
+        "(24,880 carrying debt - 1,250 cash) / 3,813",
+        "23630",
+        "3813",
+        "6.20",
+        "agreed",
+    ),
+    (
+        "Debt share",
+        "(Total debt \u2212 1-year maturities) / total debt",
+        "24300",
+        "24880",
+        "0.98",
+        "agreed",
+    ),
+    ("Revenue growth", "(7940 \u2212 6585) / 6585", "1355", "6585", "0.21", "agreed"),
+    ("Revenue growth", "(7,940 \u2212 6,585) / 6,585", "1355", "6585", "20.6%", "agreed"),
+    ("EBITDA growth", "(3813-3148) / 3148", "665", "3148", "0.21", "agreed"),
+    (
+        "Revenue growth",
+        "(Current sales less prior sales) / prior sales",
+        "1355",
+        "6585",
+        "0.21",
+        "agreed",
+    ),
+    (
+        "Revenue growth",
+        "(Current sales minus prior sales) / prior sales",
+        "1355",
+        "6585",
+        "0.21",
+        "agreed",
+    ),
+    (
+        "Revenue growth",
+        "Sales (FY2024 \u2013 as reported) / sales (FY2023 \u2013 as reported)",
+        "7940",
+        "6585",
+        "0.21",
+        "agreed",
+    ),
+    (
+        "Revenue growth",
+        "Current sales over prior sales (YoY change)",
+        "7940",
+        "6585",
+        "0.21",
+        "agreed",
+    ),
+    ("Revenue growth", "Current sales / prior sales", "7940", "6585", "1.21", "disagreed"),
+    (
+        "Revenue growth",
+        "(Current sales \u2212 prior sales) / prior sales",
+        "1355",
+        "6585",
+        "-0.79",
+        "disagreed",
+    ),
+]
+
+
+@pytest.mark.parametrize("key", CP1_ROUND2_KEY)
+def test_cp1_the_formula_reading_after_branch_review_round_2(key):
+    name, *row, status = key
+    assert cp1_by(cp1({name: tuple(row)}))[f"{name} (FY2024)"].status == status
+
+
 def test_cp1_the_rejected_live_draft_t49_table_has_no_disagreed_row():
     table = (Path(__file__).parent / "fixtures" / "cp1_earnings_update_draft1_t49.md").read_text()
     outcomes = [o for o in ms.run("CP-1", table) if o.register == "T4.9"]

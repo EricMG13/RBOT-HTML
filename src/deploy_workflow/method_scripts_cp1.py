@@ -91,21 +91,29 @@ LTM_FORMULA = (
     "LTM = Full-Year Component + Current Stub - Prior-Year Stub (REF_CP-1_08; the script's "
     "derive_periods)"
 )
-# Rule 1: a minus one that nothing continues. Not glued to a letter (`t-1`), not a bracketed period
-# tag (`_PERIOD_TAG`), and not followed by a digit, a decimal with a non-zero digit (`- 1.5`; `1.0`
-# is one), a division (`- 1) / b` included). Words, brackets, `,` and `%` may follow it; an en dash
-# counts as a minus.
-_ENDS_MINUS_ONE = re.compile(
-    r"(?<![^\W\d_])[-−–]\s*1(?:\.0+)?(?!\d|\.\d*[1-9]|\s*[/÷]|\s*\)\s*[/÷])"
+# Rule 1: a minus one that closes an expression. The minus is not glued to a letter or digit
+# (`t-1`, `FY2024-1` are tags; `_PERIOD_TAG` also drops a bracketed one); the one (`1.0` is one) is
+# not followed by a letter, a digit, `,` + digit, `.` + a non-zero digit or `-` + letter (`1L`,
+# `1Q25`, `1,250`, `1-year` are operands); and no division follows it (`- 1) / b` is a numerator).
+# An en dash counts as a minus; words, brackets, `,`, `%`, `x 100` and `=` may follow.
+_CLOSING_MINUS_ONE = re.compile(
+    r"(?<![^\W_])[-−–]\s*1(?:\.0+)?+"
+    r"(?![^\W_]|,\d|\.\d*[1-9]|-[^\W\d_]|\s*[/÷]|\s*\)\s*[/÷])"
 )
 # A minus one in brackets whose content so far is one token with no `/` (`(t - 1)`, `(FY2024-1)`).
 _PERIOD_TAG = re.compile(r"\(\s*[^\s/()]*\s*$")
-_NUMERATOR_END = re.compile(r"/|÷|\bdivided by\b|\bover\b")
-# Rule 2: a numerator that is already a change: named, or a bracketed difference of two operands
-# that each hold a letter (`(Current sales − prior sales)`; `(a - 1)` is not one).
+# The numerator ends at the first of these; only when the Formula has none is `over` the divider
+# (not inside `year-over-year`).
+_NUMERATOR_END = re.compile(r"/|÷|\bdivided by\b")
+_OVER = re.compile(r"(?<![-\w])(?<!year )over(?![-\w])(?! year)")
+# Rule 2: a numerator that is already a change: it names one, or is wholly one bracketed difference
+# of two operands of any kind (`(7940 − 6585)`, `(FY2024 sales - FY2023 sales)`).
 _NUMERATOR_CHANGE = re.compile(
     r"\bchange\b|\bincrease\b|\bdecrease\b|\bdifference\b|\bdelta\b|[δ∆]|\bmovement\b"
-    r"|\([^()]*[^\W\d_][^()]*(?:\s+-\s*|\s*[−–]\s*)[^()]*[^\W\d_][^()]*\)\s*$"
+    r"|\bless\b|\bminus\b"
+)
+_BRACKETED_DIFFERENCE = re.compile(
+    r"\(\s*[^()]*[^()\s][^()]*?(?:\s+-\s*|\s*[−–]\s*|(?<=\d)-(?=\d))[^()]*[^()\s][^()]*\)"
 )
 # Rule 3: the words say growth.
 _GROWTH_WORDS = re.compile(r"\bgrowth\b|\bchange\b|\byoy\b|year on year")
@@ -142,13 +150,16 @@ class _Quotient:
 def _reads_growth(formula: str, words: str) -> bool:
     """Whether a free row's own words make it a growth (n / d - 1) rather than a ratio (n / d).
     In order: a Formula with a closing explicit `- 1` is growth; a Formula whose numerator already
-    names a change (`Sales change / prior sales`, `Δ Sales`, `(a sales - b sales)`) is a
+    names a change (`Sales change / prior sales`, `Δ Sales`, `(7940 - 6585)`) is a
     ratio; otherwise growth or change words in the name or Formula make it growth; otherwise a
     ratio."""
     text = formula.replace("`", "").strip().casefold()  # `Δ` arrives as `δ`
-    if any(not _PERIOD_TAG.search(text[: m.start()]) for m in _ENDS_MINUS_ONE.finditer(text)):
+    if any(not _PERIOD_TAG.search(text[: m.start()]) for m in _CLOSING_MINUS_ONE.finditer(text)):
         return True
-    if _NUMERATOR_CHANGE.search(_NUMERATOR_END.split(text, maxsplit=1)[0]):
+    numerator = _NUMERATOR_END.split(text, maxsplit=1)[0]
+    if numerator == text:
+        numerator = _OVER.split(text, maxsplit=1)[0]
+    if _NUMERATOR_CHANGE.search(numerator) or _BRACKETED_DIFFERENCE.fullmatch(numerator.strip()):
         return False
     return bool(_GROWTH_WORDS.search(words))
 
