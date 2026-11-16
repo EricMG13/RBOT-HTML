@@ -93,21 +93,38 @@ _PAIR = re.compile(
 # (`%`, `x`, `times`), a change in points, or the two scales or currencies of a mixed pair.
 _UNIT_NOT_MONEY = re.compile(r"%|×|\b(?:x|times|bps?|pp|ppt|points?)\b", re.IGNORECASE)
 _QUALIFIER = r"(?:\s+(?:reported|calculated))?\s*$"
-# `20 –21%`, `20-21%`, `20 to 21%`, `20–21 %`: two percentages, the first unsigned, the cell holding
-# nothing before it and the low bound first (`_is_range`). `1355 -20.6%` (a change, then a negative
-# percentage), a signed first figure and a first figure ending on a comma are read as before.
+# A range in an Abs/% cell: two unsigned figures, the low one first, the cell holding nothing before
+# them. An explicit form only: `to`; an en dash or minus-sign character (`20 –21%`, `20–21 %`);
+# an unspaced hyphen (`20-21%`, `20%-21%`); a spaced hyphen with `%` on both figures (`20% - 21%`).
+# A plain hyphen after a space and before the figure (`10 -20.0%`, `20 - 21%`) is a change then a
+# signed percentage, read as on base, as are a signed first figure and a first figure ending on a
+# comma. A character dash after the pair's own absolute change is that change (`10 –20.0%` beside
+# `50 / 40`). Only a cell of `_CELL_MAX` characters is read (a longer one is not an Abs/% figure
+# and would only cost the patterns time).
+_CELL_MAX = 200
 _RANGE = re.compile(
-    r"^\s*(?P<low>\d+(?:,\d{3})*(?:\.\d+)?)\s*%?\s*(?:[-–−]|\bto\b|\s[-–−])\s*"
-    r"(?P<high>\d+(?:,\d{3})*(?:\.\d+)?)\s*%",
+    r"^\s*(?P<low>\d+(?:,\d{3})*(?:\.\d+)?)(?P<p1>\s*%)?(?P<pre>\s*)(?P<sep>\bto\b|[-–−])"
+    r"(?P<post>\s*)(?P<high>\d+(?:,\d{3})*(?:\.\d+)?)(?P<p2>\s*%)",
     re.IGNORECASE,
 )
 
 
-def _is_range(cell: str) -> bool:
-    read = _RANGE.match(cell)
-    if read is None:
+def _is_range(cell: str, change: float | None = None) -> bool:
+    """Whether the cell states a range of percentages; `change` is the pair's own absolute change
+    (None where unread)."""
+    if len(cell) > _CELL_MAX or (read := _RANGE.match(cell)) is None:
         return False
-    return float(read["low"].replace(",", "")) < float(read["high"].replace(",", ""))
+    low_text = read["low"].replace(",", "")
+    low, high = float(low_text), float(read["high"].replace(",", ""))
+    if low >= high:
+        return False
+    sep, spaced = read["sep"], bool(read["pre"])
+    if sep == "-":
+        return not spaced or bool(read["p1"] and read["post"])
+    if sep in "–−" and change is not None:
+        decimals = len(low_text.partition(".")[2])
+        return bool(abs(low - abs(change)) > 10**-decimals / 2)
+    return True
 
 
 # T4.6's joined `Abs/%`, read only when the percentage ends it: at most one absolute figure and a
@@ -258,11 +275,24 @@ def _two_units(unit: str) -> bool:
     return len(scales) > 1 or len(codes) > 1
 
 
-def _not_one_percentage(cell: str) -> str:
-    """Why an Abs/% cell is not one percentage (points, or a range), or ``""``."""
+def _not_one_percentage(cell: str, change: float | None = None) -> str:
+    """Why an Abs/% cell is not one percentage (points, a range, too long), or ``""``."""
+    if len(cell) > _CELL_MAX:
+        return f"is over {_CELL_MAX} characters, too long to read"
     if re.search(r"\b(?:pp|bps?|ppt|points?)\b", cell, re.IGNORECASE):
         return "states a change in points, not only a percentage"
-    return f"`{cell}` states a range, not one percentage" if _is_range(cell) else ""
+    return f"`{cell}` states a range, not one percentage" if _is_range(cell, change) else ""
+
+
+def _change(prior: str, current: str) -> float | None:
+    """The absolute change of a pair's two figures, None where either is not a plain number."""
+    try:
+        return abs(
+            float(_dash(_plain(current)).replace(",", "").strip("x×% "))
+            - float(_dash(_plain(prior)).replace(",", "").strip("x×% "))
+        )
+    except ValueError:
+        return None
 
 
 def _joined(name: str, pair_cell: str, change_cell: str) -> _Pair:
@@ -289,7 +319,7 @@ def _joined(name: str, pair_cell: str, change_cell: str) -> _Pair:
             row, skip=f"the Prior/Current cell's unit words `{unit.strip()}` name two units"
         )
     cell = _plain(change_cell)
-    if not_one := _not_one_percentage(cell):
+    if not_one := _not_one_percentage(cell, _change(found["prior"], found["current"])):
         return replace(row, skip=f"the Abs/% cell {not_one}")
     annotated, ending = _ANNOTATED.match(cell), _ENDING.match(cell)
     if annotated:

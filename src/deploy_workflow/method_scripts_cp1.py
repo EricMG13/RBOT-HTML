@@ -10,12 +10,16 @@ what it does not cover:
 - T4.9 rows with a free `Metric Name` whose `Formula` is a quotient: `Calculated Value` against the
   script's `ratio` of the row's own `Numerator Value` and `Denominator Value`, read as a ratio or a
   percentage of it, or as the script's `growth` (n / d - 1) for a change, in either form. The
-  Formula decides which, in order: it has a closing `- 1` (not a period tag like `t-1` or
-  `(t - 1)`, nothing arithmetic after it): growth; its numerator names a change (`Sales change /
-  prior sales`, `Sales less returns`, `Δ Sales`, or a bracketed difference of two
-  operands; change words include change, increase, decrease, difference, delta, movement, less and
-  minus): ratio;
-  growth or change words in the name or Formula: growth; otherwise ratio. Only the arithmetic is
+  Formula decides which, in this order: (1) a closing `- 1` (not a period tag like `t-1` or
+  `(t - 1)`, nothing arithmetic after it), the spaceless form (`7940/6585-1`) only when it is
+  attached to the row's own Denominator Value: growth; (2) a numerator that names a change (`Sales
+  change / prior sales`, `Δ Sales`), a stripped `label =` or `label:` included: ratio (change
+  words are change, increase, decrease, difference, delta, movement, less and minus); (3) a
+  bracketed difference of two figures: growth when the first is the row's Numerator Value (the
+  minuend) and the second its Denominator Value, else ratio; (4) `less` or `minus` beside growth
+  words in the row: either reading agrees, as does a Formula cell of bare figures only (`7940 /
+  6585`); `less` or `minus` alone: ratio; (5) growth words in the name or Formula: growth; (6)
+  otherwise ratio. Only the arithmetic is
   bound: which debt or EBITDA the
   operands are is the row's own statement (a free name fixes no operand), so a ratio on principal
   where the method wants carrying value (the retained
@@ -178,10 +182,11 @@ def _reads_growth(formula: str, words: str, n: float | None = None, d: float | N
     reading, but a change word in it counts as one in the numerator. In order: a Formula with a
     closing explicit `- 1` (a spaceless one only on the row's denominator `d`) is growth; a
     numerator that names a change (`Sales change / prior sales`, `Δ Sales`) is a ratio; a bracketed
-    difference of figures is growth when the row's `n` is its first figure (the minuend), else a
-    ratio; one whose only change signal is `less` or `minus` is a ratio, or either where the row's
-    words say growth; otherwise growth or change words in the name or Formula make it growth
-    (either, when the whole Formula cell is bare figures: `7940 / 6585`); otherwise a ratio."""
+    difference of figures is growth when its first figure is the row's `n` and its second the
+    row's `d`, else a ratio; one whose only change signal is `less` or `minus` is a ratio, or
+    either where the row's words say growth; otherwise growth or change words in the name or
+    Formula make it growth (either, when the whole Formula cell is bare figures: `7940 / 6585`);
+    otherwise a ratio."""
     original = formula.replace("`", "").strip().casefold()  # `Δ` arrives as `δ`
     label = _LABEL.match(original)
     text = original[label.end() :] if label else original
@@ -200,9 +205,10 @@ def _reads_growth(formula: str, words: str, n: float | None = None, d: float | N
     if _NUMERATOR_CHANGE.search(f"{label[0] if label else ''} {numerator}"):
         return "ratio"
     if small and _BRACKETED_DIFFERENCE.fullmatch(numerator):
-        first = _BARE_FIGURE.search(numerator)
-        minuend = _figure(first[0]) if first else None
-        return "growth" if n is not None and minuend == n else "ratio"
+        figures = [_figure(found[0]) for found in _BARE_FIGURE.finditer(numerator)][:2]
+        # n / d - 1 only when the bracket is `n - d` on this row's own operands
+        grown = len(figures) == 2 and figures[0] == n and figures[1] == d
+        return "growth" if grown and n is not None else "ratio"
     growth_words = bool(_GROWTH_WORDS.search(words))
     if _SUBTRACTION_WORD.search(numerator):
         return "either" if growth_words else "ratio"
