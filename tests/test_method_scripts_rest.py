@@ -1352,3 +1352,67 @@ def test_cp1b_joined_unit_words_after_the_comma_decide_whether_the_row_is_read(
     text = head + f"| {metric} | Annual YoY | {pair} | {change} | d | s |\n"
     (outcome,) = [o for o in ms.run("CP-1B", text) if o.register == "T4.6"]
     assert outcome.status == status, outcome
+
+
+# --- parked finding h: a range in Abs/%; a stated gap in the CP-3 unit cells ----------------------
+
+
+def _joined_t46(change: str) -> ms.Outcome:
+    text = (
+        "### T4.6 - Comparison\n\n| Metric | Basis | Prior/Current | Abs/% | Driver | Source |\n"
+        f"|---|---|---|---|---|---|\n| Revenue | Annual YoY | 6585 / 7940 | {change} | d | s |\n"
+    )
+    (outcome,) = [o for o in ms.run("CP-1B", text) if o.register == "T4.6"]
+    return outcome
+
+
+@pytest.mark.parametrize(
+    "cell", ["20 –21%", "20-21%", "20 to 21%", "20–21 %", "20% to 21%", "20 - 21%"]
+)
+def test_cp1b_a_range_in_abs_pct_is_not_one_figure(cell):
+    outcome = _joined_t46(cell)
+    assert outcome.status == "not checked", outcome
+    assert "range" in outcome.reason
+
+
+@pytest.mark.parametrize(
+    ("cell", "status"),
+    [
+        ("-21%", "disagreed"),
+        ("(21%)", "disagreed"),
+        ("1355; -21.0%", "disagreed"),
+        ("+1355; 20.6%", "agreed"),
+    ],
+)
+def test_cp1b_a_real_negative_in_abs_pct_is_still_read(cell, status):
+    assert _joined_t46(cell).status == status
+
+
+def _waterfall(rows: list[tuple[str, ...]]) -> list[ms.Outcome]:
+    body = "\n".join("| " + " | ".join(r) + " |" for r in rows)
+    text = (
+        "## Findings\n### Recovery waterfall\n"
+        "| Line | Amount | Low | Base | High | Currency | Scale |\n"
+        f"|---|---|---|---|---|---|---|\n{body}\n## Gaps\nNone.\n"
+    )
+    return ms.run("CP-3", text)
+
+
+_GAP = "Not supplied: no supported valuation cases"
+_EV_GAP = ("Enterprise value", _GAP, _GAP, _GAP, _GAP, _GAP, _GAP)
+_CLAIM = ("Claim: RCF", "50", "n/a", "n/a", "n/a", "USD", "millions")
+
+
+def test_cp3_a_waterfall_that_states_a_gap_names_the_gap_not_a_unit_difference():
+    (outcome,) = _waterfall([_EV_GAP, _CLAIM])
+    assert outcome.status == "not checked"
+    assert "different or unread" not in outcome.reason
+    assert "state a gap" in outcome.reason and outcome.reason.count(_GAP) == 1
+
+
+@pytest.mark.parametrize(("currency", "scale"), [("EUR", "millions"), ("USD", "thousands")])
+def test_cp3_a_real_unit_mix_keeps_its_reason(currency, scale):
+    other = ("Claim: Notes", "70", "n/a", "n/a", "n/a", currency, scale)
+    (outcome,) = _waterfall([_EV_GAP, _CLAIM, other])
+    assert outcome.status == "not checked"
+    assert "different or unread currencies or scales" in outcome.reason

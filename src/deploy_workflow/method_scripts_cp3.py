@@ -111,12 +111,34 @@ def _kind(line: str) -> tuple[str, str]:
     return _label(line), ""
 
 
+def _states_gap(cell: str) -> bool:
+    """A unit cell that states a gap in the module's own wording (`Not supplied: <reason>`,
+    `Not calculable: <reason>`), as the T3.3 every-row-states-a-gap check reads it."""
+    text = _plain(cell).casefold()
+    return text.startswith(core.GAP_WORDS) or bool(
+        re.match(r"not (?:calculable|assessable)\s*:", text)
+    )
+
+
 def _unit(rows: list[list[str]], cols: dict[str, int]) -> str:
     """The table's one money unit; a row that states neither currency nor scale (`—`) takes it."""
     stating = [r for r in rows if _plain(r[cols["Currency"]]) not in ("", *core.NOT_APPLICABLE)]
     rows = stating or rows
     pairs = {(currency_of(r[cols["Currency"]]), scale_of(r[cols["Scale"]])) for r in rows}
     if len(pairs) != 1 or None in next(iter(pairs)):
+        gaps = {_plain(c) for r in rows for c in (r[cols["Currency"]], r[cols["Scale"]])}
+        gaps = {c for c in gaps if _states_gap(c)}
+        if gaps:  # a stated gap (the module's own wording) is not a unit that differs
+            left = {
+                (currency_of(r[cols["Currency"]]), scale_of(r[cols["Scale"]]))
+                for r in rows
+                if not any(_states_gap(r[cols[c]]) for c in ("Currency", "Scale"))
+            }
+            if len(left) <= 1 and None not in next(iter(left), ()):
+                raise _NotChecked(
+                    f"{_HEADING} rows state a gap ({'; '.join(sorted(gaps))}), so recovery is "
+                    "not recomputed"
+                )
         shown = "; ".join(sorted({f"{r[cols['Currency']]} {r[cols['Scale']]}" for r in rows}))
         raise _NotChecked(
             f"{_HEADING} rows state different or unread currencies or scales: {shown}"
