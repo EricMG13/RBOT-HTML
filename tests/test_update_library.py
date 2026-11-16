@@ -685,13 +685,19 @@ def outcome(status: str, reason: str = "", **rest) -> dict:
     } | rest
 
 
+def delivered_sha(run_dir: Path, module: str) -> str:
+    """The sha256 of the delivered handoff, the response of the accepted write."""
+    delivered = next((run_dir / "deliveries").iterdir()) / f"{module}.md"
+    return hashlib.sha256(delivered.read_bytes()).hexdigest()
+
+
 def write_record(run_dir: Path, module: str, fingerprint: str, attempt: int, outcomes, **rest):
     folder = run_dir / "requests" / module / fingerprint
     folder.mkdir(parents=True, exist_ok=True)
     record = {
         "kind": "method-script-checks/1",
         "module": module,
-        "response_sha256": "0" * 64,
+        "response_sha256": delivered_sha(run_dir, module),
         "scripts": {SCRIPT: "ab" * 32},
         "checks": outcomes,
     } | rest
@@ -751,11 +757,39 @@ def test_an_unreadable_script_check_record_is_named_and_does_not_stop_the_build(
 
 def test_a_record_whose_response_is_the_delivered_handoff_wins_over_a_later_one(tmp_path):
     run_dir = make_run(tmp_path, "run-a")
-    delivered = next((run_dir / "deliveries").iterdir()) / "CP-1.md"
-    digest = hashlib.sha256(delivered.read_bytes()).hexdigest()
+    write_record(run_dir, "CP-1", "a" * 64, 1, [outcome("agreed", "accepted")])
     write_record(
-        run_dir, "CP-1", "a" * 64, 1, [outcome("agreed", "accepted")], response_sha256=digest
+        run_dir,
+        "CP-1",
+        "b" * 64,
+        2,
+        [outcome("disagreed", "a rejected try")],
+        response_sha256="1" * 64,
     )
-    write_record(run_dir, "CP-1", "b" * 64, 2, [outcome("disagreed", "a rejected try")])
     (found,) = script_checks(tmp_path)
     assert found["attempt"] == 1 and found["outcomes"][0]["reason"] == "accepted"
+
+
+def test_a_recheck_kept_beside_a_record_is_the_one_carried(tmp_path):
+    run_dir = make_run(tmp_path, "run-a")
+    write_record(run_dir, "CP-1", "f" * 64, 1, [outcome("disagreed", "old checker")])
+    folder = run_dir / "requests" / "CP-1" / ("f" * 64)
+    recheck = json.loads((folder / "1.method-checks.json").read_text(encoding="utf-8"))
+    recheck["checks"] = [outcome("agreed", "recheck acted on")]
+    (folder / f"1.method-checks-{'9' * 64}.json").write_text(json.dumps(recheck), encoding="utf-8")
+    (found,) = script_checks(tmp_path)
+    assert [o["reason"] for o in found["outcomes"]] == ["recheck acted on"]
+
+
+def test_no_record_for_the_delivered_write_carries_nothing_and_says_so(tmp_path):
+    run_dir = make_run(tmp_path, "run-a")
+    write_record(
+        run_dir,
+        "CP-1",
+        "f" * 64,
+        1,
+        [outcome("disagreed", "rejected try")],
+        response_sha256="1" * 64,
+    )
+    assert script_checks(tmp_path) == []
+    assert any("CP-1" in i and "delivered" in i for i in data_of(tmp_path)["workspace"]["issues"])

@@ -672,3 +672,26 @@ test('a Script checks route on a run that holds no record opens the summary', ()
   const html = view('checks');
   assert.ok(html.includes('id="ev-tab-summary"') && /id="ev-tab-summary"[^>]*aria-current="page"/.test(html) && !html.includes('ev-chk'));
 });
+
+// ---- repeated outcomes are one card with the registers as chips (review D1) ----
+const NOT_REQUIRED = 'not required in this transport (register scope or routing rule)';
+const MANY = () => {
+  const registers = Array.from({length: 19}, (_, k) => `T3.${k + 1}`);
+  const outcomes = [...registers.map(register => outcome('not checked', NOT_REQUIRED, {figure: 'all', row: 'all', register})), outcome('not checked', REASON, {register: 'T3.3'}),
+    outcome('agreed', 'Net debt = Gross debt - Cash', {figure: 'Net debt', stated: '9,100', recomputed: 9100, register: 'T2.1'}), outcome('agreed', 'Net debt = Gross debt - Cash', {figure: 'Net debt', stated: '8,000', recomputed: 8000, register: 'T2.2'})];
+  return [{...CHECKS[0], counts: [{status: 'agreed', n: 2}, {status: 'not checked', n: 20}], outcomes}];
+};
+test('outcomes that share status, reason and script are one card whose registers are chips; any difference keeps its own card', () => {
+  const html = view('checks', null, withChecks(MANY()));
+  const cards = html.split('class="ev-gap ev-chk"').length - 1;
+  assert.equal(cards, 4, 'one grouped card, the differing reason, and the two outcomes with their own stated values');
+  const chips = [...html.matchAll(/<span class="ev-regchip"[^>]*>([^<]*)<\/span>/g)].map(m => m[1]);
+  const fields = [...html.matchAll(/<div class="ev-l">Register<\/div><div class="ev-v">([^<]*)<\/div>/g)].map(m => m[1]);
+  assert.deepEqual(chips, Array.from({length: 19}, (_, k) => `T3.${k + 1}`), 'every register of the 19 repeated outcomes is a chip, text exact');
+  assert.deepEqual(fields.sort(), ['T2.1', 'T2.2', 'T3.3'], 'an outcome of its own card keeps its register as a field');
+  assert.equal(chips.length + fields.length, 22, 'the sum of registers drawn equals the raw outcome count');
+  assert.ok(html.includes('19 registers'), 'the count is shown');
+  assert.equal([...html.matchAll(/<div class="ev-gap-t"><span>all<\/span>/g)].length, 0, 'a check name of "all" is not drawn as a title');
+  assert.ok(html.includes(NOT_REQUIRED) && html.includes('9,100') && html.includes('8,000'));
+  assert.ok(html.includes('>20</span> not checked'), 'the header counts are the raw counts');
+});

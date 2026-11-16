@@ -348,12 +348,24 @@
   const checkRows = records => records.reduce((n, record) => n + record.outcomes.length, 0);
   const statusChip = (status, n = null) => { const [tone, name] = checkTone(status); return `<span class="badge badge-${tone}">${icon(name)}${n === null ? '' : `<span data-count>${n}</span> `}${esc(status)}</span>`; };
   const checkField = (label, value) => (value === null || value === undefined || value === '' ? '' : `<div><div class="ev-l">${esc(label)}</div><div class="ev-v">${esc(value)}</div></div>`);
-  function checkCard(outcome, record, deps) {
-    const scripts = new Map(record.scripts.map(script => [script.name, script.sha256])), digest = scripts.get(outcome.script) ?? null;
-    const figure = outcome.figure ?? outcome.row ?? 'Check', result = [outcome.recomputed, outcome.recomputedLabel].filter(value => value !== null && value !== undefined).join(' ');
+  // Outcomes of one module that share status, reason, script and every other field but the register are drawn as one card whose registers are chips (a flat run of near-identical cards is a defect); anything that differs keeps its own card, so nothing is reworded or dropped.
+  const meaningful = value => (value === null || value === undefined || value === '' || value === 'all' ? null : value);
+  const groupKey = outcome => JSON.stringify([outcome.status, outcome.reason, outcome.script, meaningful(outcome.figure), meaningful(outcome.row), outcome.stated, outcome.recomputed, outcome.recomputedLabel, outcome.tolerance, outcome.unit]);
+  function groupOutcomes(outcomes) {
+    const groups = new Map();
+    for (const outcome of outcomes) { const key = groupKey(outcome); groups.set(key, [...(groups.get(key) || []), outcome]); }
+    return [...groups.values()];
+  }
+  function checkCard(group, record, deps) {
+    const outcome = group[0], scripts = new Map(record.scripts.map(script => [script.name, script.sha256])), digest = scripts.get(outcome.script) ?? null;
+    const registers = group.map(item => item.register).filter(register => register !== null && register !== undefined && register !== '');
+    const named = meaningful(outcome.figure) ?? meaningful(outcome.row), result = [outcome.recomputed, outcome.recomputedLabel].filter(value => value !== null && value !== undefined).join(' ');
+    // The check name leads when it is one; otherwise the register (or, grouped, the count of registers) does.
+    const title = named ?? (group.length > 1 ? count(registers.length, 'register', 'registers') : registers[0] ?? 'Check');
+    const chips = group.length > 1 && registers.length ? `<div><div class="ev-l">${esc(named ? count(registers.length, 'register', 'registers') : 'Registers')}</div><div class="ev-v ev-regchips">${registers.map(register => `<span class="ev-regchip" data-register>${esc(register)}</span>`).join('')}</div></div>` : '';
     const script = outcome.script ? `${esc(outcome.script)}${digest ? ` <code title="${esc(digest)}">${esc(digest.slice(0, 12))}</code>` : ''}` : '';
-    const fields = checkField('Reason', outcome.reason) + checkField('Register', outcome.register) + checkField('Row', outcome.row !== outcome.figure ? outcome.row : null) + checkField('Stated', outcome.stated) + checkField('Recomputed', result === '' ? null : `${result}${outcome.unit ? ` ${outcome.unit}` : ''}`) + checkField('Tolerance', outcome.tolerance) + (script ? `<div><div class="ev-l">Script</div><div class="ev-v mono">${script}</div></div>` : '');
-    return `<div class="ev-gap ev-chk" role="group" aria-label="${esc(`${figure}: ${outcome.status}`)}" data-hay="${hay(deps.moduleTitle(record.module), figure, outcome.status, outcome.reason, outcome.register, outcome.script)}"><div class="ev-gap-t"><span>${esc(figure)}</span>${statusChip(outcome.status)}</div><div class="ev-gap-f">${fields}</div></div>`;
+    const fields = checkField('Reason', outcome.reason) + (group.length > 1 ? chips : (named && registers[0] ? checkField('Register', registers[0]) : '')) + checkField('Row', meaningful(outcome.row) !== named ? meaningful(outcome.row) : null) + checkField('Stated', outcome.stated) + checkField('Recomputed', result === '' ? null : `${result}${outcome.unit ? ` ${outcome.unit}` : ''}`) + checkField('Tolerance', outcome.tolerance) + (script ? `<div><div class="ev-l">Script</div><div class="ev-v mono">${script}</div></div>` : '');
+    return `<div class="ev-gap ev-chk" role="group" aria-label="${esc(`${title}: ${outcome.status}`)}" data-hay="${hay(deps.moduleTitle(record.module), named, registers.join(' '), outcome.status, outcome.reason, outcome.script)}"><div class="ev-gap-t"><span>${esc(title)}</span>${statusChip(outcome.status)}</div><div class="ev-gap-f">${fields}</div></div>`;
   }
   function checksPanel(input, module) {
     const records = checksOf(input, module), {deps} = input;
@@ -361,7 +373,7 @@
     return records.map(record => {
       const chips = record.counts.map(count => `<span class="ev-chk-n" data-status="${esc(count.status)}">${statusChip(count.status, count.n)}</span>`).join('');
       const scripts = record.scripts.length ? `<ul class="ev-hlist ev-card" data-group aria-label="Scripts run on ${esc(deps.moduleTitle(record.module))}">${record.scripts.map(script => `<li data-hay="${hay(script.name, script.sha256)}"><div><div class="ev-nm">${esc(script.name)}</div><code>${esc(shownOrNot(script.sha256))}</code></div>${script.sha256 ? copyButton(script.sha256, `hash of ${script.name}`) : ''}</li>`).join('')}</ul>` : '';
-      return `<details class="ev-call ev-chk-mod" data-group${module ? ' open' : ''}><summary>${esc(deps.moduleTitle(record.module))}<span class="ev-cd">${esc(record.module)}</span><span class="ev-chk-chips">${chips}</span><span class="ev-ch">${icon('chevron-down')}</span></summary>${scripts}<div class="ev-chk-list" data-group>${record.outcomes.map(outcome => checkCard(outcome, record, deps)).join('')}</div></details>`;
+      return `<details class="ev-call ev-chk-mod" data-group${module ? ' open' : ''}><summary>${esc(deps.moduleTitle(record.module))}<span class="ev-cd">${esc(record.module)}</span><span class="ev-chk-chips">${chips}</span><span class="ev-ch">${icon('chevron-down')}</span></summary>${scripts}<div class="ev-chk-list" data-group>${groupOutcomes(record.outcomes).map(group => checkCard(group, record, deps)).join('')}</div></details>`;
     }).join('');
   }
   // The tabs this run shows: Script checks only when the run holds a record.

@@ -219,9 +219,8 @@ def run_downloads(
     return rows
 
 
-# The suffix of a write's script-check record, beside its `<attempt>.review.json` (the writer's own
-# constant is deploy_workflow.method_scripts.RECORD_SUFFIX).
-CHECK_SUFFIX = ".method-checks.json"
+# A write's script-check record sits beside its `<attempt>.review.json` (the writer's own suffix is
+# deploy_workflow.method_scripts.RECORD_SUFFIX).
 CHECK_STATUS_ORDER = ("agreed", "disagreed", "contradicted", "missing", "noted", "not checked")
 CHECK_TEXT_FIELDS = ("figure", "register", "row", "status", "reason", "script", "stated", "unit")
 
@@ -270,29 +269,48 @@ def check_record(path: Path, folder: str, issues: list[str]) -> dict[str, Any] |
     }
 
 
+CHECK_FILE = re.compile(r"(\d+)\.method-checks(?:-[0-9a-f]{64})?\.json")
+
+
+def check_files(folder: Path) -> list[tuple[int, str, Path]]:
+    """Each attempt's record file as (attempt, request folder name, path). The writer keeps a
+    recheck that differs as `<n>.method-checks-<sha>.json` beside `<n>.method-checks.json`, and the
+    recheck is the one acted on (cpos._retain_review): of an attempt's files the newest is taken."""
+    newest: dict[tuple[int, str], Path] = {}
+    for path in sorted(folder.glob("*/*.json")):
+        named = CHECK_FILE.fullmatch(path.name)
+        if not named or path.parent.is_symlink() or path.is_symlink():
+            continue
+        key = (int(named[1]), path.parent.name)
+        if key not in newest or path.stat().st_mtime_ns >= newest[key].stat().st_mtime_ns:
+            newest[key] = path
+    return [(attempt, name, path) for (attempt, name), path in sorted(newest.items())]
+
+
 def run_script_checks(
     run_dir: Path, run: dict[str, Any], outputs: dict[str, Any], issues: list[str]
 ) -> list[dict[str, Any]]:
-    """Each module's script-check record of its accepted write, in the run's module order: the last
-    attempt's (among the writes whose response is the delivered handoff, when any is). A module with
-    no record, and a run with none, give nothing."""
+    """Each module's script-check record of its accepted write, in the run's module order: the
+    last attempt's record among those whose response is the delivered handoff. A module whose
+    records match none (a rejected attempt's record is never shown for the accepted one) shows
+    nothing and is named in the issues; a module with no record, and a run with none, give
+    nothing."""
     found: list[dict[str, Any]] = []
     for module, entry in run["modules"].items():
-        folder = run_dir / "requests" / module
-        files = []
-        for path in sorted(folder.glob(f"*/*{CHECK_SUFFIX}")):
-            attempt = path.name.removesuffix(CHECK_SUFFIX)
-            if attempt.isdigit() and not path.parent.is_symlink() and not path.is_symlink():
-                files.append((int(attempt), path.parent.name, path))
         records = [
             (attempt, record)
-            for attempt, _, path in sorted(files)
+            for attempt, _, path in check_files(run_dir / "requests" / module)
             if (record := check_record(path, run["folder"], issues))
         ]
         delivered = {outputs[name]["sha256"] for name in entry["outputs"] if name in outputs}
-        records = [r for r in records if r[1]["response"] in delivered] or records
-        if records:
-            attempt, record = records[-1]
+        accepted = [r for r in records if r[1]["response"] in delivered]
+        if records and not accepted:
+            issues.append(
+                f"{run['folder']}: {module} has script-check records but none is of the delivered"
+                " handoff; none is shown"
+            )
+        if accepted:
+            attempt, record = accepted[-1]
             found.append({"module": module, "attempt": attempt} | record)
     return found
 
