@@ -39,7 +39,7 @@ from deploy_vii.contracts import Span
 from deploy_vii.model._cells import CONTEXT, calc
 from deploy_vii.model.frame import Cell
 from deploy_vii.model.metrics import _ratio
-from deploy_vii.preparation import xlsx_content
+from deploy_vii.preparation import pdf_page_text, xlsx_content
 from deploy_vii.registry import modules
 from deploy_workflow.model.adapter import AdapterReply, ModelAdapter
 from deploy_workflow.model.budget import Budget, OverrunStop, exact_sum
@@ -463,9 +463,7 @@ def _pages(name: str, raw: bytes) -> list[str]:
     if raw.startswith(b"%PDF"):
         from pypdf import PdfReader
 
-        return [
-            p.extract_text(extraction_mode="layout") or "" for p in PdfReader(io.BytesIO(raw)).pages
-        ]
+        return [pdf_page_text(p)[0] for p in PdfReader(io.BytesIO(raw)).pages]
     if _is_workbook(raw):
         return _workbook_pages(raw)
     text = raw.decode("utf-8")
