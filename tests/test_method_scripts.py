@@ -10,6 +10,7 @@ import hashlib
 import json
 import shutil
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -1814,6 +1815,204 @@ def test_cp1_the_formula_decides_growth_or_ratio(name, formula, operands, stated
     assert cp1_by(cp1(row))[f"{name} (FY2024)"].status == status
 
 
+# Ruling (whole-branch review, brief task-D part 1): a delta sign, a subtraction numerator and
+# words after the closing - 1. (Metric Name, Formula, N, D, stated, status).
+CP1_REVIEW_KEY = [
+    ("Revenue growth", "\u0394 Sales / prior sales", "1355", "6585", "0.21", "agreed"),
+    ("Revenue growth", "\u0394Sales / prior sales", "1355", "6585", "0.21", "agreed"),
+    ("EBITDA growth", "\u0394 EBITDA / prior EBITDA", "665", "3148", "0.21", "agreed"),
+    ("Revenue growth", "\u2206 Sales / prior sales", "1355", "6585", "0.21", "agreed"),
+    (
+        "Revenue growth",
+        "(Current sales \u2212 prior sales) / prior sales",
+        "1355",
+        "6585",
+        "0.21",
+        "agreed",
+    ),
+    (
+        "Revenue growth",
+        "(FY2024 sales - FY2023 sales) / FY2023 sales",
+        "1355",
+        "6585",
+        "20.6%",
+        "agreed",
+    ),
+    (
+        "EBITDA growth",
+        "(Current \u2212 Prior EBITDA) / Prior EBITDA",
+        "665",
+        "3148",
+        "0.21",
+        "agreed",
+    ),
+    (
+        "Revenue growth",
+        "(Current sales \u2212 prior sales) / prior sales",
+        "1355",
+        "6585",
+        "-0.79",
+        "disagreed",
+    ),
+    (
+        "Revenue growth",
+        "YoY change = current sales / prior sales \u2212 1 (fraction)",
+        "7940",
+        "6585",
+        "0.21",
+        "agreed",
+    ),
+    (
+        "Revenue growth",
+        "Change: current sales / prior sales \u2212 1 (FY2024 on FY2023)",
+        "7940",
+        "6585",
+        "0.21",
+        "agreed",
+    ),
+    (
+        "Revenue growth",
+        "Current sales over prior sales (YoY change)",
+        "7940",
+        "6585",
+        "0.21",
+        "agreed",
+    ),
+    (
+        "Sales uplift",
+        "Current sales / prior sales \u2212 1, as a percentage",
+        "7940",
+        "6585",
+        "20.6%",
+        "agreed",
+    ),
+    ("Sales uplift", "(Current sales / prior sales \u2212 1) %", "7940", "6585", "20.6%", "agreed"),
+    ("Sales uplift", "Current sales / prior sales \u2212 1.0", "7940", "6585", "0.21", "agreed"),
+    ("Sales uplift", "Current sales / prior sales \u2013 1", "7940", "6585", "0.21", "agreed"),
+    ("Ratio", "(a - 1) / b", "7940", "6585", "1.21", "agreed"),
+    ("Interest cover", "EBITDA / interest (t-1)", "3813", "1160", "3.29", "agreed"),
+    ("Revenue growth", "Current sales / prior sales", "7940", "6585", "1.21", "disagreed"),
+]
+
+
+@pytest.mark.parametrize("key", CP1_REVIEW_KEY)
+def test_cp1_the_formula_reading_after_branch_review(key):
+    name, *row, status = key
+    assert cp1_by(cp1({name: tuple(row)}))[f"{name} (FY2024)"].status == status
+
+
+# Round 2 ruling (brief task-D part 1, after the re-review of dd7420f).
+CP1_ROUND2_KEY = [
+    (
+        "Revenue growth",
+        "Year-over-year increase in sales / prior sales",
+        "1355",
+        "6585",
+        "0.21",
+        "agreed",
+    ),
+    (
+        "Revenue growth",
+        "Year over year sales change / prior-year sales",
+        "1355",
+        "6585",
+        "0.21",
+        "agreed",
+    ),
+    (
+        "EBITDA growth",
+        "Year-over-year change in EBITDA / prior EBITDA",
+        "665",
+        "3148",
+        "0.21",
+        "agreed",
+    ),
+    ("Junior leverage", "(Total debt \u2212 1L debt) / EBITDA", "5000", "3813", "1.31", "agreed"),
+    (
+        "LTM interest cover",
+        "(FY2024 EBITDA + 1Q25 EBITDA \u2212 1Q24 EBITDA) / LTM cash interest",
+        "3900",
+        "1160",
+        "3.36",
+        "agreed",
+    ),
+    (
+        "LTM leverage",
+        "Carrying debt / (FY2024 EBITDA + 1H25 EBITDA - 1H24 EBITDA)",
+        "24880",
+        "3900",
+        "6.38",
+        "agreed",
+    ),
+    (
+        "Net leverage",
+        "(24,880 carrying debt - 1,250 cash) / 3,813",
+        "23630",
+        "3813",
+        "6.20",
+        "agreed",
+    ),
+    (
+        "Debt share",
+        "(Total debt \u2212 1-year maturities) / total debt",
+        "24300",
+        "24880",
+        "0.98",
+        "agreed",
+    ),
+    ("Revenue growth", "(7940 \u2212 6585) / 6585", "1355", "6585", "0.21", "agreed"),
+    ("Revenue growth", "(7,940 \u2212 6,585) / 6,585", "1355", "6585", "20.6%", "agreed"),
+    ("EBITDA growth", "(3813-3148) / 3148", "665", "3148", "0.21", "agreed"),
+    (
+        "Revenue growth",
+        "(Current sales less prior sales) / prior sales",
+        "1355",
+        "6585",
+        "0.21",
+        "agreed",
+    ),
+    (
+        "Revenue growth",
+        "(Current sales minus prior sales) / prior sales",
+        "1355",
+        "6585",
+        "0.21",
+        "agreed",
+    ),
+    (
+        "Revenue growth",
+        "Sales (FY2024 \u2013 as reported) / sales (FY2023 \u2013 as reported)",
+        "7940",
+        "6585",
+        "0.21",
+        "agreed",
+    ),
+    (
+        "Revenue growth",
+        "Current sales over prior sales (YoY change)",
+        "7940",
+        "6585",
+        "0.21",
+        "agreed",
+    ),
+    ("Revenue growth", "Current sales / prior sales", "7940", "6585", "1.21", "disagreed"),
+    (
+        "Revenue growth",
+        "(Current sales \u2212 prior sales) / prior sales",
+        "1355",
+        "6585",
+        "-0.79",
+        "disagreed",
+    ),
+]
+
+
+@pytest.mark.parametrize("key", CP1_ROUND2_KEY)
+def test_cp1_the_formula_reading_after_branch_review_round_2(key):
+    name, *row, status = key
+    assert cp1_by(cp1({name: tuple(row)}))[f"{name} (FY2024)"].status == status
+
+
 def test_cp1_the_rejected_live_draft_t49_table_has_no_disagreed_row():
     table = (Path(__file__).parent / "fixtures" / "cp1_earnings_update_draft1_t49.md").read_text()
     outcomes = [o for o in ms.run("CP-1", table) if o.register == "T4.9"]
@@ -1934,3 +2133,12 @@ def test_the_record_holds_every_outcome_and_the_script_hash():
 
 ENDING = ms.ENDING
 COMPLETE = "completeness_check.py"
+
+
+def test_cp1_a_2000_character_numerator_of_minus_terms_reads_within_a_second():
+    from deploy_workflow import method_scripts_cp1 as cp1_module
+
+    formula = "(" + "a - " * 500 + "b x / y"  # never closed: the bracket pattern cannot match
+    start = time.perf_counter()
+    cp1_module._reads_growth(formula, formula)
+    assert time.perf_counter() - start < 1.0
