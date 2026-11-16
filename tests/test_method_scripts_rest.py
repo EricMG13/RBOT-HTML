@@ -770,7 +770,14 @@ def test_cp1b_all_right():
     assert found[("T4.4", "% Change: Revenue")] == "agreed"  # FY2024 against FY2023
     assert found[("T4.4", "% Change: Net Income")] == "not checked"  # negative prior
     assert ms.issues("CP-1B", cp1b()) == ()
-    assert "CP-1B" not in ms.NOTES  # earnings_update has no room for the note
+    # The cell-format note (owner, 2026-11-16: fix all): the check reads only two bare figures in
+    # `Prior/Current` and a trailing percentage in `Abs/%`.
+    from deploy_workflow import method_scripts_cp1b
+
+    note = ms.NOTES["CP-1B"]
+    assert note == method_scripts_cp1b.CP1B_NOTE and len(note) < 300
+    assert "`6585 / 7940`" in note and "`1355; 20.6%`" in note
+    assert "Prior/Current" in note and "Abs/%" in note
 
 
 @pytest.mark.parametrize(

@@ -74,14 +74,11 @@ _PERIOD = re.compile(
     r"^(?:fy|cy|ltm|ytd|[hq][1-4]|[1-4][hq]|\d{1,2}m)?\s*(?:fy)?\s*'?(?:19|20)?\d{2}[a-z]?$"
 )
 _YEAR = re.compile(r"^(?P<pre>.*?)(?P<year>(?:19|20)\d{2}|\d{2})(?P<post>[a-z]?)$")
-# What CP-1B would need to be told for this check (not sent: `earnings_update` has 93 characters
-# under its ceiling, and the owner raises a ceiling, not this module). Kept to measure the need.
-CP1B_NOTE_UNSENT = (
-    "Python checks your T4.6 % Change and T4.4 YoY % after you answer, with the method's own "
-    "`credit_metrics.py` (you cannot run it): Current / Prior - 1, from the row's own values. "
-    "So write % Change with `%`, Prior and Current in one unit, and name T4.4's periods so the "
-    "year-earlier one is recognisable (`FY2023`, `FY2024`). A figure that disagrees is sent back "
-    "for repair; one whose input is missing is not checked, never read as zero.\n\n"
+# Sent to CP-1B (owner, 2026-11-16: fix all): the check reads only these two cell shapes.
+CP1B_NOTE = (
+    "Python checks T4.6 after you answer: write `Prior/Current` as two plain figures in the "
+    "table's stated unit (`6585 / 7940`) and `Abs/%` as the change then the percentage "
+    "(`1355; 20.6%`). A row written another way is not checked.\n\n"
 )
 
 
@@ -359,5 +356,5 @@ def check(text: str, loaded: Loaded, _upstream: Upstream) -> list[Outcome]:
     return out
 
 
-# No note: `earnings_update` has 93 characters left under its ceiling (ruling section).
-core.register("CP-1B", CREDIT_METRICS, check, None)
+# Sent `CP1B_NOTE`: the owner raised the `earnings_update` instruction ceiling by its length.
+core.register("CP-1B", CREDIT_METRICS, check, CP1B_NOTE)
