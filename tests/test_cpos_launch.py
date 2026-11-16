@@ -1507,13 +1507,16 @@ def test_the_lite_pathway_runs_end_to_end_to_a_verified_delivery_with_a_syntheti
 # 2026-11-15: deep_credit_assessment, a new pathway (owner: "Deep max $40, Full $25 and Lite $15",
 # "Deep = all"; ruling 2026-11-15-pathway-tiers-and-caps), measured 1,805,013 on this file's input:
 # rounded up to the next 10,000 plus 5%, 1,900,500. No other ceiling moved.
+# 2026-11-16 (owner: "fix all"): CP-1B is sent its cell-format note, 229 characters
+# (`method_scripts_cp1b.CP1B_NOTE`); the ceiling rises by that length, 546,500 to 546,729. The
+# reworded forecast-driver rule fits in the room that was left, so no ceiling rises for it.
 INSTRUCTION_BUDGET = {
     "deep_credit_assessment": 1_900_500,
     "lite_credit_assessment": 420_000,
     "credit_snapshot": 1_483_647,
     "covenant_refinancing": 1_155_000,
     "distressed_restructuring": 1_186_500,
-    "earnings_update": 546_500,
+    "earnings_update": 546_729,  # owner, 2026-11-16: fix all (CP1B_NOTE, 229)
     "portfolio_decision": 955_500,
     "relative_value": 1_071_000,
     "short_snapshot": 157_500,
@@ -5071,7 +5074,8 @@ def test_the_forecast_instructions_lock_the_entry_values_the_method_would_ask_fo
     assert "give your own judgment as `Analyst Interpretation`" in block
     assert "anchored to a stated figure" in block
     assert "name the anchor in `rationale`" in block and "in `limitation`" in block
-    assert "only when no stated figure can anchor it" in block
+    # Replaced 2026-11-16 (owner: fix all): never one driver null; see test_cpos_facilities.
+    assert "Never write null for one driver or year" in block
 
 
 def test_the_forecast_instructions_cap_driver_values_at_four_decimal_places():
@@ -9073,15 +9077,16 @@ T46_CP1B = """### T4.6 - Variance register
 """
 
 
-def test_cp1b_is_checked_by_its_script_without_a_note(tmp_path):
-    """`earnings_update` has 93 characters under its ceiling, so CP-1B is sent no note
-    (`method_scripts_cp1b.CP1B_NOTE_UNSENT` measures the need); its own T4.6 is still checked."""
+def test_cp1b_is_sent_its_cell_format_note_and_checked_by_its_script(tmp_path):
+    """CP-1B is sent `method_scripts_cp1b.CP1B_NOTE` (owner, 2026-11-16: fix all; the
+    `earnings_update` ceiling is raised by its length); its own T4.6 is checked."""
     from deploy_workflow import method_scripts_cp1b
 
-    assert "CP-1B" in method_scripts.CHECKS and "CP-1B" not in method_scripts.NOTES
+    assert "CP-1B" in method_scripts.CHECKS
+    assert method_scripts.NOTES["CP-1B"] == method_scripts_cp1b.CP1B_NOTE
     (tmp_path / "texts").mkdir()
     _, texts = all_instructions(tmp_path / "texts", "earnings_update")
-    assert method_scripts_cp1b.CP1B_NOTE_UNSENT not in texts["CP-1B"]
+    assert method_scripts_cp1b.CP1B_NOTE in texts["CP-1B"]
     prepared, task, context = good_task(tmp_path, "CP-1B", "earnings_update")
     raw = answer(context, list(prepared.plan.layout.routes))
     check = checker(prepared.layout)
@@ -9253,3 +9258,38 @@ def test_each_attempt_keeps_its_method_script_checks_beside_its_review(tmp_path)
     _, other, _ = good_task(tmp_path / "other", "CP-L10", "short_snapshot")
     _handoff(other, tmp_path / "run1", lambda _task: shell.format("").encode(), lambda *_: (), 1)
     assert not list((tmp_path / "run1").rglob("*.method-checks.json"))
+
+
+def test_the_check_lists_every_malformed_table_of_a_draft_in_one_review(tmp_path):
+    """Live 2026-11-15: one refusal per table cost CP-1 two of its three writes. The issuer is
+    named as the test's own, so the adapter reaches the tables and raises its first table error:
+    that error is listed once, not also as a refusal of the adapter."""
+    fixtures = Path(__file__).parent / "fixtures" / "live_2026_11_15"
+    prepared, task, _ = good_task(tmp_path, "CP-1", "earnings_update")
+    text = (fixtures / "earnings_update-CP-1-draft1.md").read_text(encoding="utf-8")
+    raw = text.replace("TransDigm Group Incorporated", ISSUER, 1).encode()
+    issues = _checked_handoff(task, raw, checker(prepared.layout))
+    for line in (323, 382):
+        mine = [i for i in issues if f"table header at line {line}:" in i]
+        assert len(mine) == 1, (line, issues)
+    assert not [i for i in issues if i.startswith("The report adapter refused")], issues
+
+
+def test_an_adapter_refusal_that_is_only_a_prefix_of_a_listed_fault_is_still_named(tmp_path):
+    from deploy_workflow.owners.cpos import _checked_handoff
+
+    prepared, task, context = good_task(tmp_path, "CP-4")
+    good = answer(context, list(prepared.plan.layout.routes))
+    lines = good.split("\n")
+    at = lines.index("## Gaps")
+    group_a = ["", "| **Note table** |", "| A | B |", "|---|---|", "| 1 | 2", ""]
+    bad_a = at + 5
+    pad = 10 * bad_a - (at + len(group_a)) - 3
+    group_b = [*[""] * pad, "| A | B |", "|---|---|", "| 1 | 2", ""]
+    text = "\n".join([*lines[:at], *group_a, *group_b, *lines[at:]])
+    bad_b = text.split("\n").index("| 1 | 2", bad_a) + 1
+    assert str(bad_b).startswith(str(bad_a))
+    review = _checked_handoff(task, text.encode(), cpos_launch.checker(prepared.layout))
+    named = "boundary pipes: line "
+    assert sum(i.endswith(f"{named}{bad_a}") for i in review) == 1, review
+    assert sum(i.endswith(f"{named}{bad_b}") for i in review) == 1, review

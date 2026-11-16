@@ -770,7 +770,14 @@ def test_cp1b_all_right():
     assert found[("T4.4", "% Change: Revenue")] == "agreed"  # FY2024 against FY2023
     assert found[("T4.4", "% Change: Net Income")] == "not checked"  # negative prior
     assert ms.issues("CP-1B", cp1b()) == ()
-    assert "CP-1B" not in ms.NOTES  # earnings_update has no room for the note
+    # The cell-format note (owner, 2026-11-16: fix all): the check reads only two bare figures in
+    # `Prior/Current` and a trailing percentage in `Abs/%`.
+    from deploy_workflow import method_scripts_cp1b
+
+    note = ms.NOTES["CP-1B"]
+    assert note == method_scripts_cp1b.CP1B_NOTE and len(note) < 300
+    assert "`6585 / 7940`" in note and "`1355; 20.6%`" in note
+    assert "Prior/Current" in note and "Abs/%" in note
 
 
 @pytest.mark.parametrize(
@@ -1249,3 +1256,221 @@ def test_cp1c_a_table_without_quartile_columns_is_not_checked_for_them():
     assert found["Peer Q1: EBITDA Margin"].status == "not checked"
     assert found["Peer Median: EBITDA Margin"].status == "agreed"
     assert ms.issues("CP-1C", bare) == ()
+
+
+# --- CP-1B: the method's joined T4.6 layout and `reported` percentages (live TDG FY2024 run) ----
+
+LIVE_1B = (ROOT / "tests/fixtures/CP-1B-earnings_update-tdg-fy2024-t44-t46.md").read_text()
+
+
+def live_1b(text: str = LIVE_1B) -> dict[tuple[str, str], ms.Outcome]:
+    return {(o.register, o.figure): o for o in ms.run("CP-1B", text)}
+
+
+def test_cp1b_live_handoff_checks_the_joined_t46_and_reported_percentages():
+    found = live_1b()
+    agreed = {
+        ("T4.4", "Revenue"): 20.5771,
+        ("T4.4", "COGS"): 19.1396,
+        ("T4.4", "Gross profit"): 21.6033,
+        ("T4.4", "SG&A"): 25.641,
+        ("T4.4", "Reported EBITDA"): 21.1245,
+        ("T4.6", "Operating profit"): 20.8005,
+        ("T4.6", "Reported EBITDA"): 21.1245,
+        ("T4.6", "Issuer-adjusted EBITDA, segment bridge"): 22.9161,
+        ("T4.6", "Operating cash flow"): 48.7273,
+    }
+    for (register, name), value in agreed.items():
+        outcome = found[(register, f"% Change: {name}")]
+        assert outcome.status == "agreed", (register, name, outcome.reason)
+        assert outcome.recomputed is not None
+        assert abs(outcome.recomputed - value) < 1e-3, (register, name, outcome.recomputed)
+    sales = found[("T4.6", "% Change: Sales, total and organic/acquisition")]
+    assert sales.status == "not checked"
+    assert "pairs" in sales.reason
+    assert found[("T4.6", "% Change: Leverage and coverage")].status == "not checked"
+    assert not [o for o in found.values() if o.status == "disagreed"]
+    assert ms.issues("CP-1B", LIVE_1B) == ()
+
+
+def test_cp1b_live_handoff_wrong_figures_are_sent_back_and_other_words_are_not_read():
+    wrong44 = LIVE_1B.replace("| 20.6% reported |", "| 22.0% reported |", 1)
+    assert live_1b(wrong44)[("T4.4", "% Change: Revenue")].status == "disagreed"
+    wrong46 = LIVE_1B.replace("+608; 20.80%", "+608; 25.0%", 1)
+    assert live_1b(wrong46)[("T4.6", "% Change: Operating profit")].status == "disagreed"
+    approx = LIVE_1B.replace("| 20.6% reported |", "| 20.6% approx |", 1)
+    assert live_1b(approx)[("T4.4", "% Change: Revenue")].status == "not checked"
+    calculated = LIVE_1B.replace("| 20.6% reported |", "| 20.58% calculated |", 1)
+    assert live_1b(calculated)[("T4.4", "% Change: Revenue")].status == "agreed"
+
+
+def joined_1b(pair: str, change: str) -> ms.Outcome:
+    head = (
+        "### T4.6 Variance register\n\n| Metric | Basis | Prior/Current | Abs/% | Driver |"
+        " Source |\n"
+        "|---|---|---|---|---|---|\n"
+    )
+    text = head + f"| Revenue | Annual YoY | {pair} | {change} | d | s |\n"
+    (outcome,) = [o for o in ms.run("CP-1B", text) if o.register == "T4.6"]
+    return outcome
+
+
+@pytest.mark.parametrize(
+    ("pair", "change", "status"),
+    [
+        ("2923 / 3531", "+608 (20.8%)", "agreed"),
+        ("2000 / 1900", "-100 (5.0%)", "agreed"),
+        ("2923 / 3531", "+608 / 20.8%", "agreed"),
+        ("2923 / 3531", "+608 (+20.8%)", "agreed"),
+        ("2923 / 3531", "+608 (-20.8%)", "disagreed"),
+        ("2000 / 1900", "-100 (+5.0%)", "disagreed"),
+        ("2000 / 1900", "(5.0%)", "agreed"),
+        ("2000 / 1900", "-100; (5.0%)", "agreed"),
+        ("6585 / 7940", "+1355; 16.2% organic", "not checked"),
+        ("2923 / 3531", "+608; 20.8% approx", "not checked"),
+        ("2923 / 3531", "+608; 25.0% reported", "disagreed"),
+    ],
+)
+def test_cp1b_joined_abs_percent_is_read_only_when_the_percentage_ends_it(pair, change, status):
+    assert joined_1b(pair, change).status == status
+
+
+@pytest.mark.parametrize(
+    ("metric", "pair", "change", "status"),
+    [
+        ("EBITDA margin", "52.3 / 53.0, %", "+0.7%", "not checked"),
+        ("EBITDA margin", "47.8 / 48.0, %", "+0.2; 0.2%", "not checked"),
+        ("Leverage", "6.27 / 6.53, x", "+0.26; 4.1%", "not checked"),
+        ("Leverage", "6.27 / 6.53, times", "+0.26; 4.1%", "not checked"),
+        ("Margin", "47.8 / 48.0, bps", "+20; 0.4%", "not checked"),
+        ("Margin", "47.8 / 48.0, pp", "+0.2; 0.4%", "not checked"),
+        ("Margin", "47.8 / 48.0, points", "+0.2; 0.4%", "not checked"),
+        ("Revenue", "950 / 1.2, USD m then USD bn", "+250; 26.3%", "not checked"),
+        ("Operating profit", "2923 / 3531, USD millions", "+608; 20.80%", "agreed"),
+    ],
+)
+def test_cp1b_joined_unit_words_after_the_comma_decide_whether_the_row_is_read(
+    metric, pair, change, status
+):
+    head = (
+        "### T4.6 Variance register\n\n| Metric | Basis | Prior/Current | Abs/% | Driver |"
+        " Source |\n|---|---|---|---|---|---|\n"
+    )
+    text = head + f"| {metric} | Annual YoY | {pair} | {change} | d | s |\n"
+    (outcome,) = [o for o in ms.run("CP-1B", text) if o.register == "T4.6"]
+    assert outcome.status == status, outcome
+
+
+# --- parked finding h: a range in Abs/%; a stated gap in the CP-3 unit cells ----------------------
+
+
+def _joined_t46(change: str, pair: str = "6585 / 7940") -> ms.Outcome:
+    text = (
+        "### T4.6 - Comparison\n\n| Metric | Basis | Prior/Current | Abs/% | Driver | Source |\n"
+        f"|---|---|---|---|---|---|\n| Revenue | Annual YoY | {pair} | {change} | d | s |\n"
+    )
+    (outcome,) = [o for o in ms.run("CP-1B", text) if o.register == "T4.6"]
+    return outcome
+
+
+@pytest.mark.parametrize(
+    "cell",
+    ["20 –21%", "20-21%", "20 to 21%", "20–21 %", "20% to 21%", "20% - 21%", "20%-21%", "20 −21%"],
+)
+def test_cp1b_a_range_in_abs_pct_is_not_one_figure(cell):
+    outcome = _joined_t46(cell)
+    assert outcome.status == "not checked", outcome
+    assert "range" in outcome.reason
+
+
+@pytest.mark.parametrize(
+    ("cell", "status"),
+    [
+        ("-21%", "disagreed"),
+        ("(21%)", "disagreed"),
+        ("1355; -21.0%", "disagreed"),
+        ("+1355; 20.6%", "agreed"),
+    ],
+)
+def test_cp1b_a_real_negative_in_abs_pct_is_still_read(cell, status):
+    assert _joined_t46(cell).status == status
+
+
+def _waterfall(rows: list[tuple[str, ...]]) -> list[ms.Outcome]:
+    body = "\n".join("| " + " | ".join(r) + " |" for r in rows)
+    text = (
+        "## Findings\n### Recovery waterfall\n"
+        "| Line | Amount | Low | Base | High | Currency | Scale |\n"
+        f"|---|---|---|---|---|---|---|\n{body}\n## Gaps\nNone.\n"
+    )
+    return ms.run("CP-3", text)
+
+
+_GAP = "Not supplied: no supported valuation cases"
+_EV_GAP = ("Enterprise value", _GAP, _GAP, _GAP, _GAP, _GAP, _GAP)
+_CLAIM = ("Claim: RCF", "50", "n/a", "n/a", "n/a", "USD", "millions")
+
+
+def test_cp3_a_waterfall_that_states_a_gap_names_the_gap_not_a_unit_difference():
+    (outcome,) = _waterfall([_EV_GAP, _CLAIM])
+    assert outcome.status == "not checked"
+    assert "different or unread" not in outcome.reason
+    assert "state a gap" in outcome.reason and outcome.reason.count(_GAP) == 1
+
+
+@pytest.mark.parametrize(("currency", "scale"), [("EUR", "millions"), ("USD", "thousands")])
+def test_cp3_a_real_unit_mix_keeps_its_reason(currency, scale):
+    other = ("Claim: Notes", "70", "n/a", "n/a", "n/a", currency, scale)
+    (outcome,) = _waterfall([_EV_GAP, _CLAIM, other])
+    assert outcome.status == "not checked"
+    assert "different or unread currencies or scales" in outcome.reason
+
+
+@pytest.mark.parametrize(
+    ("pair", "cell", "status"),
+    [
+        ("7940 / 6585", "-1355 -17.1%", "agreed"),
+        ("7940 / 6585", "−1355 −17.1%", "agreed"),
+        ("7940 / 6585", "-1,355 -17.1%", "agreed"),
+        ("7940 / 6585", "1355 -17.1%", "agreed"),
+        ("6585 / 7940", "1355 -20.6%", "disagreed"),
+        ("6585 / 7940", "1355, -20.6%", "disagreed"),
+        ("6585 / 7940", "1355 –20.6%", "disagreed"),
+        ("6585 / 7940", "1355 −20.6%", "disagreed"),
+        ("6585 / 7940", "1355 -25.0%", "disagreed"),
+        ("6585 / 7940", "-1355 -25.0%", "disagreed"),
+        # A change smaller than the percentage's figure (a prior under 100) is no range either.
+        ("50 / 40", "10 -20.0%", "agreed"),
+        ("50 / 40", "10 -25.0%", "disagreed"),
+        ("50 / 40", "10 –20.0%", "agreed"),
+        ("5.2 / 4.1", "1.1 -21.2%", "agreed"),
+        ("6585 / 7940", "20 -21%", "disagreed"),
+    ],
+)
+def test_cp1b_a_signed_percentage_after_a_change_is_not_a_range(pair, cell, status):
+    outcome = _joined_t46(cell, pair)
+    assert outcome.status == status, outcome
+
+
+@pytest.mark.parametrize(
+    ("pair", "cell"),
+    [
+        ("6585 / 7940", "1,355 - 20.6%"),
+        ("7940 / 6585", "-1355 - 17.1%"),
+        ("6585 / 7940", "20 - 21%"),
+    ],
+)
+def test_cp1b_a_spaced_dash_after_a_change_keeps_its_base_reason(pair, cell):
+    outcome = _joined_t46(cell, pair)
+    assert outcome.status == "not checked" and "range" not in outcome.reason
+
+
+@pytest.mark.parametrize("pad", [20_000])
+def test_cp1b_a_long_whitespace_cell_is_read_within_a_second(pad):
+    import time
+
+    for cell in ("1" + " " * pad + "x", "1%" + " " * pad + "x", "1" + ",111" * (pad // 4) + "x"):
+        start = time.perf_counter()
+        outcome = _joined_t46(cell)
+        assert time.perf_counter() - start < 1.0
+        assert outcome.status == "not checked"

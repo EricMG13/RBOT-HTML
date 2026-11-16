@@ -1466,7 +1466,7 @@ const libraryLeads=new Map();
 function libraryLead(key) {
   if(!key||!contexts[key])return null;
   if(!libraryLeads.has(key)) {
-    const lead=overviewLeadEntry(overviewEntries(key,LEAD_MODULES)),declared=lead?.out.state?.declared??null;
+    const lead=overviewLeadEntry(overviewEntries(key,leadModules(contexts[key].pathway)),key),declared=lead?.out.state?.declared??null;
     libraryLeads.set(key,lead?{state:declared&&window.Components.findingCell(declared,{}).html!==undefined?declared:null,sentence:window.Components.firstSentenceOf(passageTexts(lead.passages.bottom),null)}:null);
   }
   return libraryLeads.get(key);
@@ -1478,7 +1478,7 @@ const libraryStrips=new Map();
 function libraryStrip(key) {
   if(!key||!contexts[key])return '';
   if(!libraryStrips.has(key)) {
-    const entries=overviewEntries(key),lead=overviewLeadEntry(entries);
+    const entries=overviewEntries(key),lead=overviewLeadEntry(entries,key);
     libraryStrips.set(key,lead?leadStrip(lead,overviewTables(entries),key):'');
   }
   return libraryStrips.get(key);
@@ -1669,8 +1669,7 @@ function runGroups(context) {
 // judged here except counts of listed items; a passage the handoff lacks is named as missing, never replaced by other text (H7). The page answers, in order: the view
 // (the lead module's Bottom line and the figures it cites), what decides it (the first sided table), why (Key findings), what would change it, what to watch, the modules
 // and what limits the reading. Every block is a shared component (components.js); nothing on the page is audit material.
-// CP-L10 leads only a short snapshot (amendment 2026-11-11 to H5): CP-2 and CP-6 do not run in it.
-const LEAD_MODULES=['CP-6','CP-2','CP-L10'];
+// CP-L10 leads only a short snapshot (amendment 2026-11-11 to H5): CP-2 and CP-6 do not run in it. CP-1B leads only an earnings update (amendment 2026-11-16); reader.js leadModules holds the order.
 const NO_LEAD='No credit view module completed in this run.';
 const EARLIER_NO_LEAD='This run is in the earlier format: its handoffs carry no reader passages for Overview to select.';
 // The run's modules in the order CP-OS ran them, each with its default output and that output's reader passages.
@@ -1683,8 +1682,8 @@ function overviewEntries(context,only=null) {
   });
 }
 const notAssessable=entry=>Boolean(entry.out)&&blocked(entry.out.sections,entry.out.state);
-// The lead is the first of CP-6, CP-2, CP-L10 that ran, has a Bottom line and is not blocked; a run with none has no lead.
-const overviewLeadEntry=entries=>LEAD_MODULES.map(code=>entries.find(entry=>entry.module===code)).find(entry=>entry?.passages?.bottom&&!notAssessable(entry));
+// The lead is the first of the pathway's lead modules (CP-6, CP-2, CP-L10, and CP-1B on an earnings update) that ran, has a Bottom line and is not blocked; a run with none has no lead.
+const overviewLeadEntry=(entries,context)=>pickLead(entries,contexts[context]?.pathway,entry=>!notAssessable(entry));
 // One of the lead's passages as the components take it: its paragraphs, and the controls that open each one's basis in the drawer.
 function leadPassage(lead,key) {
   const texts=passageTexts(lead.passages[key]);
@@ -1709,13 +1708,13 @@ function leadStrip(lead,tables,key=null) {
   return key?window.Components.metricStrip(metric.block,{...ctx,trace:null,key:null},cited,{href:routeHref(module,firstSection(module,key),null,key),title:moduleTitle(module)}):window.Components.metricStrip(metric.block,ctx,cited,{href:moduleHref(module),title:moduleTitle(module)});
 }
 // C2 and C4: the lead's Bottom line, and beside it the rows of the run's first metric table whose label the Bottom line or Key findings name.
-function overviewLead(entries,earlier,tables) {
-  const lead=overviewLeadEntry(entries);
+function overviewLead(entries,earlier,tables,context) {
+  const lead=overviewLeadEntry(entries,context);
   if(!lead)return {lead:null,html:`<section class="overview-part" id="overview-lead"><h2 class="kicker">Credit view</h2><p class="intro">${earlier?EARLIER_NO_LEAD:NO_LEAD}</p></section>`};
   const bottom=leadPassage(lead,'bottom');
   const verdict=window.Components.verdictPanel(bottom.texts,bottom.trace,bottom.figure,'h3');
   const strip=leadStrip(lead,tables);
-  return {lead,html:`<section class="overview-part" id="overview-lead" aria-labelledby="overview-lead-h"><h2 class="sr-only" id="overview-lead-h">Credit view</h2><div class="g24"><div class="${strip?'c16':'c24'}">${verdict}</div>${strip?`<div class="c8">${strip}</div>`:''}</div></section>`};
+  return {lead,html:`<section class="overview-part" id="overview-lead" aria-labelledby="overview-lead-h"><h2 class="sr-only" id="overview-lead-h">${leadKicker(lead.module)}</h2><div class="g24"><div class="${strip?'c16':'c24'}">${verdict}</div>${strip?`<div class="c8">${strip}</div>`:''}</div></section>`};
 }
 // C7: the run's first sided table, drawn by its component and attributed to its module. No sided table, no block.
 function overviewBoard(tables) {
@@ -1738,12 +1737,13 @@ function overviewWatch(lead,tables) {
   return cards?`<section class="overview-part" id="overview-watch" aria-labelledby="overview-watch-h">${ovHead('overview-watch-h','What to watch',fromModule(module))}${cards}</section>`:'';
 }
 // C20: one tile per module of the run, in the catalogue's order and groups. A module with saved outputs and none chosen is a plain tile with the way to choose.
-function overviewModules(context) {
-  const groups=runGroups(context).map(([title,items])=>({title,items:items.map(({module,id,out,choices})=>{
+function overviewModules(context,led=null) {
+  // A CP-1B lead is not repeated here (amendment 2026-11-16 to H5); every other lead keeps its tile.
+  const groups=runGroups(context).map(([title,items])=>({title,items:items.filter(({module})=>!(led==='CP-1B'&&module===led)).map(({module,id,out,choices})=>{
     const base={title:moduleNames[module],href:moduleHref(module)};
     if(!id)return {...base,choose:{count:choices,href:`#${encodeURIComponent(module)}?${new URLSearchParams({c:context})}`}};
     return {...base,state:out.state?.declared??null,blocked:blocked(out.sections,out.state),...leadPassage({id,passages:readerPassages(out.sections)},'bottom')};
-  })}));
+  })})).filter(group=>group.items.length);
   const tiles=window.Components.moduleTiles(groups);
   return tiles?`<section class="overview-part" id="overview-modules" aria-labelledby="overview-modules-h">${ovHead('overview-modules-h','By module','<p class="ov-sub">Open one to read its whole bottom line</p>')}${tiles}</section>`:'';
 }
@@ -1757,13 +1757,13 @@ function runReport(context) {
   const entries=overviewEntries(context);
   // A run that holds no module output has nothing to select from: it says so and keeps the way to its sources.
   if(!entries.length)return `<div class="missing-state"><h2>No module output retained for this run</h2><p>The Overview is selected from module handoffs, and this run holds none.</p></div><p class="run-inventory"><a class="text-action" href="${routeHref('W-Evidence','sources',null,context)}">Evidence${icon('arrow-right')}</a></p>`;
-  const tables=overviewTables(entries),{lead,html}=overviewLead(entries,earlierFormat(contexts[context]),tables);
+  const tables=overviewTables(entries),{lead,html}=overviewLead(entries,earlierFormat(contexts[context]),tables,context);
   if(!lead)return `<div class="overview-page">${html+overviewModules(context)}</div>`;
   const key=leadPassage(lead,'key'),contrary=leadPassage(lead,'contrary');
   const feed=window.Components.findingsFeed(key.texts,key.trace,key.figure),change=window.Components.callout('What would change the view',contrary.texts,contrary.trace,contrary.figure,'h2'),watch=overviewWatch(lead,tables);
   const side=change+watch,both=Boolean(feed&&side);
   const why=feed||side?`<section class="overview-part g24" id="overview-why" aria-label="Why, and what would change the view">${feed?`<div class="${both?'c14':'c24'}"><div class="rd-card"><h2 class="rd-h">Key findings</h2>${feed}</div></div>`:''}${side?`<div class="${both?'c10':'c24'} ov-side">${side}</div>`:''}</section>`:'';
-  return `<div class="overview-page">${html+overviewBoard(tables)+why+overviewModules(context)+overviewLimitations(lead,context)}</div>`;
+  return `<div class="overview-page">${html+overviewBoard(tables)+why+overviewModules(context,lead.module)+overviewLimitations(lead,context)}</div>`;
 }
 // Run activity (ruling decision 10): only what is in progress and the queue. A finished run is reached from the library, and a run that ends while the page
 // is open is announced once by a toast. The state comes first (counts, then the run cards), detail after. Spend, run folders, run codes and file names are not shown.

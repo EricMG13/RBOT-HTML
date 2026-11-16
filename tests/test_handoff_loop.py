@@ -1695,3 +1695,83 @@ def test_a_value_restored_before_acceptance_is_not_reported(tmp_path: Path) -> N
     assert all(
         e["event"] != "values_dropped_on_repair" for e in read_events(tmp_path / "run" / EVENTS)
     )
+
+
+# ---------------------------------------------------------------- release at the module's end
+
+
+class Releasing(Draining2):
+    """A draining adapter that, like the Copilot one, can be told a module's session is over."""
+
+    def __init__(self, drains: list[tuple[Compaction, ...]], *replies: AdapterReply) -> None:
+        super().__init__(drains, *replies)
+        self.released: list[str] = []
+        self.order: list[str] = []
+
+    def drain_compactions(self, digest: str) -> tuple[Compaction, ...]:
+        self.order.append("drain")
+        return super().drain_compactions(digest)
+
+    def release(self, digest: str) -> None:
+        self.order.append("release")
+        self.released.append(digest)
+
+
+def releasing_loop(
+    tmp_path: Path, drains: list[tuple[Compaction, ...]], *replies: AdapterReply | Exception
+) -> tuple[HandoffExecutor, Releasing]:
+    adapter = Releasing(drains, *replies)  # type: ignore[arg-type]
+    loop = HandoffExecutor(
+        tmp_path / "live",
+        adapter=adapter,
+        cap_usd=Decimal("0.00001") if not replies else Decimal(10),
+        check=check,
+        events=tmp_path,
+    )
+    return loop, adapter
+
+
+def test_an_accepted_module_releases_its_session_once_after_the_drain(tmp_path: Path) -> None:
+    loop, adapter = releasing_loop(tmp_path, [()], turn(write_call()))
+    assert loop(task()) == GOOD
+    assert len(adapter.released) == 1 and len(adapter.released[0]) == 64
+    assert adapter.order == ["drain", "release"]
+    loop.drain_late()  # the sweep before close does not release it again
+    assert len(adapter.released) == 1
+
+
+def test_a_failed_module_releases_its_session_once(tmp_path: Path) -> None:
+    loop, adapter = releasing_loop(tmp_path, [()], RuntimeError("possibly sent"))
+    with pytest.raises(RuntimeError):
+        loop(task())
+    assert len(adapter.released) == 1
+    assert adapter.order == ["drain", "release"]
+
+
+def test_a_module_blocked_by_the_cap_releases_its_session_once(tmp_path: Path) -> None:
+    loop, adapter = releasing_loop(tmp_path, [()])  # no replies: the cap refuses before a send
+    with pytest.raises(Exception, match="cap"):
+        loop(task())
+    assert len(adapter.released) == 1
+
+
+def test_a_session_with_a_summary_still_running_stays_open_until_the_sweep(tmp_path: Path) -> None:
+    loop, adapter = releasing_loop(
+        tmp_path, [(), (CP8_DONE,)], compacted(turn(write_call()), CP8_START)
+    )
+    assert loop(task()) == GOOD
+    assert adapter.released == []  # a start with no completion: the runtime is still needed
+    loop.drain_late()  # the completion arrived: the session is released now, once
+    assert len(adapter.released) == 1
+    loop.drain_late()
+    assert len(adapter.released) == 1
+
+
+def test_a_failing_release_does_not_fail_the_module(tmp_path: Path) -> None:
+    loop, adapter = releasing_loop(tmp_path, [()], turn(write_call()))
+
+    def broken(digest: str) -> None:
+        raise OSError("loop gone")
+
+    adapter.release = broken  # type: ignore[method-assign]
+    assert loop(task()) == GOOD

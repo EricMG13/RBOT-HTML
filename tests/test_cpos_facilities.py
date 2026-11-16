@@ -503,3 +503,55 @@ def test_a_maturity_on_the_first_forecast_years_start_is_inside_the_forecast():
         in limits
     )
     assert not any("before the forecast" in s for s in limits)
+
+
+# --- the forecast instruction matches the parser (parked finding a, owner "fix all") ---
+# Live: CP-1 wrote `dividends.values = ["4348", null, null]`; the parser takes only
+# three figures per driver, or every driver `[null, null, null]` (the method declines).
+def _driver_texts() -> dict[str, str]:
+    from deploy_workflow.owners import cpos_launch
+
+    forecast = cpos_launch.FORECAST_BLOCK
+    return {
+        "CP-2G": forecast[forecast.index("Drivers: give a value") :],
+        "CP-1": cpos_launch.LAYER1_FORECAST_BLOCK,
+    }
+
+
+_ZERO = 'no declared or scheduled payment is `"0"`'
+_DECLINE = "if a driver has no anchor, every driver's `values` is `[null, null, null]`"
+
+
+@pytest.mark.parametrize("module", ["CP-2G", "CP-1"])
+def test_the_driver_instruction_allows_no_single_null_driver(module):
+    text = " ".join(_driver_texts()[module].split())
+    assert "Leave a driver's values null" not in text  # the sentence that read as permission
+    assert "Never write null for one driver or year" in text
+    assert _DECLINE in text
+
+
+def test_cp1_states_the_zero_year_before_the_decline_rule_and_cp2g_has_no_zero_rule():
+    cp1 = " ".join(_driver_texts()["CP-1"].split())
+    assert _ZERO in cp1 and "`limitation` says so" in cp1
+    assert "repeat no one-off payment" in cp1
+    assert cp1.index(_ZERO) < cp1.index(_DECLINE)  # a no-payment year is not "no anchor"
+    # CP-2G's method says to use null, not zero, for an unsupported amount.
+    cp2g_text = " ".join(_driver_texts()["CP-2G"].split())
+    assert _ZERO not in cp2g_text and "one-off payment" not in cp2g_text
+
+
+def test_the_parser_takes_three_figures_or_a_declined_block_and_no_part_null_driver():
+    from deploy_workflow.owners import cpos_forecast
+
+    assert cpos_forecast.parse(_block().decode(), _CP1).base_drivers
+    declined = {name: {**_block_driver(), "values": [None, None, None]} for name in _PATHS}
+    with pytest.raises(ValueError, match="no forecast drivers"):
+        cpos_forecast.parse(_block(base_drivers=declined).decode(), _CP1)
+    part = {name: {**_block_driver(), "values": list(v)} for name, v in _PATHS.items()}
+    part["dividends"]["values"] = ["4348", None, None]
+    with pytest.raises(ValueError, match="base_drivers.dividends.values.1"):
+        cpos_forecast.parse(_block(base_drivers=part).decode(), _CP1)
+
+
+def _block_driver() -> dict:
+    return {"category": "Analyst Interpretation", "rationale": "Synthetic.", "limitation": None}

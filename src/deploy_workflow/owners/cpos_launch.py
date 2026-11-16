@@ -59,10 +59,12 @@ from deploy_workflow.context import CONTEXT_SOURCE_ID, RunContext, load_context
 from deploy_workflow.credit_os_chips import MODULE_NAMES
 from deploy_workflow.docx_text import docx_text
 from deploy_workflow.handoff_delivery import (
+    BLANK_SPLITS,
     DeliveryRequest,
     HandoffInput,
     MarkdownLayout,
     MarkdownRoute,
+    table_faults,
 )
 from deploy_workflow.html_text import convert_html
 from deploy_workflow.markdown_delivery import (
@@ -1295,6 +1297,7 @@ def checker(layout: MarkdownLayout) -> Check:
                 text, json.loads(task.sources[PACK_NAME]), [item.decode("utf-8") for item in sent]
             )
         routes = tuple(r for r in layout.routes if r.module_id == task.module_id)
+        faults = table_faults(text)  # every malformed table, so one review names them all
         try:
             if routes:
                 own = layout.model_copy(
@@ -1315,7 +1318,11 @@ def checker(layout: MarkdownLayout) -> Check:
                 require_issuer(task.run, layout.issuer_aliases, task.module_id, text.splitlines())
                 literal_module(task.module_id, raw)
         except ValueError as error:
-            issues.append(f"The report adapter refused this handoff: {error}")
+            # its table error, listed below: the same text, or with the scan's hint after it
+            listed = any(f in (str(error), str(error) + BLANK_SPLITS) for f in faults)
+            if not listed:
+                issues.append(f"The report adapter refused this handoff: {error}")
+        issues += faults
         for route in routes:
             if route.kind == "chart":
                 issues += chart_issues(text, route, money=money_unit(text))

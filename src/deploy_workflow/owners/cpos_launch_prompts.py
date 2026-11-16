@@ -302,6 +302,17 @@ UNIT_RULE = (
     "exactly as printed; an amount printed in the other unit is stated as missing, with the "
     "reason, not converted. "
 )
+# What `cpos_forecast.parse` accepts: every driver three figures, or every driver
+# `[null, null, null]` (the method declines). CP-2G and CP-1 are both told the second rule; only
+# CP-1 is told the first (CP-2G's method says to use null, not zero, for an unsupported amount).
+DRIVER_NULL_RULE = (
+    "Never write null for one driver or year: if a driver has no anchor, every driver's "
+    "`values` is `[null, null, null]`."
+)
+ZERO_YEAR_RULE = (
+    'A `dividends`/`debt_repayment` year with no declared or scheduled payment is `"0"` and '
+    "`limitation` says so; repeat no one-off payment."
+)
 FORECAST_BLOCK = (
     f"Forecast inputs: write `{cpos_forecast.HEADING}` inside `## Findings`, holding exactly "
     "one fenced json block and no other fence. You state "
@@ -399,8 +410,7 @@ FORECAST_BLOCK = (
     "`Analyst Interpretation`, anchored to a stated figure (the midpoint of a guidance range, "
     "CP-1's latest-year ratio carried forward, a scheduled maturity or a declared payment): name "
     "the anchor in `rationale` and what the judgment leaves out in `limitation`. A judgment is "
-    "an input to a mechanical forecast, not a finding. Leave a driver's values null, as "
-    "`Insufficient Information`, only when no stated figure can anchor it.\n\n"
+    "an input to a mechanical forecast, not a finding. " + DRIVER_NULL_RULE + "\n\n"
 )
 # Goes into CP-1's instructions whenever a forecast is wanted, with or without CP-2G: the period
 # table lets Python date-check the last twelve months. CP-1 states no new figure in it.
@@ -552,9 +562,12 @@ LAYER1_FORECAST_BLOCK = (
     'amounts in the block\'s unit (with `"scale": 1000`, 20 million is `"20000"`, at '
     "most one decimal place) and every other driver is a ratio and is never scaled; `category` "
     "is exactly one of "
-    f"{', '.join(f'`{c}`' for c in get_args(Category))}. Leave a driver's values null, as "
-    "`Insufficient Information`, when no stated figure can anchor it; when none can, set every "
-    "driver's `values` to `[null, null, null]`. Set `downside_shock`, `upside_drivers` and "
+    f"{', '.join(f'`{c}`' for c in get_args(Category))}. "
+    + ZERO_YEAR_RULE
+    + " "
+    + DRIVER_NULL_RULE
+    + " "
+    "Set `downside_shock`, `upside_drivers` and "
     "`downside_drivers` to null: there are no cases and no shock in this forecast. `years` is "
     'three consecutive fiscal years after the base period, each `{"year": <int>, "start": '
     '"YYYY-MM-DD", "end": "YYYY-MM-DD"}`. `scope_limits` is a list of text limits. Set '
