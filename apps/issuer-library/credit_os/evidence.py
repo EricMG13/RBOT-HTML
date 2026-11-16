@@ -272,19 +272,28 @@ def check_record(path: Path, folder: str, issues: list[str]) -> dict[str, Any] |
 CHECK_FILE = re.compile(r"(\d+)\.method-checks(?:-[0-9a-f]{64})?\.json")
 
 
-def check_files(folder: Path) -> list[tuple[int, str, Path]]:
-    """Each attempt's record file as (attempt, request folder name, path). The writer keeps a
-    recheck that differs as `<n>.method-checks-<sha>.json` beside `<n>.method-checks.json`, and the
-    recheck is the one acted on (cpos._retain_review): of an attempt's files the newest is taken."""
-    newest: dict[tuple[int, str], Path] = {}
+def check_files(folder: Path) -> dict[tuple[int, str], list[Path]]:
+    """Every record file of the module's request folders, by (attempt, request folder name). The
+    writer keeps a differing recheck as `<n>.method-checks-<sha>.json` beside
+    `<n>.method-checks.json` (cpos._retain_review), and the files do not say which was acted on, so
+    no file time or name decides anything here."""
+    found: dict[tuple[int, str], list[Path]] = {}
     for path in sorted(folder.glob("*/*.json")):
         named = CHECK_FILE.fullmatch(path.name)
-        if not named or path.parent.is_symlink() or path.is_symlink():
-            continue
-        key = (int(named[1]), path.parent.name)
-        if key not in newest or path.stat().st_mtime_ns >= newest[key].stat().st_mtime_ns:
-            newest[key] = path
-    return [(attempt, name, path) for (attempt, name), path in sorted(newest.items())]
+        if named and not path.parent.is_symlink() and not path.is_symlink():
+            found.setdefault((int(named[1]), path.parent.name), []).append(path)
+    return found
+
+
+def attempt_records(paths: list[Path], run_folder: str, issues: list[str]) -> list[dict[str, Any]]:
+    """The distinct records of one attempt: files with identical bytes count as one."""
+    distinct: dict[bytes, Path] = {}
+    for path in paths:
+        try:
+            distinct.setdefault(path.read_bytes(), path)
+        except OSError:
+            distinct.setdefault(b"", path)  # unreadable: check_record names it in the issues
+    return [r for path in distinct.values() if (r := check_record(path, run_folder, issues))]
 
 
 def run_script_checks(
@@ -293,23 +302,33 @@ def run_script_checks(
     """Each module's script-check record of its accepted write, in the run's module order: the
     last attempt's record among those whose response is the delivered handoff. A module whose
     records match none (a rejected attempt's record is never shown for the accepted one) shows
-    nothing and is named in the issues; a module with no record, and a run with none, give
-    nothing."""
+    nothing and is named in the issues, as does one whose delivered attempt was rechecked with a
+    differing record (the files do not say which was acted on); a module with no record, and a
+    run with none, give nothing."""
     found: list[dict[str, Any]] = []
     for module, entry in run["modules"].items():
-        records = [
-            (attempt, record)
-            for attempt, _, path in check_files(run_dir / "requests" / module)
-            if (record := check_record(path, run["folder"], issues))
-        ]
         delivered = {outputs[name]["sha256"] for name in entry["outputs"] if name in outputs}
-        accepted = [r for r in records if r[1]["response"] in delivered]
-        if records and not accepted:
+        accepted: list[tuple[int, dict[str, Any]]] = []
+        seen = rechecked = False
+        for (attempt, _), paths in sorted(check_files(run_dir / "requests" / module).items()):
+            records = attempt_records(paths, run["folder"], issues)
+            seen = seen or bool(records)
+            mine = [r for r in records if r["response"] in delivered]
+            if len(mine) == 1:
+                accepted.append((attempt, mine[0]))
+            elif mine:
+                rechecked = True
+        if rechecked:
+            issues.append(
+                f"{run['folder']}: {module}'s delivered write was rechecked and the files do not "
+                "say which record was acted on; none is shown"
+            )
+        elif seen and not accepted:
             issues.append(
                 f"{run['folder']}: {module} has script-check records but none is of the delivered"
                 " handoff; none is shown"
             )
-        if accepted:
+        if accepted and not rechecked:
             attempt, record = accepted[-1]
             found.append({"module": module, "attempt": attempt} | record)
     return found

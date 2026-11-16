@@ -770,15 +770,53 @@ def test_a_record_whose_response_is_the_delivered_handoff_wins_over_a_later_one(
     assert found["attempt"] == 1 and found["outcomes"][0]["reason"] == "accepted"
 
 
-def test_a_recheck_kept_beside_a_record_is_the_one_carried(tmp_path):
+def sibling(run_dir: Path, reason: str, name: str | None = None) -> Path:
+    """A recheck file kept beside CP-1's record of attempt 1, with one outcome of this reason."""
+    folder = run_dir / "requests" / "CP-1" / ("f" * 64)
+    record = json.loads((folder / "1.method-checks.json").read_text(encoding="utf-8"))
+    record["checks"] = [outcome("agreed", reason)]
+    path = folder / (name or f"1.method-checks-{'9' * 64}.json")
+    path.write_text(json.dumps(record), encoding="utf-8")
+    return path
+
+
+def test_a_rechecked_write_shows_no_record_and_the_issue_names_run_and_module(tmp_path):
     run_dir = make_run(tmp_path, "run-a")
     write_record(run_dir, "CP-1", "f" * 64, 1, [outcome("disagreed", "old checker")])
+    sibling(run_dir, "recheck")
+    assert script_checks(tmp_path) == []
+    issues = data_of(tmp_path)["workspace"]["issues"]
+    assert any(
+        "run-a" in i and "CP-1" in i and "rechecked" in i and "which record was acted on" in i
+        for i in issues
+    )
+
+
+def test_a_byte_identical_sibling_counts_as_one_record(tmp_path):
+    run_dir = make_run(tmp_path, "run-a")
+    write_record(run_dir, "CP-1", "f" * 64, 1, [outcome("agreed", "same")])
     folder = run_dir / "requests" / "CP-1" / ("f" * 64)
-    recheck = json.loads((folder / "1.method-checks.json").read_text(encoding="utf-8"))
-    recheck["checks"] = [outcome("agreed", "recheck acted on")]
-    (folder / f"1.method-checks-{'9' * 64}.json").write_text(json.dumps(recheck), encoding="utf-8")
+    original = folder / "1.method-checks.json"
+    (folder / f"1.method-checks-{'9' * 64}.json").write_bytes(original.read_bytes())
     (found,) = script_checks(tmp_path)
-    assert [o["reason"] for o in found["outcomes"]] == ["recheck acted on"]
+    assert [o["reason"] for o in found["outcomes"]] == ["same"]
+
+
+def test_which_record_is_acted_on_never_depends_on_file_times(tmp_path):
+    import os
+
+    results = []
+    for order in ((1, 2), (2, 1), (1, 1)):
+        work = tmp_path / f"w{order[0]}{order[1]}"
+        work.mkdir()
+        run_dir = make_run(work, "run-a")
+        write_record(run_dir, "CP-1", "f" * 64, 1, [outcome("disagreed", "old checker")])
+        other = sibling(run_dir, "recheck")
+        original = other.with_name("1.method-checks.json")
+        os.utime(original, ns=(order[0] * 10**18, order[0] * 10**18))
+        os.utime(other, ns=(order[1] * 10**18, order[1] * 10**18))
+        results.append(script_checks(work))
+    assert results == [[], [], []]
 
 
 def test_no_record_for_the_delivered_write_carries_nothing_and_says_so(tmp_path):
