@@ -4,8 +4,11 @@ import pytest
 from test_signal_feeds import RSS
 
 from deploy_workflow.signal.fetch import Fetched, FetchRefused
+from deploy_workflow.signal.groups import Act, create_group
+from deploy_workflow.signal.identity import User
 from deploy_workflow.signal.ingest import health, run_due
-from deploy_workflow.signal.store import open_db, propose_source, set_source_state
+from deploy_workflow.signal.store import add_user, open_db, propose_source, set_source_state
+from deploy_workflow.signal.topics import add_topic
 
 NOW = datetime(2026, 11, 13, 9, tzinfo=UTC)
 
@@ -179,3 +182,19 @@ def test_story_exactly_seven_days_old_is_in_the_previous_week():
     from deploy_workflow.signal.ingest import _per_week
 
     assert _per_week([NOW - timedelta(days=7)], NOW) == (0, 0, 0, 0, 1, 0)
+
+
+def test_a_new_story_posts_into_groups_that_carry_its_topic_with_recorded_feed(db_a):
+    writer = User("ak", "writer")
+    add_user(db_a, "ak", "writer")
+    topic = add_topic(db_a, "Competition", ["merger review"], [], "ak")
+    with_topic = create_group(db_a, Act(writer, NOW), "G1", "everyone", [topic])
+    create_group(db_a, Act(writer, NOW), "G2", "everyone", [])
+    body = RSS.replace(b"Authority opens review", b"Authority opens merger review")
+    run_due(db_a, NOW, recorded(body))
+    found = db_a.execute(
+        "SELECT group_id, story_id, started_by, created_at FROM threads"
+    ).fetchall()
+    assert [tuple(r) for r in found] == [(with_topic, 1, None, NOW.isoformat())]
+    run_due(db_a, NOW + timedelta(hours=1), recorded(body))
+    assert db_a.execute("SELECT count(*) FROM threads").fetchone()[0] == 1

@@ -20,6 +20,7 @@ from deploy_workflow.signal.store import (
     set_meta,
     sources,
 )
+from deploy_workflow.signal.threads import auto_post
 from deploy_workflow.signal.topics import match_story
 
 log = logging.getLogger(__name__)
@@ -37,11 +38,11 @@ def _is_due(db: sqlite3.Connection, source_id: int, now: datetime) -> bool:
     return previous is None or datetime.fromisoformat(previous["at"]) <= now - MIN_INTERVAL
 
 
-def _match_new(db: sqlite3.Connection, source_id: int, link: str) -> None:
+def _match_new(db: sqlite3.Connection, source_id: int, link: str, now: datetime) -> None:
     story = db.execute(
         "SELECT id FROM stories WHERE source_id=? AND link_key=?", (source_id, link_key(link))
     ).fetchone()
-    match_story(db, story["id"])
+    auto_post(db, story["id"], match_story(db, story["id"]), now)
 
 
 def _check_source(
@@ -61,7 +62,7 @@ def _check_source(
     for entry in entries:
         if add_story(db, source["id"], entry, now) == "new":
             new += 1
-            _match_new(db, source["id"], entry.link)
+            _match_new(db, source["id"], entry.link, now)
     return Check(now, True, f"{new} new", fetched.etag, fetched.modified, new)
 
 

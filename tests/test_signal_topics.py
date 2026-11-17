@@ -141,7 +141,7 @@ def test_pass_records_its_time_and_matches_new_stories_with_recorded_feed(db_a):
 
 def test_a_slice_1_database_gains_the_new_tables(tmp_path):
     db = open_db(tmp_path)
-    assert db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0] == "2"
+    assert db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0] == "3"
     names = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert {"topics", "topic_stories", "topic_follows", "saves"} <= names
 
